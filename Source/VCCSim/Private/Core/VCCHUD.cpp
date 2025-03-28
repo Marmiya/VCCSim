@@ -376,6 +376,13 @@ FRobotGrpcMaps AVCCHUD::SetupActors(const FVCCSimConfig& Config)
             {
                 ULidarComponent* LidarComponent =
                     RobotPawn->FindComponentByClass<ULidarComponent>();
+                if (!LidarComponent)
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("AVCCHUD: Lidar component not found! Adding it."));
+                    LidarComponent = NewObject<ULidarComponent>(RobotPawn);
+                    LidarComponent->RegisterComponent();
+                    RobotPawn->AddInstanceComponent(LidarComponent);
+                }
                 LidarComponent->RConfigure(
                     *static_cast<FLiDarConfig*>(Component.second.get()),
                     Recorder);
@@ -392,7 +399,14 @@ FRobotGrpcMaps AVCCHUD::SetupActors(const FVCCSimConfig& Config)
             {
                 TArray<UDepthCameraComponent*> DepthCameras;
                 RobotPawn->GetComponents<UDepthCameraComponent>(DepthCameras);
-    
+                if (DepthCameras.Num() == 0)
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("AVCCHUD: DepthCamera component not found! Adding it."));
+                    UDepthCameraComponent* DepthCameraComponent = NewObject<UDepthCameraComponent>(RobotPawn);
+                    DepthCameraComponent->RegisterComponent();
+                    RobotPawn->AddInstanceComponent(DepthCameraComponent);
+                    DepthCameras.Add(DepthCameraComponent);
+                }
                 for (auto* DepthCam : DepthCameras)
                 {
                     if (!DepthCam->IsConfigured())
@@ -403,6 +417,9 @@ FRobotGrpcMaps AVCCHUD::SetupActors(const FVCCSimConfig& Config)
                         // Use both robot tag and camera ID/index for unique identification
                         // FString cameraKey = FString::Printf(TEXT("%s^%d"), 
                         //     *FString(Robot.UETag.c_str()), DepthCam->GetCameraIndex());
+                        // Set the position and Rotation of the depth camera
+                        DepthCam->SetRelativeLocation(FVector(0, 0, 50));
+                        DepthCam->SetRelativeRotation(FRotator(-10, 0, 0));
                         FString cameraKey = FString::Printf(TEXT("%s"),
                             *FString(Robot.UETag.c_str()));
                         RGrpcMaps.RCMaps.RDCMap[TCHAR_TO_UTF8(*cameraKey)] = DepthCam;
@@ -418,13 +435,24 @@ FRobotGrpcMaps AVCCHUD::SetupActors(const FVCCSimConfig& Config)
             {
                 TArray<URGBCameraComponent*> RGBCameras;
                 RobotPawn->GetComponents<URGBCameraComponent>(RGBCameras);
-
+                if (RGBCameras.Num() == 0)
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("AVCCHUD: RGBCamera component not found! Adding it."));
+                    URGBCameraComponent* RGBCameraComponent = NewObject<URGBCameraComponent>(RobotPawn);
+                    RGBCameraComponent->RegisterComponent();
+                    RobotPawn->AddInstanceComponent(RGBCameraComponent);
+                    RGBCameras.Add(RGBCameraComponent);
+                }
                 for (auto* RGBCam : RGBCameras)
                 {
                     if (!RGBCam->IsConfigured())
                     {
                         RGBCam->RConfigure(
-                            *static_cast<FRGBCameraConfig*>(Component.second.get()), Recorder);
+                            *static_cast<FRGBCameraConfig*>(Component.second.get()),
+                            Recorder);
+                        // Set the position and orientation of the RGB camera
+                        RGBCam->SetRelativeLocation(FVector(0, 0, 50));
+                        RGBCam->SetRelativeRotation(FRotator(-10, 0, 0));
                         // Use both robot tag and camera ID/index for unique identification
                         FString cameraKey = FString::Printf(TEXT("%s^%d"), 
                             *FString(Robot.UETag.c_str()), RGBCam->GetCameraIndex());
