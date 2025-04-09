@@ -1051,7 +1051,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreateSceneAnalysisPanel()
 
     +SVerticalBox::Slot()
     .AutoHeight()
-    .Padding(0, 4, 0, 0)
+    .Padding(0, 4, 0, 4)
     [
         SNew(SHorizontalBox)
         +SHorizontalBox::Slot()
@@ -1104,7 +1104,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreateSceneAnalysisPanel()
         .HAlign(HAlign_Fill)
         [
             SAssignNew(VisualizeSafeZoneButton, SButton)
-            .ButtonStyle(bPathVisualized ? 
+            .ButtonStyle(bSafeZoneVisualized ? 
                &FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Danger") : 
                &FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Primary"))
             .ContentPadding(FMargin(0, 2))
@@ -1138,9 +1138,25 @@ TSharedRef<SWidget> SVCCSimPanel::CreateSceneAnalysisPanel()
         ]
     ]
 
+    // Separator
+    +SVerticalBox::Slot()
+    .MaxHeight(1)
+    .Padding(FMargin(0, 0, 0, 0))
+    [
+        SNew(SBorder)
+        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
+        .BorderBackgroundColor(FColor(2, 2, 2))
+        .Padding(0)
+        .Content()
+        [
+            SNew(SBox)
+            .HeightOverride(1.0f)
+        ]
+    ]
+    
     +SVerticalBox::Slot()
     .AutoHeight()
-    .Padding(0, 4, 0, 0)
+    .Padding(0, 4, 0, 4)
     [
         SNew(SHorizontalBox)
         +SHorizontalBox::Slot()
@@ -1210,7 +1226,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreateSceneAnalysisPanel()
         .HAlign(HAlign_Fill)
         [
             SAssignNew(VisualizeCoverageButton, SButton)
-            .ButtonStyle(bPathVisualized ? 
+            .ButtonStyle(bCoverageVisualized ? 
                &FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Danger") : 
                &FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Primary"))
             .ContentPadding(FMargin(0, 2))
@@ -1240,6 +1256,89 @@ TSharedRef<SWidget> SVCCSimPanel::CreateSceneAnalysisPanel()
             })
             .IsEnabled_Lambda([this]() {
                 return SceneAnalysisManager.IsValid() && !bGenCoverage;
+            })
+        ]
+    ]
+
+    // Separator
+    +SVerticalBox::Slot()
+    .MaxHeight(1)
+    .Padding(FMargin(0, 0, 0, 0))
+    [
+        SNew(SBorder)
+        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
+        .BorderBackgroundColor(FColor(2, 2, 2))
+        .Padding(0)
+        .Content()
+        [
+            SNew(SBox)
+            .HeightOverride(1.0f)
+        ]
+    ]
+
+    +SVerticalBox::Slot()
+    .AutoHeight()
+    .Padding(0, 4, 0, 0)
+    [
+        SNew(SHorizontalBox)
+        +SHorizontalBox::Slot()
+        .MaxWidth(150)
+        .Padding(FMargin(0, 0, 4, 0))
+        .HAlign(HAlign_Fill)
+        [
+            SNew(SButton)
+            .ButtonStyle(FAppStyle::Get(), "FlatButton.Default")
+            .ContentPadding(FMargin(0, 2))
+            .Text(FText::FromString("Analyze Complexity"))
+            .HAlign(HAlign_Center)
+            .OnClicked_Lambda([this]() {
+                if (SceneAnalysisManager.IsValid())
+                {
+                    SceneAnalysisManager->AnalyzeGeometricComplexity();
+                    bAnalyzeComplexity = false;
+                }
+                return FReply::Handled();
+            })
+            .IsEnabled_Lambda([this]() {
+                return SceneAnalysisManager.IsValid();
+            })
+        ]
+        +SHorizontalBox::Slot()
+        .MaxWidth(150)
+        .Padding(FMargin(0, 0, 4, 0))
+        .HAlign(HAlign_Fill)
+        [
+            SAssignNew(VisualizeComplexityButton, SButton)
+            .ButtonStyle(bComplexityVisualized ? 
+               &FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Danger") : 
+               &FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Primary"))
+            .ContentPadding(FMargin(0, 2))
+            .HAlign(HAlign_Center)
+            .Text_Lambda([this]() {
+                return FText::FromString(bComplexityVisualized ? "Hide Complexity" : "Show Complexity");
+            })
+            .OnClicked(this, &SVCCSimPanel::OnToggleComplexityVisualizationClicked)
+            .IsEnabled_Lambda([this]() {
+                return SceneAnalysisManager.IsValid() && !bAnalyzeComplexity;
+            })
+        ]
+        +SHorizontalBox::Slot()
+        .MaxWidth(150)
+        .Padding(FMargin(0, 0, 4, 0))
+        .HAlign(HAlign_Fill)
+        [
+            SNew(SButton)
+            .ButtonStyle(FAppStyle::Get(), "FlatButton.Default")
+            .ContentPadding(FMargin(0, 2))
+            .Text(FText::FromString("Clear Complexity"))
+            .HAlign(HAlign_Center)
+            .OnClicked_Lambda([this]() {
+                SceneAnalysisManager->ClearComplexityVisualization();
+                bAnalyzeComplexity = true;
+                return FReply::Handled();
+            })
+            .IsEnabled_Lambda([this]() {
+                return SceneAnalysisManager.IsValid() && !bAnalyzeComplexity;
             })
         ]
     ]
@@ -2234,6 +2333,25 @@ FReply SVCCSimPanel::OnToggleCoverageVisualizationClicked()
     SceneAnalysisManager->VisualizeCoverage(bCoverageVisualized);
     
     VisualizeCoverageButton->SetButtonStyle(bCoverageVisualized ? 
+        &FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Danger") : 
+        &FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Primary"));
+    
+    return FReply::Handled();
+}
+
+FReply SVCCSimPanel::OnToggleComplexityVisualizationClicked()
+{
+    if (!SceneAnalysisManager.IsValid())
+    {
+        return FReply::Handled();
+    }
+    
+    // Toggle the visualization state
+    bComplexityVisualized = !bComplexityVisualized;
+    
+    SceneAnalysisManager->VisualizeComplexity(bComplexityVisualized);
+    
+    VisualizeComplexityButton->SetButtonStyle(bComplexityVisualized ? 
         &FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Danger") : 
         &FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Primary"));
     

@@ -1,13 +1,28 @@
+/*
+* Copyright (C) 2025 Visual Computing Research Center, Shenzhen University
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
 #include "Simulation/SceneAnalysisManager.h"
 #include "Components/StaticMeshComponent.h"
-#include "Components/InstancedStaticMeshComponent.h"
 #include "TimerManager.h"
 #include "Sensors/CameraSensor.h"
 #include "EngineUtils.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
 #include "DrawDebugHelpers.h"
-#include "MaterialDomain.h"
 
 ASceneAnalysisManager::ASceneAnalysisManager()
 {
@@ -982,7 +997,7 @@ TArray<FVector> ASceneAnalysisManager::SamplePointsOnMesh(const FMeshInfo& MeshI
             SampledPoints.Add(V2);
             
             // Calculate triangle area (in square units)
-            float TriangleArea = 0.5f * FVector::CrossProduct(V1 - V0, V2 - V0).Size();
+            float TriangleArea = 0.5f * FVector::CrossProduct(V1 - V0, V2 - V0).Size() / 10000.0f;
             
             // Calculate number of samples based on SamplingDensity and triangle area
             // SamplingDensity represents points per square meter
@@ -1390,6 +1405,728 @@ void ASceneAnalysisManager::CreateSafeZoneMesh()
     UE_LOG(LogTemp, Display, TEXT("Safe zone visualization: Created mesh with %d unsafe cells "
                                   "out of %d populated cells (%d vertices, %d triangles)"), 
            NumCellsVisualized, UnifiedGrid.Num(), Vertices.Num(), Triangles.Num() / 3);
+}
+
+
+// Add these implementations to SceneAnalysisManager.cpp
+
+void ASceneAnalysisManager::AnalyzeGeometricComplexity()
+{
+    if (!World || !bGridInitialized || SceneMeshes.Num() == 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("AnalyzeGeometricComplexity: World not initialized or no meshes in scene"));
+        return;
+    }
+    
+    // Apply preset parameters if not using custom
+    if (SceneComplexityPreset != ESceneComplexityPreset::Custom)
+    {
+        ApplyComplexityPreset(SceneComplexityPreset);
+    }
+    
+    UE_LOG(LogTemp, Display, TEXT("Analyzing geometric complexity with weights: Curvature=%.2f, EdgeDensity=%.2f, AngleVariation=%.2f"),
+           CurvatureWeight, EdgeDensityWeight, AngleVariationWeight);
+    
+    // Reset complexity scores
+    for (auto& Pair : UnifiedGrid)
+    {
+        FUnifiedGridCell& Cell = Pair.Value;
+        Cell.CurvatureScore = 0.0f;
+        Cell.EdgeDensityScore = 0.0f;
+        Cell.AngleVariationScore = 0.0f;
+        Cell.ComplexityScore = 0.0f;
+    }
+    
+    // Data structures for tracking metrics in each cell
+    TMap<FIntVector, TArray<FVector>> CellNormals;
+    TMap<FIntVector, int32> CellEdgeCounts;
+    TMap<FIntVector, TArray<float>> CellDihedralAngles;
+    
+    // Calculate min/max values for adaptive normalization
+    float MinCurvature = FLT_MAX, MaxCurvature = -FLT_MAX;
+    float MinEdgeDensity = FLT_MAX, MaxEdgeDensity = -FLT_MAX;
+    float MinAngleVar = FLT_MAX, MaxAngleVar = -FLT_MAX;
+    
+    // Edge table to avoid counting edges twice
+    TSet<TPair<int32, int32>> ProcessedEdges;
+    
+    // First pass: calculate raw metrics for each cell
+    for (const FMeshInfo& MeshInfo : SceneMeshes)
+    {
+        // Reset processed edges for each mesh
+        ProcessedEdges.Empty();
+        
+        // Process each triangle in the mesh
+        for (int32 i = 0; i < MeshInfo.Indices.Num(); i += 3)
+        {
+            if (i + 2 >= MeshInfo.Indices.Num()) continue;
+            
+            // Get triangle vertices
+            const int32 Idx0 = MeshInfo.Indices[i];
+            const int32 Idx1 = MeshInfo.Indices[i + 1];
+            const int32 Idx2 = MeshInfo.Indices[i + 2];
+            
+            if (Idx0 >= MeshInfo.VertexPositions.Num() || 
+                Idx1 >= MeshInfo.VertexPositions.Num() || 
+                Idx2 >= MeshInfo.VertexPositions.Num())
+            {
+                continue; // Skip invalid indices
+            }
+            
+            const FVector& V0 = MeshInfo.VertexPositions[Idx0];
+            const FVector& V1 = MeshInfo.VertexPositions[Idx1];
+            const FVector& V2 = MeshInfo.VertexPositions[Idx2];
+            
+            // Calculate triangle normal
+            FVector TriangleNormal = CalculateTriangleNormal(V0, V1, V2);
+            
+            // Calculate triangle centroid
+            FVector Centroid = (V0 + V1 + V2) / 3.0f;
+            
+            // Get grid cell for centroid
+            FIntVector CellCoords = WorldToGridCoordinates(Centroid);
+            
+            // Skip if cell not in unified grid (shouldn't happen in practice)
+            if (!UnifiedGrid.Contains(CellCoords))
+                continue;
+            
+            // Add triangle normal to cell's normal list
+            CellNormals.FindOrAdd(CellCoords).Add(TriangleNormal);
+            
+            // Process edges for edge density calculation
+            TPair<int32, int32> Edge1(FMath::Min(Idx0, Idx1), FMath::Max(Idx0, Idx1));
+            TPair<int32, int32> Edge2(FMath::Min(Idx1, Idx2), FMath::Max(Idx1, Idx2));
+            TPair<int32, int32> Edge3(FMath::Min(Idx2, Idx0), FMath::Max(Idx2, Idx0));
+            
+            if (!ProcessedEdges.Contains(Edge1))
+            {
+                ProcessedEdges.Add(Edge1);
+                CellEdgeCounts.FindOrAdd(CellCoords)++;
+            }
+            
+            if (!ProcessedEdges.Contains(Edge2))
+            {
+                ProcessedEdges.Add(Edge2);
+                CellEdgeCounts.FindOrAdd(CellCoords)++;
+            }
+            
+            if (!ProcessedEdges.Contains(Edge3))
+            {
+                ProcessedEdges.Add(Edge3);
+                CellEdgeCounts.FindOrAdd(CellCoords)++;
+            }
+            
+            // Find adjacent triangles for dihedral angle calculation
+            for (int32 j = 0; j < MeshInfo.Indices.Num(); j += 3)
+            {
+                if (j == i || j + 2 >= MeshInfo.Indices.Num()) continue;
+                
+                const int32 AdjIdx0 = MeshInfo.Indices[j];
+                const int32 AdjIdx1 = MeshInfo.Indices[j + 1];
+                const int32 AdjIdx2 = MeshInfo.Indices[j + 2];
+                
+                // Check if triangles share an edge
+                bool bSharesEdge = 
+                    (Idx0 == AdjIdx0 || Idx0 == AdjIdx1 || Idx0 == AdjIdx2) &&
+                    (Idx1 == AdjIdx0 || Idx1 == AdjIdx1 || Idx1 == AdjIdx2);
+                
+                bSharesEdge |= 
+                    (Idx1 == AdjIdx0 || Idx1 == AdjIdx1 || Idx1 == AdjIdx2) &&
+                    (Idx2 == AdjIdx0 || Idx2 == AdjIdx1 || Idx2 == AdjIdx2);
+                
+                bSharesEdge |= 
+                    (Idx2 == AdjIdx0 || Idx2 == AdjIdx1 || Idx2 == AdjIdx2) &&
+                    (Idx0 == AdjIdx0 || Idx0 == AdjIdx1 || Idx0 == AdjIdx2);
+                
+                if (bSharesEdge)
+                {
+                    // Calculate adjacent triangle normal
+                    FVector AdjV0 = MeshInfo.VertexPositions[AdjIdx0];
+                    FVector AdjV1 = MeshInfo.VertexPositions[AdjIdx1];
+                    FVector AdjV2 = MeshInfo.VertexPositions[AdjIdx2];
+                    FVector AdjNormal = CalculateTriangleNormal(AdjV0, AdjV1, AdjV2);
+                    
+                    // Calculate dihedral angle (angle between normals)
+                    float CosAngle = FVector::DotProduct(TriangleNormal, AdjNormal);
+                    CosAngle = FMath::Clamp(CosAngle, -1.0f, 1.0f); // Avoid acos domain errors
+                    float AngleRadians = FMath::Acos(CosAngle);
+                    float AngleDegrees = FMath::RadiansToDegrees(AngleRadians);
+                    
+                    // Add angle to cell's angle list
+                    CellDihedralAngles.FindOrAdd(CellCoords).Add(AngleDegrees);
+                }
+            }
+        }
+    }
+    
+    // Calculate complexity scores for each cell
+    for (auto& Pair : CellNormals)
+    {
+        const FIntVector& CellCoords = Pair.Key;
+        FUnifiedGridCell& Cell = UnifiedGrid.FindOrAdd(CellCoords);
+        
+        // Calculate cell volume (for normalizing edge density)
+        float CellVolume = FMath::Pow(GridResolution, 3);
+        
+        // Calculate raw scores
+        float RawCurvatureScore = CalculateCurvatureScore(Pair.Value);
+        
+        float RawEdgeDensityScore = 0.0f;
+        if (CellEdgeCounts.Contains(CellCoords))
+        {
+            RawEdgeDensityScore = CalculateEdgeDensityScore(CellEdgeCounts[CellCoords], CellVolume);
+        }
+        
+        float RawAngleVariationScore = 0.0f;
+        if (CellDihedralAngles.Contains(CellCoords))
+        {
+            RawAngleVariationScore = CalculateAngleVariationScore(CellDihedralAngles[CellCoords]);
+        }
+        
+        // Track min/max for normalization if using adaptive normalization
+        if (bUseAdaptiveNormalization)
+        {
+            MinCurvature = FMath::Min(MinCurvature, RawCurvatureScore);
+            MaxCurvature = FMath::Max(MaxCurvature, RawCurvatureScore);
+            
+            MinEdgeDensity = FMath::Min(MinEdgeDensity, RawEdgeDensityScore);
+            MaxEdgeDensity = FMath::Max(MaxEdgeDensity, RawEdgeDensityScore);
+            
+            MinAngleVar = FMath::Min(MinAngleVar, RawAngleVariationScore);
+            MaxAngleVar = FMath::Max(MaxAngleVar, RawAngleVariationScore);
+        }
+        
+        // Store raw scores
+        Cell.CurvatureScore = RawCurvatureScore;
+        Cell.EdgeDensityScore = RawEdgeDensityScore;
+        Cell.AngleVariationScore = RawAngleVariationScore;
+    }
+    
+    // Ensure valid min/max values
+    if (bUseAdaptiveNormalization)
+    {
+        if (MinCurvature == FLT_MAX || MaxCurvature == -FLT_MAX)
+        {
+            MinCurvature = 0.0f;
+            MaxCurvature = 1.0f;
+        }
+        
+        if (MinEdgeDensity == FLT_MAX || MaxEdgeDensity == -FLT_MAX)
+        {
+            MinEdgeDensity = 0.0f;
+            MaxEdgeDensity = 1.0f;
+        }
+        
+        if (MinAngleVar == FLT_MAX || MaxAngleVar == -FLT_MAX)
+        {
+            MinAngleVar = 0.0f;
+            MaxAngleVar = 1.0f;
+        }
+        
+        // Prevent division by zero
+        if (FMath::IsNearlyEqual(MaxCurvature, MinCurvature))
+            MaxCurvature = MinCurvature + 1.0f;
+            
+        if (FMath::IsNearlyEqual(MaxEdgeDensity, MinEdgeDensity))
+            MaxEdgeDensity = MinEdgeDensity + 1.0f;
+            
+        if (FMath::IsNearlyEqual(MaxAngleVar, MinAngleVar))
+            MaxAngleVar = MinAngleVar + 1.0f;
+    }
+    
+    // Second pass: normalize scores and calculate combined complexity
+    for (auto& Pair : UnifiedGrid)
+    {
+        FUnifiedGridCell& Cell = Pair.Value;
+        
+        // Skip cells with no geometry data
+        if (!CellNormals.Contains(Pair.Key))
+            continue;
+        
+        // Normalize individual scores if using adaptive normalization
+        if (bUseAdaptiveNormalization)
+        {
+            // Normalize each score between 0 and 1 based on min/max values
+            Cell.CurvatureScore = (Cell.CurvatureScore - MinCurvature) / (MaxCurvature - MinCurvature);
+            Cell.EdgeDensityScore = (Cell.EdgeDensityScore - MinEdgeDensity) / (MaxEdgeDensity - MinEdgeDensity);
+            Cell.AngleVariationScore = (Cell.AngleVariationScore - MinAngleVar) / (MaxAngleVar - MinAngleVar);
+        }
+        
+        // Clamp normalized values between 0 and 1
+        Cell.CurvatureScore = FMath::Clamp(Cell.CurvatureScore, 0.0f, 1.0f);
+        Cell.EdgeDensityScore = FMath::Clamp(Cell.EdgeDensityScore, 0.0f, 1.0f);
+        Cell.AngleVariationScore = FMath::Clamp(Cell.AngleVariationScore, 0.0f, 1.0f);
+        
+        // Calculate weighted complexity score
+        Cell.ComplexityScore = 
+            Cell.CurvatureScore * CurvatureWeight +
+            Cell.EdgeDensityScore * EdgeDensityWeight +
+            Cell.AngleVariationScore * AngleVariationWeight;
+        
+        // Ensure total weight is 1.0
+        float TotalWeight = CurvatureWeight + EdgeDensityWeight + AngleVariationWeight;
+        if (!FMath::IsNearlyEqual(TotalWeight, 1.0f))
+        {
+            Cell.ComplexityScore /= TotalWeight;
+        }
+    }
+    
+    bComplexityVisualizationDirty = true;
+    
+    // Log results
+    int32 TotalAnalyzedCells = CellNormals.Num();
+    int32 HighComplexityCells = 0;
+    
+    for (const auto& Pair : UnifiedGrid)
+    {
+        if (Pair.Value.ComplexityScore > 0.7f)
+            HighComplexityCells++;
+    }
+    
+    UE_LOG(LogTemp, Display, TEXT("Geometric complexity analysis complete: %d cells analyzed, %d high-complexity cells identified"),
+           TotalAnalyzedCells, HighComplexityCells);
+}
+
+TArray<FIntVector> ASceneAnalysisManager::GetHighComplexityRegions(float ComplexityThreshold)
+{
+    TArray<FIntVector> HighComplexityRegions;
+    
+    for (const auto& Pair : UnifiedGrid)
+    {
+        if (Pair.Value.ComplexityScore >= ComplexityThreshold)
+        {
+            HighComplexityRegions.Add(Pair.Key);
+        }
+    }
+    
+    return HighComplexityRegions;
+}
+
+float ASceneAnalysisManager::CalculateCurvatureScore(const TArray<FVector>& Normals)
+{
+    // Calculate variance of surface normals
+    if (Normals.Num() < 2)
+        return 0.0f;
+        
+    FVector AvgNormal(0, 0, 0);
+    for (const FVector& Normal : Normals)
+    {
+        AvgNormal += Normal;
+    }
+    AvgNormal /= Normals.Num();
+    AvgNormal.Normalize();
+    
+    float TotalVariation = 0.0f;
+    for (const FVector& Normal : Normals)
+    {
+        // 1 - dot product gives deviation from average normal
+        float Deviation = 1.0f - FVector::DotProduct(Normal, AvgNormal);
+        TotalVariation += Deviation;
+    }
+    
+    return TotalVariation / Normals.Num() * CurvatureSensitivity;
+}
+
+float ASceneAnalysisManager::CalculateEdgeDensityScore(int32 EdgeCount, float CellVolume)
+{
+    // Normalize edge count by cell volume and scaling factor
+    return FMath::Min(1.0f, (float)EdgeCount / (CellVolume * EdgeDensityNormalizationFactor));
+}
+
+float ASceneAnalysisManager::CalculateAngleVariationScore(const TArray<float>& Angles)
+{
+    if (Angles.Num() < 2)
+        return 0.0f;
+        
+    // Calculate variance of angles
+    float AvgAngle = 0.0f;
+    for (float Angle : Angles)
+    {
+        AvgAngle += Angle;
+    }
+    AvgAngle /= Angles.Num();
+    
+    float TotalVariation = 0.0f;
+    for (float Angle : Angles)
+    {
+        float Deviation = FMath::Abs(Angle - AvgAngle);
+        // Normalize by threshold
+        TotalVariation += FMath::Min(1.0f, Deviation / AngleVariationThreshold);
+    }
+    
+    return TotalVariation / Angles.Num();
+}
+
+FVector ASceneAnalysisManager::CalculateTriangleNormal(const FVector& V0, const FVector& V1, const FVector& V2)
+{
+    FVector Edge1 = V1 - V0;
+    FVector Edge2 = V2 - V0;
+    FVector Normal = FVector::CrossProduct(Edge1, Edge2);
+    
+    // Normalize if not zero
+    if (!Normal.IsNearlyZero())
+    {
+        Normal.Normalize();
+    }
+    else
+    {
+        // Default normal if triangle is degenerate
+        Normal = FVector(0, 0, 1);
+    }
+    
+    return Normal;
+}
+
+void ASceneAnalysisManager::ApplyComplexityPreset(ESceneComplexityPreset Preset)
+{
+    switch(Preset)
+    {
+        case ESceneComplexityPreset::UrbanOutdoor:
+            // Urban scenes value edge density more than curvature
+            CurvatureWeight = 0.25f;
+            EdgeDensityWeight = 0.5f;
+            AngleVariationWeight = 0.25f;
+            CurvatureSensitivity = 0.6f;
+            EdgeDensityNormalizationFactor = 15.0f;
+            AngleVariationThreshold = 30.0f;
+            break;
+            
+        case ESceneComplexityPreset::IndoorCluttered:
+            // Indoor scenes benefit from balanced approach
+            CurvatureWeight = 0.33f;
+            EdgeDensityWeight = 0.33f;
+            AngleVariationWeight = 0.33f;
+            CurvatureSensitivity = 1.0f;
+            EdgeDensityNormalizationFactor = 20.0f;
+            AngleVariationThreshold = 40.0f;
+            break;
+            
+        case ESceneComplexityPreset::NaturalTerrain:
+            // Natural terrain has smooth curves but complex angle variations
+            CurvatureWeight = 0.2f;
+            EdgeDensityWeight = 0.3f;
+            AngleVariationWeight = 0.5f;
+            CurvatureSensitivity = 0.7f;
+            EdgeDensityNormalizationFactor = 7.0f;
+            AngleVariationThreshold = 60.0f;
+            break;
+            
+        case ESceneComplexityPreset::MechanicalParts:
+            // Mechanical parts have sharp edges and precise angles
+            CurvatureWeight = 0.3f;
+            EdgeDensityWeight = 0.4f;
+            AngleVariationWeight = 0.3f;
+            CurvatureSensitivity = 1.2f;
+            EdgeDensityNormalizationFactor = 25.0f;
+            AngleVariationThreshold = 15.0f;  // Very sensitive to angle changes
+            break;
+            
+        case ESceneComplexityPreset::Generic:
+        default:
+            // Balanced default parameters
+            CurvatureWeight = 0.4f;
+            EdgeDensityWeight = 0.3f;
+            AngleVariationWeight = 0.3f;
+            CurvatureSensitivity = 0.8f;
+            EdgeDensityNormalizationFactor = 10.0f;
+            AngleVariationThreshold = 45.0f;
+            break;
+    }
+    
+    UE_LOG(LogTemp, Display, TEXT("Applied complexity preset: %s"), 
+        *UEnum::GetValueAsString(Preset));
+}
+
+void ASceneAnalysisManager::InitializeComplexityVisualization()
+{
+    if (!World)
+        return;
+    
+    // Initialize the procedural mesh component if it doesn't exist
+    if (!ComplexityVisualizationMesh)
+    {
+        ComplexityVisualizationMesh = NewObject<UProceduralMeshComponent>(this);
+        ComplexityVisualizationMesh->RegisterComponent();
+        ComplexityVisualizationMesh->SetMobility(EComponentMobility::Movable);
+        ComplexityVisualizationMesh->AttachToComponent(GetRootComponent(), 
+                                                  FAttachmentTransformRules::KeepWorldTransform);
+        ComplexityVisualizationMesh->SetCollisionEnabled(ECollisionEnabled::Type::NoCollision);
+    }
+    
+    // Load or create the complexity material if not already set
+    if (!ComplexityMaterial)
+    {
+        // Try to load the complexity material
+        ComplexityMaterial = LoadObject<UMaterialInterface>(nullptr, 
+            TEXT("/Script/Engine.Material'/VCCSim/Materials/M_Complexity.M_Complexity'"));
+        
+        // Only log error if material failed to load
+        if (!ComplexityMaterial)
+        {
+            UE_LOG(LogTemp, Error, TEXT("InitializeComplexityVisualization: "
+                                      "Failed to load complexity material."));
+        }
+    }
+}
+
+void ASceneAnalysisManager::VisualizeComplexity(bool bShow)
+{
+    if (!World)
+        return;
+    
+    // Check if we have complexity data
+    bool bHasComplexityData = false;
+    for (const auto& Pair : UnifiedGrid)
+    {
+        if (Pair.Value.ComplexityScore > 0.0f)
+        {
+            bHasComplexityData = true;
+            break;
+        }
+    }
+    
+    if (!bHasComplexityData)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("VisualizeComplexity: No complexity data found. Run AnalyzeGeometricComplexity first."));
+        return;
+    }
+    
+    // If not showing, clear visualization and return
+    if (!bShow)
+    {
+        if (ComplexityVisualizationMesh)
+        {
+            ComplexityVisualizationMesh->SetVisibility(false);
+        }
+        return;
+    }
+    
+    // Initialize visualization components if needed
+    InitializeComplexityVisualization();
+    
+    // If mesh component failed to initialize, return
+    if (!ComplexityVisualizationMesh)
+    {
+        UE_LOG(LogTemp, Error, TEXT("VisualizeComplexity: Complexity mesh component not initialized"));
+        return;
+    }
+    
+    // Only update mesh if dirty or visibility is changing
+    if (bComplexityVisualizationDirty)
+    {
+        CreateComplexityMesh();
+        bComplexityVisualizationDirty = false;
+    }
+    
+    // Set visibility
+    ComplexityVisualizationMesh->SetVisibility(true);
+}
+
+void ASceneAnalysisManager::ClearComplexityVisualization()
+{
+    if (ComplexityVisualizationMesh)
+    {
+        ComplexityVisualizationMesh->ClearAllMeshSections();
+        ComplexityVisualizationMesh->SetVisibility(false);
+    }
+}
+
+void ASceneAnalysisManager::CreateComplexityMesh()
+{
+    // Clear existing mesh sections
+    ComplexityVisualizationMesh->ClearAllMeshSections();
+    
+    // Create arrays for procedural mesh
+    TArray<FVector> Vertices;
+    TArray<int32> Triangles;
+    TArray<FVector> Normals;
+    TArray<FVector2D> UV0;
+    TArray<FColor> VertexColors;
+    TArray<FProcMeshTangent> Tangents;
+    
+    // Pre-allocate memory based on number of cells
+    int32 EstimatedCells = UnifiedGrid.Num();
+    Vertices.Reserve(EstimatedCells * 8);
+    Triangles.Reserve(EstimatedCells * 36);
+    Normals.Reserve(EstimatedCells * 8);
+    UV0.Reserve(EstimatedCells * 8);
+    VertexColors.Reserve(EstimatedCells * 8);
+    Tangents.Reserve(EstimatedCells * 8);
+    
+    // Create cubes only for cells with complexity above zero
+    int32 NumCellsVisualized = 0;
+    for (const auto& Pair : UnifiedGrid)
+    {
+        const FIntVector& GridCoords = Pair.Key;
+        const FUnifiedGridCell& Cell = Pair.Value;
+        
+        // Skip cells with no complexity
+        if (Cell.ComplexityScore <= 0.0f)
+            continue;
+        
+        // Calculate cell center in world space
+        FVector CellCenter(
+            GridOrigin.X + (GridCoords.X + 0.5f) * GridResolution,
+            GridOrigin.Y + (GridCoords.Y + 0.5f) * GridResolution,
+            GridOrigin.Z + (GridCoords.Z + 0.5f) * GridResolution
+        );
+        
+        // Calculate cell size (slightly smaller than grid resolution to see cell boundaries)
+        float CellSize = GridResolution * 0.9f;
+        float HalfSize = CellSize * 0.5f;
+        
+        // Convert complexity to color (blue = low, green = medium, red = high)
+        FLinearColor ComplexityColor;
+        
+        if (Cell.ComplexityScore < 0.33f)
+        {
+            // Blue to Cyan
+            float T = Cell.ComplexityScore / 0.33f;
+            ComplexityColor = FLinearColor::LerpUsingHSV(
+                FLinearColor(0.0f, 0.0f, 1.0f), // Blue (low complexity)
+                FLinearColor(0.0f, 1.0f, 1.0f), // Cyan
+                T
+            );
+        }
+        else if (Cell.ComplexityScore < 0.66f)
+        {
+            // Cyan to Yellow
+            float T = (Cell.ComplexityScore - 0.33f) / 0.33f;
+            ComplexityColor = FLinearColor::LerpUsingHSV(
+                FLinearColor(0.0f, 1.0f, 1.0f), // Cyan
+                FLinearColor(1.0f, 1.0f, 0.0f), // Yellow
+                T
+            );
+        }
+        else
+        {
+            // Yellow to Red
+            float T = (Cell.ComplexityScore - 0.66f) / 0.34f;
+            ComplexityColor = FLinearColor::LerpUsingHSV(
+                FLinearColor(1.0f, 1.0f, 0.0f), // Yellow
+                FLinearColor(1.0f, 0.0f, 0.0f), // Red (high complexity)
+                T
+            );
+        }
+        
+        FColor CellColor = ComplexityColor.ToFColor(false);
+        
+        // Adjust alpha based on complexity
+        CellColor.A = 128 + FMath::FloorToInt(127.0f * Cell.ComplexityScore); // 128-255 range
+        
+        // Add a cube for this cell
+        int32 BaseVertexIndex = Vertices.Num();
+        
+        // Define the 8 corners of the cube
+        Vertices.Add(CellCenter + FVector(-HalfSize, -HalfSize, -HalfSize)); // 0: bottom left back
+        Vertices.Add(CellCenter + FVector(HalfSize, -HalfSize, -HalfSize));  // 1: bottom right back
+        Vertices.Add(CellCenter + FVector(HalfSize, HalfSize, -HalfSize));   // 2: bottom right front
+        Vertices.Add(CellCenter + FVector(-HalfSize, HalfSize, -HalfSize));  // 3: bottom left front
+        Vertices.Add(CellCenter + FVector(-HalfSize, -HalfSize, HalfSize));  // 4: top left back
+        Vertices.Add(CellCenter + FVector(HalfSize, -HalfSize, HalfSize));   // 5: top right back
+        Vertices.Add(CellCenter + FVector(HalfSize, HalfSize, HalfSize));    // 6: top right front
+        Vertices.Add(CellCenter + FVector(-HalfSize, HalfSize, HalfSize));   // 7: top left front
+        
+        // Add colors for all 8 vertices
+        for (int32 i = 0; i < 8; ++i)
+        {
+            VertexColors.Add(CellColor);
+        }
+        
+        // Add texture coordinates
+        UV0.Add(FVector2D(0, 0)); // 0
+        UV0.Add(FVector2D(1, 0)); // 1
+        UV0.Add(FVector2D(1, 1)); // 2
+        UV0.Add(FVector2D(0, 1)); // 3
+        UV0.Add(FVector2D(0, 0)); // 4
+        UV0.Add(FVector2D(1, 0)); // 5
+        UV0.Add(FVector2D(1, 1)); // 6
+        UV0.Add(FVector2D(0, 1)); // 7
+        
+        // Add normals
+        Normals.Add(FVector(-1, -1, -1).GetSafeNormal()); // 0
+        Normals.Add(FVector(1, -1, -1).GetSafeNormal());  // 1
+        Normals.Add(FVector(1, 1, -1).GetSafeNormal());   // 2
+        Normals.Add(FVector(-1, 1, -1).GetSafeNormal());  // 3
+        Normals.Add(FVector(-1, -1, 1).GetSafeNormal());  // 4
+        Normals.Add(FVector(1, -1, 1).GetSafeNormal());   // 5
+        Normals.Add(FVector(1, 1, 1).GetSafeNormal());    // 6
+        Normals.Add(FVector(-1, 1, 1).GetSafeNormal());   // 7
+        
+        // Add tangents (simplified)
+        for (int32 i = 0; i < 8; ++i)
+        {
+            Tangents.Add(FProcMeshTangent(1, 0, 0));
+        }
+        
+        // Add triangles for each face (12 triangles total)
+        // Bottom face (0,1,2,3)
+        Triangles.Add(BaseVertexIndex + 0);
+        Triangles.Add(BaseVertexIndex + 1);
+        Triangles.Add(BaseVertexIndex + 2);
+        Triangles.Add(BaseVertexIndex + 0);
+        Triangles.Add(BaseVertexIndex + 2);
+        Triangles.Add(BaseVertexIndex + 3);
+        
+        // Top face (4,5,6,7)
+        Triangles.Add(BaseVertexIndex + 4);
+        Triangles.Add(BaseVertexIndex + 6);
+        Triangles.Add(BaseVertexIndex + 5);
+        Triangles.Add(BaseVertexIndex + 4);
+        Triangles.Add(BaseVertexIndex + 7);
+        Triangles.Add(BaseVertexIndex + 6);
+        
+        // Front face (3,2,6,7)
+        Triangles.Add(BaseVertexIndex + 3);
+        Triangles.Add(BaseVertexIndex + 2);
+        Triangles.Add(BaseVertexIndex + 6);
+        Triangles.Add(BaseVertexIndex + 3);
+        Triangles.Add(BaseVertexIndex + 6);
+        Triangles.Add(BaseVertexIndex + 7);
+        
+        // Back face (0,1,5,4)
+        Triangles.Add(BaseVertexIndex + 0);
+        Triangles.Add(BaseVertexIndex + 5);
+        Triangles.Add(BaseVertexIndex + 1);
+        Triangles.Add(BaseVertexIndex + 0);
+        Triangles.Add(BaseVertexIndex + 4);
+        Triangles.Add(BaseVertexIndex + 5);
+        
+        // Left face (0,3,7,4)
+        Triangles.Add(BaseVertexIndex + 0);
+        Triangles.Add(BaseVertexIndex + 3);
+        Triangles.Add(BaseVertexIndex + 7);
+        Triangles.Add(BaseVertexIndex + 0);
+        Triangles.Add(BaseVertexIndex + 7);
+        Triangles.Add(BaseVertexIndex + 4);
+        
+        // Right face (1,2,6,5)
+        Triangles.Add(BaseVertexIndex + 1);
+        Triangles.Add(BaseVertexIndex + 6);
+        Triangles.Add(BaseVertexIndex + 2);
+        Triangles.Add(BaseVertexIndex + 1);
+        Triangles.Add(BaseVertexIndex + 5);
+        Triangles.Add(BaseVertexIndex + 6);
+        
+        NumCellsVisualized++;
+    }
+    
+    // Only create mesh if we have cells to visualize
+    if (NumCellsVisualized > 0)
+    {
+        // Create the mesh section
+        ComplexityVisualizationMesh->CreateMeshSection(0, Vertices, Triangles, Normals,
+            UV0, VertexColors, Tangents, false);
+        
+        // Set the material
+        if (ComplexityMaterial)
+        {
+            ComplexityVisualizationMesh->SetMaterial(0, ComplexityMaterial);
+        }
+    }
+    
+    UE_LOG(LogTemp, Display, TEXT("Complexity visualization: Created mesh with %d cells visible, %d vertices, %d triangles"),
+          NumCellsVisualized, Vertices.Num(), Triangles.Num() / 3);
 }
 
 /* ----------------------------- Test ----------------------------- */

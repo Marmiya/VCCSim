@@ -168,6 +168,11 @@ private:
     bool bCoverageVisualized = false;
     TSharedPtr<class SButton> VisualizeCoverageButton;
     FReply OnToggleCoverageVisualizationClicked();
+
+    bool bAnalyzeComplexity = true;
+    bool bComplexityVisualized = false;
+    TSharedPtr<class SButton> VisualizeComplexityButton;
+    FReply OnToggleComplexityVisualizationClicked();
 };
 
 namespace FVCCSimPanelFactory
