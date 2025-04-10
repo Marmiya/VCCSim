@@ -81,6 +81,7 @@ public:
     ASceneAnalysisManager();
     bool Initialize(UWorld* InWorld, FString&& Path);
     void ScanScene();
+    void ScanSceneRegion3D(float MinX, float MaxX, float MinY, float MaxY, float MinZ, float MaxZ);
     void RegisterCamera(URGBCameraComponent* CameraComponent);
     
     UPROPERTY(EditAnywhere, Category = "SceneAnalysis")
@@ -126,6 +127,10 @@ public:
     void VisualizeSafeZone(bool Vis);
     UFUNCTION(BlueprintCallable, Category = "SceneAnalysis|SafeZone")
     void ClearSafeZoneVisualization();
+    UPROPERTY(EditAnywhere, Category = "SceneAnalysis|SafeZone")
+    FLinearColor SafeZoneLightColor = FLinearColor(1.0f, 0.47f, 0.47f);
+    UPROPERTY(EditAnywhere, Category = "SceneAnalysis|SafeZone")
+    FLinearColor SafeZoneDarkColor = FLinearColor(0.58f, 0.0f, 0.0f);
 
     // Complexity Analysis Parameters
     UPROPERTY(EditAnywhere, Category = "SceneAnalysis|Complexity", meta = (ClampMin = "0.0", ClampMax = "1.0"))
@@ -188,6 +193,7 @@ public:
     void VisualizeSampledPoints(float Duration, float VertexSize);
 
 private:
+    void ScanSceneImpl(const TOptional<FBox>& RegionBounds);
     void ConstructFrustum(FConvexVolume& OutFrustum,
         const FTransform& CameraPose, const FMatrix44f& CameraIntrinsic);
     bool IsPointVisibleFromCamera(const FVector& Point,

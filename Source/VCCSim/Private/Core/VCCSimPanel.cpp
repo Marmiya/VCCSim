@@ -40,7 +40,6 @@
 #include "IDesktopPlatform.h"
 #include "Misc/FileHelper.h"
 
-// Destructor
 SVCCSimPanel::~SVCCSimPanel()
 {
     // Unregister from selection events
@@ -72,7 +71,6 @@ SVCCSimPanel::~SVCCSimPanel()
     }
 }
 
-// Construct method
 void SVCCSimPanel::Construct(const FArguments& InArgs)
 {
     NumPosesValue = NumPoses;
@@ -81,11 +79,16 @@ void SVCCSimPanel::Construct(const FArguments& InArgs)
     VerticalGapValue = VerticalGap;
     SafeDistanceValue = SafeDistance;
     SafeHeightValue = SafeHeight;
+    LimitedMinXValue = LimitedMinX;
+    LimitedMaxXValue = LimitedMaxX;
+    LimitedMinYValue = LimitedMinY;
+    LimitedMaxYValue = LimitedMaxY;
+    LimitedMinZValue = LimitedMinZ;
+    LimitedMaxZValue = LimitedMaxZ;
     JobNum = MakeShared<std::atomic<int32>>(0);
     
     // Register for selection change events
-    USelection* Selection = GEditor->GetSelectedActors();
-    if (Selection)
+    if (USelection* Selection = GEditor->GetSelectedActors())
     {
         Selection->SelectionChangedEvent.AddSP(
             SharedThis(this), 
@@ -577,7 +580,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreatePoseConfigPanel()
     +SVerticalBox::Slot()
     .AutoHeight()
     [
-        CreateSectionHeader("Pose Configuration")
+        CreateSectionHeader("Path Configuration")
     ]
     +SVerticalBox::Slot()
     .AutoHeight()
@@ -793,7 +796,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreatePoseConfigPanel()
             [
                 SNew(SHorizontalBox)
                 +SHorizontalBox::Slot()
-                .MaxWidth(120)
+                .MaxWidth(180)
                 .Padding(FMargin(0, 0, 4, 0))
                 .HAlign(HAlign_Fill)
                 [
@@ -808,7 +811,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreatePoseConfigPanel()
                     })
                 ]
                 +SHorizontalBox::Slot()
-                .MaxWidth(120)
+                .MaxWidth(180)
                 .Padding(FMargin(4, 0, 4, 0))
                 .HAlign(HAlign_Fill)
                 [
@@ -851,7 +854,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreateCapturePanel()
             [
                 SNew(SHorizontalBox)
                 +SHorizontalBox::Slot()
-                .MaxWidth(100)
+                .MaxWidth(180)
                 .Padding(FMargin(0, 0, 4, 0))
                 .HAlign(HAlign_Fill)
                 [
@@ -872,7 +875,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreateCapturePanel()
                     })
                 ]
                 +SHorizontalBox::Slot()
-                .MaxWidth(100)
+                .MaxWidth(180)
                 .Padding(FMargin(4, 0, 4, 0))
                 .HAlign(HAlign_Fill)
                 [
@@ -973,64 +976,57 @@ TSharedRef<SWidget> SVCCSimPanel::CreateSceneAnalysisPanel()
     .AutoHeight()
     [
     CreateSectionContent(
-        SNew(SVerticalBox)
-        +SVerticalBox::Slot()
-        .AutoHeight()
-        .Padding(FMargin(0, 0, 0, 4))
+    SNew(SVerticalBox)
+    +SVerticalBox::Slot()
+    .AutoHeight()
+    .Padding(FMargin(0, 0, 0, 4))
+    [
+        SNew(SHorizontalBox)
+        
+        +SHorizontalBox::Slot()
+        .FillWidth(1.0f)
+        .Padding(FMargin(0, 0, 8, 0))
         [
-            SNew(SHorizontalBox)
-            // Pose Count
-            +SHorizontalBox::Slot()
-            .FillWidth(1.0f)
-            .Padding(FMargin(0, 0, 8, 0))
-            [
-                CreatePropertyRow(
-                    "Safe Distance",
-                    SNew(SBorder)
-                    .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
-                    .BorderBackgroundColor(FColor(5,5, 5, 255))
-                    .Padding(4, 0)
-                    [
-                        SAssignNew(SafeDistanceSpinBox, SNumericEntryBox<float>)
-                        .Value_Lambda([this]() { return SafeDistanceValue; })
-                        .MinValue(0.f)
-                        .Delta(10.f)
-                        .AllowSpin(true)
-                        .OnValueChanged(SNumericEntryBox<float>::FOnValueChanged::CreateLambda(
-                            [this](float NewValue) {
-                            SafeDistance = NewValue;
-                            SafeDistanceValue = NewValue;
-                        }))
-                    ]
-                )
-            ]
-            
-            // Vertical Gap
-            +SHorizontalBox::Slot()
-            .FillWidth(1.0f)
-            .Padding(FMargin(0, 0, 0, 0))
-            [
-                CreatePropertyRow(
-                    "Safe Height",
-                    SNew(SBorder)
-                    .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
-                    .BorderBackgroundColor(FColor(5,5, 5, 255))
-                    .Padding(4, 0)
-                    [
-                        SAssignNew(SafeHeightSpinBox, SNumericEntryBox<float>)
-                        .Value_Lambda([this]() { return SafeHeightValue; })
-                        .MinValue(0.0f)
-                        .Delta(5.0f)
-                        .AllowSpin(true)
-                        .OnValueChanged(SNumericEntryBox<float>::FOnValueChanged::CreateLambda(
-                            [this](float NewValue) {
-                            SafeHeight = NewValue;
-                            SafeHeightValue = NewValue;
-                        }))
-                    ]
-                )
-            ]
+            CreatePropertyRow(
+                "Limited MinX",
+                SNew(SBorder)
+                .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
+                .BorderBackgroundColor(FColor(5,5, 5, 255))
+                .Padding(4, 0)
+                [
+                    SAssignNew(LimitedMinXSpinBox, SNumericEntryBox<float>)
+                    .Value_Lambda([this]() { return LimitedMinXValue; })
+                    .OnValueChanged(SNumericEntryBox<float>::FOnValueChanged::CreateLambda(
+                        [this](float NewValue) {
+                        LimitedMinX = NewValue;
+                        LimitedMinXValue = NewValue;
+                    }))
+                ]
+            )
         ]
+        
+        +SHorizontalBox::Slot()
+        .FillWidth(1.0f)
+        .Padding(FMargin(0, 0, 0, 0))
+        [
+            CreatePropertyRow(
+                "Limited MaxX",
+                SNew(SBorder)
+                .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
+                .BorderBackgroundColor(FColor(5,5, 5, 255))
+                .Padding(4, 0)
+                [
+                    SAssignNew(LimitedMaxXSpinBox, SNumericEntryBox<float>)
+                    .Value_Lambda([this]() { return LimitedMaxXValue; })
+                    .OnValueChanged(SNumericEntryBox<float>::FOnValueChanged::CreateLambda(
+                        [this](float NewValue) {
+                        LimitedMaxX = NewValue;
+                        LimitedMaxXValue = NewValue;
+                    }))
+                ]
+            )
+        ]
+    ]
     
     // Separator
     +SVerticalBox::Slot()
@@ -1047,7 +1043,213 @@ TSharedRef<SWidget> SVCCSimPanel::CreateSceneAnalysisPanel()
             .HeightOverride(1.0f)
         ]
     ]
+    
+    +SVerticalBox::Slot()
+    .AutoHeight()
+    .Padding(FMargin(0, 0, 0, 4))
+    [
+        SNew(SHorizontalBox)
         
+        +SHorizontalBox::Slot()
+        .FillWidth(1.0f)
+        .Padding(FMargin(0, 0, 8, 0))
+        [
+            CreatePropertyRow(
+                "Limited MinY",
+                SNew(SBorder)
+                .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
+                .BorderBackgroundColor(FColor(5,5, 5, 255))
+                .Padding(4, 0)
+                [
+                    SAssignNew(LimitedMinYSpinBox, SNumericEntryBox<float>)
+                    .Value_Lambda([this]() { return LimitedMinYValue; })
+                    .OnValueChanged(SNumericEntryBox<float>::FOnValueChanged::CreateLambda(
+                        [this](float NewValue) {
+                        LimitedMinY = NewValue;
+                        LimitedMinYValue = NewValue;
+                    }))
+                ]
+            )
+        ]
+        
+        +SHorizontalBox::Slot()
+        .FillWidth(1.0f)
+        .Padding(FMargin(0, 0, 0, 0))
+        [
+            CreatePropertyRow(
+                "Limited MaxY",
+                SNew(SBorder)
+                .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
+                .BorderBackgroundColor(FColor(5,5, 5, 255))
+                .Padding(4, 0)
+                [
+                    SAssignNew(LimitedMaxYSpinBox, SNumericEntryBox<float>)
+                    .Value_Lambda([this]() { return LimitedMaxYValue; })
+                    .OnValueChanged(SNumericEntryBox<float>::FOnValueChanged::CreateLambda(
+                        [this](float NewValue) {
+                        LimitedMaxY = NewValue;
+                        LimitedMaxYValue = NewValue;
+                    }))
+                ]
+            )
+        ]
+    ]
+    
+    // Separator
+    +SVerticalBox::Slot()
+    .MaxHeight(1)
+    .Padding(FMargin(0, 0, 0, 0))
+    [
+        SNew(SBorder)
+        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
+        .BorderBackgroundColor(FColor(2, 2, 2))
+        .Padding(0)
+        .Content()
+        [
+            SNew(SBox)
+            .HeightOverride(1.0f)
+        ]
+    ]
+
+    +SVerticalBox::Slot()
+    .AutoHeight()
+    .Padding(FMargin(0, 0, 0, 4))
+    [
+        SNew(SHorizontalBox)
+        
+        +SHorizontalBox::Slot()
+        .FillWidth(1.0f)
+        .Padding(FMargin(0, 0, 8, 0))
+        [
+            CreatePropertyRow(
+                "Limited MinZ",
+                SNew(SBorder)
+                .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
+                .BorderBackgroundColor(FColor(5,5, 5, 255))
+                .Padding(4, 0)
+                [
+                    SAssignNew(LimitedMinZSpinBox, SNumericEntryBox<float>)
+                    .Value_Lambda([this]() { return LimitedMinZValue; })
+                    .OnValueChanged(SNumericEntryBox<float>::FOnValueChanged::CreateLambda(
+                        [this](float NewValue) {
+                        LimitedMinZ = NewValue;
+                        LimitedMinZValue = NewValue;
+                    }))
+                ]
+            )
+        ]
+        
+        +SHorizontalBox::Slot()
+        .FillWidth(1.0f)
+        .Padding(FMargin(0, 0, 0, 0))
+        [
+            CreatePropertyRow(
+                "Limited MaxZ",
+                SNew(SBorder)
+                .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
+                .BorderBackgroundColor(FColor(5,5, 5, 255))
+                .Padding(4, 0)
+                [
+                    SAssignNew(LimitedMaxZSpinBox, SNumericEntryBox<float>)
+                    .Value_Lambda([this]() { return LimitedMaxZValue; })
+                    .OnValueChanged(SNumericEntryBox<float>::FOnValueChanged::CreateLambda(
+                        [this](float NewValue) {
+                        LimitedMaxZ = NewValue;
+                        LimitedMaxZValue = NewValue;
+                    }))
+                ]
+            )
+        ]
+    ]
+    
+    // Separator
+    +SVerticalBox::Slot()
+    .MaxHeight(1)
+    .Padding(FMargin(0, 0, 0, 0))
+    [
+        SNew(SBorder)
+        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
+        .BorderBackgroundColor(FColor(2, 2, 2))
+        .Padding(0)
+        .Content()
+        [
+            SNew(SBox)
+            .HeightOverride(1.0f)
+        ]
+    ]
+    
+    +SVerticalBox::Slot()
+    .AutoHeight()
+    .Padding(FMargin(0, 0, 0, 4))
+    [
+        SNew(SHorizontalBox)
+        
+        +SHorizontalBox::Slot()
+        .FillWidth(1.0f)
+        .Padding(FMargin(0, 0, 8, 0))
+        [
+            CreatePropertyRow(
+                "Safe Distance",
+                SNew(SBorder)
+                .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
+                .BorderBackgroundColor(FColor(5,5, 5, 255))
+                .Padding(4, 0)
+                [
+                    SAssignNew(SafeDistanceSpinBox, SNumericEntryBox<float>)
+                    .Value_Lambda([this]() { return SafeDistanceValue; })
+                    .MinValue(0.f)
+                    .Delta(10.f)
+                    .AllowSpin(true)
+                    .OnValueChanged(SNumericEntryBox<float>::FOnValueChanged::CreateLambda(
+                        [this](float NewValue) {
+                        SafeDistance = NewValue;
+                        SafeDistanceValue = NewValue;
+                    }))
+                ]
+            )
+        ]
+        
+        +SHorizontalBox::Slot()
+        .FillWidth(1.0f)
+        .Padding(FMargin(0, 0, 0, 0))
+        [
+            CreatePropertyRow(
+                "Safe Height",
+                SNew(SBorder)
+                .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
+                .BorderBackgroundColor(FColor(5,5, 5, 255))
+                .Padding(4, 0)
+                [
+                    SAssignNew(SafeHeightSpinBox, SNumericEntryBox<float>)
+                    .Value_Lambda([this]() { return SafeHeightValue; })
+                    .MinValue(0.0f)
+                    .Delta(5.0f)
+                    .AllowSpin(true)
+                    .OnValueChanged(SNumericEntryBox<float>::FOnValueChanged::CreateLambda(
+                        [this](float NewValue) {
+                        SafeHeight = NewValue;
+                        SafeHeightValue = NewValue;
+                    }))
+                ]
+            )
+        ]
+    ]
+    
+    // Separator
+    +SVerticalBox::Slot()
+    .MaxHeight(1)
+    .Padding(FMargin(0, 0, 0, 0))
+    [
+        SNew(SBorder)
+        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
+        .BorderBackgroundColor(FColor(2, 2, 2))
+        .Padding(0)
+        .Content()
+        [
+            SNew(SBox)
+            .HeightOverride(1.0f)
+        ]
+    ]
 
     +SVerticalBox::Slot()
     .AutoHeight()
@@ -1055,7 +1257,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreateSceneAnalysisPanel()
     [
         SNew(SHorizontalBox)
         +SHorizontalBox::Slot()
-        .MaxWidth(120)
+        .MaxWidth(150)
         .Padding(FMargin(0, 0, 4, 0))
         .HAlign(HAlign_Fill)
         [
@@ -1067,7 +1269,10 @@ TSharedRef<SWidget> SVCCSimPanel::CreateSceneAnalysisPanel()
             .OnClicked_Lambda([this]() {
                 if (SceneAnalysisManager.IsValid())
                 {
-                    SceneAnalysisManager->ScanScene();
+                    SceneAnalysisManager->ScanSceneRegion3D(
+                        LimitedMinX, LimitedMaxX,
+                        LimitedMinY, LimitedMaxY,
+                        LimitedMinZ, LimitedMaxZ);
                     bNeedScan = false;
                 }
                 return FReply::Handled();
@@ -1077,7 +1282,59 @@ TSharedRef<SWidget> SVCCSimPanel::CreateSceneAnalysisPanel()
             })
         ]
         +SHorizontalBox::Slot()
-        .MaxWidth(120)
+        .MaxWidth(150)
+        .Padding(FMargin(0, 0, 4, 0))
+        .HAlign(HAlign_Fill)
+        [
+            SNew(SButton)
+            .ButtonStyle(FAppStyle::Get(), "FlatButton.Default")
+            .ContentPadding(FMargin(5, 2))
+            .Text(FText::FromString("Register Camera"))
+            .HAlign(HAlign_Center)
+            .OnClicked_Lambda([this]() {
+                if (SceneAnalysisManager.IsValid())
+                {
+                    URGBCameraComponent* Camera =
+                        SelectedFlashPawn->GetComponentByClass<URGBCameraComponent>();
+                    Camera->CameraName = "CoverageCamera";
+                    if (Camera)
+                    {
+                        Camera->ComputeIntrinsics();
+                        SceneAnalysisManager->RegisterCamera(Camera);
+                    }
+                    bInitCoverage = false;
+                }
+                return FReply::Handled();
+            })
+            .IsEnabled_Lambda([this]() {
+                return SceneAnalysisManager.IsValid() && SelectedFlashPawn.IsValid();
+            })
+        ]
+    ]
+
+    // Separator
+    +SVerticalBox::Slot()
+    .MaxHeight(1)
+    .Padding(FMargin(0, 0, 0, 0))
+    [
+        SNew(SBorder)
+        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
+        .BorderBackgroundColor(FColor(2, 2, 2))
+        .Padding(0)
+        .Content()
+        [
+            SNew(SBox)
+            .HeightOverride(1.0f)
+        ]
+    ]
+        
+    +SVerticalBox::Slot()
+    .AutoHeight()
+    .Padding(0, 4, 0, 4)
+    [
+        SNew(SHorizontalBox)
+        +SHorizontalBox::Slot()
+        .MaxWidth(150)
         .Padding(FMargin(0, 0, 4, 0))
         .HAlign(HAlign_Fill)
         [
@@ -1099,7 +1356,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreateSceneAnalysisPanel()
             })
         ]
         +SHorizontalBox::Slot()
-        .MaxWidth(120)
+        .MaxWidth(150)
         .Padding(FMargin(0, 0, 4, 0))
         .HAlign(HAlign_Fill)
         [
@@ -1118,7 +1375,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreateSceneAnalysisPanel()
             })
         ]
         +SHorizontalBox::Slot()
-        .MaxWidth(120)
+        .MaxWidth(150)
         .Padding(FMargin(0, 0, 4, 0))
         .HAlign(HAlign_Fill)
         [
@@ -1130,6 +1387,9 @@ TSharedRef<SWidget> SVCCSimPanel::CreateSceneAnalysisPanel()
             .OnClicked_Lambda([this]() {
                 SceneAnalysisManager->ClearSafeZoneVisualization();
                 bGenSafeZone = true;
+                bSafeZoneVisualized = false;
+                VisualizeSafeZoneButton->SetButtonStyle(
+                    &FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Primary"));
                 return FReply::Handled();
             })
             .IsEnabled_Lambda([this]() {
@@ -1160,36 +1420,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreateSceneAnalysisPanel()
     [
         SNew(SHorizontalBox)
         +SHorizontalBox::Slot()
-        .MaxWidth(120)
-        .Padding(FMargin(0, 0, 4, 0))
-        .HAlign(HAlign_Fill)
-        [
-            SNew(SButton)
-            .ButtonStyle(FAppStyle::Get(), "FlatButton.Default")
-            .ContentPadding(FMargin(5, 2))
-            .Text(FText::FromString("Init Coverage"))
-            .HAlign(HAlign_Center)
-            .OnClicked_Lambda([this]() {
-                if (SceneAnalysisManager.IsValid())
-                {
-                    URGBCameraComponent* Camera =
-                        SelectedFlashPawn->GetComponentByClass<URGBCameraComponent>();
-                    Camera->CameraName = "CoverageCamera";
-                    if (Camera)
-                    {
-                        Camera->ComputeIntrinsics();
-                        SceneAnalysisManager->RegisterCamera(Camera);
-                    }
-                    bInitCoverage = false;
-                }
-                return FReply::Handled();
-            })
-            .IsEnabled_Lambda([this]() {
-                return SceneAnalysisManager.IsValid() && SelectedFlashPawn.IsValid();
-            })
-        ]
-        +SHorizontalBox::Slot()
-        .MaxWidth(120)
+        .MaxWidth(150)
         .Padding(FMargin(0, 0, 4, 0))
         .HAlign(HAlign_Fill)
         [
@@ -1221,7 +1452,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreateSceneAnalysisPanel()
             })
         ]
         +SHorizontalBox::Slot()
-        .MaxWidth(120)
+        .MaxWidth(150)
         .Padding(FMargin(0, 0, 4, 0))
         .HAlign(HAlign_Fill)
         [
@@ -1240,7 +1471,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreateSceneAnalysisPanel()
             })
         ]
         +SHorizontalBox::Slot()
-        .MaxWidth(120)
+        .MaxWidth(150)
         .Padding(FMargin(0, 0, 4, 0))
         .HAlign(HAlign_Fill)
         [
@@ -1252,6 +1483,9 @@ TSharedRef<SWidget> SVCCSimPanel::CreateSceneAnalysisPanel()
             .OnClicked_Lambda([this]() {
                 SceneAnalysisManager->ClearCoverageVisualization();
                 bGenCoverage = true;
+                bCoverageVisualized = false;
+                VisualizeCoverageButton ->SetButtonStyle(
+                    &FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Primary"));
                 return FReply::Handled();
             })
             .IsEnabled_Lambda([this]() {
@@ -1300,7 +1534,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreateSceneAnalysisPanel()
                 return FReply::Handled();
             })
             .IsEnabled_Lambda([this]() {
-                return SceneAnalysisManager.IsValid();
+                return SceneAnalysisManager.IsValid() && !bNeedScan;
             })
         ]
         +SHorizontalBox::Slot()
@@ -1335,6 +1569,9 @@ TSharedRef<SWidget> SVCCSimPanel::CreateSceneAnalysisPanel()
             .OnClicked_Lambda([this]() {
                 SceneAnalysisManager->ClearComplexityVisualization();
                 bAnalyzeComplexity = true;
+                bComplexityVisualized = false;
+                VisualizeComplexityButton ->SetButtonStyle(
+                    &FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Primary"));
                 return FReply::Handled();
             })
             .IsEnabled_Lambda([this]() {
@@ -2370,11 +2607,11 @@ void FVCCSimPanelFactory::RegisterTabSpawner(FTabManager& TabManager)
         FOnSpawnTab::CreateLambda([](const FSpawnTabArgs& InArgs) -> TSharedRef<SDockTab> {
             return SNew(SDockTab)
                 .TabRole(ETabRole::NomadTab)
-                .Label(FText::FromString("Image Acquisition"))
+                .Label(FText::FromString("VCCSIM Panel"))
                 [
                     SNew(SVCCSimPanel)
                 ];
         })
     )
-    .SetDisplayName(FText::FromString("Image Acquisition"));
+    .SetDisplayName(FText::FromString("VCCSIM"));
 }

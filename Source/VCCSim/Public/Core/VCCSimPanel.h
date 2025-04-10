@@ -53,6 +53,12 @@ private:
     TSharedPtr<class SNumericEntryBox<float>> VerticalGapSpinBox;
     TSharedPtr<class SNumericEntryBox<float>> SafeDistanceSpinBox;
     TSharedPtr<class SNumericEntryBox<float>> SafeHeightSpinBox;
+    TSharedPtr<class SNumericEntryBox<float>> LimitedMinXSpinBox;
+    TSharedPtr<class SNumericEntryBox<float>> LimitedMaxXSpinBox;
+    TSharedPtr<class SNumericEntryBox<float>> LimitedMinYSpinBox;
+    TSharedPtr<class SNumericEntryBox<float>> LimitedMaxYSpinBox;
+    TSharedPtr<class SNumericEntryBox<float>> LimitedMinZSpinBox;
+    TSharedPtr<class SNumericEntryBox<float>> LimitedMaxZSpinBox;
     
     // Camera availability indicators
     TSharedPtr<class STextBlock> RGBCameraAvailableText;
@@ -80,8 +86,14 @@ private:
     float HeightOffset = 0.0f;
     float VerticalGap = 50.0f;
     FString SaveDirectory;
-    float SafeDistance = 500.0f;
-    float SafeHeight = 300.0f;
+    float SafeDistance = 200.0f;
+    float SafeHeight = 200.0f;
+    float LimitedMinX = .0f;
+    float LimitedMaxX = 5000.0f;
+    float LimitedMinY = -9500.0f;
+    float LimitedMaxY = -7000.0f;
+    float LimitedMinZ = -20.0f;
+    float LimitedMaxZ = 2000.0f;
     
     // TOptional attributes for SpinBox values
     TOptional<int32> NumPosesValue;
@@ -90,6 +102,12 @@ private:
     TOptional<float> VerticalGapValue;
     TOptional<float> SafeDistanceValue;
     TOptional<float> SafeHeightValue;
+    TOptional<float> LimitedMinXValue;
+    TOptional<float> LimitedMaxXValue;
+    TOptional<float> LimitedMinYValue;
+    TOptional<float> LimitedMaxYValue;
+    TOptional<float> LimitedMinZValue;
+    TOptional<float> LimitedMaxZValue;
     
     // Camera settings
     bool bUseRGBCamera = true;

@@ -53,28 +53,151 @@ bool ASceneAnalysisManager::Initialize(UWorld* InWorld, FString&& Path)
 
 void ASceneAnalysisManager::ScanScene()
 {
+    // Call implementation without region bounds
+    ScanSceneImpl(TOptional<FBox>());
+}
+
+void ASceneAnalysisManager::ScanSceneRegion3D(
+    float MinX, float MaxX, float MinY, float MaxY, float MinZ, float MaxZ)
+{
+    // Create a 3D region bounds
+    FBox RegionBounds(
+        FVector(MinX, MinY, MinZ),
+        FVector(MaxX, MaxY, MaxZ)
+    );
+    
+    ScanSceneImpl(RegionBounds);
+}
+
+void ASceneAnalysisManager::ScanSceneImpl(const TOptional<FBox>& RegionBounds)
+{
     if (!World)
         return;
+    
+    // Log region info if bounds are specified
+    if (RegionBounds.IsSet())
+    {
+        const FBox& Bounds = RegionBounds.GetValue();
+        UE_LOG(LogTemp, Display, TEXT("Scanning scene within region bounds: "
+                                      "X(%.2f to %.2f), Y(%.2f to %.2f), Z(%.2f to %.2f)"),
+               Bounds.Min.X, Bounds.Max.X, Bounds.Min.Y, Bounds.Max.Y, Bounds.Min.Z, Bounds.Max.Z);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Display, TEXT("Scanning entire scene (no bounds)"));
+    }
     
     // Clear previous data
     SceneMeshes.Empty();
     TotalPointsInScene = 0;
     TotalTrianglesInScene = 0;
     
-    // Iterate only through StaticMeshActor objects in the world
-    for (TActorIterator<AStaticMeshActor> ActorItr(World); ActorItr; ++ActorItr)
+    int32 TotalActorsFound = 0;
+    int32 TotalMeshComponentsFound = 0;
+    int32 TotalMeshesInRegion = 0;
+    
+    // Iterate through ALL actors in the world instead of just StaticMeshActors
+    for (TActorIterator<AActor> ActorItr(World); ActorItr; ++ActorItr)
     {
-        AStaticMeshActor* StaticMeshActor = *ActorItr;
-        UStaticMeshComponent* MeshComp = StaticMeshActor->GetStaticMeshComponent();
+        AActor* Actor = *ActorItr;
+        TotalActorsFound++;
         
-        if (MeshComp && MeshComp->GetStaticMesh())
+        // Skip actors with the "NotSMActor" tag
+        if (Actor->ActorHasTag(FName("NotSMActor")))
         {
-            FMeshInfo MeshInfo;
-            ExtractMeshData(MeshComp, MeshInfo);
-            SceneMeshes.Add(MeshInfo);
-            
-            TotalTrianglesInScene += MeshInfo.NumTriangles;
-            TotalPointsInScene += MeshInfo.NumVertices;
+            continue;
+        }
+        
+        // Find all static mesh components on this actor
+        TArray<UStaticMeshComponent*> MeshComponents;
+        Actor->GetComponents<UStaticMeshComponent>(MeshComponents);
+        
+        for (UStaticMeshComponent* MeshComp : MeshComponents)
+        {
+            if (MeshComp && MeshComp->GetStaticMesh())
+            {
+                TotalMeshComponentsFound++;
+                
+                // If region bounds are specified, check if mesh intersects with region
+                bool bShouldIncludeMesh = true;
+                
+                if (RegionBounds.IsSet())
+                {
+                    const FBox& RegionBox = RegionBounds.GetValue();
+                    FBoxSphereBounds MeshBoundsS = MeshComp->Bounds;
+                    FBox MeshBox = MeshBoundsS.GetBox();
+                    
+                    // Explicit overlap test instead of using Intersect
+                    bool bOverlapsX = (MeshBox.Max.X >= RegionBox.Min.X) &&
+                        (MeshBox.Min.X <= RegionBox.Max.X);
+                    bool bOverlapsY = (MeshBox.Max.Y >= RegionBox.Min.Y) &&
+                        (MeshBox.Min.Y <= RegionBox.Max.Y);
+                    bool bOverlapsZ = (MeshBox.Max.Z >= RegionBox.Min.Z) &&
+                        (MeshBox.Min.Z <= RegionBox.Max.Z);
+                    
+                    bShouldIncludeMesh = bOverlapsX && bOverlapsY && bOverlapsZ;
+                    
+                    if (bShouldIncludeMesh)
+                    {
+                        TotalMeshesInRegion++;
+                        UE_LOG(LogTemp, Verbose,
+                            TEXT("Mesh from %s is within region - Bounds: X(%.2f to %.2f), "
+                                 "Y(%.2f to %.2f), Z(%.2f to %.2f)"),
+                              *Actor->GetName(),
+                              MeshBox.Min.X, MeshBox.Max.X,
+                              MeshBox.Min.Y, MeshBox.Max.Y,
+                              MeshBox.Min.Z, MeshBox.Max.Z);
+                    }
+                    else
+                    {
+                        UE_LOG(LogTemp, Verbose,
+                            TEXT("Mesh from %s is outside region - Bounds:"
+                                 " X(%.2f to %.2f), Y(%.2f to %.2f), Z(%.2f to %.2f)"),
+                              *Actor->GetName(),
+                              MeshBox.Min.X, MeshBox.Max.X,
+                              MeshBox.Min.Y, MeshBox.Max.Y,
+                              MeshBox.Min.Z, MeshBox.Max.Z);
+                    }
+                }
+                
+                if (bShouldIncludeMesh)
+                {
+                    FMeshInfo MeshInfo;
+                    ExtractMeshData(MeshComp, MeshInfo);
+                    SceneMeshes.Add(MeshInfo);
+                    
+                    TotalTrianglesInScene += MeshInfo.NumTriangles;
+                    TotalPointsInScene += MeshInfo.NumVertices;
+                }
+            }
+        }
+    }
+    
+    UE_LOG(LogTemp, Display, TEXT("Scan complete: Found %d actors, "
+                                  "%d with mesh components, %d within region bounds. "
+                                  "Added %d meshes with %d triangles and %d vertices."),
+          TotalActorsFound, TotalMeshComponentsFound, TotalMeshesInRegion,
+          SceneMeshes.Num(), TotalTrianglesInScene, TotalPointsInScene);
+    
+    // If no meshes were found, provide a warning
+    if (SceneMeshes.Num() == 0)
+    {
+        if (TotalActorsFound == 0)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("No actors found in the world!"));
+        }
+        else if (TotalMeshComponentsFound == 0)
+        {
+            UE_LOG(LogTemp, Warning,
+                TEXT("Found %d actors, but none have valid static mesh components!"), 
+                TotalActorsFound);
+        }
+        else if (RegionBounds.IsSet())
+        {
+            UE_LOG(LogTemp, Warning,
+                TEXT("Found %d actors with valid static mesh components, "
+                     "but none intersect with the specified region!"), 
+                  TotalMeshComponentsFound);
         }
     }
     
@@ -285,15 +408,19 @@ FCoverageData ASceneAnalysisManager::ComputeCoverage(
             if (MeshTotalPoints > 0)
             {
                 MeshVisiblePointRatio = (float)MeshVisiblePoints / (float)MeshTotalPoints;
-                VisibleTriangles += FMath::RoundToInt(MeshInfo.NumTriangles * MeshVisiblePointRatio);
+                VisibleTriangles +=
+                    FMath::RoundToInt(MeshInfo.NumTriangles * MeshVisiblePointRatio);
             }
         }
     }
     
     CoverageData.TotalVisibleTriangles = VisibleTriangles;
     
-    UE_LOG(LogTemp, Display, TEXT("Coverage computed for camera %s: %.2f%% of points visible (%d/%d), %d visible meshes, ~%d visible triangles"),
-        *CameraName, CoveragePercentage, VisiblePointCount, TotalPoints, VisibleMeshIDs.Num(), VisibleTriangles);
+    UE_LOG(LogTemp, Display, TEXT("Coverage computed for camera %s:"
+                                  " %.2f%% of points visible (%d/%d), %d visible meshes,"
+                                  " ~%d visible triangles"),
+        *CameraName, CoveragePercentage, VisiblePointCount, TotalPoints,
+        VisibleMeshIDs.Num(), VisibleTriangles);
 
     if (bGridInitialized)
     {
@@ -352,7 +479,8 @@ void ASceneAnalysisManager::VisualizeCoverage(bool bShow)
     // Check if we have coverage data
     if (!bGridInitialized)
     {
-        UE_LOG(LogTemp, Warning, TEXT("VisualizeCoverage: No coverage grid initialized"));
+        UE_LOG(LogTemp, Warning,
+            TEXT("VisualizeCoverage: No coverage grid initialized"));
         return;
     }
     
@@ -424,7 +552,8 @@ void ASceneAnalysisManager::ResetCoverage()
 }
 
 void ASceneAnalysisManager::ConstructFrustum(
-    FConvexVolume& OutFrustum, const FTransform& CameraPose, const FMatrix44f& CameraIntrinsic)
+    FConvexVolume& OutFrustum, const FTransform& CameraPose,
+    const FMatrix44f& CameraIntrinsic)
 {
     // Extract camera parameters
     const float fx = CameraIntrinsic.M[0][0];
@@ -747,7 +876,6 @@ void ASceneAnalysisManager::GenerateSafeZone(
                         }
                     }
                 }
-                
                 // Update grid cells in a thread-safe manner
                 if (CellsToUpdate.Num() > 0)
                 {
@@ -843,6 +971,7 @@ void ASceneAnalysisManager::GenerateSafeZone(
         }
     }
 
+    UE_LOG(LogTemp, Display, TEXT("Safe zone generated: Over"));
     bSafeZoneDirty = true;
 }
 
@@ -997,11 +1126,13 @@ TArray<FVector> ASceneAnalysisManager::SamplePointsOnMesh(const FMeshInfo& MeshI
             SampledPoints.Add(V2);
             
             // Calculate triangle area (in square units)
-            float TriangleArea = 0.5f * FVector::CrossProduct(V1 - V0, V2 - V0).Size() / 10000.0f;
+            float TriangleArea = 0.5f *
+                FVector::CrossProduct(V1 - V0, V2 - V0).Size() / 10000.0f;
             
             // Calculate number of samples based on SamplingDensity and triangle area
             // SamplingDensity represents points per square meter
-            int32 NumSamples = FMath::Max(1, FMath::RoundToInt(TriangleArea * SamplingDensity));
+            int32 NumSamples =
+                FMath::Max(1, FMath::RoundToInt(TriangleArea * SamplingDensity));
             
             // Add additional samples within the triangle
             for (int32 SampleIdx = 0; SampleIdx < NumSamples; ++SampleIdx)
@@ -1266,6 +1397,27 @@ void ASceneAnalysisManager::CreateSafeZoneMesh()
     VertexColors.Reserve(EstimatedUnsafeCells * 8);
     Tangents.Reserve(EstimatedUnsafeCells * 8);
     
+    // Find the Z range of unsafe cells to create proper gradient mapping
+    float MinZ = FLT_MAX;
+    float MaxZ = -FLT_MAX;
+    
+    for (const auto& Pair : UnifiedGrid)
+    {
+        if (!Pair.Value.bIsSafe)
+        {
+            const FIntVector& GridCoords = Pair.Key;
+            float CellZ = GridOrigin.Z + (GridCoords.Z + 0.5f) * GridResolution;
+            MinZ = FMath::Min(MinZ, CellZ);
+            MaxZ = FMath::Max(MaxZ, CellZ);
+        }
+    }
+    
+    // Prevent division by zero if all cells are at same height
+    if (FMath::IsNearlyEqual(MaxZ, MinZ))
+    {
+        MaxZ = MinZ + 1.0f;
+    }
+    
     // Create cubes only for unsafe cells
     int32 NumCellsVisualized = 0;
     for (const auto& Pair : UnifiedGrid)
@@ -1288,8 +1440,15 @@ void ASceneAnalysisManager::CreateSafeZoneMesh()
         float CellSize = GridResolution * 0.9f;
         float HalfSize = CellSize * 0.5f;
         
-        // Use a consistent color for unsafe cells
-        FColor CellColor = FColor(255, 0, 0, 128); // Red with transparency
+        // Calculate color based on height
+        float NormalizedHeight = (CellCenter.Z - MinZ) / (MaxZ - MinZ);
+        
+        FLinearColor CellLinearColor = FLinearColor::LerpUsingHSV(
+            SafeZoneDarkColor, SafeZoneLightColor, NormalizedHeight);
+        
+        // Convert to FColor and add transparency
+        FColor CellColor = CellLinearColor.ToFColor(false);
+        CellColor.A = 180; // Semi-transparent
         
         // Add a cube for this cell
         int32 BaseVertexIndex = Vertices.Num();
@@ -1414,7 +1573,8 @@ void ASceneAnalysisManager::AnalyzeGeometricComplexity()
 {
     if (!World || !bGridInitialized || SceneMeshes.Num() == 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("AnalyzeGeometricComplexity: World not initialized or no meshes in scene"));
+        UE_LOG(LogTemp, Warning, TEXT("AnalyzeGeometricComplexity: "
+                                      "World not initialized or no meshes in scene"));
         return;
     }
     
@@ -1424,7 +1584,8 @@ void ASceneAnalysisManager::AnalyzeGeometricComplexity()
         ApplyComplexityPreset(SceneComplexityPreset);
     }
     
-    UE_LOG(LogTemp, Display, TEXT("Analyzing geometric complexity with weights: Curvature=%.2f, EdgeDensity=%.2f, AngleVariation=%.2f"),
+    UE_LOG(LogTemp, Display, TEXT("Analyzing geometric complexity with weights: "
+                                  "Curvature=%.2f, EdgeDensity=%.2f, AngleVariation=%.2f"),
            CurvatureWeight, EdgeDensityWeight, AngleVariationWeight);
     
     // Reset complexity scores
@@ -1683,7 +1844,8 @@ void ASceneAnalysisManager::AnalyzeGeometricComplexity()
             HighComplexityCells++;
     }
     
-    UE_LOG(LogTemp, Display, TEXT("Geometric complexity analysis complete: %d cells analyzed, %d high-complexity cells identified"),
+    UE_LOG(LogTemp, Display, TEXT("Geometric complexity analysis complete: "
+                                  "%d cells analyzed, %d high-complexity cells identified"),
            TotalAnalyzedCells, HighComplexityCells);
 }
 
@@ -1757,7 +1919,8 @@ float ASceneAnalysisManager::CalculateAngleVariationScore(const TArray<float>& A
     return TotalVariation / Angles.Num();
 }
 
-FVector ASceneAnalysisManager::CalculateTriangleNormal(const FVector& V0, const FVector& V1, const FVector& V2)
+FVector ASceneAnalysisManager::CalculateTriangleNormal(
+    const FVector& V0, const FVector& V1, const FVector& V2)
 {
     FVector Edge1 = V1 - V0;
     FVector Edge2 = V2 - V0;
@@ -1887,7 +2050,8 @@ void ASceneAnalysisManager::VisualizeComplexity(bool bShow)
     
     if (!bHasComplexityData)
     {
-        UE_LOG(LogTemp, Warning, TEXT("VisualizeComplexity: No complexity data found. Run AnalyzeGeometricComplexity first."));
+        UE_LOG(LogTemp, Warning, TEXT("VisualizeComplexity: No complexity data found."
+                                      " Run AnalyzeGeometricComplexity first."));
         return;
     }
     
@@ -1907,7 +2071,8 @@ void ASceneAnalysisManager::VisualizeComplexity(bool bShow)
     // If mesh component failed to initialize, return
     if (!ComplexityVisualizationMesh)
     {
-        UE_LOG(LogTemp, Error, TEXT("VisualizeComplexity: Complexity mesh component not initialized"));
+        UE_LOG(LogTemp, Error, TEXT("VisualizeComplexity: "
+                                    "Complexity mesh component not initialized"));
         return;
     }
     
@@ -2125,7 +2290,8 @@ void ASceneAnalysisManager::CreateComplexityMesh()
         }
     }
     
-    UE_LOG(LogTemp, Display, TEXT("Complexity visualization: Created mesh with %d cells visible, %d vertices, %d triangles"),
+    UE_LOG(LogTemp, Display, TEXT("Complexity visualization: "
+                                  "Created mesh with %d cells visible, %d vertices, %d triangles"),
           NumCellsVisualized, Vertices.Num(), Triangles.Num() / 3);
 }
 
