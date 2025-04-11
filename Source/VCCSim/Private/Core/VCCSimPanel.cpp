@@ -1270,10 +1270,17 @@ TSharedRef<SWidget> SVCCSimPanel::CreateSceneAnalysisPanel()
             .OnClicked_Lambda([this]() {
                 if (SceneAnalysisManager.IsValid())
                 {
-                    SceneAnalysisManager->ScanSceneRegion3D(
-                        LimitedMinX, LimitedMaxX,
-                        LimitedMinY, LimitedMaxY,
-                        LimitedMinZ, LimitedMaxZ);
+                    if (bUseLimited)
+                    {
+                        SceneAnalysisManager->ScanSceneRegion3D(
+                            LimitedMinX, LimitedMaxX,
+                            LimitedMinY, LimitedMaxY,
+                            LimitedMinZ, LimitedMaxZ);
+                    }
+                    else
+                    {
+                        SceneAnalysisManager->ScanScene();
+                    }
                     bNeedScan = false;
                 }
                 return FReply::Handled();
@@ -1311,6 +1318,22 @@ TSharedRef<SWidget> SVCCSimPanel::CreateSceneAnalysisPanel()
                 return SceneAnalysisManager.IsValid() && SelectedFlashPawn.IsValid();
             })
         ]
+        +SHorizontalBox::Slot()
+        .AutoWidth()
+        .VAlign(VAlign_Center)
+        .Padding(FMargin(8, 0, 4, 0))
+        [
+            SAssignNew(SelectUseLimitedToggle, SCheckBox)
+            .IsChecked(bUseLimited ? ECheckBoxState::Checked : ECheckBoxState::Unchecked)
+            .OnCheckStateChanged(this, &SVCCSimPanel::OnUseLimitedToggleChanged)
+        ]
+        +SHorizontalBox::Slot()
+        .AutoWidth()
+        .VAlign(VAlign_Center)
+        [
+            SNew(STextBlock)
+            .Text(FText::FromString("Limited Region"))
+        ]
     ]
 
     // Separator
@@ -1347,7 +1370,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreateSceneAnalysisPanel()
             .OnClicked_Lambda([this]() {
                 if (SceneAnalysisManager.IsValid())
                 {
-                    SceneAnalysisManager->GenerateSafeZone(SafeDistance, SafeHeight);
+                    SceneAnalysisManager->GenerateSafeZone(SafeDistance);
                     bGenSafeZone = false;
                 }
                 return FReply::Handled();
@@ -1607,6 +1630,14 @@ void SVCCSimPanel::OnSelectTargetToggleChanged(ECheckBoxState NewState)
         bSelectingFlashPawn = false;
         SelectFlashPawnToggle->SetIsChecked(ECheckBoxState::Unchecked);
     }
+}
+
+void SVCCSimPanel::OnUseLimitedToggleChanged(ECheckBoxState NewState)
+{
+    bUseLimited = (NewState == ECheckBoxState::Checked);
+
+    UE_LOG(LogTemp, Display, TEXT("Use Limited Region: %s"),
+        bUseLimited ? TEXT("Enabled") : TEXT("Disabled"));
 }
 
 // Camera checkbox callbacks
@@ -2476,7 +2507,7 @@ void SVCCSimPanel::UpdatePathVisualization()
 
     if (PathVisualizationActor.IsValid())
     { 
-        PathVisualizationActor->Tags.Add(FName("NoSMActor"));
+        PathVisualizationActor->Tags.Add(FName("NotSMActor"));
     }
 
     HidePathVisualization();

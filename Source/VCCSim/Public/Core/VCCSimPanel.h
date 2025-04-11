@@ -73,8 +73,10 @@ private:
     // Selection state toggles
     TSharedPtr<class SCheckBox> SelectFlashPawnToggle;
     TSharedPtr<class SCheckBox> SelectTargetToggle;
+    TSharedPtr<class SCheckBox> SelectUseLimitedToggle;
     bool bSelectingFlashPawn = false;
     bool bSelectingTarget = false;
+    bool bUseLimited = false;
     
     // Selected objects
     TWeakObjectPtr<AFlashPawn> SelectedFlashPawn;
@@ -134,6 +136,7 @@ private:
     // UI callbacks
     void OnSelectFlashPawnToggleChanged(ECheckBoxState NewState);
     void OnSelectTargetToggleChanged(ECheckBoxState NewState);
+    void OnUseLimitedToggleChanged(ECheckBoxState NewState);
     
     void OnRGBCameraCheckboxChanged(ECheckBoxState NewState);
     void OnDepthCameraCheckboxChanged(ECheckBoxState NewState);

@@ -39,9 +39,6 @@ struct FUnifiedGridCell
     int32 VisiblePoints;
     float Coverage;
     
-    // Safe zone data
-    bool bIsSafe;
-
     // Complexity data
     float CurvatureScore;
     float EdgeDensityScore;
@@ -52,7 +49,6 @@ struct FUnifiedGridCell
             : TotalPoints(0)
             , VisiblePoints(0)
             , Coverage(0.0f)
-            , bIsSafe(true)
             , CurvatureScore(0.0f)
             , EdgeDensityScore(0.0f)
             , AngleVariationScore(0.0f)
@@ -87,23 +83,7 @@ public:
     UPROPERTY(EditAnywhere, Category = "SceneAnalysis")
     float GridResolution = 50.0f;
     
-    // Coverage
-    float GetTotalCoveragePercentage() const { return CurrentCoveragePercentage;}
-    void ResetCoverage();
-    FCoverageData ComputeCoverage(
-        const TArray<FTransform>& CameraTransforms, const FString& CameraName);
-    FCoverageData ComputeCoverage(
-        const FTransform& CameraTransform, const FString& CameraName);
-    
-    // Coverage Grid Visualization
-    UFUNCTION(BlueprintCallable, Category = "SceneAnalysis|Coverage")
-    void InitializeCoverageVisualization();
-    UFUNCTION(BlueprintCallable, Category = "SceneAnalysis|Coverage")
-    void VisualizeCoverage(bool bShow);
-    UFUNCTION(BlueprintCallable, Category = "SceneAnalysis|Coverage")
-    void ClearCoverageVisualization();
-    
-    // Coverage Grid Settings
+    /* ------------------------------- Coverage ----------------------------- */
     UPROPERTY(EditAnywhere, Category = "SceneAnalysis|Coverage")
     UProceduralMeshComponent* CoverageVisualizationMesh;
     UPROPERTY(EditAnywhere, Category = "SceneAnalysis|Coverage")
@@ -115,24 +95,39 @@ public:
     UPROPERTY(EditAnywhere, Category = "SceneAnalysis|Coverage", meta = (ClampMin = "0.0", ClampMax = "1.0"))
     float VisualizationThreshold = 0.f;
     
-    // Safe zone
-    void GenerateSafeZone(const float& SafeDistance, const float& SafeHeight);
+    float GetTotalCoveragePercentage() const { return CurrentCoveragePercentage;}
+    void ResetCoverage();
+    FCoverageData ComputeCoverage(const TArray<FTransform>& CameraTransforms, const FString& CameraName);
+    FCoverageData ComputeCoverage(const FTransform& CameraTransform, const FString& CameraName);
+    UFUNCTION(BlueprintCallable, Category = "SceneAnalysis|Coverage")
+    void InitializeCoverageVisualization();
+    UFUNCTION(BlueprintCallable, Category = "SceneAnalysis|Coverage")
+    void VisualizeCoverage(bool bShow);
+    UFUNCTION(BlueprintCallable, Category = "SceneAnalysis|Coverage")
+    void ClearCoverageVisualization();
+    void UpdateCoverageGrid();
+    void CreateCoverageMesh();
+
+    /* -------------------------- Safe zone -------------------------- */
     UPROPERTY(EditAnywhere, Category = "SceneAnalysis|SafeZone")
     UProceduralMeshComponent* SafeZoneVisualizationMesh;
     UPROPERTY(EditAnywhere, Category = "SceneAnalysis|SafeZone")
     UMaterialInterface* SafeZoneMaterial;
+    UPROPERTY(EditAnywhere, Category = "SceneAnalysis|SafeZone")
+    FLinearColor SafeZoneColor = FLinearColor(1.0f, 0.47f, 0.47f);
+
+    TArray<FBox> MeshSafeZones;
+    
     UFUNCTION(BlueprintCallable, Category = "SceneAnalysis|SafeZone")
     void InitializeSafeZoneVisualization();
     UFUNCTION(BlueprintCallable, Category = "SceneAnalysis|SafeZone")
     void VisualizeSafeZone(bool Vis);
     UFUNCTION(BlueprintCallable, Category = "SceneAnalysis|SafeZone")
     void ClearSafeZoneVisualization();
-    UPROPERTY(EditAnywhere, Category = "SceneAnalysis|SafeZone")
-    FLinearColor SafeZoneLightColor = FLinearColor(1.0f, 0.47f, 0.47f);
-    UPROPERTY(EditAnywhere, Category = "SceneAnalysis|SafeZone")
-    FLinearColor SafeZoneDarkColor = FLinearColor(0.58f, 0.0f, 0.0f);
-
-    // Complexity Analysis Parameters
+    void GenerateSafeZone(const float& SafeDistance);
+    void CreateSafeZoneMesh();
+    
+    /* --------------------- Complexity --------------------------- */
     UPROPERTY(EditAnywhere, Category = "SceneAnalysis|Complexity", meta = (ClampMin = "0.0", ClampMax = "1.0"))
     float CurvatureWeight = 0.4f;
     UPROPERTY(EditAnywhere, Category = "SceneAnalysis|Complexity", meta = (ClampMin = "0.0", ClampMax = "1.0"))
@@ -154,16 +149,14 @@ public:
     // Scene-specific calibration
     UPROPERTY(EditAnywhere, Category = "SceneAnalysis|Complexity")
     ESceneComplexityPreset SceneComplexityPreset = ESceneComplexityPreset::Generic;
-    
-    void AnalyzeGeometricComplexity();
-    TArray<FIntVector> GetHighComplexityRegions(float ComplexityThreshold = 0.7f);
-    void ApplyComplexityPreset(ESceneComplexityPreset Preset);
-
-    // Visualization
     UPROPERTY(EditAnywhere, Category = "SceneAnalysis|Complexity")
     UProceduralMeshComponent* ComplexityVisualizationMesh;
     UPROPERTY(EditAnywhere, Category = "SceneAnalysis|Complexity")
     UMaterialInterface* ComplexityMaterial;
+    
+    void AnalyzeGeometricComplexity();
+    TArray<FIntVector> GetHighComplexityRegions(float ComplexityThreshold = 0.7f);
+    void ApplyComplexityPreset(ESceneComplexityPreset Preset);
     UFUNCTION(BlueprintCallable, Category = "SceneAnalysis|Complexity")
     void InitializeComplexityVisualization();
     UFUNCTION(BlueprintCallable, Category = "SceneAnalysis|Complexity")
@@ -171,7 +164,7 @@ public:
     UFUNCTION(BlueprintCallable, Category = "SceneAnalysis|Complexity")
     void ClearComplexityVisualization();
 
-    // Helper functions
+    /* -------------------------- Helper functions ------------------------- */
     FMeshInfo GetMeshInfo(int32 MeshID) const;
     TArray<FMeshInfo> GetAllMeshInfo() const;
     static void ExtractMeshData(UStaticMeshComponent* MeshComponent,
@@ -199,10 +192,6 @@ private:
     bool IsPointVisibleFromCamera(const FVector& Point,
         const FTransform& CameraPose) const;
     TArray<FVector> SamplePointsOnMesh(const FMeshInfo& MeshInfo);
-
-    void UpdateCoverageGrid();
-    void CreateCoverageMesh();
-    void CreateSafeZoneMesh();
 
 private:
     UPROPERTY()
@@ -232,6 +221,7 @@ private:
     UPROPERTY()
     FBox ExpandedSceneBounds;
     bool bSafeZoneDirty = false;
+    TArray<FMeshInfo> SafetyEnvelopes;
 
     // Complexity Analysis
     void CreateComplexityMesh();

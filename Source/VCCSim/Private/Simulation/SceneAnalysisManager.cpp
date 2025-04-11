@@ -21,7 +21,6 @@
 #include "Sensors/CameraSensor.h"
 #include "EngineUtils.h"
 #include "Engine/StaticMesh.h"
-#include "Engine/StaticMeshActor.h"
 #include "DrawDebugHelpers.h"
 
 ASceneAnalysisManager::ASceneAnalysisManager()
@@ -248,7 +247,8 @@ FCoverageData ASceneAnalysisManager::ComputeCoverage(
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("ComputeCoverage: No intrinsics found for camera %s"), *CameraName);
+        UE_LOG(LogTemp, Warning, TEXT("ComputeCoverage: "
+                                      "No intrinsics found for camera %s"), *CameraName);
     }
     
     // Reset visibility of all points
@@ -802,7 +802,6 @@ void ASceneAnalysisManager::InitializeUnifiedGrid()
         // Add cell with no coverage yet
         FUnifiedGridCell& Cell = UnifiedGrid.FindOrAdd(GridCoords);
         Cell.TotalPoints++;
-        Cell.bIsSafe = false; // Default to safe
     }
     
     bGridInitialized = true;
@@ -810,241 +809,6 @@ void ASceneAnalysisManager::InitializeUnifiedGrid()
     UE_LOG(LogTemp, Display, TEXT("Unified grid initialized: "
                                   "theoretical grid %dx%dx%d, actual populated cells: %d"), 
            GridSizeX, GridSizeY, GridSizeZ, UnifiedGrid.Num());
-}
-
-void ASceneAnalysisManager::GenerateSafeZone(
-    const float& SafeDistance, const float& SafeHeight)
-{
-    // Try to find a valid world
-    if (GEngine)
-    {
-        for (const FWorldContext& Context : GEngine->GetWorldContexts())
-        {
-            if (Context.WorldType == EWorldType::Game || Context.WorldType == EWorldType::PIE)
-            {
-                World = Context.World();
-            }
-        }
-    }
-    
-    if (!World)
-    {
-        UE_LOG(LogTemp, Error, TEXT("GenerateSafeZone: No valid World found"));
-        return;
-    }
-    
-    // Get scene mesh data
-    if (SceneMeshes.Num() == 0)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("GenerateSafeZone: No meshes in scene"));
-        return;
-    }
-    
-    // Initialize grid if not done already
-    if (!bGridInitialized)
-    {
-        InitializeUnifiedGrid();
-    }
-    
-    // Mark all cells as safe initially
-    for (auto& Pair : UnifiedGrid)
-    {
-        Pair.Value.bIsSafe = true;
-    }
-    
-    // Calculate expanded scene bounds for safety
-    FBox SceneBounds = ExpandedSceneBounds;
-    FVector BoundsMin = SceneBounds.Min;
-    FVector BoundsSize = SceneBounds.GetSize();
-    
-    int32 NumX = FMath::Max(1, FMath::CeilToInt(BoundsSize.X / GridResolution));
-    int32 NumY = FMath::Max(1, FMath::CeilToInt(BoundsSize.Y / GridResolution));
-    int32 NumZ = FMath::Max(1, FMath::CeilToInt(BoundsSize.Z / GridResolution));
-    
-    UE_LOG(LogTemp, Display, TEXT("Generating safe zone grid: %dx%dx%d "
-                                  "with cell size %.2f"), NumX, NumY, NumZ, GridResolution);
-    
-    // OPTIMIZATION: Use parallel processing for large meshes
-    const bool bUseParallelProcessing = SceneMeshes.Num() > 10 || TotalTrianglesInScene > 100000;
-    FCriticalSection CriticalSection;
-    
-    // For each mesh in the scene
-    for (const FMeshInfo& MeshInfo : SceneMeshes)
-    {
-        // Process triangles in parallel for large meshes
-        if (bUseParallelProcessing && MeshInfo.Indices.Num() > 30000)
-        {
-            ParallelFor(MeshInfo.Indices.Num() / 3, [&](int32 TriangleIndex)
-            {
-                int32 i = TriangleIndex * 3;
-                if (i + 2 >= MeshInfo.Indices.Num()) return;
-                
-                // Get triangle vertices
-                const FVector& V0 = MeshInfo.VertexPositions[MeshInfo.Indices[i]];
-                const FVector& V1 = MeshInfo.VertexPositions[MeshInfo.Indices[i + 1]];
-                const FVector& V2 = MeshInfo.VertexPositions[MeshInfo.Indices[i + 2]];
-                
-                // Calculate triangle bounds
-                FBox TriBounds(EForceInit::ForceInit);
-                TriBounds += V0;
-                TriBounds += V1;
-                TriBounds += V2;
-                
-                // Expand bounds by safe distance
-                TriBounds = TriBounds.ExpandBy(FVector(SafeDistance,
-                    SafeDistance, SafeHeight));
-                
-                // Convert to grid coordinates
-                int32 MinX = FMath::Max(0, FMath::FloorToInt(
-                    (TriBounds.Min.X - BoundsMin.X) / GridResolution));
-                int32 MinY = FMath::Max(0, FMath::FloorToInt(
-                    (TriBounds.Min.Y - BoundsMin.Y) / GridResolution));
-                int32 MinZ = FMath::Max(0, FMath::FloorToInt(
-                    (TriBounds.Min.Z - BoundsMin.Z) / GridResolution));
-                
-                int32 MaxX = FMath::Min(NumX - 1, FMath::CeilToInt(
-                    (TriBounds.Max.X - BoundsMin.X) / GridResolution));
-                int32 MaxY = FMath::Min(NumY - 1, FMath::CeilToInt(
-                    (TriBounds.Max.Y - BoundsMin.Y) / GridResolution));
-                int32 MaxZ = FMath::Min(NumZ - 1, FMath::CeilToInt(
-                    (TriBounds.Max.Z - BoundsMin.Z) / GridResolution));
-                
-                // Process cells that need checking
-                TArray<FIntVector> CellsToUpdate;
-                
-                // Check each cell in the expanded bounds
-                for (int32 X = MinX; X <= MaxX; ++X)
-                {
-                    for (int32 Y = MinY; Y <= MaxY; ++Y)
-                    {
-                        for (int32 Z = MinZ; Z <= MaxZ; ++Z)
-                        {
-                            FIntVector GridCoords(X, Y, Z);
-                            
-                            // Calculate cell center
-                            FVector CellCenter(
-                                BoundsMin.X + (X + 0.5f) * GridResolution,
-                                BoundsMin.Y + (Y + 0.5f) * GridResolution,
-                                BoundsMin.Z + (Z + 0.5f) * GridResolution
-                            );
-                            
-                            // Find closest point on triangle
-                            FVector ClosestPoint = FMath::ClosestPointOnTriangleToPoint(
-                                CellCenter, V0, V1, V2);
-                            
-                            // Check horizontal distance (XY plane)
-                            FVector2D CellCenter2D(CellCenter.X, CellCenter.Y);
-                            FVector2D ClosestPoint2D(ClosestPoint.X, ClosestPoint.Y);
-                            float HorizontalDist = FVector2D::Distance(CellCenter2D, ClosestPoint2D);
-                            
-                            // Check vertical distance (Z axis)
-                            float VerticalDist = FMath::Abs(CellCenter.Z - ClosestPoint.Z);
-                            
-                            // Mark as unsafe if too close in both horizontal and vertical directions
-                            if (HorizontalDist < SafeDistance && VerticalDist < SafeHeight)
-                            {
-                                CellsToUpdate.Add(GridCoords);
-                            }
-                        }
-                    }
-                }
-                // Update grid cells in a thread-safe manner
-                if (CellsToUpdate.Num() > 0)
-                {
-                    FScopeLock Lock(&CriticalSection);
-                    for (const FIntVector& Coords : CellsToUpdate)
-                    {
-                        FUnifiedGridCell& Cell = UnifiedGrid.FindOrAdd(Coords);
-                        Cell.bIsSafe = false;
-                    }
-                }
-            });
-        }
-        else
-        {
-            // Sequential processing for smaller meshes
-            for (int32 i = 0; i < MeshInfo.Indices.Num(); i += 3)
-            {
-                if (i + 2 >= MeshInfo.Indices.Num()) continue;
-                
-                // Get triangle vertices
-                const FVector& V0 = MeshInfo.VertexPositions[MeshInfo.Indices[i]];
-                const FVector& V1 = MeshInfo.VertexPositions[MeshInfo.Indices[i + 1]];
-                const FVector& V2 = MeshInfo.VertexPositions[MeshInfo.Indices[i + 2]];
-                
-                // Calculate triangle bounds
-                FBox TriBounds(EForceInit::ForceInit);
-                TriBounds += V0;
-                TriBounds += V1;
-                TriBounds += V2;
-                
-                // Expand bounds by safe distance
-                TriBounds = TriBounds.ExpandBy(FVector(SafeDistance,
-                    SafeDistance, SafeHeight));
-                
-                // Convert to grid coordinates
-                int32 MinX = FMath::Max(0, FMath::FloorToInt(
-                    (TriBounds.Min.X - BoundsMin.X) / GridResolution));
-                int32 MinY = FMath::Max(0, FMath::FloorToInt(
-                    (TriBounds.Min.Y - BoundsMin.Y) / GridResolution));
-                int32 MinZ = FMath::Max(0, FMath::FloorToInt(
-                    (TriBounds.Min.Z - BoundsMin.Z) / GridResolution));
-                
-                int32 MaxX = FMath::Min(NumX - 1, FMath::CeilToInt(
-                    (TriBounds.Max.X - BoundsMin.X) / GridResolution));
-                int32 MaxY = FMath::Min(NumY - 1, FMath::CeilToInt(
-                    (TriBounds.Max.Y - BoundsMin.Y) / GridResolution));
-                int32 MaxZ = FMath::Min(NumZ - 1, FMath::CeilToInt(
-                    (TriBounds.Max.Z - BoundsMin.Z) / GridResolution));
-                
-                // OPTIMIZATION: Use bounding box check first
-                for (int32 X = MinX; X <= MaxX; ++X)
-                {
-                    for (int32 Y = MinY; Y <= MaxY; ++Y)
-                    {
-                        for (int32 Z = MinZ; Z <= MaxZ; ++Z)
-                        {
-                            FIntVector GridCoords(X, Y, Z);
-                            
-                            // Find or add cell to unified grid
-                            FUnifiedGridCell& Cell = UnifiedGrid.FindOrAdd(GridCoords);
-                            
-                            // Skip if already marked unsafe (optimization)
-                            if (!Cell.bIsSafe) continue;
-                            
-                            // Calculate cell center
-                            FVector CellCenter(
-                                BoundsMin.X + (X + 0.5f) * GridResolution,
-                                BoundsMin.Y + (Y + 0.5f) * GridResolution,
-                                BoundsMin.Z + (Z + 0.5f) * GridResolution
-                            );
-                            
-                            // Find closest point on triangle
-                            FVector ClosestPoint = FMath::ClosestPointOnTriangleToPoint(
-                                CellCenter, V0, V1, V2);
-                            
-                            // Check horizontal distance (XY plane)
-                            FVector2D CellCenter2D(CellCenter.X, CellCenter.Y);
-                            FVector2D ClosestPoint2D(ClosestPoint.X, ClosestPoint.Y);
-                            float HorizontalDist = FVector2D::Distance(CellCenter2D, ClosestPoint2D);
-                            
-                            // Check vertical distance (Z axis)
-                            float VerticalDist = FMath::Abs(CellCenter.Z - ClosestPoint.Z);
-                            
-                            // Mark as unsafe if too close in both horizontal and vertical directions
-                            if (HorizontalDist < SafeDistance && VerticalDist < SafeHeight)
-                            {
-                                Cell.bIsSafe = false;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    UE_LOG(LogTemp, Display, TEXT("Safe zone generated: Over"));
-    bSafeZoneDirty = true;
 }
 
 void ASceneAnalysisManager::InitializeSafeZoneVisualization()
@@ -1072,8 +836,7 @@ void ASceneAnalysisManager::InitializeSafeZoneVisualization()
         
         if (!SafeZoneMaterial)
         {
-            UE_LOG(LogTemp, Error, TEXT("InitializeSafeZoneVisualization: "
-                                       "Failed to load safe zone material."));
+            UE_LOG(LogTemp, Error, TEXT("InitializeSafeZoneVisualization: Failed to load safe zone material."));
         }
     }
 }
@@ -1082,13 +845,6 @@ void ASceneAnalysisManager::VisualizeSafeZone(bool Vis)
 {
     if (!World)
         return;
-    
-    // Check if we have a valid grid
-    if (!bGridInitialized)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("VisualizeSafeZone: No grid initialized"));
-        return;
-    }
     
     // If not showing, clear visualization and return
     if (!Vis)
@@ -1100,23 +856,25 @@ void ASceneAnalysisManager::VisualizeSafeZone(bool Vis)
         return;
     }
     
+    // Check if we have safe zones
+    if (MeshSafeZones.Num() == 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("VisualizeSafeZone: No safe zones to visualize. Generate safe zones first."));
+        return;
+    }
+    
     // Initialize visualization components if needed
     InitializeSafeZoneVisualization();
     
     // If mesh component failed to initialize, return
     if (!SafeZoneVisualizationMesh)
     {
-        UE_LOG(LogTemp, Error, TEXT("VisualizeSafeZone: Safe zone "
-                                   "mesh component not initialized"));
+        UE_LOG(LogTemp, Error, TEXT("VisualizeSafeZone: Safe zone mesh component not initialized"));
         return;
     }
     
-    // Only update mesh if dirty or visibility is changing
-    if (bSafeZoneDirty)
-    {
-        CreateSafeZoneMesh();
-        bSafeZoneDirty = false;
-    }
+    // Create the safe zone mesh
+    CreateSafeZoneMesh();
     
     // Set visibility
     SafeZoneVisualizationMesh->SetVisibility(true);
@@ -1124,10 +882,168 @@ void ASceneAnalysisManager::VisualizeSafeZone(bool Vis)
 
 void ASceneAnalysisManager::ClearSafeZoneVisualization()
 {
+    // Clear mesh section
     if (SafeZoneVisualizationMesh)
     {
         SafeZoneVisualizationMesh->ClearAllMeshSections();
         SafeZoneVisualizationMesh->SetVisibility(false);
+    }
+    
+    // Clear safe zones
+    MeshSafeZones.Empty();
+}
+
+void ASceneAnalysisManager::GenerateSafeZone(const float& SafeDistance)
+{
+    if (!World || SceneMeshes.Num() == 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("GenerateSafeZone: No valid World or no meshes in scene"));
+        return;
+    }
+    
+    // Clear previous safe zones
+    MeshSafeZones.Empty();
+    MeshSafeZones.Reserve(SceneMeshes.Num());
+    
+    // Generate individual safe zone for each mesh
+    for (const FMeshInfo& MeshInfo : SceneMeshes)
+    {
+        // Get the original mesh bounds
+        FBox MeshBounds = MeshInfo.Bounds.GetBox();
+        
+        // Expand by safe distance
+        FBox ExpandedMeshBounds = MeshBounds.ExpandBy(SafeDistance);
+        
+        // Add to our collection
+        MeshSafeZones.Add(ExpandedMeshBounds);
+    }
+    
+    // Also keep the overall expanded scene bounds (might be useful for other functions)
+    FBox SceneBounds(EForceInit::ForceInit);
+    for (const FBox& SafeZone : MeshSafeZones)
+    {
+        SceneBounds += SafeZone;
+    }
+    ExpandedSceneBounds = SceneBounds;
+    
+    UE_LOG(LogTemp, Display, TEXT("Generated %d individual mesh safe zones with expansion distance %.2f"), 
+           MeshSafeZones.Num(), SafeDistance);
+}
+
+void ASceneAnalysisManager::CreateSafeZoneMesh()
+{
+    // Clear existing mesh sections
+    SafeZoneVisualizationMesh->ClearAllMeshSections();
+    
+    // Create arrays for procedural mesh
+    TArray<FVector> Vertices;
+    TArray<int32> Triangles;
+    TArray<FVector> Normals;
+    TArray<FVector2D> UV0;
+    TArray<FColor> VertexColors;
+    TArray<FProcMeshTangent> Tangents;
+    
+    // Create a semi-transparent color
+    FColor BoxColor = SafeZoneColor.ToFColor(false);
+    BoxColor.A = 128; // Semi-transparent
+    
+    // Process each mesh safe zone
+    for (int32 BoxIndex = 0; BoxIndex < MeshSafeZones.Num(); BoxIndex++)
+    {
+        const FBox& SafeZoneBox = MeshSafeZones[BoxIndex];
+        
+        // Get the box dimensions
+        FVector BoxMin = SafeZoneBox.Min;
+        FVector BoxMax = SafeZoneBox.Max;
+        
+        // Base vertex index for this box
+        int32 BaseVertexIndex = Vertices.Num();
+        
+        // Define the 8 corners of the box
+        Vertices.Add(FVector(BoxMin.X, BoxMin.Y, BoxMin.Z)); // 0: bottom left back
+        Vertices.Add(FVector(BoxMax.X, BoxMin.Y, BoxMin.Z)); // 1: bottom right back
+        Vertices.Add(FVector(BoxMax.X, BoxMax.Y, BoxMin.Z)); // 2: bottom right front
+        Vertices.Add(FVector(BoxMin.X, BoxMax.Y, BoxMin.Z)); // 3: bottom left front
+        Vertices.Add(FVector(BoxMin.X, BoxMin.Y, BoxMax.Z)); // 4: top left back
+        Vertices.Add(FVector(BoxMax.X, BoxMin.Y, BoxMax.Z)); // 5: top right back
+        Vertices.Add(FVector(BoxMax.X, BoxMax.Y, BoxMax.Z)); // 6: top right front
+        Vertices.Add(FVector(BoxMin.X, BoxMax.Y, BoxMax.Z)); // 7: top left front
+        
+        // Add colors for all 8 vertices
+        for (int32 i = 0; i < 8; ++i)
+        {
+            VertexColors.Add(BoxColor);
+        }
+        
+        // Add texture coordinates
+        UV0.Add(FVector2D(0, 0)); // 0
+        UV0.Add(FVector2D(1, 0)); // 1
+        UV0.Add(FVector2D(1, 1)); // 2
+        UV0.Add(FVector2D(0, 1)); // 3
+        UV0.Add(FVector2D(0, 0)); // 4
+        UV0.Add(FVector2D(1, 0)); // 5
+        UV0.Add(FVector2D(1, 1)); // 6
+        UV0.Add(FVector2D(0, 1)); // 7
+        
+        // Add normals
+        Normals.Add(FVector(0, 0, -1)); // Bottom face
+        Normals.Add(FVector(0, 0, -1));
+        Normals.Add(FVector(0, 0, -1));
+        Normals.Add(FVector(0, 0, -1));
+        Normals.Add(FVector(0, 0, 1));  // Top face
+        Normals.Add(FVector(0, 0, 1));
+        Normals.Add(FVector(0, 0, 1));
+        Normals.Add(FVector(0, 0, 1));
+        
+        // Add tangents
+        for (int32 i = 0; i < 8; ++i)
+        {
+            Tangents.Add(FProcMeshTangent(1, 0, 0));
+        }
+        
+        // Add triangles for each face (12 triangles total)
+        // Bottom face (0,1,2,3)
+        Triangles.Add(BaseVertexIndex + 0); Triangles.Add(BaseVertexIndex + 1); Triangles.Add(BaseVertexIndex + 2);
+        Triangles.Add(BaseVertexIndex + 0); Triangles.Add(BaseVertexIndex + 2); Triangles.Add(BaseVertexIndex + 3);
+        
+        // Top face (4,5,6,7)
+        Triangles.Add(BaseVertexIndex + 4); Triangles.Add(BaseVertexIndex + 6); Triangles.Add(BaseVertexIndex + 5);
+        Triangles.Add(BaseVertexIndex + 4); Triangles.Add(BaseVertexIndex + 7); Triangles.Add(BaseVertexIndex + 6);
+        
+        // Front face (3,2,6,7)
+        Triangles.Add(BaseVertexIndex + 3); Triangles.Add(BaseVertexIndex + 2); Triangles.Add(BaseVertexIndex + 6);
+        Triangles.Add(BaseVertexIndex + 3); Triangles.Add(BaseVertexIndex + 6); Triangles.Add(BaseVertexIndex + 7);
+        
+        // Back face (0,1,5,4)
+        Triangles.Add(BaseVertexIndex + 0); Triangles.Add(BaseVertexIndex + 5); Triangles.Add(BaseVertexIndex + 1);
+        Triangles.Add(BaseVertexIndex + 0); Triangles.Add(BaseVertexIndex + 4); Triangles.Add(BaseVertexIndex + 5);
+        
+        // Left face (0,3,7,4)
+        Triangles.Add(BaseVertexIndex + 0); Triangles.Add(BaseVertexIndex + 3); Triangles.Add(BaseVertexIndex + 7);
+        Triangles.Add(BaseVertexIndex + 0); Triangles.Add(BaseVertexIndex + 7); Triangles.Add(BaseVertexIndex + 4);
+        
+        // Right face (1,2,6,5)
+        Triangles.Add(BaseVertexIndex + 1); Triangles.Add(BaseVertexIndex + 6); Triangles.Add(BaseVertexIndex + 2);
+        Triangles.Add(BaseVertexIndex + 1); Triangles.Add(BaseVertexIndex + 5); Triangles.Add(BaseVertexIndex + 6);
+    }
+    
+    // Create the mesh section
+    if (Vertices.Num() > 0 && Triangles.Num() > 0)
+    {
+        SafeZoneVisualizationMesh->CreateMeshSection(0, Vertices, Triangles, Normals, UV0, VertexColors, Tangents, false);
+        
+        // Apply material
+        if (SafeZoneMaterial)
+        {
+            SafeZoneVisualizationMesh->SetMaterial(0, SafeZoneMaterial);
+        }
+        
+        UE_LOG(LogTemp, Display, TEXT("Created safe zone visualization with %d individual boxes, %d vertices, %d triangles"),
+               MeshSafeZones.Num(), Vertices.Num(), Triangles.Num() / 3);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("CreateSafeZoneMesh: No valid geometry to create mesh"));
     }
 }
 
@@ -1196,8 +1112,10 @@ void ASceneAnalysisManager::ConstructFrustum(
     const float fxRecip = (fx > KINDA_SMALL_NUMBER) ? 1.0f / fx : 0.0f;
     const float fyRecip = (fy > KINDA_SMALL_NUMBER) ? 1.0f / fy : 0.0f;
     
-    float HorizontalFOV = (fx > KINDA_SMALL_NUMBER) ? 2.0f * FMath::Atan(width * 0.5f * fxRecip) : FMath::DegreesToRadians(90.0f);
-    float VerticalFOV = (fy > KINDA_SMALL_NUMBER) ? 2.0f * FMath::Atan(height * 0.5f * fyRecip) : FMath::DegreesToRadians(60.0f);
+    float HorizontalFOV = (fx > KINDA_SMALL_NUMBER) ? 2.0f *
+        FMath::Atan(width * 0.5f * fxRecip) : FMath::DegreesToRadians(90.0f);
+    float VerticalFOV = (fy > KINDA_SMALL_NUMBER) ? 2.0f *
+        FMath::Atan(height * 0.5f * fyRecip) : FMath::DegreesToRadians(60.0f);
     float AspectRatio = width / height;
     
     // If values are extreme, use reasonable defaults
@@ -1244,16 +1162,20 @@ void ASceneAnalysisManager::ConstructFrustum(
     OutFrustum.Planes.Add(FPlane(FarCenter, -ForwardVector));
     
     // Calculate plane normals more efficiently
-    FVector LeftNormal = FVector::CrossProduct(FarTopLeft - Position, FarBottomLeft - Position).GetSafeNormal();
+    FVector LeftNormal = -FVector::CrossProduct(FarTopLeft - Position,
+        FarBottomLeft - Position).GetSafeNormal();
     OutFrustum.Planes.Add(FPlane(Position, -LeftNormal));
     
-    FVector RightNormal = FVector::CrossProduct(FarBottomRight - Position, FarTopRight - Position).GetSafeNormal();
+    FVector RightNormal = -FVector::CrossProduct(FarBottomRight - Position,
+        FarTopRight - Position).GetSafeNormal();
     OutFrustum.Planes.Add(FPlane(Position, -RightNormal));
     
-    FVector TopNormal = FVector::CrossProduct(FarTopRight - Position, FarTopLeft - Position).GetSafeNormal();
+    FVector TopNormal = -FVector::CrossProduct(FarTopRight - Position,
+        FarTopLeft - Position).GetSafeNormal();
     OutFrustum.Planes.Add(FPlane(Position, -TopNormal));
     
-    FVector BottomNormal = FVector::CrossProduct(FarBottomLeft - Position, FarBottomRight - Position).GetSafeNormal();
+    FVector BottomNormal = -FVector::CrossProduct(FarBottomLeft - Position,
+        FarBottomRight - Position).GetSafeNormal();
     OutFrustum.Planes.Add(FPlane(Position, -BottomNormal));
 }
 
@@ -1359,95 +1281,49 @@ void ASceneAnalysisManager::UpdateCoverageGrid()
 {
     if (!bGridInitialized)
         return;
-    
+
     // Reset visible points and coverage in existing cells
-    ParallelFor(UnifiedGrid.Num(), [this](int32 Index)
+    for (auto& Pair : UnifiedGrid)
     {
-        auto It = UnifiedGrid.CreateIterator();
-        for (int32 i = 0; i < Index; ++i)
-        {
-            ++It;
-        }
-        
-        It.Value().VisiblePoints = 0;
-        It.Value().Coverage = 0.0f;
+        FUnifiedGridCell& Cell = Pair.Value;
+        Cell.VisiblePoints = 0;
+        Cell.Coverage = 0.0f;
         // Note: we don't reset safe zone data here
-    });
-    
-    // Create a spatial hash structure for faster grid cell lookup
-    struct FGridCellInfo
+    }
+
+    // Process each point in the coverage map
+    for (const auto& Pair : CoverageMap)
     {
-        FIntVector Coords;
-        int32 VisiblePoints;
-        
-        FGridCellInfo(const FIntVector& InCoords) : Coords(InCoords), VisiblePoints(0) {}
-    };
-    
-    // Calculate the number of cells in each dimension for the hash
-    constexpr int32 HashGridSize = 10; // Adjust based on scene scale
-    TMap<FIntVector, TArray<FGridCellInfo*>> GridHashMap;
-    
-    // Create a thread-local copy of cell data to avoid lock contention
-    TMap<FIntVector, int32> LocalCellVisibility;
-    LocalCellVisibility.Reserve(UnifiedGrid.Num());
-    
-    // Process points in parallel batches
-    const int32 BatchSize = 1000;
-    const int32 NumBatches = FMath::DivideAndRoundUp(CoverageMap.Num(), BatchSize);
-    
-    ParallelFor(NumBatches, [&](int32 BatchIndex)
-    {
-        // Set up batch processing range
-        auto It = CoverageMap.CreateConstIterator();
-        for (int32 i = 0; i < BatchIndex * BatchSize && It; ++i, ++It) {}
-        
-        // Process this batch
-        TMap<FIntVector, int32> ThreadLocalVisibility;
-        
-        for (int32 i = 0; i < BatchSize && It; ++i, ++It)
-        {
-            const FVector& Point = It.Key();
-            bool bIsVisible = It.Value();
-            
-            // Convert world position to grid coordinates
-            FIntVector GridCoords = WorldToGridCoordinates(Point);
-            
-            // If point is visible, increment local counter
-            if (bIsVisible)
-            {
-                ThreadLocalVisibility.FindOrAdd(GridCoords)++;
-            }
-        }
-        
-        // Merge thread-local results with global map using atomic operations
-        FCriticalSection CriticalSection;
-        FScopeLock Lock(&CriticalSection);
-        
-        for (const auto& Pair : ThreadLocalVisibility)
-        {
-            LocalCellVisibility.FindOrAdd(Pair.Key) += Pair.Value;
-        }
-    });
-    
-    // Update the grid with local visibility data
-    for (const auto& Pair : LocalCellVisibility)
-    {
-        const FIntVector& GridCoords = Pair.Key;
-        int32 VisiblePointsCount = Pair.Value;
-        
+        const FVector& Point = Pair.Key;
+        bool bIsVisible = Pair.Value;
+
+        // Convert world position to grid coordinates
+        FIntVector GridCoords = WorldToGridCoordinates(Point);
+
+        // Get the cell (should already exist from initialization)
         if (UnifiedGrid.Contains(GridCoords))
         {
             FUnifiedGridCell& Cell = UnifiedGrid[GridCoords];
-            Cell.VisiblePoints = VisiblePointsCount;
-            
-            // Calculate coverage
-            if (Cell.TotalPoints > 0)
+
+            // If point is visible, increment visible points
+            if (bIsVisible)
             {
-                Cell.Coverage = (float)Cell.VisiblePoints / (float)Cell.TotalPoints;
+                Cell.VisiblePoints++;
             }
         }
     }
+
+    // Normalize coverage values
+    for (auto& Pair : UnifiedGrid)
+    {
+        FUnifiedGridCell& Cell = Pair.Value;
+        if (Cell.TotalPoints > 0)
+        {
+            Cell.Coverage = (float)Cell.VisiblePoints / (float)Cell.TotalPoints;
+        }
+    }
 }
+
 
 void ASceneAnalysisManager::CreateCoverageMesh()
 {
@@ -1618,200 +1494,6 @@ void ASceneAnalysisManager::CreateCoverageMesh()
                                   "visible out of %d populated cells (%d vertices, %d triangles)"), 
            NumCellsVisualized, UnifiedGrid.Num(), Vertices.Num(), Triangles.Num() / 3);
 }
-
-void ASceneAnalysisManager::CreateSafeZoneMesh()
-{
-    // Clear existing mesh sections
-    SafeZoneVisualizationMesh->ClearAllMeshSections();
-    
-    // Create arrays for procedural mesh
-    TArray<FVector> Vertices;
-    TArray<int32> Triangles;
-    TArray<FVector> Normals;
-    TArray<FVector2D> UV0;
-    TArray<FColor> VertexColors;
-    TArray<FProcMeshTangent> Tangents;
-    
-    // Pre-allocate memory based on estimated number of unsafe cells
-    int32 EstimatedUnsafeCells = UnifiedGrid.Num() / 2; // Rough estimate
-    Vertices.Reserve(EstimatedUnsafeCells * 8);
-    Triangles.Reserve(EstimatedUnsafeCells * 36);
-    Normals.Reserve(EstimatedUnsafeCells * 8);
-    UV0.Reserve(EstimatedUnsafeCells * 8);
-    VertexColors.Reserve(EstimatedUnsafeCells * 8);
-    Tangents.Reserve(EstimatedUnsafeCells * 8);
-    
-    // Find the Z range of unsafe cells to create proper gradient mapping
-    float MinZ = FLT_MAX;
-    float MaxZ = -FLT_MAX;
-    
-    for (const auto& Pair : UnifiedGrid)
-    {
-        if (!Pair.Value.bIsSafe)
-        {
-            const FIntVector& GridCoords = Pair.Key;
-            float CellZ = GridOrigin.Z + (GridCoords.Z + 0.5f) * GridResolution;
-            MinZ = FMath::Min(MinZ, CellZ);
-            MaxZ = FMath::Max(MaxZ, CellZ);
-        }
-    }
-    
-    // Prevent division by zero if all cells are at same height
-    if (FMath::IsNearlyEqual(MaxZ, MinZ))
-    {
-        MaxZ = MinZ + 1.0f;
-    }
-    
-    // Create cubes only for unsafe cells
-    int32 NumCellsVisualized = 0;
-    for (const auto& Pair : UnifiedGrid)
-    {
-        const FIntVector& GridCoords = Pair.Key;
-        const FUnifiedGridCell& Cell = Pair.Value;
-        
-        // Skip safe cells - only visualize unsafe cells
-        if (Cell.bIsSafe)
-            continue;
-        
-        // Calculate cell center in world space
-        FVector CellCenter(
-            GridOrigin.X + (GridCoords.X + 0.5f) * GridResolution,
-            GridOrigin.Y + (GridCoords.Y + 0.5f) * GridResolution,
-            GridOrigin.Z + (GridCoords.Z + 0.5f) * GridResolution
-        );
-        
-        // Calculate cell size (slightly smaller than grid resolution to see cell boundaries)
-        float CellSize = GridResolution * 0.9f;
-        float HalfSize = CellSize * 0.5f;
-        
-        // Calculate color based on height
-        float NormalizedHeight = (CellCenter.Z - MinZ) / (MaxZ - MinZ);
-        
-        FLinearColor CellLinearColor = FLinearColor::LerpUsingHSV(
-            SafeZoneDarkColor, SafeZoneLightColor, NormalizedHeight);
-        
-        // Convert to FColor and add transparency
-        FColor CellColor = CellLinearColor.ToFColor(false);
-        CellColor.A = 180; // Semi-transparent
-        
-        // Add a cube for this cell
-        int32 BaseVertexIndex = Vertices.Num();
-        
-        // Define the 8 corners of the cube
-        Vertices.Add(CellCenter + FVector(-HalfSize, -HalfSize, -HalfSize)); // 0: bottom left back
-        Vertices.Add(CellCenter + FVector(HalfSize, -HalfSize, -HalfSize));  // 1: bottom right back
-        Vertices.Add(CellCenter + FVector(HalfSize, HalfSize, -HalfSize));   // 2: bottom right front
-        Vertices.Add(CellCenter + FVector(-HalfSize, HalfSize, -HalfSize));  // 3: bottom left front
-        Vertices.Add(CellCenter + FVector(-HalfSize, -HalfSize, HalfSize));  // 4: top left back
-        Vertices.Add(CellCenter + FVector(HalfSize, -HalfSize, HalfSize));   // 5: top right back
-        Vertices.Add(CellCenter + FVector(HalfSize, HalfSize, HalfSize));    // 6: top right front
-        Vertices.Add(CellCenter + FVector(-HalfSize, HalfSize, HalfSize));   // 7: top left front
-        
-        // Add colors for all 8 vertices
-        for (int32 i = 0; i < 8; ++i)
-        {
-            VertexColors.Add(CellColor);
-        }
-        
-        // Add texture coordinates
-        UV0.Add(FVector2D(0, 0)); // 0
-        UV0.Add(FVector2D(1, 0)); // 1
-        UV0.Add(FVector2D(1, 1)); // 2
-        UV0.Add(FVector2D(0, 1)); // 3
-        UV0.Add(FVector2D(0, 0)); // 4
-        UV0.Add(FVector2D(1, 0)); // 5
-        UV0.Add(FVector2D(1, 1)); // 6
-        UV0.Add(FVector2D(0, 1)); // 7
-        
-        // Add normals
-        Normals.Add(FVector(-1, -1, -1).GetSafeNormal()); // 0
-        Normals.Add(FVector(1, -1, -1).GetSafeNormal());  // 1
-        Normals.Add(FVector(1, 1, -1).GetSafeNormal());   // 2
-        Normals.Add(FVector(-1, 1, -1).GetSafeNormal());  // 3
-        Normals.Add(FVector(-1, -1, 1).GetSafeNormal());  // 4
-        Normals.Add(FVector(1, -1, 1).GetSafeNormal());   // 5
-        Normals.Add(FVector(1, 1, 1).GetSafeNormal());    // 6
-        Normals.Add(FVector(-1, 1, 1).GetSafeNormal());   // 7
-        
-        // Add tangents (simplified)
-        for (int32 i = 0; i < 8; ++i)
-        {
-            Tangents.Add(FProcMeshTangent(1, 0, 0));
-        }
-        
-        // Add triangles for each face (12 triangles total)
-        // Bottom face (0,1,2,3)
-        Triangles.Add(BaseVertexIndex + 0);
-        Triangles.Add(BaseVertexIndex + 1);
-        Triangles.Add(BaseVertexIndex + 2);
-        Triangles.Add(BaseVertexIndex + 0);
-        Triangles.Add(BaseVertexIndex + 2);
-        Triangles.Add(BaseVertexIndex + 3);
-        
-        // Top face (4,5,6,7)
-        Triangles.Add(BaseVertexIndex + 4);
-        Triangles.Add(BaseVertexIndex + 6);
-        Triangles.Add(BaseVertexIndex + 5);
-        Triangles.Add(BaseVertexIndex + 4);
-        Triangles.Add(BaseVertexIndex + 7);
-        Triangles.Add(BaseVertexIndex + 6);
-        
-        // Front face (3,2,6,7)
-        Triangles.Add(BaseVertexIndex + 3);
-        Triangles.Add(BaseVertexIndex + 2);
-        Triangles.Add(BaseVertexIndex + 6);
-        Triangles.Add(BaseVertexIndex + 3);
-        Triangles.Add(BaseVertexIndex + 6);
-        Triangles.Add(BaseVertexIndex + 7);
-        
-        // Back face (0,1,5,4)
-        Triangles.Add(BaseVertexIndex + 0);
-        Triangles.Add(BaseVertexIndex + 5);
-        Triangles.Add(BaseVertexIndex + 1);
-        Triangles.Add(BaseVertexIndex + 0);
-        Triangles.Add(BaseVertexIndex + 4);
-        Triangles.Add(BaseVertexIndex + 5);
-        
-        // Left face (0,3,7,4)
-        Triangles.Add(BaseVertexIndex + 0);
-        Triangles.Add(BaseVertexIndex + 3);
-        Triangles.Add(BaseVertexIndex + 7);
-        Triangles.Add(BaseVertexIndex + 0);
-        Triangles.Add(BaseVertexIndex + 7);
-        Triangles.Add(BaseVertexIndex + 4);
-        
-        // Right face (1,2,6,5)
-        Triangles.Add(BaseVertexIndex + 1);
-        Triangles.Add(BaseVertexIndex + 6);
-        Triangles.Add(BaseVertexIndex + 2);
-        Triangles.Add(BaseVertexIndex + 1);
-        Triangles.Add(BaseVertexIndex + 5);
-        Triangles.Add(BaseVertexIndex + 6);
-        
-        NumCellsVisualized++;
-    }
-    
-    // Only create mesh if we have cells to visualize
-    if (NumCellsVisualized > 0)
-    {
-        // Create the mesh section
-        SafeZoneVisualizationMesh->CreateMeshSection(0, Vertices, Triangles, Normals,
-            UV0, VertexColors, Tangents, false);
-        
-        // Set the material
-        if (SafeZoneMaterial)
-        {
-            SafeZoneVisualizationMesh->SetMaterial(0, SafeZoneMaterial);
-        }
-    }
-    
-    UE_LOG(LogTemp, Display, TEXT("Safe zone visualization: Created mesh with %d unsafe cells "
-                                  "out of %d populated cells (%d vertices, %d triangles)"), 
-           NumCellsVisualized, UnifiedGrid.Num(), Vertices.Num(), Triangles.Num() / 3);
-}
-
-
-// Add these implementations to SceneAnalysisManager.cpp
 
 void ASceneAnalysisManager::AnalyzeGeometricComplexity()
 {
