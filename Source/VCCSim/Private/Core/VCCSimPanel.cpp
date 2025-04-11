@@ -16,11 +16,9 @@
 */
 
 #include "Core/VCCSimPanel.h"
-#include "PropertyEditorModule.h"
 #include "Engine/Selection.h"
 #include "EngineUtils.h"
 #include "Widgets/Input/SButton.h"
-#include "Widgets/Input/SComboBox.h"
 #include "Widgets/Input/SNumericEntryBox.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Text/STextBlock.h"
@@ -38,7 +36,10 @@
 #include "Utils/TrajectoryViewer.h"
 #include "DesktopPlatformModule.h"
 #include "IDesktopPlatform.h"
+#include "WorkspaceMenuStructure.h"
+#include "WorkspaceMenuStructureModule.h"
 #include "Misc/FileHelper.h"
+#include "Styling/SlateStyleRegistry.h"
 
 SVCCSimPanel::~SVCCSimPanel()
 {
@@ -2473,6 +2474,11 @@ void SVCCSimPanel::UpdatePathVisualization()
         bPathVisualized = false;
     }
 
+    if (PathVisualizationActor.IsValid())
+    { 
+        PathVisualizationActor->Tags.Add(FName("NoSMActor"));
+    }
+
     HidePathVisualization();
     bPathNeedsUpdate = false;
     VisualizePathButton->SetButtonStyle(bPathVisualized ? 
@@ -2602,6 +2608,28 @@ namespace FVCCSimPanelFactory
 
 void FVCCSimPanelFactory::RegisterTabSpawner(FTabManager& TabManager)
 {
+    // Create the style set if it doesn't exist
+    static FName VCCSimStyleName("VCCSimStyle");
+    static TSharedPtr<FSlateStyleSet> StyleSet;
+    
+    if (!StyleSet.IsValid())
+    {
+        StyleSet = MakeShareable(new FSlateStyleSet(VCCSimStyleName));
+        
+        // Set the content root
+        FString PluginDir = FPaths::Combine(FPaths::ProjectPluginsDir(), TEXT("VCCSim"));
+        StyleSet->SetContentRoot(PluginDir);
+        
+        // Register the icon
+        FString VCCLogoPath = FPaths::Combine(PluginDir, TEXT("image/Logo/vcc.png"));
+        StyleSet->Set("VCCSimStyle.TabIcon",
+            new FSlateImageBrush(VCCLogoPath, FVector2D(16, 16)));
+        
+        // Register the style
+        FSlateStyleRegistry::RegisterSlateStyle(*StyleSet.Get());
+    }
+    
+    // Now use the registered icon in the tab spawner
     TabManager.RegisterTabSpawner(
         TabId, 
         FOnSpawnTab::CreateLambda([](const FSpawnTabArgs& InArgs) -> TSharedRef<SDockTab> {
@@ -2613,5 +2641,7 @@ void FVCCSimPanelFactory::RegisterTabSpawner(FTabManager& TabManager)
                 ];
         })
     )
-    .SetDisplayName(FText::FromString("VCCSIM"));
+    .SetDisplayName(FText::FromString("VCCSIM"))
+    .SetIcon(FSlateIcon(VCCSimStyleName, "VCCSimStyle.TabIcon"))
+    .SetGroup(WorkspaceMenu::GetMenuStructure().GetLevelEditorCategory());
 }

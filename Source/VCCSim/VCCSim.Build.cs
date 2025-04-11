@@ -35,7 +35,8 @@ public class VCCSim : ModuleRules
                 "LevelSequence",
 				"MovieScene", "EnhancedInput", 
 				"ChaosVehicles",
-				"LevelEditor", "UnrealEd"
+				"LevelEditor", "UnrealEd",
+				"WorkspaceMenuStructure"
 				// "Serialization",
 				// ... add other public dependencies that you statically link with here ...
 			}
@@ -48,7 +49,7 @@ public class VCCSim : ModuleRules
 				"CoreUObject",
 				"Engine",
 				"Slate",
-				"SlateCore",
+				"SlateCore", "WorkspaceMenuStructure", "WorkspaceMenuStructure",
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);
