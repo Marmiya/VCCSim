@@ -162,11 +162,11 @@ private:
     void SaveGeneratedPose();
     FReply OnLoadPoseClicked();
     FReply OnSavePoseClicked();
-    // Add these to your SVCCSimPanel.h file under the private section
 
     TSharedRef<SWidget> CreateSectionHeader(const FString& Title);
     TSharedRef<SWidget> CreateSectionContent(TSharedRef<SWidget> Content);
-    TSharedRef<SWidget> CreatePropertyRow(const FString& Label, TSharedRef<SWidget> Content);
+    TSharedRef<SWidget> CreatePropertyRow(const FString& Label,
+        TSharedRef<SWidget> Content);
 
     bool bPathVisualized = false;
     bool bPathNeedsUpdate = true;

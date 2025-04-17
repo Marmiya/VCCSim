@@ -158,16 +158,17 @@ void URGBCameraComponent::SetCaptureComponent() const
         // Change the capture source to HDR for better quality
         CaptureComponent->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
         CaptureComponent->bCaptureEveryFrame = false;
-        CaptureComponent->bCaptureOnMovement = false;
+        CaptureComponent->bCaptureOnMovement = true;
         CaptureComponent->bAlwaysPersistRenderingState = true;
+        CaptureComponent->PrimaryComponentTick.bCanEverTick = true;
         
         FEngineShowFlags& ShowFlags = CaptureComponent->ShowFlags;
-        ShowFlags.SetTemporalAA(true);
+        // ShowFlags.SetTemporalAA(true);
         ShowFlags.EnableAdvancedFeatures();
         ShowFlags.SetPostProcessing(true);
         ShowFlags.SetTonemapper(true);
         ShowFlags.SetBloom(true);
-        
+
         ShowFlags.SetLumenGlobalIllumination(true);
         ShowFlags.SetLumenReflections(true);
     }
