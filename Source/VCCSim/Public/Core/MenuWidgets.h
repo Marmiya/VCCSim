@@ -41,7 +41,10 @@ protected:
 	void OnMap3Selected();
 
 	UFUNCTION()
-	void OnMapTestSelected();
+	void OnMap4Selected();
+
+	UFUNCTION()
+	void OnMap5Selected();
 
 	UFUNCTION()
 	void OnMap1Hovered();
@@ -53,7 +56,10 @@ protected:
 	void OnMap3Hovered();
 
 	UFUNCTION()
-	void OnMapTestHovered();
+	void OnMap4Hovered();
+
+	UFUNCTION()
+	void OnMap5Hovered();
 
 	UFUNCTION()
 	void OnMap1Unhovered();
@@ -65,7 +71,10 @@ protected:
 	void OnMap3Unhovered();
 
 	UFUNCTION()
-	void OnMapTestUnhovered();
+	void OnMap4Unhovered();
+
+	UFUNCTION()
+	void OnMap5Unhovered();
 
 	UPROPERTY()
 	FLinearColor Map1OriginalColor;
@@ -77,7 +86,10 @@ protected:
 	FLinearColor Map3OriginalColor;
 
 	UPROPERTY()
-	FLinearColor MapTestOriginalColor;
+	FLinearColor Map4OriginalColor;
+
+	UPROPERTY()
+	FLinearColor Map5OriginalColor;
 
 	UPROPERTY(EditAnywhere, Category = "Button Colors")
 	FLinearColor HoveredColor =
@@ -96,7 +108,10 @@ protected:
 	class UButton* Map3Button;
 
 	UPROPERTY(meta = (BindWidget))
-	class UButton* MapTestButton;
+	class UButton* Map4Button;
+
+	UPROPERTY(meta = (BindWidget))
+	class UButton* Map5Button;
 
 	UPROPERTY(meta = (BindWidget))
 	class UTextBlock* StatusText;
@@ -122,6 +137,9 @@ protected:
 	UPROPERTY(meta = (BindWidget))
 	class UButton* QuitButton;
 
+	UPROPERTY(meta = (BindWidget))
+	class UButton* SemanticButton;
+
 	UFUNCTION()
 	void OnResumeClicked();
 
@@ -130,6 +148,9 @@ protected:
 
 	UFUNCTION()
 	void OnQuitClicked();
+
+	UFUNCTION()
+	void OnSemanticClicked();
 
 private:
 	UPROPERTY()

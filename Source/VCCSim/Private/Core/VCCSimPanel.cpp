@@ -65,7 +65,7 @@ SVCCSimPanel::~SVCCSimPanel()
 
     if (SceneAnalysisManager.IsValid())
     {
-        SceneAnalysisManager->ClearSafeZoneVisualization();
+        SceneAnalysisManager->InterfaceClearSafeZoneVisualization();
         SceneAnalysisManager->ClearCoverageVisualization();
     }
 }
@@ -1081,11 +1081,11 @@ FReply SVCCSimPanel::OnToggleSafeZoneVisualizationClicked()
 
     if (bSafeZoneVisualized)
     {
-        SceneAnalysisManager->VisualizeSafeZone(true);
+        SceneAnalysisManager->InterfaceVisualizeSafeZone(true);
     }
     else
     {
-        SceneAnalysisManager->VisualizeSafeZone(false);
+        SceneAnalysisManager->InterfaceVisualizeSafeZone(false);
     }
 
     VisualizeSafeZoneButton->SetButtonStyle(bSafeZoneVisualized ? 

@@ -101,7 +101,7 @@ void SVCCSimPanel::Construct(const FArguments& InArgs)
             {
                 SceneAnalysisManager->Initialize(World,
                     FPaths::ProjectSavedDir() / TEXT("VCCSimCaptures"));
-                SceneAnalysisManager->InitializeSafeZoneVisualization();
+                SceneAnalysisManager->InterfaceInitializeSafeZoneVisualization();
                 SceneAnalysisManager->InitializeCoverageVisualization();
                 break;
             }
@@ -1332,7 +1332,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreateSceneAnalysisPanel()
             .OnClicked_Lambda([this]() {
                 if (SceneAnalysisManager.IsValid())
                 {
-                    SceneAnalysisManager->GenerateSafeZone(SafeDistance);
+                    SceneAnalysisManager->InterfaceGenerateSafeZone(SafeDistance);
                     bGenSafeZone = false;
                 }
                 return FReply::Handled();
@@ -1371,7 +1371,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreateSceneAnalysisPanel()
             .Text(FText::FromString("Clear SafeZone"))
             .HAlign(HAlign_Center)
             .OnClicked_Lambda([this]() {
-                SceneAnalysisManager->ClearSafeZoneVisualization();
+                SceneAnalysisManager->InterfaceClearSafeZoneVisualization();
                 bGenSafeZone = true;
                 bSafeZoneVisualized = false;
                 VisualizeSafeZoneButton->SetButtonStyle(

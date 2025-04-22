@@ -23,6 +23,8 @@
 #include "SceneAnalysisManager.generated.h"
 
 class URGBCameraComponent;
+class USemanticAnalyzer;
+class USafeZoneAnalyzer;
 
 struct FCoverageData
 {
@@ -107,25 +109,6 @@ public:
     void ClearCoverageVisualization();
     void UpdateCoverageGrid();
     void CreateCoverageMesh();
-
-    /* -------------------------- Safe zone -------------------------- */
-    UPROPERTY(EditAnywhere, Category = "SceneAnalysis|SafeZone")
-    UProceduralMeshComponent* SafeZoneVisualizationMesh;
-    UPROPERTY(EditAnywhere, Category = "SceneAnalysis|SafeZone")
-    UMaterialInterface* SafeZoneMaterial;
-    UPROPERTY(EditAnywhere, Category = "SceneAnalysis|SafeZone")
-    FLinearColor SafeZoneColor = FLinearColor(1.0f, 0.47f, 0.47f);
-
-    TArray<FBox> MeshSafeZones;
-    
-    UFUNCTION(BlueprintCallable, Category = "SceneAnalysis|SafeZone")
-    void InitializeSafeZoneVisualization();
-    UFUNCTION(BlueprintCallable, Category = "SceneAnalysis|SafeZone")
-    void VisualizeSafeZone(bool Vis);
-    UFUNCTION(BlueprintCallable, Category = "SceneAnalysis|SafeZone")
-    void ClearSafeZoneVisualization();
-    void GenerateSafeZone(const float& SafeDistance);
-    void CreateSafeZoneMesh();
     
     /* --------------------- Complexity --------------------------- */
     UPROPERTY(EditAnywhere, Category = "SceneAnalysis|Complexity", meta = (ClampMin = "0.0", ClampMax = "1.0"))
@@ -176,7 +159,19 @@ public:
     float CalculateEdgeDensityScore(int32 EdgeCount, float CellVolume);
     float CalculateAngleVariationScore(const TArray<float>& Angles);
     FVector CalculateTriangleNormal(const FVector& V0, const FVector& V1, const FVector& V2);
+
+    /* -------------------------- SubModules -------------------------- */
+    UPROPERTY(EditAnywhere, Category = "SceneAnalysis|SubModules")
+    USemanticAnalyzer* SemanticAnalyzer;
+    bool InterfaceVisualizeSemanticAnalysis();
     
+    UPROPERTY(EditAnywhere, Category = "SceneAnalysis|SubModules")
+    USafeZoneAnalyzer* SafeZoneAnalyzer;
+    void InterfaceVisualizeSafeZone(bool bShow);
+    void InterfaceClearSafeZoneVisualization();
+    void InterfaceInitializeSafeZoneVisualization();
+    void InterfaceGenerateSafeZone(const float& SafeDistance);
+        
     /* ----------------------------- Test ----------------------------- */
     FString LogPath;
     void ExportMeshesToPly();
@@ -216,12 +211,6 @@ private:
     TArray<FVector> VisiblePoints;
     TArray<FVector> InvisiblePoints;
     bool bCoverageVisualizationDirty = false;
-
-    // Safe zone
-    UPROPERTY()
-    FBox ExpandedSceneBounds;
-    bool bSafeZoneDirty = false;
-    TArray<FMeshInfo> SafetyEnvelopes;
 
     // Complexity Analysis
     void CreateComplexityMesh();
