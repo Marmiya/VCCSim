@@ -32,12 +32,16 @@
 #include "LevelSequencePlayer.h"
 #include "LevelSequenceActor.h"
 #include "Kismet/GameplayStatics.h"
+#include "Simulation/SemanticAnalyzer.h"
 
 void AVCCHUD::BeginPlay()
 {
     Super::BeginPlay();
     
     FVCCSimConfig Config = ParseConfig();
+    
+    SceneAnalysisManager = Cast<ASceneAnalysisManager>(UGameplayStatics::
+        GetActorOfClass(GetWorld(), ASceneAnalysisManager::StaticClass()));
     
     SetupRecorder(Config);
     SetupWidgetsAndLS(Config);
@@ -48,10 +52,6 @@ void AVCCHUD::BeginPlay()
         MeshManager = NewObject<UFMeshManager>(Holder);
         MeshManager->RConfigure(Config);
     }
-
-    // SceneAnalysisManager = NewObject<ASceneAnalysisManager>(Holder);
-    // SceneAnalysisManager->Initialize(GetWorld(), Config.VCCSim.LogSavePath.c_str());
-    // SceneAnalysisManager->ScanScene();
     
     RunServer(Config, Holder, RCMaps, MeshManager);
 }
@@ -247,8 +247,16 @@ void AVCCHUD::SetupMainCharacter(const FVCCSimConfig& Config, TArray<AActor*> Fo
                                       "MainCharacter not found!"));
         return;
     }
+    else
+    {
+        if (SceneAnalysisManager)
+        {
+            SceneAnalysisManager->SemanticAnalyzer->CenterCharacter = MainCharacter;
+        }
+    }
 
-    if (const auto SetManualControlFuc = MainCharacter->FindFunction(FName(TEXT("SetManualControl"))))
+    if (const auto SetManualControlFuc =
+        MainCharacter->FindFunction(FName(TEXT("SetManualControl"))))
     {
         MainCharacter->ProcessEvent(SetManualControlFuc, (void*)&Config.VCCSim.ManualControl);
     }

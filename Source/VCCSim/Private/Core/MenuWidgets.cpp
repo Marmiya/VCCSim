@@ -20,6 +20,7 @@
 #include "Kismet/KismetSystemLibrary.h"
 #include "Components/Button.h"
 #include "Components/TextBlock.h"
+#include "Simulation/SceneAnalysisManager.h"
 
 void UMenuWidgets::NativeConstruct()
 {
@@ -27,31 +28,35 @@ void UMenuWidgets::NativeConstruct()
 
     UE_LOG(LogTemp, Warning, TEXT("MenuWidgets: NativeConstruct called"));
 
-    if (!Map1Button || !Map2Button || !Map3Button || !MapTestButton)
+    if (!Map1Button || !Map2Button || !Map3Button || !Map4Button || !Map5Button)
     {
         UE_LOG(LogTemp, Error, TEXT("MenuWidgets: One or more buttons are null! "
-                                    "Map1: %s, Map2: %s, Map3: %s, MapTest: %s"), 
+                                    "Map1: %s, Map2: %s, Map3: %s, Map4: %s, Map5: %s"),
             Map1Button ? TEXT("Valid") : TEXT("Null"),
             Map2Button ? TEXT("Valid") : TEXT("Null"),
             Map3Button ? TEXT("Valid") : TEXT("Null"),
-            MapTestButton ? TEXT("Valid") : TEXT("Null"));
+            Map4Button ? TEXT("Valid") : TEXT("Null"),
+            Map5Button ? TEXT("Valid") : TEXT("Null"));
         return;
     }
 
     Map1Button->SetIsEnabled(true);
     Map2Button->SetIsEnabled(true);
     Map3Button->SetIsEnabled(true);
-    MapTestButton->SetIsEnabled(true);
+    Map4Button->SetIsEnabled(true);
+    Map5Button->SetIsEnabled(true);
 
     Map1Button->OnClicked.AddDynamic(this, &UMenuWidgets::OnMap1Selected);
     Map2Button->OnClicked.AddDynamic(this, &UMenuWidgets::OnMap2Selected);
     Map3Button->OnClicked.AddDynamic(this, &UMenuWidgets::OnMap3Selected);
-    MapTestButton->OnClicked.AddDynamic(this, &UMenuWidgets::OnMapTestSelected);
+    Map4Button->OnClicked.AddDynamic(this, &UMenuWidgets::OnMap4Selected);
+    Map5Button->OnClicked.AddDynamic(this, &UMenuWidgets::OnMap4Selected);
     
     Map1OriginalColor = Map1Button->GetColorAndOpacity();
     Map2OriginalColor = Map2Button->GetColorAndOpacity();
     Map3OriginalColor = Map3Button->GetColorAndOpacity();
-    MapTestOriginalColor = MapTestButton->GetColorAndOpacity();
+    Map4OriginalColor = Map4Button->GetColorAndOpacity();
+    Map5OriginalColor = Map5Button->GetColorAndOpacity();
 
     Map1Button->OnHovered.AddDynamic(this, &UMenuWidgets::OnMap1Hovered);
     Map1Button->OnUnhovered.AddDynamic(this, &UMenuWidgets::OnMap1Unhovered);
@@ -59,8 +64,10 @@ void UMenuWidgets::NativeConstruct()
     Map2Button->OnUnhovered.AddDynamic(this, &UMenuWidgets::OnMap2Unhovered);
     Map3Button->OnHovered.AddDynamic(this, &UMenuWidgets::OnMap3Hovered);
     Map3Button->OnUnhovered.AddDynamic(this, &UMenuWidgets::OnMap3Unhovered);
-    MapTestButton->OnHovered.AddDynamic(this, &UMenuWidgets::OnMapTestHovered);
-    MapTestButton->OnUnhovered.AddDynamic(this, &UMenuWidgets::OnMapTestUnhovered);
+    Map4Button->OnHovered.AddDynamic(this, &UMenuWidgets::OnMap4Hovered);
+    Map4Button->OnUnhovered.AddDynamic(this, &UMenuWidgets::OnMap4Unhovered);
+    Map5Button->OnHovered.AddDynamic(this, &UMenuWidgets::OnMap4Hovered);
+    Map5Button->OnUnhovered.AddDynamic(this, &UMenuWidgets::OnMap4Unhovered);
 
     // Initialize game instance
     GameInstance = Cast<UVCCSimGameInstance>(GetGameInstance());
@@ -114,11 +121,19 @@ void UMenuWidgets::OnMap3Hovered()
     }
 }
 
-void UMenuWidgets::OnMapTestHovered()
+void UMenuWidgets::OnMap4Hovered()
 {
-    if (MapTestButton)
+    if (Map4Button)
     {
-        MapTestButton->SetColorAndOpacity(HoveredColor);
+        Map4Button->SetColorAndOpacity(HoveredColor);
+    }
+}
+
+void UMenuWidgets::OnMap5Hovered()
+{
+    if (Map5Button)
+    {
+        Map5Button->SetColorAndOpacity(HoveredColor);
     }
 }
 
@@ -146,11 +161,19 @@ void UMenuWidgets::OnMap3Unhovered()
     }
 }
 
-void UMenuWidgets::OnMapTestUnhovered()
+void UMenuWidgets::OnMap4Unhovered()
 {
-    if (MapTestButton)
+    if (Map4Button)
     {
-        MapTestButton->SetColorAndOpacity(MapTestOriginalColor);
+        Map4Button->SetColorAndOpacity(Map4OriginalColor);
+    }
+}
+
+void UMenuWidgets::OnMap5Unhovered()
+{
+    if (Map5Button)
+    {
+        Map5Button->SetColorAndOpacity(Map5OriginalColor);
     }
 }
 
@@ -160,7 +183,8 @@ void UMenuWidgets::OnMap1Selected()
     
     if (!GameInstance)
     {
-        UE_LOG(LogTemp, Error, TEXT("MenuWidgets: GameInstance is null in OnMap1Selected"));
+        UE_LOG(LogTemp, Error, TEXT("MenuWidgets: "
+                                    "GameInstance is null in OnMap1Selected"));
         return;
     }
 
@@ -190,7 +214,8 @@ void UMenuWidgets::OnMap2Selected()
     
     if (!GameInstance)
     {
-        UE_LOG(LogTemp, Error, TEXT("MenuWidgets: GameInstance is null in OnMap2Selected"));
+        UE_LOG(LogTemp, Error, TEXT("MenuWidgets: "
+                                    "GameInstance is null in OnMap2Selected"));
         return;
     }
 
@@ -220,7 +245,8 @@ void UMenuWidgets::OnMap3Selected()
     
     if (!GameInstance)
     {
-        UE_LOG(LogTemp, Error, TEXT("MenuWidgets: GameInstance is null in OnMap3Selected"));
+        UE_LOG(LogTemp, Error, TEXT("MenuWidgets: "
+                                    "GameInstance is null in OnMap3Selected"));
         return;
     }
 
@@ -244,13 +270,14 @@ void UMenuWidgets::OnMap3Selected()
     );
 }
 
-void UMenuWidgets::OnMapTestSelected()
+void UMenuWidgets::OnMap4Selected()
 {
     UE_LOG(LogTemp, Warning, TEXT("MenuWidgets: MapTest Button Clicked"));
     
     if (!GameInstance)
     {
-        UE_LOG(LogTemp, Error, TEXT("MenuWidgets: GameInstance is null in OnMapTestSelected"));
+        UE_LOG(LogTemp, Error, TEXT("MenuWidgets: "
+                                    "GameInstance is null in OnMapTestSelected"));
         return;
     }
 
@@ -267,6 +294,37 @@ void UMenuWidgets::OnMapTestSelected()
             if (GameInstance)
             {
                 GameInstance->LoadMap(GameInstance->AvailableMaps[3]);
+            }
+        },
+        0.1f,
+        false
+    );
+}
+
+void UMenuWidgets::OnMap5Selected()
+{
+    UE_LOG(LogTemp, Warning, TEXT("MenuWidgets: Map5 Button Clicked"));
+    
+    if (!GameInstance)
+    {
+        UE_LOG(LogTemp, Error, TEXT("MenuWidgets: "
+                                    "GameInstance is null in OnMap5Selected"));
+        return;
+    }
+
+    if (StatusText)
+    {
+        StatusText->SetText(FText::FromString(TEXT("Loading Map5...")));
+    }
+
+    // Add a small delay to ensure the loading text is visible
+    GetWorld()->GetTimerManager().SetTimer(
+        LoadingTimerHandle,
+        [this]()
+        {
+            if (GameInstance)
+            {
+                GameInstance->LoadMap(GameInstance->AvailableMaps[4]);
             }
         },
         0.1f,
@@ -294,6 +352,10 @@ void UPauseMenuWidget::NativeConstruct()
     if (QuitButton)
     {
         QuitButton->OnClicked.AddDynamic(this, &UPauseMenuWidget::OnQuitClicked);
+    }
+    if (SemanticButton)
+    {
+        SemanticButton->OnClicked.AddDynamic(this, &UPauseMenuWidget::OnSemanticClicked);
     }
 }
 
@@ -331,4 +393,28 @@ void UPauseMenuWidget::OnQuitClicked()
     
     UKismetSystemLibrary::QuitGame(GetWorld(), GetWorld()->GetFirstPlayerController(), 
         EQuitPreference::Quit, false);
+}
+
+void UPauseMenuWidget::OnSemanticClicked()
+{
+    if (ASceneAnalysisManager* SceneAnalysisManager = 
+        Cast<ASceneAnalysisManager>(UGameplayStatics::GetActorOfClass(GetWorld(), 
+        ASceneAnalysisManager::StaticClass())))
+    {
+        const auto ans = SceneAnalysisManager->InterfaceVisualizeSemanticAnalysis();
+
+        if (SemanticButton && SemanticButton->GetChildAt(0))
+        {
+            UTextBlock* ButtonText = Cast<UTextBlock>(SemanticButton->GetChildAt(0));
+            if (ButtonText)
+            {
+                FString NewText = ans ? TEXT("Hide Semantic Info") : TEXT("Show Semantic Info");
+                ButtonText->SetText(FText::FromString(NewText));
+            }
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("Scene Analysis Manager not found!"));
+    }
 }

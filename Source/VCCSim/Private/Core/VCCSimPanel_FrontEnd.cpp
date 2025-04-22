@@ -101,8 +101,9 @@ void SVCCSimPanel::Construct(const FArguments& InArgs)
             {
                 SceneAnalysisManager->Initialize(World,
                     FPaths::ProjectSavedDir() / TEXT("VCCSimCaptures"));
-                SceneAnalysisManager->InitializeSafeZoneVisualization();
-                SceneAnalysisManager->InitializeCoverageVisualization();
+                SceneAnalysisManager->InterfaceInitializeSafeZoneVisualization();
+                SceneAnalysisManager->InterfaceInitializeCoverageVisualization();
+                SceneAnalysisManager->InterfaceInitializeComplexityVisualization();
                 break;
             }
             break;
@@ -1332,7 +1333,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreateSceneAnalysisPanel()
             .OnClicked_Lambda([this]() {
                 if (SceneAnalysisManager.IsValid())
                 {
-                    SceneAnalysisManager->GenerateSafeZone(SafeDistance);
+                    SceneAnalysisManager->InterfaceGenerateSafeZone(SafeDistance);
                     bGenSafeZone = false;
                 }
                 return FReply::Handled();
@@ -1371,7 +1372,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreateSceneAnalysisPanel()
             .Text(FText::FromString("Clear SafeZone"))
             .HAlign(HAlign_Center)
             .OnClicked_Lambda([this]() {
-                SceneAnalysisManager->ClearSafeZoneVisualization();
+                SceneAnalysisManager->InterfaceClearSafeZoneVisualization();
                 bGenSafeZone = true;
                 bSafeZoneVisualized = false;
                 VisualizeSafeZoneButton->SetButtonStyle(
@@ -1428,7 +1429,8 @@ TSharedRef<SWidget> SVCCSimPanel::CreateSceneAnalysisPanel()
                         Transform.SetRotation(FQuat(Rotations[i]));
                         CoverageTransforms.Add(Transform);
                     }
-                    SceneAnalysisManager->ComputeCoverage(CoverageTransforms, "CoverageCamera");
+                    SceneAnalysisManager->InterfaceComputeCoverage(
+                        CoverageTransforms, "CoverageCamera");
                     bGenCoverage = false;
                 }
                 return FReply::Handled();
@@ -1467,7 +1469,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreateSceneAnalysisPanel()
             .Text(FText::FromString("Clear Coverage"))
             .HAlign(HAlign_Center)
             .OnClicked_Lambda([this]() {
-                SceneAnalysisManager->ClearCoverageVisualization();
+                SceneAnalysisManager->InterfaceClearCoverageVisualization();
                 bGenCoverage = true;
                 bCoverageVisualized = false;
                 VisualizeCoverageButton ->SetButtonStyle(
@@ -1514,7 +1516,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreateSceneAnalysisPanel()
             .OnClicked_Lambda([this]() {
                 if (SceneAnalysisManager.IsValid())
                 {
-                    SceneAnalysisManager->AnalyzeGeometricComplexity();
+                    SceneAnalysisManager->InterfaceAnalyzeGeometricComplexity();
                     bAnalyzeComplexity = false;
                 }
                 return FReply::Handled();
@@ -1553,7 +1555,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreateSceneAnalysisPanel()
             .Text(FText::FromString("Clear Complexity"))
             .HAlign(HAlign_Center)
             .OnClicked_Lambda([this]() {
-                SceneAnalysisManager->ClearComplexityVisualization();
+                SceneAnalysisManager->InterfaceClearComplexityVisualization();
                 bAnalyzeComplexity = true;
                 bComplexityVisualized = false;
                 VisualizeComplexityButton ->SetButtonStyle(

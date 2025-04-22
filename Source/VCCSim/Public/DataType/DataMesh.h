@@ -44,3 +44,27 @@ struct FMeshInfo
 	TArray<int32> Indices;
 	bool bIsVisible;
 };
+
+struct FUnifiedGridCell
+{
+	// Coverage data
+	int32 TotalPoints;
+	int32 VisiblePoints;
+	float Coverage;
+    
+	// Complexity data
+	float CurvatureScore;
+	float EdgeDensityScore;
+	float AngleVariationScore;
+	float ComplexityScore; 
+    
+	FUnifiedGridCell() 
+			: TotalPoints(0)
+			, VisiblePoints(0)
+			, Coverage(0.0f)
+			, CurvatureScore(0.0f)
+			, EdgeDensityScore(0.0f)
+			, AngleVariationScore(0.0f)
+			, ComplexityScore(0.0f)
+	{}
+};

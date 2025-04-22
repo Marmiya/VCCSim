@@ -48,8 +48,8 @@ public:
     
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UPauseMenuWidget> PauseWidgetClass;
-    
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Gameplay")
+
+	UPROPERTY()
 	TObjectPtr<APawn> MainCharacter;
     
 	UPROPERTY(EditAnywhere, Category = "IA")

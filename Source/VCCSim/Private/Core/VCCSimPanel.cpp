@@ -65,8 +65,9 @@ SVCCSimPanel::~SVCCSimPanel()
 
     if (SceneAnalysisManager.IsValid())
     {
-        SceneAnalysisManager->ClearSafeZoneVisualization();
-        SceneAnalysisManager->ClearCoverageVisualization();
+        SceneAnalysisManager->InterfaceClearSafeZoneVisualization();
+        SceneAnalysisManager->InterfaceClearCoverageVisualization();
+        SceneAnalysisManager->InterfaceClearComplexityVisualization();
     }
 }
 
@@ -1081,11 +1082,11 @@ FReply SVCCSimPanel::OnToggleSafeZoneVisualizationClicked()
 
     if (bSafeZoneVisualized)
     {
-        SceneAnalysisManager->VisualizeSafeZone(true);
+        SceneAnalysisManager->InterfaceVisualizeSafeZone(true);
     }
     else
     {
-        SceneAnalysisManager->VisualizeSafeZone(false);
+        SceneAnalysisManager->InterfaceVisualizeSafeZone(false);
     }
 
     VisualizeSafeZoneButton->SetButtonStyle(bSafeZoneVisualized ? 
@@ -1105,7 +1106,7 @@ FReply SVCCSimPanel::OnToggleCoverageVisualizationClicked()
     // Toggle the visualization state
     bCoverageVisualized = !bCoverageVisualized;
     
-    SceneAnalysisManager->VisualizeCoverage(bCoverageVisualized);
+    SceneAnalysisManager->InterfaceVisualizeCoverage(bCoverageVisualized);
     
     VisualizeCoverageButton->SetButtonStyle(bCoverageVisualized ? 
         &FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Danger") : 
@@ -1124,7 +1125,7 @@ FReply SVCCSimPanel::OnToggleComplexityVisualizationClicked()
     // Toggle the visualization state
     bComplexityVisualized = !bComplexityVisualized;
     
-    SceneAnalysisManager->VisualizeComplexity(bComplexityVisualized);
+    SceneAnalysisManager->InterfaceVisualizeComplexity(bComplexityVisualized);
     
     VisualizeComplexityButton->SetButtonStyle(bComplexityVisualized ? 
         &FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Danger") : 

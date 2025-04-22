@@ -22,22 +22,88 @@
 #include "EngineUtils.h"
 #include "Engine/StaticMesh.h"
 #include "DrawDebugHelpers.h"
+#include "Kismet/GameplayStatics.h"
+#include "Simulation/SemanticAnalyzer.h"
+#include "Simulation/SafeZoneAnalyzer.h"
+#include "Simulation/ComplexityAnalyzer.h"
+#include "Simulation/CoverageAnalyzer.h"
 
 ASceneAnalysisManager::ASceneAnalysisManager()
 {
     World = nullptr;
     TotalPointsInScene = 0;
     TotalTrianglesInScene = 0;
-    CurrentCoveragePercentage = 0.0f;
     LogPath = FPaths::ProjectLogDir();
-    SafeZoneMaterial = nullptr;
-    SafeZoneVisualizationMesh = nullptr;
-    CoverageVisualizationMesh = nullptr;
-    CoverageMaterial = nullptr;
 
-    // Set no collision and no tick
-    PrimaryActorTick.bCanEverTick = false;
     SetActorEnableCollision(false);
+
+    SemanticAnalyzer = CreateDefaultSubobject<USemanticAnalyzer>(TEXT("SemanticAnalyzer"));
+    if (SemanticAnalyzer)
+    {
+        SemanticAnalyzer->SetupAttachment(RootComponent);
+        SemanticAnalyzer->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        SemanticAnalyzer->SetVisibility(false);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("ASceneAnalysisManager::ASceneAnalysisManager:"
+                                    " Failed to create SemanticAnalyzer component!"));
+    }
+
+    SafeZoneAnalyzer = CreateDefaultSubobject<USafeZoneAnalyzer>(TEXT("SafeZoneAnalyzer"));
+    if (SafeZoneAnalyzer)
+    {
+        SafeZoneAnalyzer->SetupAttachment(RootComponent);
+        SafeZoneAnalyzer->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        SafeZoneAnalyzer->SetVisibility(false);
+        SafeZoneAnalyzer->MeshInfos = &SceneMeshes;
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("ASceneAnalysisManager::ASceneAnalysisManager:"
+                                    " Failed to create SafeZoneAnalyzer component!"));
+    }
+
+    ComplexityAnalyzer = CreateDefaultSubobject<UComplexityAnalyzer>(TEXT("ComplexityAnalyzer"));
+    if (ComplexityAnalyzer)
+    {
+        ComplexityAnalyzer->SetupAttachment(RootComponent);
+        ComplexityAnalyzer->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        ComplexityAnalyzer->SetVisibility(false);
+        ComplexityAnalyzer->GridResolutionPtr = &GridResolution;
+        ComplexityAnalyzer->MeshInfos = &SceneMeshes;
+        ComplexityAnalyzer->TotalPointsInScenePtr = &TotalPointsInScene;
+        ComplexityAnalyzer->TotalTrianglesInScenePtr = &TotalTrianglesInScene;
+        ComplexityAnalyzer->UnifiedGridPtr = &UnifiedGrid;
+        ComplexityAnalyzer->GridOriginPtr = &GridOrigin;
+        ComplexityAnalyzer->GridSizePtr = &GridSize;
+        ComplexityAnalyzer->GridInitializedPtr = &bGridInitialized;
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("ASceneAnalysisManager::ASceneAnalysisManager:"
+                                    " Failed to create ComplexityAnalyzer component!"));
+    }
+
+    CoverageAnalyzer = CreateDefaultSubobject<UCoverageAnalyzer>(TEXT("CoverageAnalyzer"));
+    if (CoverageAnalyzer)
+    {
+        CoverageAnalyzer->SetupAttachment(RootComponent);
+        CoverageAnalyzer->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        CoverageAnalyzer->SetVisibility(false);
+        CoverageAnalyzer->GridResolutionPtr = &GridResolution;
+        CoverageAnalyzer->CameraIntrinsicsPtr = &CameraIntrinsics;
+        CoverageAnalyzer->MeshInfos = &SceneMeshes;
+        CoverageAnalyzer->UnifiedGridPtr = &UnifiedGrid;
+        CoverageAnalyzer->GridOriginPtr = &GridOrigin;
+        CoverageAnalyzer->GridSizePtr = &GridSize;
+        CoverageAnalyzer->GridInitializedPtr = &bGridInitialized;
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("ASceneAnalysisManager::ASceneAnalysisManager:"
+                                    " Failed to create CoverageAnalyzer component!"));
+    }
 }
 
 bool ASceneAnalysisManager::Initialize(UWorld* InWorld, FString&& Path)
@@ -46,13 +112,13 @@ bool ASceneAnalysisManager::Initialize(UWorld* InWorld, FString&& Path)
         return false;
     
     World = InWorld;
+    CoverageAnalyzer->World = World;
     LogPath = std::move(Path) + "/SceneAnalysisLog";
     return true;
 }
 
 void ASceneAnalysisManager::ScanScene()
 {
-    // Call implementation without region bounds
     ScanSceneImpl(TOptional<FBox>());
 }
 
@@ -140,8 +206,8 @@ void ASceneAnalysisManager::ScanSceneImpl(const TOptional<FBox>& RegionBounds)
                     {
                         TotalMeshesInRegion++;
                         UE_LOG(LogTemp, Verbose,
-                            TEXT("Mesh from %s is within region - Bounds: X(%.2f to %.2f), "
-                                 "Y(%.2f to %.2f), Z(%.2f to %.2f)"),
+                            TEXT("Mesh from %s is within region - Bounds: "
+                                 "X(%.2f to %.2f), Y(%.2f to %.2f), Z(%.2f to %.2f)"),
                               *Actor->GetName(),
                               MeshBox.Min.X, MeshBox.Max.X,
                               MeshBox.Min.Y, MeshBox.Max.Y,
@@ -178,7 +244,6 @@ void ASceneAnalysisManager::ScanSceneImpl(const TOptional<FBox>& RegionBounds)
           TotalActorsFound, TotalMeshComponentsFound, TotalMeshesInRegion,
           SceneMeshes.Num(), TotalTrianglesInScene, TotalPointsInScene);
     
-    // If no meshes were found, provide a warning
     if (SceneMeshes.Num() == 0)
     {
         if (TotalActorsFound == 0)
@@ -200,16 +265,14 @@ void ASceneAnalysisManager::ScanSceneImpl(const TOptional<FBox>& RegionBounds)
         }
     }
     
-    ResetCoverage();
+    CoverageAnalyzer->ResetCoverage();
+    InitializeUnifiedGrid();
 }
 
 void ASceneAnalysisManager::RegisterCamera(URGBCameraComponent* CameraComponent)
 {
     CameraIntrinsics.Add(CameraComponent->CameraName,
     CameraComponent->GetCameraIntrinsics());
-
-    // CameraComponent->OnKeyPointCaptured.BindUFunction(
-    //     this, "");
 }
 
 FMeshInfo ASceneAnalysisManager::GetMeshInfo(int32 MeshID) const
@@ -226,483 +289,6 @@ FMeshInfo ASceneAnalysisManager::GetMeshInfo(int32 MeshID) const
 TArray<FMeshInfo> ASceneAnalysisManager::GetAllMeshInfo() const
 {
     return SceneMeshes;
-}
-
-FCoverageData ASceneAnalysisManager::ComputeCoverage(
-    const TArray<FTransform>& CameraTransforms, const FString& CameraName)
-{
-    FCoverageData CoverageData;
-    CoverageData.CoveragePercentage = 0.0f;
-    CoverageData.TotalVisibleTriangles = 0;
-    
-    if (!World || CameraTransforms.Num() == 0 || CoverageMap.Num() == 0)
-        return CoverageData;
-    
-    // Get camera intrinsic for specified camera name
-    FMatrix44f CameraIntrinsic;
-    
-    if (CameraIntrinsics.Contains(CameraName))
-    {
-        CameraIntrinsic = CameraIntrinsics[CameraName];
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("ComputeCoverage: "
-                                      "No intrinsics found for camera %s"), *CameraName);
-    }
-    
-    // Reset visibility of all points
-    VisiblePoints.Empty(CoverageMap.Num() / 2); // Pre-allocate with estimated capacity
-    InvisiblePoints.Empty(CoverageMap.Num() / 2);
-    
-    // Create a spatial hash grid for quickly finding which mesh a point belongs to
-    // This is a simple implementation - could be replaced with a more sophisticated structure
-    constexpr float SpatialGridSize = 500.0f; // Adjust based on scene scale
-    TMap<FIntVector, TArray<int32>> SpatialGrid;
-    
-    // Populate spatial grid with mesh IDs
-    for (int32 MeshIdx = 0; MeshIdx < SceneMeshes.Num(); ++MeshIdx)
-    {
-        const FMeshInfo& MeshInfo = SceneMeshes[MeshIdx];
-        FBox MeshBox = MeshInfo.Bounds.GetBox();
-        
-        // Calculate grid cell range for this mesh
-        FIntVector MinCell(
-            FMath::FloorToInt(MeshBox.Min.X / SpatialGridSize),
-            FMath::FloorToInt(MeshBox.Min.Y / SpatialGridSize),
-            FMath::FloorToInt(MeshBox.Min.Z / SpatialGridSize)
-        );
-        
-        FIntVector MaxCell(
-            FMath::FloorToInt(MeshBox.Max.X / SpatialGridSize),
-            FMath::FloorToInt(MeshBox.Max.Y / SpatialGridSize),
-            FMath::FloorToInt(MeshBox.Max.Z / SpatialGridSize)
-        );
-        
-        // Add mesh to all cells it overlaps
-        for (int32 X = MinCell.X; X <= MaxCell.X; ++X)
-        {
-            for (int32 Y = MinCell.Y; Y <= MaxCell.Y; ++Y)
-            {
-                for (int32 Z = MinCell.Z; Z <= MaxCell.Z; ++Z)
-                {
-                    FIntVector Cell(X, Y, Z);
-                    SpatialGrid.FindOrAdd(Cell).Add(MeshIdx);
-                }
-            }
-        }
-    }
-    
-    // Reset all points to invisible first and create a copy for parallel processing
-    struct FPointVisibilityData
-    {
-        FVector Point;
-        bool bIsVisible;
-        
-        FPointVisibilityData(const FVector& InPoint) : Point(InPoint), bIsVisible(false) {}
-    };
-    
-    TArray<FPointVisibilityData> PointsData;
-    PointsData.Reserve(CoverageMap.Num());
-    
-    for (auto& Pair : CoverageMap)
-    {
-        Pair.Value = false; // Reset to invisible
-        PointsData.Emplace(Pair.Key);
-    }
-    
-    // OPTIMIZATION: Lower threshold for parallel processing and use better work distribution
-    const int32 ParallelThreshold = 1000; // Lowered from 10000
-    
-    // For each camera, check which points are visible
-    for (const FTransform& CameraTransform : CameraTransforms)
-    {
-        // Construct frustum for this camera (this could be further optimized)
-        FConvexVolume Frustum;
-        ConstructFrustum(Frustum, CameraTransform, CameraIntrinsic);
-        
-        // OPTIMIZATION: Extract camera properties once outside the loops
-        const FVector CameraLocation = CameraTransform.GetLocation();
-        const FVector CameraForward = CameraTransform.GetRotation().GetForwardVector();
-        
-        // Process points in parallel for better performance
-        if (PointsData.Num() > ParallelThreshold)
-        {
-            // OPTIMIZATION: Improved parallel processing with better work distribution
-            const int32 NumBatches = FMath::Max(1, FMath::Min(FPlatformMisc::NumberOfCores() * 2, PointsData.Num() / 100));
-            const int32 PointsPerBatch = FMath::DivideAndRoundUp(PointsData.Num(), NumBatches);
-            
-            ParallelFor(NumBatches, [&](int32 BatchIndex)
-            {
-                const int32 StartIdx = BatchIndex * PointsPerBatch;
-                const int32 EndIdx = FMath::Min(StartIdx + PointsPerBatch, PointsData.Num());
-                
-                // Pre-allocate trace params outside the loop
-                FCollisionQueryParams TraceParams;
-                TraceParams.bTraceComplex = true;
-                
-                // OPTIMIZATION: Use batched visibility checks for better performance
-                for (int32 PointIdx = StartIdx; PointIdx < EndIdx; ++PointIdx)
-                {
-                    FPointVisibilityData& PointData = PointsData[PointIdx];
-                    
-                    // Skip points that are already visible
-                    if (PointData.bIsVisible)
-                        continue;
-                    
-                    // OPTIMIZATION: Early directional culling (cheaper than frustum test)
-                    FVector PointDir = (PointData.Point - CameraLocation).GetSafeNormal();
-                    if (FVector::DotProduct(CameraForward, PointDir) <= 0.0f)
-                        continue; // Point is behind camera
-                    
-                    // Early frustum culling
-                    bool bInFrustum = true;
-                    for (const FPlane& Plane : Frustum.Planes)
-                    {
-                        if (Plane.PlaneDot(PointData.Point) < 0.0f)
-                        {
-                            bInFrustum = false;
-                            break;
-                        }
-                    }
-                    
-                    if (!bInFrustum)
-                        continue;
-                    
-                    // OPTIMIZATION: Could implement occlusion culling here
-                    
-                    // Visibility check with line trace
-                    FHitResult HitResult;
-                    if (World->LineTraceSingleByChannel(
-                            HitResult,
-                            CameraLocation,
-                            PointData.Point,
-                            ECC_Visibility,
-                            TraceParams))
-                    {
-                        // If we hit something near our target point, consider it visible
-                        PointData.bIsVisible = (HitResult.Location - PointData.Point).SizeSquared() < 1.0f;
-                    }
-                    else
-                    {
-                        // If nothing was hit, point is visible
-                        PointData.bIsVisible = true;
-                    }
-                }
-            });
-        }
-        else
-        {
-            // Sequential processing for smaller point sets
-            // Pre-allocate trace params outside the loop
-            FCollisionQueryParams TraceParams;
-            TraceParams.bTraceComplex = true;
-            
-            for (FPointVisibilityData& PointData : PointsData)
-            {
-                // Skip points that are already visible
-                if (PointData.bIsVisible)
-                    continue;
-                
-                // Early directional culling
-                FVector PointDir = (PointData.Point - CameraLocation).GetSafeNormal();
-                if (FVector::DotProduct(CameraForward, PointDir) <= 0.0f)
-                    continue; // Point is behind camera
-                
-                // Early frustum culling
-                bool bInFrustum = true;
-                for (const FPlane& Plane : Frustum.Planes)
-                {
-                    if (Plane.PlaneDot(PointData.Point) < 0.0f)
-                    {
-                        bInFrustum = false;
-                        break;
-                    }
-                }
-                
-                if (!bInFrustum)
-                    continue;
-                
-                // Visibility check with line trace
-                FHitResult HitResult;
-                if (World->LineTraceSingleByChannel(
-                        HitResult,
-                        CameraLocation,
-                        PointData.Point,
-                        ECC_Visibility,
-                        TraceParams))
-                {
-                    // If we hit something near our target point, consider it visible
-                    PointData.bIsVisible = (HitResult.Location - PointData.Point).SizeSquared() < 1.0f;
-                }
-                else
-                {
-                    // If nothing was hit, point is visible
-                    PointData.bIsVisible = true;
-                }
-            }
-        }
-    }
-    
-    // Update the CoverageMap with results and build visible/invisible point lists
-    TSet<int32> VisibleMeshIDs;
-    int32 VisiblePointCount = 0;
-    
-    for (int32 PointIdx = 0; PointIdx < PointsData.Num(); ++PointIdx)
-    {
-        const FPointVisibilityData& PointData = PointsData[PointIdx];
-        
-        // Update the coverage map
-        CoverageMap[PointData.Point] = PointData.bIsVisible;
-        
-        if (PointData.bIsVisible)
-        {
-            VisiblePoints.Add(PointData.Point);
-            VisiblePointCount++;
-            
-            // OPTIMIZATION: Use spatial grid to quickly find which meshes contain this point
-            FIntVector GridCell(
-                FMath::FloorToInt(PointData.Point.X / SpatialGridSize),
-                FMath::FloorToInt(PointData.Point.Y / SpatialGridSize),
-                FMath::FloorToInt(PointData.Point.Z / SpatialGridSize)
-            );
-            
-            // Get meshes potentially containing this point
-            if (SpatialGrid.Contains(GridCell))
-            {
-                const TArray<int32>& PotentialMeshIndices = SpatialGrid[GridCell];
-                
-                for (int32 MeshIdx : PotentialMeshIndices)
-                {
-                    // Final check if point is inside mesh bounds
-                    if (SceneMeshes[MeshIdx].Bounds.GetBox().IsInsideOrOn(PointData.Point))
-                    {
-                        VisibleMeshIDs.Add(SceneMeshes[MeshIdx].MeshID);
-                    }
-                }
-            }
-        }
-        else
-        {
-            InvisiblePoints.Add(PointData.Point);
-        }
-    }
-    
-    // Calculate coverage percentage
-    int32 TotalPoints = CoverageMap.Num();
-    float CoveragePercentage = TotalPoints > 0 ? (float)VisiblePointCount / (float)TotalPoints * 100.0f : 0.0f;
-    
-    // OPTIMIZATION: More efficient visible triangle calculation
-    struct FMeshVisibilityData
-    {
-        int32 TotalPoints;
-        int32 VisiblePoints;
-        
-        FMeshVisibilityData() : TotalPoints(0), VisiblePoints(0) {}
-    };
-    
-    TMap<int32, FMeshVisibilityData> MeshVisibilityMap;
-    
-    // Pre-allocate with estimated capacity
-    MeshVisibilityMap.Reserve(VisibleMeshIDs.Num());
-    
-    // First pass: count points per mesh
-    for (const auto& Pair : CoverageMap)
-    {
-        const FVector& Point = Pair.Key;
-        bool bIsVisible = Pair.Value;
-        
-        // OPTIMIZATION: Use spatial grid to find mesh
-        FIntVector GridCell(
-            FMath::FloorToInt(Point.X / SpatialGridSize),
-            FMath::FloorToInt(Point.Y / SpatialGridSize),
-            FMath::FloorToInt(Point.Z / SpatialGridSize)
-        );
-        
-        if (SpatialGrid.Contains(GridCell))
-        {
-            for (int32 MeshIdx : SpatialGrid[GridCell])
-            {
-                const FMeshInfo& MeshInfo = SceneMeshes[MeshIdx];
-                
-                if (MeshInfo.Bounds.GetBox().IsInsideOrOn(Point))
-                {
-                    FMeshVisibilityData& VisData = MeshVisibilityMap.FindOrAdd(MeshInfo.MeshID);
-                    VisData.TotalPoints++;
-                    
-                    if (bIsVisible)
-                    {
-                        VisData.VisiblePoints++;
-                    }
-                    
-                    break; // Point can only be in one mesh
-                }
-            }
-        }
-    }
-    
-    // Calculate visible triangles
-    int32 VisibleTriangles = 0;
-    
-    for (const FMeshInfo& MeshInfo : SceneMeshes)
-    {
-        if (VisibleMeshIDs.Contains(MeshInfo.MeshID))
-        {
-            // Get visibility data for this mesh
-            if (MeshVisibilityMap.Contains(MeshInfo.MeshID))
-            {
-                const FMeshVisibilityData& VisData = MeshVisibilityMap[MeshInfo.MeshID];
-                
-                if (VisData.TotalPoints > 0)
-                {
-                    float MeshVisiblePointRatio = (float)VisData.VisiblePoints / (float)VisData.TotalPoints;
-                    VisibleTriangles += FMath::RoundToInt(MeshInfo.NumTriangles * MeshVisiblePointRatio);
-                }
-            }
-        }
-    }
-    
-    // Update class members
-    CurrentlyVisibleMeshIDs = VisibleMeshIDs;
-    CurrentCoveragePercentage = CoveragePercentage;
-    bCoverageVisualizationDirty = true;
-    
-    // Populate return data structure
-    CoverageData.CoveragePercentage = CoveragePercentage;
-    CoverageData.VisibleMeshIDs = VisibleMeshIDs;
-    CoverageData.VisiblePoints = VisiblePoints;
-    CoverageData.TotalVisibleTriangles = VisibleTriangles;
-    
-    UE_LOG(LogTemp, Display, TEXT("Coverage computed for camera %s: %.2f%% of points visible (%d/%d), %d visible meshes, ~%d visible triangles"),
-        *CameraName, CoveragePercentage, VisiblePointCount, TotalPoints, VisibleMeshIDs.Num(), VisibleTriangles);
-    
-    if (bGridInitialized)
-    {
-        UpdateCoverageGrid();
-    }
-    
-    return CoverageData;
-}
-
-FCoverageData ASceneAnalysisManager::ComputeCoverage(
-    const FTransform& CameraTransform, const FString& CameraName)
-{
-    // Create array with single transform and call the multi-transform version
-    TArray<FTransform> CameraTransforms;
-    CameraTransforms.Add(CameraTransform);
-    return ComputeCoverage(CameraTransforms, CameraName);
-}
-
-void ASceneAnalysisManager::InitializeCoverageVisualization()
-{
-    if (!World)
-        return;
-    
-    // Initialize the procedural mesh component if it doesn't exist
-    if (!CoverageVisualizationMesh)
-    {
-        CoverageVisualizationMesh = NewObject<UProceduralMeshComponent>(this);
-        CoverageVisualizationMesh->RegisterComponent();
-        CoverageVisualizationMesh->SetMobility(EComponentMobility::Movable);
-        CoverageVisualizationMesh->AttachToComponent(GetRootComponent(), 
-                                                   FAttachmentTransformRules::KeepWorldTransform);
-        CoverageVisualizationMesh->SetCollisionEnabled(ECollisionEnabled::Type::NoCollision);
-    }
-    
-    // Load or create the coverage material if not already set
-    if (!CoverageMaterial)
-    {
-        // Try to load the coverage material
-        CoverageMaterial = LoadObject<UMaterialInterface>(nullptr, 
-            TEXT("/Script/Engine.Material'/VCCSim/Materials/M_Coverage.M_Coverage'"));
-        
-        // Only log error if material failed to load
-        if (!CoverageMaterial)
-        {
-            UE_LOG(LogTemp, Error, TEXT("InitializeCoverageVisualization: "
-                                       "Failed to load coverage material."));
-        }
-    }
-}
-
-void ASceneAnalysisManager::VisualizeCoverage(bool bShow)
-{
-    if (!World)
-        return;
-    
-    // Check if we have coverage data
-    if (!bGridInitialized)
-    {
-        UE_LOG(LogTemp, Warning,
-            TEXT("VisualizeCoverage: No coverage grid initialized"));
-        return;
-    }
-    
-    // If not showing, clear visualization and return
-    if (!bShow)
-    {
-        if (CoverageVisualizationMesh)
-        {
-            CoverageVisualizationMesh->SetVisibility(false);
-        }
-        return;
-    }
-    
-    // Initialize visualization components if needed
-    InitializeCoverageVisualization();
-    
-    // If mesh component failed to initialize, return
-    if (!CoverageVisualizationMesh)
-    {
-        UE_LOG(LogTemp, Error, TEXT("VisualizeCoverage: Coverage "
-                                    "mesh component not initialized"));
-        return;
-    }
-    
-    // Only update mesh if dirty or visibility is changing
-    if (bCoverageVisualizationDirty)
-    {
-        CreateCoverageMesh();
-        bCoverageVisualizationDirty = false;
-    }
-    
-    // Set visibility
-    CoverageVisualizationMesh->SetVisibility(true);
-}
-
-void ASceneAnalysisManager::ClearCoverageVisualization()
-{
-    if (CoverageVisualizationMesh)
-    {
-        CoverageVisualizationMesh->ClearAllMeshSections();
-        CoverageVisualizationMesh->SetVisibility(false);
-    }
-}
-
-// Update the ResetCoverage function to initialize the point arrays
-void ASceneAnalysisManager::ResetCoverage()
-{
-    CoverageMap.Empty();
-    CurrentlyVisibleMeshIDs.Empty();
-    CurrentCoveragePercentage = 0.0f;
-    VisiblePoints.Empty();
-    InvisiblePoints.Empty();
-    
-    // Initialize coverage map with all points set to not visible
-    for (const FMeshInfo& MeshInfo : SceneMeshes)
-    {
-        TArray<FVector> SampledPoints = SamplePointsOnMesh(MeshInfo);
-        for (const FVector& Point : SampledPoints)
-        {
-            CoverageMap.Add(Point, false);
-            InvisiblePoints.Add(Point);
-        }
-    }
-    
-    // Initialize the unified grid
-    InitializeUnifiedGrid();
-    
-    bCoverageVisualizationDirty = true;
 }
 
 void ASceneAnalysisManager::ExtractMeshData(
@@ -778,9 +364,7 @@ void ASceneAnalysisManager::InitializeUnifiedGrid()
     
     // Expand bounds slightly
     SceneBounds = SceneBounds.ExpandBy(GridResolution * 2.0f);
-    ExpandedSceneBounds = SceneBounds;
     
-    // Store grid origin
     GridOrigin = SceneBounds.Min;
     
     FVector BoundsSize = SceneBounds.GetSize();
@@ -790,19 +374,7 @@ void ASceneAnalysisManager::InitializeUnifiedGrid()
     
     GridSize = FVector(GridSizeX, GridSizeY, GridSizeZ);
     
-    // Clear the unified grid (sparse structure)
-    UnifiedGrid.Empty();
-    
-    // Pre-populate the grid with cells that contain sampled points
-    for (const auto& Pair : CoverageMap)
-    {
-        const FVector& Point = Pair.Key;
-        FIntVector GridCoords = WorldToGridCoordinates(Point);
-        
-        // Add cell with no coverage yet
-        FUnifiedGridCell& Cell = UnifiedGrid.FindOrAdd(GridCoords);
-        Cell.TotalPoints++;
-    }
+    CoverageAnalyzer->PrepareCoverage();
     
     bGridInitialized = true;
     
@@ -811,1594 +383,83 @@ void ASceneAnalysisManager::InitializeUnifiedGrid()
            GridSizeX, GridSizeY, GridSizeZ, UnifiedGrid.Num());
 }
 
-void ASceneAnalysisManager::InitializeSafeZoneVisualization()
+/* -------------------------------- SubModules ------------------------------ */
+
+bool ASceneAnalysisManager::InterfaceVisualizeSemanticAnalysis()
 {
-    if (!World)
-        return;
-    
-    // Initialize the procedural mesh component if it doesn't exist
-    if (!SafeZoneVisualizationMesh)
+    SemanticAnalyzer->bShowSemanticAnalysis = !SemanticAnalyzer->bShowSemanticAnalysis;
+    if (UGameplayStatics::IsGamePaused(GetWorld()))
     {
-        SafeZoneVisualizationMesh = NewObject<UProceduralMeshComponent>(this);
-        SafeZoneVisualizationMesh->RegisterComponent();
-        SafeZoneVisualizationMesh->SetMobility(EComponentMobility::Movable);
-        SafeZoneVisualizationMesh->AttachToComponent(GetRootComponent(), 
-                                                  FAttachmentTransformRules::KeepWorldTransform);
-        SafeZoneVisualizationMesh->SetCollisionEnabled(ECollisionEnabled::Type::NoCollision);
+        SemanticAnalyzer->bShowSemanticAnalysis = SemanticAnalyzer->bShowSemanticAnalysis;
+        SemanticAnalyzer->ShowSemanticAnalysis();
     }
-    
-    // Load or create the safe zone material if not already set
-    if (!SafeZoneMaterial)
-    {
-        // Try to load the safe zone material
-        SafeZoneMaterial = LoadObject<UMaterialInterface>(nullptr, 
-            TEXT("/Script/Engine.Material'/VCCSim/Materials/M_SafeZone.M_SafeZone'"));
-        
-        if (!SafeZoneMaterial)
-        {
-            UE_LOG(LogTemp, Error, TEXT("InitializeSafeZoneVisualization: Failed to load safe zone material."));
-        }
-    }
+    return SemanticAnalyzer->bShowSemanticAnalysis;
 }
 
-void ASceneAnalysisManager::VisualizeSafeZone(bool Vis)
+void ASceneAnalysisManager::InterfaceVisualizeSafeZone(bool bShow)
 {
-    if (!World)
-        return;
-    
-    // If not showing, clear visualization and return
-    if (!Vis)
-    {
-        if (SafeZoneVisualizationMesh)
-        {
-            SafeZoneVisualizationMesh->SetVisibility(false);
-        }
-        return;
-    }
-    
-    // Check if we have safe zones
-    if (MeshSafeZones.Num() == 0)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("VisualizeSafeZone: No safe zones to visualize. Generate safe zones first."));
-        return;
-    }
-    
-    // Initialize visualization components if needed
-    InitializeSafeZoneVisualization();
-    
-    // If mesh component failed to initialize, return
-    if (!SafeZoneVisualizationMesh)
-    {
-        UE_LOG(LogTemp, Error, TEXT("VisualizeSafeZone: Safe zone mesh component not initialized"));
-        return;
-    }
-    
-    // Create the safe zone mesh
-    CreateSafeZoneMesh();
-    
-    // Set visibility
-    SafeZoneVisualizationMesh->SetVisibility(true);
+    SafeZoneAnalyzer->VisualizeSafeZone(bShow);
 }
 
-void ASceneAnalysisManager::ClearSafeZoneVisualization()
+void ASceneAnalysisManager::InterfaceClearSafeZoneVisualization()
 {
-    // Clear mesh section
-    if (SafeZoneVisualizationMesh)
-    {
-        SafeZoneVisualizationMesh->ClearAllMeshSections();
-        SafeZoneVisualizationMesh->SetVisibility(false);
-    }
-    
-    // Clear safe zones
-    MeshSafeZones.Empty();
+    SafeZoneAnalyzer->ClearSafeZoneVisualization();
 }
 
-void ASceneAnalysisManager::GenerateSafeZone(const float& SafeDistance)
+void ASceneAnalysisManager::InterfaceInitializeSafeZoneVisualization()
 {
-    if (!World || SceneMeshes.Num() == 0)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("GenerateSafeZone: No valid World or no meshes in scene"));
-        return;
-    }
-    
-    // Clear previous safe zones
-    MeshSafeZones.Empty();
-    MeshSafeZones.Reserve(SceneMeshes.Num());
-    
-    // Generate individual safe zone for each mesh
-    for (const FMeshInfo& MeshInfo : SceneMeshes)
-    {
-        // Get the original mesh bounds
-        FBox MeshBounds = MeshInfo.Bounds.GetBox();
-        
-        // Expand by safe distance
-        FBox ExpandedMeshBounds = MeshBounds.ExpandBy(SafeDistance);
-        
-        // Add to our collection
-        MeshSafeZones.Add(ExpandedMeshBounds);
-    }
-    
-    // Also keep the overall expanded scene bounds (might be useful for other functions)
-    FBox SceneBounds(EForceInit::ForceInit);
-    for (const FBox& SafeZone : MeshSafeZones)
-    {
-        SceneBounds += SafeZone;
-    }
-    ExpandedSceneBounds = SceneBounds;
-    
-    UE_LOG(LogTemp, Display, TEXT("Generated %d individual mesh safe zones with expansion distance %.2f"), 
-           MeshSafeZones.Num(), SafeDistance);
+    SafeZoneAnalyzer->InitializeSafeZoneVisualization();
 }
 
-void ASceneAnalysisManager::CreateSafeZoneMesh()
+void ASceneAnalysisManager::InterfaceGenerateSafeZone(const float& SafeDistance)
 {
-    // Clear existing mesh sections
-    SafeZoneVisualizationMesh->ClearAllMeshSections();
-    
-    // Create arrays for procedural mesh
-    TArray<FVector> Vertices;
-    TArray<int32> Triangles;
-    TArray<FVector> Normals;
-    TArray<FVector2D> UV0;
-    TArray<FColor> VertexColors;
-    TArray<FProcMeshTangent> Tangents;
-    
-    // Create a semi-transparent color
-    FColor BoxColor = SafeZoneColor.ToFColor(false);
-    BoxColor.A = 128; // Semi-transparent
-    
-    // Process each mesh safe zone
-    for (int32 BoxIndex = 0; BoxIndex < MeshSafeZones.Num(); BoxIndex++)
-    {
-        const FBox& SafeZoneBox = MeshSafeZones[BoxIndex];
-        
-        // Get the box dimensions
-        FVector BoxMin = SafeZoneBox.Min;
-        FVector BoxMax = SafeZoneBox.Max;
-        
-        // Base vertex index for this box
-        int32 BaseVertexIndex = Vertices.Num();
-        
-        // Define the 8 corners of the box
-        Vertices.Add(FVector(BoxMin.X, BoxMin.Y, BoxMin.Z)); // 0: bottom left back
-        Vertices.Add(FVector(BoxMax.X, BoxMin.Y, BoxMin.Z)); // 1: bottom right back
-        Vertices.Add(FVector(BoxMax.X, BoxMax.Y, BoxMin.Z)); // 2: bottom right front
-        Vertices.Add(FVector(BoxMin.X, BoxMax.Y, BoxMin.Z)); // 3: bottom left front
-        Vertices.Add(FVector(BoxMin.X, BoxMin.Y, BoxMax.Z)); // 4: top left back
-        Vertices.Add(FVector(BoxMax.X, BoxMin.Y, BoxMax.Z)); // 5: top right back
-        Vertices.Add(FVector(BoxMax.X, BoxMax.Y, BoxMax.Z)); // 6: top right front
-        Vertices.Add(FVector(BoxMin.X, BoxMax.Y, BoxMax.Z)); // 7: top left front
-        
-        // Add colors for all 8 vertices
-        for (int32 i = 0; i < 8; ++i)
-        {
-            VertexColors.Add(BoxColor);
-        }
-        
-        // Add texture coordinates
-        UV0.Add(FVector2D(0, 0)); // 0
-        UV0.Add(FVector2D(1, 0)); // 1
-        UV0.Add(FVector2D(1, 1)); // 2
-        UV0.Add(FVector2D(0, 1)); // 3
-        UV0.Add(FVector2D(0, 0)); // 4
-        UV0.Add(FVector2D(1, 0)); // 5
-        UV0.Add(FVector2D(1, 1)); // 6
-        UV0.Add(FVector2D(0, 1)); // 7
-        
-        // Add normals
-        Normals.Add(FVector(0, 0, -1)); // Bottom face
-        Normals.Add(FVector(0, 0, -1));
-        Normals.Add(FVector(0, 0, -1));
-        Normals.Add(FVector(0, 0, -1));
-        Normals.Add(FVector(0, 0, 1));  // Top face
-        Normals.Add(FVector(0, 0, 1));
-        Normals.Add(FVector(0, 0, 1));
-        Normals.Add(FVector(0, 0, 1));
-        
-        // Add tangents
-        for (int32 i = 0; i < 8; ++i)
-        {
-            Tangents.Add(FProcMeshTangent(1, 0, 0));
-        }
-        
-        // Add triangles for each face (12 triangles total)
-        // Bottom face (0,1,2,3)
-        Triangles.Add(BaseVertexIndex + 0); Triangles.Add(BaseVertexIndex + 1); Triangles.Add(BaseVertexIndex + 2);
-        Triangles.Add(BaseVertexIndex + 0); Triangles.Add(BaseVertexIndex + 2); Triangles.Add(BaseVertexIndex + 3);
-        
-        // Top face (4,5,6,7)
-        Triangles.Add(BaseVertexIndex + 4); Triangles.Add(BaseVertexIndex + 6); Triangles.Add(BaseVertexIndex + 5);
-        Triangles.Add(BaseVertexIndex + 4); Triangles.Add(BaseVertexIndex + 7); Triangles.Add(BaseVertexIndex + 6);
-        
-        // Front face (3,2,6,7)
-        Triangles.Add(BaseVertexIndex + 3); Triangles.Add(BaseVertexIndex + 2); Triangles.Add(BaseVertexIndex + 6);
-        Triangles.Add(BaseVertexIndex + 3); Triangles.Add(BaseVertexIndex + 6); Triangles.Add(BaseVertexIndex + 7);
-        
-        // Back face (0,1,5,4)
-        Triangles.Add(BaseVertexIndex + 0); Triangles.Add(BaseVertexIndex + 5); Triangles.Add(BaseVertexIndex + 1);
-        Triangles.Add(BaseVertexIndex + 0); Triangles.Add(BaseVertexIndex + 4); Triangles.Add(BaseVertexIndex + 5);
-        
-        // Left face (0,3,7,4)
-        Triangles.Add(BaseVertexIndex + 0); Triangles.Add(BaseVertexIndex + 3); Triangles.Add(BaseVertexIndex + 7);
-        Triangles.Add(BaseVertexIndex + 0); Triangles.Add(BaseVertexIndex + 7); Triangles.Add(BaseVertexIndex + 4);
-        
-        // Right face (1,2,6,5)
-        Triangles.Add(BaseVertexIndex + 1); Triangles.Add(BaseVertexIndex + 6); Triangles.Add(BaseVertexIndex + 2);
-        Triangles.Add(BaseVertexIndex + 1); Triangles.Add(BaseVertexIndex + 5); Triangles.Add(BaseVertexIndex + 6);
-    }
-    
-    // Create the mesh section
-    if (Vertices.Num() > 0 && Triangles.Num() > 0)
-    {
-        SafeZoneVisualizationMesh->CreateMeshSection(0, Vertices, Triangles, Normals, UV0, VertexColors, Tangents, false);
-        
-        // Apply material
-        if (SafeZoneMaterial)
-        {
-            SafeZoneVisualizationMesh->SetMaterial(0, SafeZoneMaterial);
-        }
-        
-        UE_LOG(LogTemp, Display, TEXT("Created safe zone visualization with %d individual boxes, %d vertices, %d triangles"),
-               MeshSafeZones.Num(), Vertices.Num(), Triangles.Num() / 3);
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("CreateSafeZoneMesh: No valid geometry to create mesh"));
-    }
+    SafeZoneAnalyzer->GenerateSafeZone(SafeDistance);
 }
 
-bool ASceneAnalysisManager::IsPointVisibleFromCamera(
-    const FVector& Point, const FTransform& CameraPose) const
+void ASceneAnalysisManager::InterfaceVisualizeComplexity(bool bShow)
 {
-    if (!World)
-    {
-        return false;
-    }
-    
-    // Get camera position and forward vector (optimized)
-    const FVector CameraPos = CameraPose.GetLocation();
-    const FVector CameraForward = CameraPose.GetRotation().GetForwardVector();
-    
-    // Check if point is in front of camera (dot product optimization)
-    const FVector PointDir = (Point - CameraPos).GetSafeNormal();
-    
-    if (FVector::DotProduct(CameraForward, PointDir) <= 0.0f)
-        return false; // Point is behind camera
-    
-    // Use pre-allocated trace params for better performance
-    static FCollisionQueryParams TraceParams;
-    static bool bTraceParamsInitialized = false;
-    
-    if (!bTraceParamsInitialized)
-    {
-        TraceParams.bTraceComplex = true;
-        bTraceParamsInitialized = true;
-    }
-    
-    // Trace from camera to point
-    FHitResult HitResult;
-    
-    if (World->LineTraceSingleByChannel(
-            HitResult,
-            CameraPos,
-            Point,
-            ECC_Visibility,
-            TraceParams))
-    {
-        // If we hit something near our target point, consider it visible
-        // Optimized by using SizeSquared() instead of Size()
-        return (HitResult.Location - Point).SizeSquared() < 1.0f;
-    }
-    
-    // If nothing was hit, point is visible
-    return true;
+    ComplexityAnalyzer->VisualizeComplexity(bShow);
 }
 
-void ASceneAnalysisManager::ConstructFrustum(
-    FConvexVolume& OutFrustum, const FTransform& CameraPose,
-    const FMatrix44f& CameraIntrinsic)
+void ASceneAnalysisManager::InterfaceClearComplexityVisualization()
 {
-    // Cache frequently used values
-    const float fx = CameraIntrinsic.M[0][0];
-    const float fy = CameraIntrinsic.M[1][1];
-    const float cx = CameraIntrinsic.M[0][2];
-    const float cy = CameraIntrinsic.M[1][2];
-    
-    // Calculate image width and height from principal points (assuming centered)
-    const float width = cx * 2.0f;
-    const float height = cy * 2.0f;
-    
-    // Calculate FOV correctly and cache reciprocals for efficiency
-    const float fxRecip = (fx > KINDA_SMALL_NUMBER) ? 1.0f / fx : 0.0f;
-    const float fyRecip = (fy > KINDA_SMALL_NUMBER) ? 1.0f / fy : 0.0f;
-    
-    float HorizontalFOV = (fx > KINDA_SMALL_NUMBER) ? 2.0f *
-        FMath::Atan(width * 0.5f * fxRecip) : FMath::DegreesToRadians(90.0f);
-    float VerticalFOV = (fy > KINDA_SMALL_NUMBER) ? 2.0f *
-        FMath::Atan(height * 0.5f * fyRecip) : FMath::DegreesToRadians(60.0f);
-    float AspectRatio = width / height;
-    
-    // If values are extreme, use reasonable defaults
-    if (FMath::IsNaN(HorizontalFOV) || HorizontalFOV < FMath::DegreesToRadians(1.0f)) {
-        HorizontalFOV = FMath::DegreesToRadians(90.0f);
-    }
-    
-    // Extract camera transform components once
-    const FVector ForwardVector = CameraPose.GetRotation().GetForwardVector();
-    const FVector RightVector = CameraPose.GetRotation().GetRightVector();
-    const FVector UpVector = CameraPose.GetRotation().GetUpVector();
-    const FVector Position = CameraPose.GetLocation();
-    
-    // Use constants for near and far plane distances
-    constexpr float NearPlaneDistance = 10.0f;
-    constexpr float FarPlaneDistance = 5000.0f;
-    
-    // Pre-calculate common values
-    const float HalfVFOV = VerticalFOV * 0.5f;
-    const float FarHeight = FarPlaneDistance * FMath::Tan(HalfVFOV);
-    const float FarWidth = FarHeight * AspectRatio;
-    
-    // Calculate plane centers once
-    const FVector NearCenter = Position + ForwardVector * NearPlaneDistance;
-    const FVector FarCenter = Position + ForwardVector * FarPlaneDistance;
-    
-    // Calculate far plane corners efficiently
-    const FVector UpScaled = UpVector * FarHeight;
-    const FVector RightScaled = RightVector * FarWidth;
-    
-    const FVector FarTopLeft = FarCenter + UpScaled - RightScaled;
-    const FVector FarTopRight = FarCenter + UpScaled + RightScaled;
-    const FVector FarBottomLeft = FarCenter - UpScaled - RightScaled;
-    const FVector FarBottomRight = FarCenter - UpScaled + RightScaled;
-    
-    // Pre-allocate planes array with exact capacity
-    OutFrustum.Planes.Empty(6);
-    OutFrustum.Planes.Reserve(6);
-    
-    // Near plane (normal points backward)
-    OutFrustum.Planes.Add(FPlane(NearCenter, ForwardVector));
-    
-    // Far plane (normal points forward)
-    OutFrustum.Planes.Add(FPlane(FarCenter, -ForwardVector));
-    
-    // Calculate plane normals more efficiently
-    FVector LeftNormal = -FVector::CrossProduct(FarTopLeft - Position,
-        FarBottomLeft - Position).GetSafeNormal();
-    OutFrustum.Planes.Add(FPlane(Position, -LeftNormal));
-    
-    FVector RightNormal = -FVector::CrossProduct(FarBottomRight - Position,
-        FarTopRight - Position).GetSafeNormal();
-    OutFrustum.Planes.Add(FPlane(Position, -RightNormal));
-    
-    FVector TopNormal = -FVector::CrossProduct(FarTopRight - Position,
-        FarTopLeft - Position).GetSafeNormal();
-    OutFrustum.Planes.Add(FPlane(Position, -TopNormal));
-    
-    FVector BottomNormal = -FVector::CrossProduct(FarBottomLeft - Position,
-        FarBottomRight - Position).GetSafeNormal();
-    OutFrustum.Planes.Add(FPlane(Position, -BottomNormal));
+    ComplexityAnalyzer->ClearComplexityVisualization();
 }
 
-TArray<FVector> ASceneAnalysisManager::SamplePointsOnMesh(const FMeshInfo& MeshInfo)
+void ASceneAnalysisManager::InterfaceInitializeComplexityVisualization()
 {
-    // Pre-allocate result array based on whether we're using vertex sampling
-    TArray<FVector> SampledPoints;
-    
-    if (bUseVertexSampling)
-    {
-        // When using vertex sampling, just return a copy of vertex positions
-        return MeshInfo.VertexPositions;
-    }
-    
-    // Calculate total triangle area for more accurate pre-allocation
-    float TotalArea = 0.0f;
-    for (int32 i = 0; i < MeshInfo.Indices.Num(); i += 3)
-    {
-        if (i + 2 < MeshInfo.Indices.Num())
-        {
-            const FVector& V0 = MeshInfo.VertexPositions[MeshInfo.Indices[i]];
-            const FVector& V1 = MeshInfo.VertexPositions[MeshInfo.Indices[i + 1]];
-            const FVector& V2 = MeshInfo.VertexPositions[MeshInfo.Indices[i + 2]];
-            
-            // Calculate triangle area
-            float TriangleArea = 0.5f * FVector::CrossProduct(V1 - V0, V2 - V0).Size() / 10000.0f;
-            TotalArea += TriangleArea;
-        }
-    }
-    
-    // Estimate total number of samples
-    int32 EstimatedSampleCount = MeshInfo.Indices.Num() +
-        FMath::Max(1, FMath::RoundToInt(TotalArea * SamplingDensity));
-    SampledPoints.Reserve(EstimatedSampleCount);
-    
-    // Process triangles in batches for better cache coherency
-    const int32 BatchSize = 64;
-    const int32 NumTriangles = MeshInfo.Indices.Num() / 3;
-    const int32 NumBatches = FMath::DivideAndRoundUp(NumTriangles, BatchSize);
-    
-    // Pre-compute random values for barycentric coordinates
-    const int32 MaxSamplesPerTriangle = FMath::Max(10, SamplingDensity);
-    TArray<float> RandomValues;
-    RandomValues.Reserve(MaxSamplesPerTriangle * 2);
-    
-    for (int32 i = 0; i < MaxSamplesPerTriangle * 2; ++i)
-    {
-        RandomValues.Add(FMath::SRand());
-    }
-    
-    for (int32 BatchIdx = 0; BatchIdx < NumBatches; ++BatchIdx)
-    {
-        int32 StartTriangle = BatchIdx * BatchSize;
-        int32 EndTriangle = FMath::Min(StartTriangle + BatchSize, NumTriangles);
-        
-        for (int32 TriIdx = StartTriangle; TriIdx < EndTriangle; ++TriIdx)
-        {
-            int32 BaseIdx = TriIdx * 3;
-            
-            // Skip if invalid indices
-            if (BaseIdx + 2 >= MeshInfo.Indices.Num())
-                continue;
-            
-            const FVector& V0 = MeshInfo.VertexPositions[MeshInfo.Indices[BaseIdx]];
-            const FVector& V1 = MeshInfo.VertexPositions[MeshInfo.Indices[BaseIdx + 1]];
-            const FVector& V2 = MeshInfo.VertexPositions[MeshInfo.Indices[BaseIdx + 2]];
-            
-            // Add triangle vertices
-            SampledPoints.Add(V0);
-            SampledPoints.Add(V1);
-            SampledPoints.Add(V2);
-            
-            // Calculate triangle area efficiently
-            FVector Cross = FVector::CrossProduct(V1 - V0, V2 - V0);
-            float TriangleArea = 0.5f * Cross.Size() / 10000.0f;
-            
-            // Calculate number of samples based on SamplingDensity and triangle area
-            int32 NumSamples = FMath::Max(1, FMath::RoundToInt(TriangleArea * SamplingDensity));
-            NumSamples = FMath::Min(NumSamples, MaxSamplesPerTriangle);
-            
-            // Add additional samples within the triangle using pre-computed random values
-            for (int32 SampleIdx = 0; SampleIdx < NumSamples; ++SampleIdx)
-            {
-                // Use pre-computed random values
-                float r1 = RandomValues[SampleIdx * 2 % RandomValues.Num()];
-                float r2 = RandomValues[(SampleIdx * 2 + 1) % RandomValues.Num()];
-                
-                // Convert to barycentric coordinates - use sqrt for better distribution
-                float u = 1.0f - FMath::Sqrt(r1);
-                float v = r2 * FMath::Sqrt(r1);
-                float w = 1.0f - u - v;
-                
-                // Compute point using barycentric coordinates
-                SampledPoints.Add(u * V0 + v * V1 + w * V2);
-            }
-        }
-    }
-    
-    return SampledPoints;
+    ComplexityAnalyzer->InitializeComplexityVisualization();
 }
 
-void ASceneAnalysisManager::UpdateCoverageGrid()
+void ASceneAnalysisManager::InterfaceAnalyzeGeometricComplexity()
 {
-    if (!bGridInitialized)
-        return;
-
-    // Reset visible points and coverage in existing cells
-    for (auto& Pair : UnifiedGrid)
-    {
-        FUnifiedGridCell& Cell = Pair.Value;
-        Cell.VisiblePoints = 0;
-        Cell.Coverage = 0.0f;
-        // Note: we don't reset safe zone data here
-    }
-
-    // Process each point in the coverage map
-    for (const auto& Pair : CoverageMap)
-    {
-        const FVector& Point = Pair.Key;
-        bool bIsVisible = Pair.Value;
-
-        // Convert world position to grid coordinates
-        FIntVector GridCoords = WorldToGridCoordinates(Point);
-
-        // Get the cell (should already exist from initialization)
-        if (UnifiedGrid.Contains(GridCoords))
-        {
-            FUnifiedGridCell& Cell = UnifiedGrid[GridCoords];
-
-            // If point is visible, increment visible points
-            if (bIsVisible)
-            {
-                Cell.VisiblePoints++;
-            }
-        }
-    }
-
-    // Normalize coverage values
-    for (auto& Pair : UnifiedGrid)
-    {
-        FUnifiedGridCell& Cell = Pair.Value;
-        if (Cell.TotalPoints > 0)
-        {
-            Cell.Coverage = (float)Cell.VisiblePoints / (float)Cell.TotalPoints;
-        }
-    }
+    ComplexityAnalyzer->AnalyzeGeometricComplexity();
 }
 
-
-void ASceneAnalysisManager::CreateCoverageMesh()
+void ASceneAnalysisManager::InterfaceVisualizeCoverage(bool bShow)
 {
-    // Clear existing mesh sections
-    CoverageVisualizationMesh->ClearAllMeshSections();
-    
-    // Create arrays for procedural mesh
-    TArray<FVector> Vertices;
-    TArray<int32> Triangles;
-    TArray<FVector> Normals;
-    TArray<FVector2D> UV0;
-    TArray<FColor> VertexColors;
-    TArray<FProcMeshTangent> Tangents;
-    
-    // Pre-allocate memory based on number of cells with sample points
-    int32 EstimatedCells = UnifiedGrid.Num();
-    Vertices.Reserve(EstimatedCells * 8);
-    Triangles.Reserve(EstimatedCells * 36);
-    Normals.Reserve(EstimatedCells * 8);
-    UV0.Reserve(EstimatedCells * 8);
-    VertexColors.Reserve(EstimatedCells * 8);
-    Tangents.Reserve(EstimatedCells * 8);
-    
-    // Create cubes only for cells with sample points and coverage above threshold
-    int32 NumCellsVisualized = 0;
-    for (const auto& Pair : UnifiedGrid)
-    {
-        const FIntVector& GridCoords = Pair.Key;
-        const FUnifiedGridCell& Cell = Pair.Value;
-        
-        // Skip cells with no sample points or low coverage
-        if (Cell.TotalPoints == 0 || Cell.Coverage < VisualizationThreshold)
-            continue;
-        
-        // Calculate cell center in world space
-        FVector CellCenter(
-            GridOrigin.X + (GridCoords.X + 0.5f) * GridResolution,
-            GridOrigin.Y + (GridCoords.Y + 0.5f) * GridResolution,
-            GridOrigin.Z + (GridCoords.Z + 0.5f) * GridResolution
-        );
-        
-        // Calculate cell size (slightly smaller than grid resolution to see cell boundaries)
-        float CellSize = GridResolution * 0.9f;
-        float HalfSize = CellSize * 0.5f;
-        
-        // Convert coverage to color (green = 1.0, red = 0.0)
-        FColor CellColor = FLinearColor::LerpUsingHSV(
-            FLinearColor(1.0f, 0.0f, 0.0f), // Red (0% coverage)
-            FLinearColor(0.0f, 1.0f, 0.0f), // Green (100% coverage)
-            Cell.Coverage
-        ).ToFColor(false);
-        
-        // Adjust alpha based on coverage
-        CellColor.A = 128 + FMath::FloorToInt(127.0f * Cell.Coverage); // 128-255 range for alpha
-        
-        // Add a cube for this cell
-        int32 BaseVertexIndex = Vertices.Num();
-        
-        // Define the 8 corners of the cube
-        Vertices.Add(CellCenter + FVector(-HalfSize, -HalfSize, -HalfSize)); // 0: bottom left back
-        Vertices.Add(CellCenter + FVector(HalfSize, -HalfSize, -HalfSize));  // 1: bottom right back
-        Vertices.Add(CellCenter + FVector(HalfSize, HalfSize, -HalfSize));   // 2: bottom right front
-        Vertices.Add(CellCenter + FVector(-HalfSize, HalfSize, -HalfSize));  // 3: bottom left front
-        Vertices.Add(CellCenter + FVector(-HalfSize, -HalfSize, HalfSize));  // 4: top left back
-        Vertices.Add(CellCenter + FVector(HalfSize, -HalfSize, HalfSize));   // 5: top right back
-        Vertices.Add(CellCenter + FVector(HalfSize, HalfSize, HalfSize));    // 6: top right front
-        Vertices.Add(CellCenter + FVector(-HalfSize, HalfSize, HalfSize));   // 7: top left front
-        
-        // Add colors for all 8 vertices
-        for (int32 i = 0; i < 8; ++i)
-        {
-            VertexColors.Add(CellColor);
-        }
-        
-        // Add texture coordinates
-        UV0.Add(FVector2D(0, 0)); // 0
-        UV0.Add(FVector2D(1, 0)); // 1
-        UV0.Add(FVector2D(1, 1)); // 2
-        UV0.Add(FVector2D(0, 1)); // 3
-        UV0.Add(FVector2D(0, 0)); // 4
-        UV0.Add(FVector2D(1, 0)); // 5
-        UV0.Add(FVector2D(1, 1)); // 6
-        UV0.Add(FVector2D(0, 1)); // 7
-        
-        // Add normals
-        Normals.Add(FVector(-1, -1, -1).GetSafeNormal()); // 0
-        Normals.Add(FVector(1, -1, -1).GetSafeNormal());  // 1
-        Normals.Add(FVector(1, 1, -1).GetSafeNormal());   // 2
-        Normals.Add(FVector(-1, 1, -1).GetSafeNormal());  // 3
-        Normals.Add(FVector(-1, -1, 1).GetSafeNormal());  // 4
-        Normals.Add(FVector(1, -1, 1).GetSafeNormal());   // 5
-        Normals.Add(FVector(1, 1, 1).GetSafeNormal());    // 6
-        Normals.Add(FVector(-1, 1, 1).GetSafeNormal());   // 7
-        
-        // Add tangents (simplified)
-        for (int32 i = 0; i < 8; ++i)
-        {
-            Tangents.Add(FProcMeshTangent(1, 0, 0));
-        }
-        
-        // Add triangles for each face (12 triangles total)
-        // Bottom face (0,1,2,3)
-        Triangles.Add(BaseVertexIndex + 0);
-        Triangles.Add(BaseVertexIndex + 1);
-        Triangles.Add(BaseVertexIndex + 2);
-        Triangles.Add(BaseVertexIndex + 0);
-        Triangles.Add(BaseVertexIndex + 2);
-        Triangles.Add(BaseVertexIndex + 3);
-        
-        // Top face (4,5,6,7)
-        Triangles.Add(BaseVertexIndex + 4);
-        Triangles.Add(BaseVertexIndex + 6);
-        Triangles.Add(BaseVertexIndex + 5);
-        Triangles.Add(BaseVertexIndex + 4);
-        Triangles.Add(BaseVertexIndex + 7);
-        Triangles.Add(BaseVertexIndex + 6);
-        
-        // Front face (3,2,6,7)
-        Triangles.Add(BaseVertexIndex + 3);
-        Triangles.Add(BaseVertexIndex + 2);
-        Triangles.Add(BaseVertexIndex + 6);
-        Triangles.Add(BaseVertexIndex + 3);
-        Triangles.Add(BaseVertexIndex + 6);
-        Triangles.Add(BaseVertexIndex + 7);
-        
-        // Back face (0,1,5,4)
-        Triangles.Add(BaseVertexIndex + 0);
-        Triangles.Add(BaseVertexIndex + 5);
-        Triangles.Add(BaseVertexIndex + 1);
-        Triangles.Add(BaseVertexIndex + 0);
-        Triangles.Add(BaseVertexIndex + 4);
-        Triangles.Add(BaseVertexIndex + 5);
-        
-        // Left face (0,3,7,4)
-        Triangles.Add(BaseVertexIndex + 0);
-        Triangles.Add(BaseVertexIndex + 3);
-        Triangles.Add(BaseVertexIndex + 7);
-        Triangles.Add(BaseVertexIndex + 0);
-        Triangles.Add(BaseVertexIndex + 7);
-        Triangles.Add(BaseVertexIndex + 4);
-        
-        // Right face (1,2,6,5)
-        Triangles.Add(BaseVertexIndex + 1);
-        Triangles.Add(BaseVertexIndex + 6);
-        Triangles.Add(BaseVertexIndex + 2);
-        Triangles.Add(BaseVertexIndex + 1);
-        Triangles.Add(BaseVertexIndex + 5);
-        Triangles.Add(BaseVertexIndex + 6);
-        
-        NumCellsVisualized++;
-    }
-    
-    // Only create mesh if we have cells to visualize
-    if (NumCellsVisualized > 0)
-    {
-        // Create the mesh section
-        CoverageVisualizationMesh->CreateMeshSection(0, Vertices, Triangles, Normals,
-            UV0, VertexColors, Tangents, false);
-        
-        // Set the material
-        if (CoverageMaterial)
-        {
-            CoverageVisualizationMesh->SetMaterial(0, CoverageMaterial);
-        }
-    }
-    
-    UE_LOG(LogTemp, Display, TEXT("Coverage visualization: Created mesh with %d cells "
-                                  "visible out of %d populated cells (%d vertices, %d triangles)"), 
-           NumCellsVisualized, UnifiedGrid.Num(), Vertices.Num(), Triangles.Num() / 3);
+    CoverageAnalyzer->VisualizeCoverage(bShow);
 }
 
-void ASceneAnalysisManager::AnalyzeGeometricComplexity()
+void ASceneAnalysisManager::InterfaceClearCoverageVisualization()
 {
-    if (!World || !bGridInitialized || SceneMeshes.Num() == 0)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("AnalyzeGeometricComplexity: "
-                                      "World not initialized or no meshes in scene"));
-        return;
-    }
-    
-    // Apply preset parameters if not using custom
-    if (SceneComplexityPreset != ESceneComplexityPreset::Custom)
-    {
-        ApplyComplexityPreset(SceneComplexityPreset);
-    }
-    
-    UE_LOG(LogTemp, Display, TEXT("Analyzing geometric complexity with weights: "
-                                  "Curvature=%.2f, EdgeDensity=%.2f, AngleVariation=%.2f"),
-           CurvatureWeight, EdgeDensityWeight, AngleVariationWeight);
-    
-    // Reset complexity scores
-    for (auto& Pair : UnifiedGrid)
-    {
-        FUnifiedGridCell& Cell = Pair.Value;
-        Cell.CurvatureScore = 0.0f;
-        Cell.EdgeDensityScore = 0.0f;
-        Cell.AngleVariationScore = 0.0f;
-        Cell.ComplexityScore = 0.0f;
-    }
-    
-    // Thread-safe storage for collected data
-    FCriticalSection DataLock;
-    
-    // More efficient data structures
-    struct FCellData {
-        TArray<FVector> Normals;
-        int32 EdgeCount;
-        TArray<float> DihedralAngles;
-        
-        FCellData() : EdgeCount(0) {}
-    };
-    
-    TMap<FIntVector, FCellData> CellDataMap;
-    
-    // Prepare the map with expected capacity to avoid rehashing
-    CellDataMap.Reserve(UnifiedGrid.Num());
-    for (auto& Pair : UnifiedGrid)
-    {
-        CellDataMap.Add(Pair.Key, FCellData());
-    }
-    
-    // Calculate min/max values for adaptive normalization
-    float MinCurvature = FLT_MAX, MaxCurvature = -FLT_MAX;
-    float MinEdgeDensity = FLT_MAX, MaxEdgeDensity = -FLT_MAX;
-    float MinAngleVar = FLT_MAX, MaxAngleVar = -FLT_MAX;
-    
-    // Track processed edges to avoid duplicates
-    TSet<TPair<int32, int32>> ProcessedEdges;
-    ProcessedEdges.Reserve(TotalTrianglesInScene * 3);
-    
-    // Process meshes in parallel
-    ParallelFor(SceneMeshes.Num(), [&](int32 MeshIndex)
-    {
-        const FMeshInfo& MeshInfo = SceneMeshes[MeshIndex];
-        
-        // Thread-local data to minimize lock contention
-        TMap<FIntVector, FCellData> LocalCellData;
-        TSet<TPair<int32, int32>> LocalProcessedEdges;
-        
-        // Process each triangle in this mesh
-        for (int32 i = 0; i < MeshInfo.Indices.Num(); i += 3)
-        {
-            if (i + 2 >= MeshInfo.Indices.Num()) continue;
-            
-            // Get triangle vertices
-            const int32 Idx0 = MeshInfo.Indices[i];
-            const int32 Idx1 = MeshInfo.Indices[i + 1];
-            const int32 Idx2 = MeshInfo.Indices[i + 2];
-            
-            if (Idx0 >= MeshInfo.VertexPositions.Num() || 
-                Idx1 >= MeshInfo.VertexPositions.Num() || 
-                Idx2 >= MeshInfo.VertexPositions.Num())
-            {
-                continue; // Skip invalid indices
-            }
-            
-            const FVector& V0 = MeshInfo.VertexPositions[Idx0];
-            const FVector& V1 = MeshInfo.VertexPositions[Idx1];
-            const FVector& V2 = MeshInfo.VertexPositions[Idx2];
-            
-            if ((V0 - V1).IsNearlyZero() || (V1 - V2).IsNearlyZero() || (V2 - V0).IsNearlyZero())
-            {
-                continue;
-            }
-            
-            // Calculate triangle normal (optimized)
-            FVector Edge1 = V1 - V0;
-            FVector Edge2 = V2 - V0;
-            FVector TriangleNormal = FVector::CrossProduct(Edge1, Edge2);
-            
-            // Skip triangles with zero area
-            float TriangleArea = TriangleNormal.Size();
-            if (TriangleArea < KINDA_SMALL_NUMBER)
-            {
-                continue;
-            }
-            
-            // Normalize the normal
-            TriangleNormal /= TriangleArea;
-            
-            // Calculate triangle centroid
-            FVector Centroid = (V0 + V1 + V2) / 3.0f;
-            
-            // Get grid cell for centroid
-            FIntVector CellCoords = WorldToGridCoordinates(Centroid);
-            
-            // Add triangle normal to cell's normal list
-            FCellData& CellData = LocalCellData.FindOrAdd(CellCoords);
-            CellData.Normals.Add(TriangleNormal);
-            
-            // Process edges for edge density calculation
-            // Use an ordered pair to ensure consistent edge representation
-            TPair<int32, int32> Edge1Pair(FMath::Min(Idx0, Idx1), FMath::Max(Idx0, Idx1));
-            TPair<int32, int32> Edge2Pair(FMath::Min(Idx1, Idx2), FMath::Max(Idx1, Idx2));
-            TPair<int32, int32> Edge3Pair(FMath::Min(Idx2, Idx0), FMath::Max(Idx2, Idx0));
-            
-            if (!LocalProcessedEdges.Contains(Edge1Pair))
-            {
-                LocalProcessedEdges.Add(Edge1Pair);
-                CellData.EdgeCount++;
-            }
-            
-            if (!LocalProcessedEdges.Contains(Edge2Pair))
-            {
-                LocalProcessedEdges.Add(Edge2Pair);
-                CellData.EdgeCount++;
-            }
-            
-            if (!LocalProcessedEdges.Contains(Edge3Pair))
-            {
-                LocalProcessedEdges.Add(Edge3Pair);
-                CellData.EdgeCount++;
-            }
-            
-            // OPTIMIZATION: Find adjacent triangles more efficiently
-            // We'll batch process dihedral angles in a second pass
-        }
-        
-        // Second pass for dihedral angles
-        // Instead of nested loops, use an optimized lookup approach
-        
-        // Create a map of edges to triangles for faster lookup
-        TMap<TPair<int32, int32>, TArray<TPair<int32, FVector>>> EdgeToTriangles;
-        
-        for (int32 TriIdx = 0; TriIdx < MeshInfo.Indices.Num() / 3; TriIdx++)
-        {
-            int32 BaseIdx = TriIdx * 3;
-            if (BaseIdx + 2 >= MeshInfo.Indices.Num()) continue;
-            
-            int32 Idx0 = MeshInfo.Indices[BaseIdx];
-            int32 Idx1 = MeshInfo.Indices[BaseIdx + 1];
-            int32 Idx2 = MeshInfo.Indices[BaseIdx + 2];
-            
-            if (Idx0 >= MeshInfo.VertexPositions.Num() || 
-                Idx1 >= MeshInfo.VertexPositions.Num() || 
-                Idx2 >= MeshInfo.VertexPositions.Num())
-            {
-                continue;
-            }
-            
-            // Calculate normal once
-            const FVector& V0 = MeshInfo.VertexPositions[Idx0];
-            const FVector& V1 = MeshInfo.VertexPositions[Idx1];
-            const FVector& V2 = MeshInfo.VertexPositions[Idx2];
-            
-            FVector Edge1 = V1 - V0;
-            FVector Edge2 = V2 - V0;
-            FVector Normal = FVector::CrossProduct(Edge1, Edge2);
-            
-            // Skip degenerate triangles
-            if (Normal.IsNearlyZero())
-                continue;
-                
-            Normal.Normalize();
-            
-            // Get triangle edges
-            TPair<int32, int32> Edge1Pair(FMath::Min(Idx0, Idx1), FMath::Max(Idx0, Idx1));
-            TPair<int32, int32> Edge2Pair(FMath::Min(Idx1, Idx2), FMath::Max(Idx1, Idx2));
-            TPair<int32, int32> Edge3Pair(FMath::Min(Idx2, Idx0), FMath::Max(Idx2, Idx0));
-            
-            // Add this triangle to each edge's list
-            EdgeToTriangles.FindOrAdd(Edge1Pair).Add(TPair<int32, FVector>(TriIdx, Normal));
-            EdgeToTriangles.FindOrAdd(Edge2Pair).Add(TPair<int32, FVector>(TriIdx, Normal));
-            EdgeToTriangles.FindOrAdd(Edge3Pair).Add(TPair<int32, FVector>(TriIdx, Normal));
-        }
-        
-        // Now find adjacent triangles by shared edges
-        for (auto& EdgePair : EdgeToTriangles)
-        {
-            const TArray<TPair<int32, FVector>>& TriangleList = EdgePair.Value;
-            
-            // Only edges shared by exactly 2 triangles can form dihedral angles
-            if (TriangleList.Num() != 2)
-                continue;
-                
-            // Get both triangle's normals
-            const FVector& Normal1 = TriangleList[0].Value;
-            const FVector& Normal2 = TriangleList[1].Value;
-            
-            // Calculate dihedral angle
-            float CosAngle = FVector::DotProduct(Normal1, Normal2);
-            CosAngle = FMath::Clamp(CosAngle, -1.0f, 1.0f); // Avoid acos domain errors
-            float AngleRadians = FMath::Acos(CosAngle);
-            float AngleDegrees = FMath::RadiansToDegrees(AngleRadians);
-            
-            // Get triangle indices
-            int32 TriIdx1 = TriangleList[0].Key;
-            int32 TriIdx2 = TriangleList[1].Key;
-            
-            // Calculate centroids of both triangles
-            FVector Centroid1 = FVector::ZeroVector;
-            FVector Centroid2 = FVector::ZeroVector;
-            
-            for (int32 i = 0; i < 3; i++)
-            {
-                int32 Idx = MeshInfo.Indices[TriIdx1 * 3 + i];
-                if (Idx < MeshInfo.VertexPositions.Num())
-                    Centroid1 += MeshInfo.VertexPositions[Idx];
-                    
-                Idx = MeshInfo.Indices[TriIdx2 * 3 + i];
-                if (Idx < MeshInfo.VertexPositions.Num())
-                    Centroid2 += MeshInfo.VertexPositions[Idx];
-            }
-            
-            Centroid1 /= 3.0f;
-            Centroid2 /= 3.0f;
-            
-            // Get grid cells for both centroids
-            FIntVector CellCoords1 = WorldToGridCoordinates(Centroid1);
-            FIntVector CellCoords2 = WorldToGridCoordinates(Centroid2);
-            
-            // Add angle to both cells' angle lists
-            LocalCellData.FindOrAdd(CellCoords1).DihedralAngles.Add(AngleDegrees);
-            
-            // Only add to second cell if it's different from the first
-            if (CellCoords1 != CellCoords2)
-            {
-                LocalCellData.FindOrAdd(CellCoords2).DihedralAngles.Add(AngleDegrees);
-            }
-        }
-        
-        // Merge thread-local data with global data
-        FScopeLock Lock(&DataLock);
-        
-        for (auto& Pair : LocalCellData)
-        {
-            FCellData& GlobalCellData = CellDataMap.FindOrAdd(Pair.Key);
-            GlobalCellData.Normals.Append(Pair.Value.Normals);
-            GlobalCellData.EdgeCount += Pair.Value.EdgeCount;
-            GlobalCellData.DihedralAngles.Append(Pair.Value.DihedralAngles);
-        }
-    });
-    
-    // Calculate complexity scores for each cell with data
-    for (auto& Pair : CellDataMap)
-    {
-        const FIntVector& CellCoords = Pair.Key;
-        
-        // Skip if cell not in unified grid (shouldn't happen)
-        if (!UnifiedGrid.Contains(CellCoords))
-            continue;
-            
-        FCellData& CellData = Pair.Value;
-        FUnifiedGridCell& Cell = UnifiedGrid[CellCoords];
-        
-        // Calculate cell volume (for normalizing edge density)
-        float CellVolume = FMath::Pow(GridResolution, 3);
-        
-        // Calculate raw scores only if we have data
-        float RawCurvatureScore = 0.0f;
-        if (CellData.Normals.Num() >= 2)
-        {
-            RawCurvatureScore = CalculateCurvatureScore(CellData.Normals);
-        }
-        
-        float RawEdgeDensityScore = 0.0f;
-        if (CellData.EdgeCount > 0)
-        {
-            RawEdgeDensityScore = CalculateEdgeDensityScore(CellData.EdgeCount, CellVolume);
-        }
-        
-        float RawAngleVariationScore = 0.0f;
-        if (CellData.DihedralAngles.Num() >= 2)
-        {
-            RawAngleVariationScore = CalculateAngleVariationScore(CellData.DihedralAngles);
-        }
-        
-        // Track min/max for normalization if using adaptive normalization
-        if (bUseAdaptiveNormalization)
-        {
-            if (CellData.Normals.Num() >= 2)
-            {
-                MinCurvature = FMath::Min(MinCurvature, RawCurvatureScore);
-                MaxCurvature = FMath::Max(MaxCurvature, RawCurvatureScore);
-            }
-            
-            if (CellData.EdgeCount > 0)
-            {
-                MinEdgeDensity = FMath::Min(MinEdgeDensity, RawEdgeDensityScore);
-                MaxEdgeDensity = FMath::Max(MaxEdgeDensity, RawEdgeDensityScore);
-            }
-            
-            if (CellData.DihedralAngles.Num() >= 2)
-            {
-                MinAngleVar = FMath::Min(MinAngleVar, RawAngleVariationScore);
-                MaxAngleVar = FMath::Max(MaxAngleVar, RawAngleVariationScore);
-            }
-        }
-        
-        // Store raw scores
-        Cell.CurvatureScore = RawCurvatureScore;
-        Cell.EdgeDensityScore = RawEdgeDensityScore;
-        Cell.AngleVariationScore = RawAngleVariationScore;
-    }
-    
-    // Ensure valid min/max values for normalization
-    if (bUseAdaptiveNormalization)
-    {
-        // Handle cases where no valid data was found
-        if (MinCurvature == FLT_MAX || MaxCurvature == -FLT_MAX)
-        {
-            MinCurvature = 0.0f;
-            MaxCurvature = 1.0f;
-        }
-        
-        if (MinEdgeDensity == FLT_MAX || MaxEdgeDensity == -FLT_MAX)
-        {
-            MinEdgeDensity = 0.0f;
-            MaxEdgeDensity = 1.0f;
-        }
-        
-        if (MinAngleVar == FLT_MAX || MaxAngleVar == -FLT_MAX)
-        {
-            MinAngleVar = 0.0f;
-            MaxAngleVar = 1.0f;
-        }
-        
-        // Prevent division by zero
-        if (FMath::IsNearlyEqual(MaxCurvature, MinCurvature))
-            MaxCurvature = MinCurvature + 1.0f;
-            
-        if (FMath::IsNearlyEqual(MaxEdgeDensity, MinEdgeDensity))
-            MaxEdgeDensity = MinEdgeDensity + 1.0f;
-            
-        if (FMath::IsNearlyEqual(MaxAngleVar, MinAngleVar))
-            MaxAngleVar = MinAngleVar + 1.0f;
-    }
-    
-    // Second pass: normalize scores and calculate combined complexity
-    for (auto& Pair : UnifiedGrid)
-    {
-        FUnifiedGridCell& Cell = Pair.Value;
-        
-        // Normalize individual scores if using adaptive normalization
-        if (bUseAdaptiveNormalization)
-        {
-            // Normalize each score between 0 and 1 based on min/max values
-            Cell.CurvatureScore = (Cell.CurvatureScore - MinCurvature) / (MaxCurvature - MinCurvature);
-            Cell.EdgeDensityScore = (Cell.EdgeDensityScore - MinEdgeDensity) / (MaxEdgeDensity - MinEdgeDensity);
-            Cell.AngleVariationScore = (Cell.AngleVariationScore - MinAngleVar) / (MaxAngleVar - MinAngleVar);
-        }
-        
-        // Clamp normalized values between 0 and 1
-        Cell.CurvatureScore = FMath::Clamp(Cell.CurvatureScore, 0.0f, 1.0f);
-        Cell.EdgeDensityScore = FMath::Clamp(Cell.EdgeDensityScore, 0.0f, 1.0f);
-        Cell.AngleVariationScore = FMath::Clamp(Cell.AngleVariationScore, 0.0f, 1.0f);
-        
-        // Calculate weighted complexity score
-        Cell.ComplexityScore = 
-            Cell.CurvatureScore * CurvatureWeight +
-            Cell.EdgeDensityScore * EdgeDensityWeight +
-            Cell.AngleVariationScore * AngleVariationWeight;
-        
-        // Ensure total weight is 1.0
-        float TotalWeight = CurvatureWeight + EdgeDensityWeight + AngleVariationWeight;
-        if (!FMath::IsNearlyEqual(TotalWeight, 1.0f))
-        {
-            Cell.ComplexityScore /= TotalWeight;
-        }
-    }
-    
-    bComplexityVisualizationDirty = true;
-    
-    // Log results
-    int32 TotalAnalyzedCells = CellDataMap.Num();
-    int32 HighComplexityCells = 0;
-    
-    for (const auto& Pair : UnifiedGrid)
-    {
-        if (Pair.Value.ComplexityScore > 0.7f)
-            HighComplexityCells++;
-    }
-    
-    UE_LOG(LogTemp, Display, TEXT("Geometric complexity analysis complete: %d cells analyzed, %d high-complexity cells identified"),
-           TotalAnalyzedCells, HighComplexityCells);
+    CoverageAnalyzer->ClearCoverageVisualization();
 }
 
-TArray<FIntVector> ASceneAnalysisManager::GetHighComplexityRegions(float ComplexityThreshold)
+void ASceneAnalysisManager::InterfaceInitializeCoverageVisualization()
 {
-    TArray<FIntVector> HighComplexityRegions;
-    
-    for (const auto& Pair : UnifiedGrid)
-    {
-        if (Pair.Value.ComplexityScore >= ComplexityThreshold)
-        {
-            HighComplexityRegions.Add(Pair.Key);
-        }
-    }
-    
-    return HighComplexityRegions;
+    CoverageAnalyzer->InitializeCoverageVisualization();
 }
 
-float ASceneAnalysisManager::CalculateCurvatureScore(const TArray<FVector>& Normals)
+void ASceneAnalysisManager::InterfaceUpdateCoverageGrid()
 {
-    // Optimized calculation of variance of surface normals
-    if (Normals.Num() < 2)
-        return 0.0f;
-    
-    // Use a more efficient approach to calculate the average normal
-    FVector AvgNormal(0, 0, 0);
-    
-    // Process normals in batches for better cache coherency
-    const int32 BatchSize = 64;
-    int32 NumBatches = FMath::DivideAndRoundUp(Normals.Num(), BatchSize);
-    
-    for (int32 BatchIdx = 0; BatchIdx < NumBatches; BatchIdx++)
-    {
-        FVector BatchSum(0, 0, 0);
-        int32 StartIdx = BatchIdx * BatchSize;
-        int32 EndIdx = FMath::Min(StartIdx + BatchSize, Normals.Num());
-        
-        for (int32 i = StartIdx; i < EndIdx; i++)
-        {
-            BatchSum += Normals[i];
-        }
-        
-        AvgNormal += BatchSum;
-    }
-    
-    float InvNum = 1.0f / Normals.Num();
-    AvgNormal *= InvNum;
-    
-    // Normalize only if not close to zero
-    if (!AvgNormal.IsNearlyZero())
-    {
-        AvgNormal.Normalize();
-    }
-    else
-    {
-        // Default direction if average is zero
-        AvgNormal = FVector(0, 0, 1);
-    }
-    
-    // Calculate variation from average normal efficiently
-    float TotalVariation = 0.0f;
-    
-    for (int32 BatchIdx = 0; BatchIdx < NumBatches; BatchIdx++)
-    {
-        float BatchVariation = 0.0f;
-        int32 StartIdx = BatchIdx * BatchSize;
-        int32 EndIdx = FMath::Min(StartIdx + BatchSize, Normals.Num());
-        
-        for (int32 i = StartIdx; i < EndIdx; i++)
-        {
-            // 1 - dot product gives deviation from average normal
-            float Deviation = 1.0f - FVector::DotProduct(Normals[i], AvgNormal);
-            BatchVariation += Deviation;
-        }
-        
-        TotalVariation += BatchVariation;
-    }
-    
-    return TotalVariation * InvNum * CurvatureSensitivity;
+    CoverageAnalyzer->UpdateCoverageGrid();
 }
 
-float ASceneAnalysisManager::CalculateEdgeDensityScore(int32 EdgeCount, float CellVolume)
+void ASceneAnalysisManager::InterfaceComputeCoverage(
+    const TArray<FTransform>& CameraTransforms, const FString& CameraName)
 {
-    // Skip division if cell volume is too small
-    if (CellVolume < KINDA_SMALL_NUMBER)
-        return EdgeCount > 0 ? 1.0f : 0.0f;
-        
-    // More efficient normalization
-    float NormalizedDensity = (float)EdgeCount / (CellVolume * EdgeDensityNormalizationFactor);
-    
-    // Early clamping
-    return FMath::Min(1.0f, NormalizedDensity);
-}
-
-float ASceneAnalysisManager::CalculateAngleVariationScore(const TArray<float>& Angles)
-{
-    if (Angles.Num() < 2)
-        return 0.0f;
-        
-    // More efficient calculation of angle statistics
-    float Sum = 0.0f;
-    float SumOfSquares = 0.0f;
-    
-    // Calculate sum and sum of squares in one pass
-    for (float Angle : Angles)
-    {
-        Sum += Angle;
-        SumOfSquares += Angle * Angle;
-    }
-    
-    float InvCount = 1.0f / Angles.Num();
-    float Mean = Sum * InvCount;
-    
-    // Calculate variance efficiently
-    float Variance = (SumOfSquares * InvCount) - (Mean * Mean);
-    
-    // Standard deviation as a measure of variation
-    float StdDev = FMath::Sqrt(FMath::Max(0.0f, Variance));
-    
-    // Normalize by threshold
-    return FMath::Min(1.0f, StdDev / AngleVariationThreshold);
-}
-
-FVector ASceneAnalysisManager::CalculateTriangleNormal(const FVector& V0, const FVector& V1, const FVector& V2)
-{
-    // More efficient normal calculation
-    FVector Edge1 = V1 - V0;
-    FVector Edge2 = V2 - V0;
-    FVector Normal = FVector::CrossProduct(Edge1, Edge2);
-    
-    // Get length once to avoid repeated calculation
-    float Length = Normal.Size();
-    
-    // Handle degenerate triangles efficiently
-    if (Length > KINDA_SMALL_NUMBER)
-    {
-        // Normalize directly using the length we already calculated
-        Normal *= (1.0f / Length);
-    }
-    else
-    {
-        // Default normal if triangle is degenerate
-        Normal = FVector(0, 0, 1);
-    }
-    
-    return Normal;
-}
-
-void ASceneAnalysisManager::ApplyComplexityPreset(ESceneComplexityPreset Preset)
-{
-    switch(Preset)
-    {
-        case ESceneComplexityPreset::UrbanOutdoor:
-            // Urban scenes value edge density more than curvature
-            CurvatureWeight = 0.25f;
-            EdgeDensityWeight = 0.5f;
-            AngleVariationWeight = 0.25f;
-            CurvatureSensitivity = 0.6f;
-            EdgeDensityNormalizationFactor = 15.0f;
-            AngleVariationThreshold = 30.0f;
-            break;
-            
-        case ESceneComplexityPreset::IndoorCluttered:
-            // Indoor scenes benefit from balanced approach
-            CurvatureWeight = 0.33f;
-            EdgeDensityWeight = 0.33f;
-            AngleVariationWeight = 0.33f;
-            CurvatureSensitivity = 1.0f;
-            EdgeDensityNormalizationFactor = 20.0f;
-            AngleVariationThreshold = 40.0f;
-            break;
-            
-        case ESceneComplexityPreset::NaturalTerrain:
-            // Natural terrain has smooth curves but complex angle variations
-            CurvatureWeight = 0.2f;
-            EdgeDensityWeight = 0.3f;
-            AngleVariationWeight = 0.5f;
-            CurvatureSensitivity = 0.7f;
-            EdgeDensityNormalizationFactor = 7.0f;
-            AngleVariationThreshold = 60.0f;
-            break;
-            
-        case ESceneComplexityPreset::MechanicalParts:
-            // Mechanical parts have sharp edges and precise angles
-            CurvatureWeight = 0.3f;
-            EdgeDensityWeight = 0.4f;
-            AngleVariationWeight = 0.3f;
-            CurvatureSensitivity = 1.2f;
-            EdgeDensityNormalizationFactor = 25.0f;
-            AngleVariationThreshold = 15.0f;  // Very sensitive to angle changes
-            break;
-            
-        case ESceneComplexityPreset::Generic:
-        default:
-            // Balanced default parameters
-            CurvatureWeight = 0.4f;
-            EdgeDensityWeight = 0.3f;
-            AngleVariationWeight = 0.3f;
-            CurvatureSensitivity = 0.8f;
-            EdgeDensityNormalizationFactor = 10.0f;
-            AngleVariationThreshold = 45.0f;
-            break;
-    }
-    
-    UE_LOG(LogTemp, Display, TEXT("Applied complexity preset: %s"), 
-        *UEnum::GetValueAsString(Preset));
-}
-
-void ASceneAnalysisManager::InitializeComplexityVisualization()
-{
-    if (!World)
-        return;
-    
-    // Initialize the procedural mesh component if it doesn't exist
-    if (!ComplexityVisualizationMesh)
-    {
-        ComplexityVisualizationMesh = NewObject<UProceduralMeshComponent>(this);
-        ComplexityVisualizationMesh->RegisterComponent();
-        ComplexityVisualizationMesh->SetMobility(EComponentMobility::Movable);
-        ComplexityVisualizationMesh->AttachToComponent(GetRootComponent(), 
-                                                  FAttachmentTransformRules::KeepWorldTransform);
-        ComplexityVisualizationMesh->SetCollisionEnabled(ECollisionEnabled::Type::NoCollision);
-    }
-    
-    // Load or create the complexity material if not already set
-    if (!ComplexityMaterial)
-    {
-        // Try to load the complexity material
-        ComplexityMaterial = LoadObject<UMaterialInterface>(nullptr, 
-            TEXT("/Script/Engine.Material'/VCCSim/Materials/M_Complexity.M_Complexity'"));
-        
-        // Only log error if material failed to load
-        if (!ComplexityMaterial)
-        {
-            UE_LOG(LogTemp, Error, TEXT("InitializeComplexityVisualization: "
-                                      "Failed to load complexity material."));
-        }
-    }
-}
-
-void ASceneAnalysisManager::VisualizeComplexity(bool bShow)
-{
-    if (!World)
-        return;
-    
-    // Check if we have complexity data
-    bool bHasComplexityData = false;
-    for (const auto& Pair : UnifiedGrid)
-    {
-        if (Pair.Value.ComplexityScore > 0.0f)
-        {
-            bHasComplexityData = true;
-            break;
-        }
-    }
-    
-    if (!bHasComplexityData)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("VisualizeComplexity: No complexity data found."
-                                      " Run AnalyzeGeometricComplexity first."));
-        return;
-    }
-    
-    // If not showing, clear visualization and return
-    if (!bShow)
-    {
-        if (ComplexityVisualizationMesh)
-        {
-            ComplexityVisualizationMesh->SetVisibility(false);
-        }
-        return;
-    }
-    
-    // Initialize visualization components if needed
-    InitializeComplexityVisualization();
-    
-    // If mesh component failed to initialize, return
-    if (!ComplexityVisualizationMesh)
-    {
-        UE_LOG(LogTemp, Error, TEXT("VisualizeComplexity: "
-                                    "Complexity mesh component not initialized"));
-        return;
-    }
-    
-    // Only update mesh if dirty or visibility is changing
-    if (bComplexityVisualizationDirty)
-    {
-        CreateComplexityMesh();
-        bComplexityVisualizationDirty = false;
-    }
-    
-    // Set visibility
-    ComplexityVisualizationMesh->SetVisibility(true);
-}
-
-void ASceneAnalysisManager::ClearComplexityVisualization()
-{
-    if (ComplexityVisualizationMesh)
-    {
-        ComplexityVisualizationMesh->ClearAllMeshSections();
-        ComplexityVisualizationMesh->SetVisibility(false);
-    }
-}
-
-void ASceneAnalysisManager::CreateComplexityMesh()
-{
-    // Clear existing mesh sections
-    ComplexityVisualizationMesh->ClearAllMeshSections();
-    
-    // Create arrays for procedural mesh
-    TArray<FVector> Vertices;
-    TArray<int32> Triangles;
-    TArray<FVector> Normals;
-    TArray<FVector2D> UV0;
-    TArray<FColor> VertexColors;
-    TArray<FProcMeshTangent> Tangents;
-    
-    // Pre-allocate memory based on number of cells
-    int32 EstimatedCells = UnifiedGrid.Num();
-    Vertices.Reserve(EstimatedCells * 8);
-    Triangles.Reserve(EstimatedCells * 36);
-    Normals.Reserve(EstimatedCells * 8);
-    UV0.Reserve(EstimatedCells * 8);
-    VertexColors.Reserve(EstimatedCells * 8);
-    Tangents.Reserve(EstimatedCells * 8);
-    
-    // Create cubes only for cells with complexity above zero
-    int32 NumCellsVisualized = 0;
-    for (const auto& Pair : UnifiedGrid)
-    {
-        const FIntVector& GridCoords = Pair.Key;
-        const FUnifiedGridCell& Cell = Pair.Value;
-        
-        // Skip cells with no complexity
-        if (Cell.ComplexityScore <= 0.0f)
-            continue;
-        
-        // Calculate cell center in world space
-        FVector CellCenter(
-            GridOrigin.X + (GridCoords.X + 0.5f) * GridResolution,
-            GridOrigin.Y + (GridCoords.Y + 0.5f) * GridResolution,
-            GridOrigin.Z + (GridCoords.Z + 0.5f) * GridResolution
-        );
-        
-        // Calculate cell size (slightly smaller than grid resolution to see cell boundaries)
-        float CellSize = GridResolution * 0.9f;
-        float HalfSize = CellSize * 0.5f;
-        
-        // Convert complexity to color (blue = low, green = medium, red = high)
-        FLinearColor ComplexityColor;
-        
-        if (Cell.ComplexityScore < 0.33f)
-        {
-            // Blue to Cyan
-            float T = Cell.ComplexityScore / 0.33f;
-            ComplexityColor = FLinearColor::LerpUsingHSV(
-                FLinearColor(0.0f, 0.0f, 1.0f), // Blue (low complexity)
-                FLinearColor(0.0f, 1.0f, 1.0f), // Cyan
-                T
-            );
-        }
-        else if (Cell.ComplexityScore < 0.66f)
-        {
-            // Cyan to Yellow
-            float T = (Cell.ComplexityScore - 0.33f) / 0.33f;
-            ComplexityColor = FLinearColor::LerpUsingHSV(
-                FLinearColor(0.0f, 1.0f, 1.0f), // Cyan
-                FLinearColor(1.0f, 1.0f, 0.0f), // Yellow
-                T
-            );
-        }
-        else
-        {
-            // Yellow to Red
-            float T = (Cell.ComplexityScore - 0.66f) / 0.34f;
-            ComplexityColor = FLinearColor::LerpUsingHSV(
-                FLinearColor(1.0f, 1.0f, 0.0f), // Yellow
-                FLinearColor(1.0f, 0.0f, 0.0f), // Red (high complexity)
-                T
-            );
-        }
-        
-        FColor CellColor = ComplexityColor.ToFColor(false);
-        
-        // Adjust alpha based on complexity
-        CellColor.A = 128 + FMath::FloorToInt(127.0f * Cell.ComplexityScore); // 128-255 range
-        
-        // Add a cube for this cell
-        int32 BaseVertexIndex = Vertices.Num();
-        
-        // Define the 8 corners of the cube
-        Vertices.Add(CellCenter + FVector(-HalfSize, -HalfSize, -HalfSize)); // 0: bottom left back
-        Vertices.Add(CellCenter + FVector(HalfSize, -HalfSize, -HalfSize));  // 1: bottom right back
-        Vertices.Add(CellCenter + FVector(HalfSize, HalfSize, -HalfSize));   // 2: bottom right front
-        Vertices.Add(CellCenter + FVector(-HalfSize, HalfSize, -HalfSize));  // 3: bottom left front
-        Vertices.Add(CellCenter + FVector(-HalfSize, -HalfSize, HalfSize));  // 4: top left back
-        Vertices.Add(CellCenter + FVector(HalfSize, -HalfSize, HalfSize));   // 5: top right back
-        Vertices.Add(CellCenter + FVector(HalfSize, HalfSize, HalfSize));    // 6: top right front
-        Vertices.Add(CellCenter + FVector(-HalfSize, HalfSize, HalfSize));   // 7: top left front
-        
-        // Add colors for all 8 vertices
-        for (int32 i = 0; i < 8; ++i)
-        {
-            VertexColors.Add(CellColor);
-        }
-        
-        // Add texture coordinates
-        UV0.Add(FVector2D(0, 0)); // 0
-        UV0.Add(FVector2D(1, 0)); // 1
-        UV0.Add(FVector2D(1, 1)); // 2
-        UV0.Add(FVector2D(0, 1)); // 3
-        UV0.Add(FVector2D(0, 0)); // 4
-        UV0.Add(FVector2D(1, 0)); // 5
-        UV0.Add(FVector2D(1, 1)); // 6
-        UV0.Add(FVector2D(0, 1)); // 7
-        
-        // Add normals
-        Normals.Add(FVector(-1, -1, -1).GetSafeNormal()); // 0
-        Normals.Add(FVector(1, -1, -1).GetSafeNormal());  // 1
-        Normals.Add(FVector(1, 1, -1).GetSafeNormal());   // 2
-        Normals.Add(FVector(-1, 1, -1).GetSafeNormal());  // 3
-        Normals.Add(FVector(-1, -1, 1).GetSafeNormal());  // 4
-        Normals.Add(FVector(1, -1, 1).GetSafeNormal());   // 5
-        Normals.Add(FVector(1, 1, 1).GetSafeNormal());    // 6
-        Normals.Add(FVector(-1, 1, 1).GetSafeNormal());   // 7
-        
-        // Add tangents (simplified)
-        for (int32 i = 0; i < 8; ++i)
-        {
-            Tangents.Add(FProcMeshTangent(1, 0, 0));
-        }
-        
-        // Add triangles for each face (12 triangles total)
-        // Bottom face (0,1,2,3)
-        Triangles.Add(BaseVertexIndex + 0);
-        Triangles.Add(BaseVertexIndex + 1);
-        Triangles.Add(BaseVertexIndex + 2);
-        Triangles.Add(BaseVertexIndex + 0);
-        Triangles.Add(BaseVertexIndex + 2);
-        Triangles.Add(BaseVertexIndex + 3);
-        
-        // Top face (4,5,6,7)
-        Triangles.Add(BaseVertexIndex + 4);
-        Triangles.Add(BaseVertexIndex + 6);
-        Triangles.Add(BaseVertexIndex + 5);
-        Triangles.Add(BaseVertexIndex + 4);
-        Triangles.Add(BaseVertexIndex + 7);
-        Triangles.Add(BaseVertexIndex + 6);
-        
-        // Front face (3,2,6,7)
-        Triangles.Add(BaseVertexIndex + 3);
-        Triangles.Add(BaseVertexIndex + 2);
-        Triangles.Add(BaseVertexIndex + 6);
-        Triangles.Add(BaseVertexIndex + 3);
-        Triangles.Add(BaseVertexIndex + 6);
-        Triangles.Add(BaseVertexIndex + 7);
-        
-        // Back face (0,1,5,4)
-        Triangles.Add(BaseVertexIndex + 0);
-        Triangles.Add(BaseVertexIndex + 5);
-        Triangles.Add(BaseVertexIndex + 1);
-        Triangles.Add(BaseVertexIndex + 0);
-        Triangles.Add(BaseVertexIndex + 4);
-        Triangles.Add(BaseVertexIndex + 5);
-        
-        // Left face (0,3,7,4)
-        Triangles.Add(BaseVertexIndex + 0);
-        Triangles.Add(BaseVertexIndex + 3);
-        Triangles.Add(BaseVertexIndex + 7);
-        Triangles.Add(BaseVertexIndex + 0);
-        Triangles.Add(BaseVertexIndex + 7);
-        Triangles.Add(BaseVertexIndex + 4);
-        
-        // Right face (1,2,6,5)
-        Triangles.Add(BaseVertexIndex + 1);
-        Triangles.Add(BaseVertexIndex + 6);
-        Triangles.Add(BaseVertexIndex + 2);
-        Triangles.Add(BaseVertexIndex + 1);
-        Triangles.Add(BaseVertexIndex + 5);
-        Triangles.Add(BaseVertexIndex + 6);
-        
-        NumCellsVisualized++;
-    }
-    
-    // Only create mesh if we have cells to visualize
-    if (NumCellsVisualized > 0)
-    {
-        // Create the mesh section
-        ComplexityVisualizationMesh->CreateMeshSection(0, Vertices, Triangles, Normals,
-            UV0, VertexColors, Tangents, false);
-        
-        // Set the material
-        if (ComplexityMaterial)
-        {
-            ComplexityVisualizationMesh->SetMaterial(0, ComplexityMaterial);
-        }
-    }
-    
-    UE_LOG(LogTemp, Display, TEXT("Complexity visualization: "
-                                  "Created mesh with %d cells visible, %d vertices, %d triangles"),
-          NumCellsVisualized, Vertices.Num(), Triangles.Num() / 3);
+    CoverageAnalyzer->ComputeCoverage(CameraTransforms, CameraName);
 }
 
 /* ----------------------------- Test ----------------------------- */
@@ -2535,17 +596,7 @@ void ASceneAnalysisManager::VisualizeSceneMeshes(
         }
     }
     
-    // Log some statistics
     UE_LOG(LogTemp, Display, TEXT("Visualized %d meshes with %d total "
                                   "triangles and %d total vertices"), 
         SceneMeshes.Num(), TotalTrianglesInScene, TotalPointsInScene);
-}
-
-void ASceneAnalysisManager::VisualizeSampledPoints(float Duration, float VertexSize)
-{
-    for (const auto& Point : CoverageMap)
-    {
-        DrawDebugPoint(World, Point.Key, VertexSize, FColor::Green,
-            false, Duration);
-    }
 }
