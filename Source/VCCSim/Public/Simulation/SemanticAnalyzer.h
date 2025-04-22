@@ -37,7 +37,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	float DisplayDistance = 1000.0f;
 	UPROPERTY(VisibleAnywhere)
-	FVector LastPosition = {100000.0f, 100000.0f, 100000.0f};
+	FVector LastPosition = { INFINITY, 100000.0f, 100000.0f};
 	UPROPERTY(EditAnywhere)
 	bool bShowSemanticAnalysis = false;
 
@@ -47,7 +47,8 @@ private:
     
 	void ClearVisualization();
 	void CreateVisualizationForActor(AActor* Actor);
-	void CreateBoundingBoxMesh(UProceduralMeshComponent* MeshComponent, const FVector& Origin, const FVector& Extent);
+	void CreateBoundingBoxMesh(UProceduralMeshComponent* MeshComponent,
+		const FVector& Origin, const FVector& Extent);
 	void CreateBoxEdges(TArray<FVector>& Vertices, TArray<int32>& Triangles, 
 						TArray<FVector>& Normals, TArray<FVector2D>& UV0, 
 						TArray<FColor>& VertexColors, TArray<FProcMeshTangent>& Tangents);
