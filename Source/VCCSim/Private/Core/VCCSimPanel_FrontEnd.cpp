@@ -69,7 +69,7 @@ void SVCCSimPanel::Construct(const FArguments& InArgs)
     {
         VCCLogoBrush = MakeShareable(new FSlateDynamicImageBrush(
             FName(*VCCLogoPath), 
-            FVector2D(65, 65),  // Maintain square ratio but smaller for UI
+            FVector2D(65, 65),
             FColor(255, 255, 255, 255)));
     }
     else
@@ -79,11 +79,10 @@ void SVCCSimPanel::Construct(const FArguments& InArgs)
 
     if (FPaths::FileExists(SZULogoPath))
     {
-        // Calculate width to maintain aspect ratio with same height as VCC logo
-        float SZUWidth = 80 * (272.0f / 80.0f);  // 85 * 3.4 = ~289
+        float SZUWidth = 80 * (272.0f / 80.0f);
         SZULogoBrush = MakeShareable(new FSlateDynamicImageBrush(
             FName(*SZULogoPath), 
-            FVector2D(SZUWidth, 80),  // Same height as VCC logo, width preserves ratio
+            FVector2D(SZUWidth, 80),
             FColor(255, 255, 255, 255)));
     }
     else
@@ -110,99 +109,107 @@ void SVCCSimPanel::Construct(const FArguments& InArgs)
         }
     }
     
-    // Create the widget layout
-     ChildSlot
+    // Create the widget layout with scrollbar
+    ChildSlot
     [
         SNew(SBorder)
         .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryTop"))
         .Padding(0)
         [
-            SNew(SVerticalBox)
-            
-            // Logo panel with consistent styling
-            +SVerticalBox::Slot()
-            .AutoHeight()
-            .Padding(0)
+            // Add SScrollBox here to enable scrolling
+            SNew(SScrollBox)
+            .ScrollBarAlwaysVisible(false)  // Changed to false - only show when needed
+            .AllowOverscroll(EAllowOverscroll::No)
+            .ScrollBarThickness(FVector2D(8.0f, 8.0f))
+            + SScrollBox::Slot()
             [
-                CreateSectionContent(
-                    SNew(SHorizontalBox)
-                    
-                    // VCC Logo (left)
-                    +SHorizontalBox::Slot()
-                    .AutoWidth()
-                    .Padding(8, 0, 0, 0)
-                    .HAlign(HAlign_Left)
-                    .VAlign(VAlign_Center)
-                    [
-                        SNew(SImage)
-                        .Image_Lambda([this]() {
-                            return VCCLogoBrush.IsValid() ? VCCLogoBrush.Get() :
-                            FAppStyle::GetBrush("NoBrush");
-                        })
-                    ]
-                    
-                    // Spacer to push logos to the edges
-                    +SHorizontalBox::Slot()
-                    .FillWidth(1.0f)
-                    [
-                        SNew(SSpacer)
-                    ]
-                    
-                    // SZU Logo (right)
-                    +SHorizontalBox::Slot()
-                    .AutoWidth()
-                    .HAlign(HAlign_Right)
-                    .VAlign(VAlign_Center)
-                    [
-                        SNew(SImage)
-                        .Image_Lambda([this]() {
-                            return SZULogoBrush.IsValid() ? SZULogoBrush.Get() :
-                            FAppStyle::GetBrush("NoBrush");
-                        })
-                    ]
-                )
-            ]
-            
-            // Flash Pawn section
-            +SVerticalBox::Slot()
-            .AutoHeight()
-            [
-                CreatePawnSelectPanel()
-            ]
-            
-            // Camera section
-            +SVerticalBox::Slot()
-            .AutoHeight()
-            [
-                CreateCameraSelectPanel()
-            ]
-            
-            // Target section
-            +SVerticalBox::Slot()
-            .AutoHeight()
-            [
-                CreateTargetSelectPanel()
-            ]
-            
-            // Pose configuration
-            +SVerticalBox::Slot()
-            .AutoHeight()
-            [
-                CreatePoseConfigPanel()
-            ]
-            
-            // Capture panel
-            +SVerticalBox::Slot()
-            .AutoHeight()
-            [
-                CreateCapturePanel()
-            ]
+                SNew(SVerticalBox)
+                
+                // Logo panel with consistent styling
+                +SVerticalBox::Slot()
+                .AutoHeight()
+                .Padding(0)
+                [
+                    CreateSectionContent(
+                        SNew(SHorizontalBox)
+                        
+                        // VCC Logo (left)
+                        +SHorizontalBox::Slot()
+                        .AutoWidth()
+                        .Padding(8, 0, 0, 0)
+                        .HAlign(HAlign_Left)
+                        .VAlign(VAlign_Center)
+                        [
+                            SNew(SImage)
+                            .Image_Lambda([this]() {
+                                return VCCLogoBrush.IsValid() ? VCCLogoBrush.Get() :
+                                FAppStyle::GetBrush("NoBrush");
+                            })
+                        ]
+                        
+                        // Spacer to push logos to the edges
+                        +SHorizontalBox::Slot()
+                        .FillWidth(1.0f)
+                        [
+                            SNew(SSpacer)
+                        ]
+                        
+                        // SZU Logo (right)
+                        +SHorizontalBox::Slot()
+                        .AutoWidth()
+                        .HAlign(HAlign_Right)
+                        .VAlign(VAlign_Center)
+                        [
+                            SNew(SImage)
+                            .Image_Lambda([this]() {
+                                return SZULogoBrush.IsValid() ? SZULogoBrush.Get() :
+                                FAppStyle::GetBrush("NoBrush");
+                            })
+                        ]
+                    )
+                ]
+                
+                // Flash Pawn section
+                +SVerticalBox::Slot()
+                .AutoHeight()
+                [
+                    CreatePawnSelectPanel()
+                ]
+                
+                // Camera section
+                +SVerticalBox::Slot()
+                .AutoHeight()
+                [
+                    CreateCameraSelectPanel()
+                ]
+                
+                // Target section
+                +SVerticalBox::Slot()
+                .AutoHeight()
+                [
+                    CreateTargetSelectPanel()
+                ]
+                
+                // Pose configuration
+                +SVerticalBox::Slot()
+                .AutoHeight()
+                [
+                    CreatePoseConfigPanel()
+                ]
+                
+                // Capture panel
+                +SVerticalBox::Slot()
+                .AutoHeight()
+                [
+                    CreateCapturePanel()
+                ]
 
-            // Scene analysis panel
-            +SVerticalBox::Slot()
-            .AutoHeight()
-            [
-                CreateSceneAnalysisPanel()
+                // Scene analysis panel
+                +SVerticalBox::Slot()
+                .AutoHeight()
+                [
+                    CreateSceneAnalysisPanel()
+                ]
             ]
         ]
     ];
