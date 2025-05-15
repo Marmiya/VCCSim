@@ -26,6 +26,7 @@ class UDepthCameraComponent;
 class URGBCameraComponent;
 class USegmentationCameraComponent;
 class UFMeshManager;
+class ARecorder;
 struct FVCCSimConfig;
 
 struct FRobotGrpcMaps
@@ -53,6 +54,7 @@ struct FRobotGrpcMaps
 extern FAsyncTask<FGrpcServerTask>* Server_Task;
 
 void RunServer(const FVCCSimConfig& Config, AActor* Holder,
-	const FRobotGrpcMaps& RGrpcMaps, UFMeshManager* MeshManager);
+	const FRobotGrpcMaps& RGrpcMaps, UFMeshManager* MeshManager,
+	ARecorder* Recorder);
 
 void ShutdownServer();

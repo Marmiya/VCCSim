@@ -50,7 +50,7 @@ void UMenuWidgets::NativeConstruct()
     Map2Button->OnClicked.AddDynamic(this, &UMenuWidgets::OnMap2Selected);
     Map3Button->OnClicked.AddDynamic(this, &UMenuWidgets::OnMap3Selected);
     Map4Button->OnClicked.AddDynamic(this, &UMenuWidgets::OnMap4Selected);
-    Map5Button->OnClicked.AddDynamic(this, &UMenuWidgets::OnMap4Selected);
+    Map5Button->OnClicked.AddDynamic(this, &UMenuWidgets::OnMap5Selected);
     
     Map1OriginalColor = Map1Button->GetColorAndOpacity();
     Map2OriginalColor = Map2Button->GetColorAndOpacity();
@@ -66,8 +66,8 @@ void UMenuWidgets::NativeConstruct()
     Map3Button->OnUnhovered.AddDynamic(this, &UMenuWidgets::OnMap3Unhovered);
     Map4Button->OnHovered.AddDynamic(this, &UMenuWidgets::OnMap4Hovered);
     Map4Button->OnUnhovered.AddDynamic(this, &UMenuWidgets::OnMap4Unhovered);
-    Map5Button->OnHovered.AddDynamic(this, &UMenuWidgets::OnMap4Hovered);
-    Map5Button->OnUnhovered.AddDynamic(this, &UMenuWidgets::OnMap4Unhovered);
+    Map5Button->OnHovered.AddDynamic(this, &UMenuWidgets::OnMap5Hovered);
+    Map5Button->OnUnhovered.AddDynamic(this, &UMenuWidgets::OnMap5Unhovered);
 
     // Initialize game instance
     GameInstance = Cast<UVCCSimGameInstance>(GetGameInstance());

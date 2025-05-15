@@ -53,7 +53,7 @@ void AVCCHUD::BeginPlay()
         MeshManager->RConfigure(Config);
     }
     
-    RunServer(Config, Holder, RCMaps, MeshManager);
+    RunServer(Config, Holder, RCMaps, MeshManager, Recorder);
 }
 
 void AVCCHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)

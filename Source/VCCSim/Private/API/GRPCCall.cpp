@@ -26,6 +26,31 @@
 #include "Pawns/FlashPawn.h"
 #include "Pawns/CarPawn.h"
 #include "Simulation/MeshManager.h"
+#include "Simulation/Recorder.h"
+
+SimRecording::SimRecording(
+    VCCSim::RecordingService::AsyncService* service,
+    grpc::ServerCompletionQueue* cq, ARecorder* Recorder)
+        : AsyncCallTemplate(service, cq, Recorder)
+{
+    Proceed(true);
+}
+
+void SimRecording::PrepareNextCall()
+{
+    new SimRecording(service_, cq_, component_);
+}
+
+void SimRecording::InitializeRequest()
+{
+    service_->RequestRecording(&ctx_, &request_, &responder_, cq_, cq_, this);
+}
+
+void SimRecording::ProcessRequest()
+{
+    component_->ToggleRecording();
+    response_.set_status(component_->RecordState);
+}
 
 LidarGetDataCall::LidarGetDataCall(
     VCCSim::LidarService::AsyncService* service,

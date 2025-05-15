@@ -26,6 +26,7 @@ class VCCSimClient:
         self.channel = grpc.insecure_channel(f"{host}:{port}", options=options)
         
         # Initialize service stubs
+        self.record_service = VCCSim_pb2_grpc.RecordingServiceStub(self.channel)
         self.lidar_service = VCCSim_pb2_grpc.LidarServiceStub(self.channel)
         self.depth_camera_service = VCCSim_pb2_grpc.DepthCameraServiceStub(self.channel)
         self.rgb_camera_service = VCCSim_pb2_grpc.RGBCameraServiceStub(self.channel)
@@ -56,6 +57,11 @@ class VCCSimClient:
                              yaw: float) -> VCCSim_pb2.PoseOnlyYaw:
         """Create a PoseOnlyYaw message."""
         return VCCSim_pb2.PoseOnlyYaw(x=x, y=y, z=z, yaw=yaw)
+    
+    # Record Service Methods
+    def toggle_recording(self) -> bool:
+        response = self.record_service.Recording(VCCSim_pb2.EmptyRequest())
+        return response.status
 
     # LiDAR Service Methods
     def get_lidar_data(self, robot_name: str) -> List[Tuple[float, float, float]]:

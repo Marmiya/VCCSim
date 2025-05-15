@@ -45,10 +45,10 @@ public:
     FGrpcServerTask(
     	const FVCCSimConfig& Config, UMeshHandlerComponent* MeshComponent,
     	UInsMeshHolder* InstancedMeshHolder, UFMeshManager* MeshManager,
-    	FRobotGrpcMaps RobotGrpcMap)
+    	FRobotGrpcMaps RobotGrpcMap, ARecorder* ARecorder)
         : Config(Config), MeshComponent(MeshComponent),
 		  InstancedMeshHolder(InstancedMeshHolder), MeshManager(MeshManager),
-		  RGrpcMaps(RobotGrpcMap) {}
+		  RGrpcMaps(RobotGrpcMap), Recorder(ARecorder) {}
 
     FORCEINLINE TStatId GetStatId() const
     {
@@ -68,6 +68,7 @@ public:
     	VCCSim::RGBCameraService::AsyncService RGBCameraService;
     	VCCSim::MeshService::AsyncService MeshService;
     	VCCSim::PointCloudService::AsyncService PointCloudService;
+    	VCCSim::RecordingService::AsyncService RecordingService;
     	
 
     	if (!RGrpcMaps.RMaps.DroneMap.empty())
@@ -95,7 +96,8 @@ public:
     		Builder.RegisterService(&RGBCameraService);
     		RGBIndexedCameraImageDataCall::InitializeImageModule();
     	}
-        
+
+    	Builder.RegisterService(&RecordingService);
         Builder.RegisterService(&MeshService);
     	Builder.RegisterService(&PointCloudService);
     	
@@ -174,7 +176,8 @@ public:
         		new RGBIndexedCameraImageSizeCall(&RGBCameraService,
         			CompletionQueue.get(), RGrpcMaps.RCMaps.RRGBCMap);
         	}
-        	
+
+        	new SimRecording(&RecordingService, CompletionQueue.get(), Recorder);
         	new SendMeshCall(&MeshService, CompletionQueue.get(), MeshComponent);
         	if (Config.VCCSim.UseMeshManager)
         	{
@@ -242,6 +245,7 @@ private:
 	UInsMeshHolder* InstancedMeshHolder = nullptr;
 	UFMeshManager* MeshManager;
     FRobotGrpcMaps RGrpcMaps;
+	ARecorder* Recorder = nullptr;
 	
     std::unique_ptr<grpc::ServerCompletionQueue> CompletionQueue;
     std::unique_ptr<grpc::Server> Server;
@@ -249,7 +253,7 @@ private:
 };
 
 void RunServer(const FVCCSimConfig& Config, AActor* Holder,
-	const FRobotGrpcMaps& RGrpcMaps, UFMeshManager* MeshManager)
+	const FRobotGrpcMaps& RGrpcMaps, UFMeshManager* MeshManager, ARecorder* Recorder)
 {
 	if (ShutdownRequested.load())
 	{
@@ -263,7 +267,8 @@ void RunServer(const FVCCSimConfig& Config, AActor* Holder,
 		Holder->FindComponentByClass<UMeshHandlerComponent>(),
 		Holder->FindComponentByClass<UInsMeshHolder>(),
 		MeshManager,
-		RGrpcMaps);
+		RGrpcMaps,
+		Recorder);
 	Server_Task->StartBackgroundTask();
 	UE_LOG(LogTemp, Warning, TEXT("GRPC server started."));
 }

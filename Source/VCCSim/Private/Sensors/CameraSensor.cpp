@@ -62,6 +62,7 @@ void URGBCameraComponent::TickComponent(float DeltaTime, ELevelTick TickType,
     
     if (bRecorded && RecordState)
     {
+        UE_LOG(LogTemp, Log, TEXT("Recording camera %s"), *CameraName);
         TimeSinceLastCapture += DeltaTime;
         if (TimeSinceLastCapture >= RecordInterval)
         {
@@ -158,7 +159,7 @@ void URGBCameraComponent::SetCaptureComponent() const
         // Change the capture source to HDR for better quality
         CaptureComponent->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
         CaptureComponent->bCaptureEveryFrame = false;
-        CaptureComponent->bCaptureOnMovement = true;
+        CaptureComponent->bCaptureOnMovement = false;
         CaptureComponent->bAlwaysPersistRenderingState = true;
         CaptureComponent->PrimaryComponentTick.bCanEverTick = true;
         

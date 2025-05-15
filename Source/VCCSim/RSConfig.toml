@@ -21,43 +21,42 @@ StartWithRecording = false
 UseMeshManager = true
 MeshMaterial = "/VCCSim/Materials/M_Static_mesh"
 LS_StartOffset = 0                              # Frame
-BufferSize = 100
+BufferSize = 10
 LogSavePath = "C:/UEProjects/VCCSimDev/Plugins/VCCSim/Logs"
 DefaultDronePawn = "/VCCSim/Pawn/Drone/BP_PreciseDrone_1C_1D_L.BP_PreciseDrone_1C_1D_L_C"
 DefaultCarPawn = "/VCCSim/Pawn/Husky/Blueprints/BP_CarPawn_Husky.BP_CarPawn_Husky_C"
 DefaultFlashPawn = "/VCCSim/Pawn/Flash/BP_FlashPawn.BP_FlashPawn_C"
 
 [[Robots]]
-
 UETag = "Mavic"
 Type = "Drone"
-RecordInterval = -0.5
+RecordInterval = 0.5
 
-#[Robots.ComponentConfigs.Lidar]
-#RecordInterval = -0.5
-#NumRays = 32
-#NumPoints = 16000
-#ScannerRangeInner = 300
-#ScannerRangeOuter = 3000
-#ScannerAngleUp = 25
-#ScannerAngleDown = 25
-#bVisualizePoints = false
+[Robots.ComponentConfigs.Lidar]
+RecordInterval = -0.5
+NumRays = 32
+NumPoints = 16000
+ScannerRangeInner = 300
+ScannerRangeOuter = 3000
+ScannerAngleUp = 25
+ScannerAngleDown = 25
+bVisualizePoints = true
 
 [Robots.ComponentConfigs.RGBCamera]
-RecordInterval = -0.033333
+RecordInterval = 0.033333
 FOV = 90
 Width = 1280
 Height = 720
 bOrthographic = false
 
-#[Robots.ComponentConfigs.DepthCamera]
-#RecordInterval = -0.033333
-#FOV = 90
-#Width = 1280
-#Height = 720
-#MaxRange = 3000.0
-#MinRange = 0.0
-#bOrthographic = false
+[Robots.ComponentConfigs.DepthCamera]
+RecordInterval = -0.033333
+FOV = 90
+Width = 1280
+Height = 720
+MaxRange = 3000.0
+MinRange = 0.0
+bOrthographic = false
 
 [Robots.ComponentConfigs.SegmentationCamera]
 RecordInterval = -0.033333

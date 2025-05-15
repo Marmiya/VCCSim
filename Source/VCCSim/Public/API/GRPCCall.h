@@ -19,6 +19,8 @@
 
 #include "CoreMinimal.h"
 #include <grpcpp/grpcpp.h>
+#include <ThirdParty/ShaderConductor/ShaderConductor/External/DirectXShaderCompiler/include/dxc/DXIL/DxilConstants.h>
+
 #include "IImageWrapper.h"
 #include "IImageWrapperModule.h"
 #include "API/VCCSim.grpc.pb.h"
@@ -38,6 +40,34 @@ public:
     virtual void Proceed(bool ok) = 0;
     virtual void Shutdown() = 0;
     virtual ~AsyncCall() {}
+};
+
+template <typename RequestType, typename ResponseType,
+          typename ServiceType>
+class AsyncCallTemplateSimple : public AsyncCall
+{
+public:
+    AsyncCallTemplateSimple(ServiceType *service,
+        grpc::ServerCompletionQueue* cq);
+
+    virtual void Proceed(bool ok) override final;
+    virtual void Shutdown() override final;
+
+protected:
+    virtual void PrepareNextCall() = 0;
+    virtual void InitializeRequest() = 0;
+    virtual void ProcessRequest() = 0;
+    
+    grpc::ServerContext ctx_;
+    RequestType request_;
+    ResponseType response_;
+    grpc::ServerAsyncResponseWriter<ResponseType> responder_;
+    
+    enum CallStatus { CREATE, PROCESS, FINISH };
+    CallStatus status_;
+    
+    ServiceType* service_;
+    grpc::ServerCompletionQueue* cq_;
 };
 
 template <typename RequestType, typename ResponseType,
@@ -127,6 +157,24 @@ protected:
     ServiceType* service_;
     grpc::ServerCompletionQueue* cq_;
     RobotComponentMap RCMap_;
+};
+
+/* -------------------------- Recording ---------------------------------- */
+class ARecorder;
+class SimRecording : public AsyncCallTemplate<
+    VCCSim::EmptyRequest, VCCSim::Status,
+    VCCSim::RecordingService::AsyncService,
+    ARecorder>
+{
+public:
+    SimRecording(
+        VCCSim::RecordingService::AsyncService* service,
+        grpc::ServerCompletionQueue* cq, ARecorder* Recorder);
+
+protected:
+    virtual void PrepareNextCall() override;
+    virtual void InitializeRequest() override;
+    virtual void ProcessRequest() override;
 };
 
 /* ---------------------------------LiDAR---------------------------------- */
@@ -620,7 +668,40 @@ protected:
 };
 
 /* --------------------------Template implementation----------------------- */
-    
+
+template <typename RequestType, typename ResponseType, typename ServiceType>
+AsyncCallTemplateSimple<RequestType, ResponseType, ServiceType>::
+AsyncCallTemplateSimple(ServiceType* service,
+    grpc::ServerCompletionQueue* cq)
+        : responder_(&ctx_), status_(CREATE), service_(service),
+          cq_(cq) {}
+
+template <typename RequestType, typename ResponseType, typename ServiceType>
+void AsyncCallTemplateSimple<RequestType, ResponseType, ServiceType>::Proceed(bool ok)
+{
+    if (status_ == CREATE) {
+        status_ = PROCESS;
+        InitializeRequest();
+    }
+    else if (status_ == PROCESS) {
+        PrepareNextCall();
+        ProcessRequest();
+
+        status_ = FINISH;
+        responder_.Finish(response_, grpc::Status::OK, this);
+    }
+    else {
+        delete this;
+    }
+}
+
+template <typename RequestType, typename ResponseType, typename ServiceType>
+void AsyncCallTemplateSimple<RequestType, ResponseType, ServiceType>::Shutdown()
+{
+    status_ = FINISH;
+    delete this;
+}
+
 template <typename RequestType, typename ResponseType,
           typename ServiceType, typename ComponentType>
 AsyncCallTemplate<RequestType, ResponseType,

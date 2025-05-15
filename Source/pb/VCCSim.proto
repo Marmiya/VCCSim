@@ -169,9 +169,12 @@ message FlashPath {
   string name = 1;
   repeated Pose path = 2;
 }
-  
 
 // Services:
+service RecordingService {
+  rpc Recording (EmptyRequest) returns (Status);
+}
+
 service LidarService {
   rpc GetLiDARData (RobotName) returns (LidarData);
   rpc GetLiDAROdom (RobotName) returns (Odometry);
