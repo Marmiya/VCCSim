@@ -996,9 +996,9 @@ void SVCCSimPanel::UpdatePathVisualization()
         Rotations,
         PathMaterial,
         CameraMaterial,
-        2.0f,     // Path width
-        30.0f,    // Cone size
-        45.0f     // Cone length
+        0.1f,     // Path width
+        50.0f,    // Cone size
+        75.0f     // Cone length
     );
         
     if (!PathVisualizationActor.IsValid())
