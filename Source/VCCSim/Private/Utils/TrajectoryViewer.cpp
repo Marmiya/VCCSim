@@ -85,16 +85,20 @@ AActor* UTrajectoryViewer::GenerateVisibleElements(
     // Create a container actor for all visualization elements
     FActorSpawnParameters SpawnParams;
     SpawnParams.ObjectFlags = RF_Transient;  // Make it not saved
-    AActor* VisualizationActor = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+    AActor* VisualizationActor = World->SpawnActor<AActor>(AActor::StaticClass(),
+        FTransform::Identity, SpawnParams);
     VisualizationActor->SetActorLabel(TEXT("PathVisualization_Temp"));
     
     // Load meshes
-    UStaticMesh* CylinderMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder"));
-    UStaticMesh* ConeMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cone"));
+    UStaticMesh* CylinderMesh = LoadObject<UStaticMesh>(nullptr,
+        TEXT("/Engine/BasicShapes/Cylinder"));
+    UStaticMesh* ConeMesh = LoadObject<UStaticMesh>(nullptr,
+        TEXT("/Engine/BasicShapes/Cone"));
     
     if (!CylinderMesh || !ConeMesh)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Failed to load basic shapes for path visualization"));
+        UE_LOG(LogTemp, Warning, TEXT("Failed to load basic shapes for "
+                                      "path visualization"));
         World->DestroyActor(VisualizationActor);
         return nullptr;
     }
@@ -113,7 +117,8 @@ AActor* UTrajectoryViewer::GenerateVisibleElements(
             continue;
         }
         
-        UStaticMeshComponent* CylinderComponent = NewObject<UStaticMeshComponent>(VisualizationActor);
+        UStaticMeshComponent* CylinderComponent =
+            NewObject<UStaticMeshComponent>(VisualizationActor);
         CylinderComponent->SetStaticMesh(CylinderMesh);
         CylinderComponent->SetMaterial(0, PathMaterial);
         CylinderComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -140,7 +145,8 @@ AActor* UTrajectoryViewer::GenerateVisibleElements(
         FVector Location = InPositions[i];
         FRotator Rotation = InRotations[i];
         
-        UStaticMeshComponent* ConeComponent = NewObject<UStaticMeshComponent>(VisualizationActor);
+        UStaticMeshComponent* ConeComponent =
+            NewObject<UStaticMeshComponent>(VisualizationActor);
         ConeComponent->SetStaticMesh(ConeMesh);
         ConeComponent->SetMaterial(0, CameraMaterial);
         ConeComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);

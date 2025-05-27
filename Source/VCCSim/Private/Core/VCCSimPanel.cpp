@@ -459,7 +459,7 @@ void SVCCSimPanel::SaveRGB(int32 PoseIndex, bool& bAnyCaptured)
             
             ViewportClient->SetViewLocation(CameraTransform.GetLocation());
             ViewportClient->SetViewRotation(CameraTransform.GetRotation().Rotator());
-            
+            ViewportClient->ViewFOV = 67.38f;
             ViewportClient->Invalidate();
             ViewportClient->Viewport->Draw();
             
@@ -969,8 +969,8 @@ FReply SVCCSimPanel::OnTogglePathVisualizationClicked()
 
 void SVCCSimPanel::UpdatePathVisualization()
 {
-    TArray<FVector> Positions = SelectedFlashPawn->PendingPositions;
-    TArray<FRotator> Rotations = SelectedFlashPawn->PendingRotations;
+    const TArray<FVector> Positions = SelectedFlashPawn->PendingPositions;
+    const TArray<FRotator> Rotations = SelectedFlashPawn->PendingRotations;
 
     if (Positions.Num() == 0 || Positions.Num() != Rotations.Num())
     {
@@ -996,7 +996,7 @@ void SVCCSimPanel::UpdatePathVisualization()
         Rotations,
         PathMaterial,
         CameraMaterial,
-        0.1f,     // Path width
+        5.f,     // Path width
         50.0f,    // Cone size
         75.0f     // Cone length
     );
