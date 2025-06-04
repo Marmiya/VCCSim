@@ -27,7 +27,7 @@ def test_send_drone_path():
     try:
         # Initialize the client
         logger.info("Initializing VCCSimClient...")
-        client = VCCSimClient(host="localhost", port=50996)
+        client = VCCSimClient(host="172.31.178.18", port=50996)
 
         # Drone name
         drone_name = "Mavic"
