@@ -21,6 +21,8 @@
 #include "Widgets/Docking/SDockTab.h"
 #include "Widgets/SCompoundWidget.h"
 #include "Editor/PropertyEditor/Public/IDetailsView.h"
+#include "DataType/PointCloud.h"
+#include "ProceduralMeshComponent.h"
 
 class AFlashPawn;
 class AVCCSimPath;
@@ -132,6 +134,7 @@ private:
     TSharedRef<SWidget> CreatePoseConfigPanel();
     TSharedRef<SWidget> CreateCapturePanel();
     TSharedRef<SWidget> CreateSceneAnalysisPanel();
+    TSharedRef<SWidget> CreatePointCloudPanel();
     
     // UI callbacks
     void OnSelectFlashPawnToggleChanged(ECheckBoxState NewState);
@@ -194,6 +197,40 @@ private:
     bool bComplexityVisualized = false;
     TSharedPtr<class SButton> VisualizeComplexityButton;
     FReply OnToggleComplexityVisualizationClicked();
+
+    // Point Cloud members
+    TSharedPtr<SButton> LoadPointCloudButton;
+    TSharedPtr<SButton> VisualizePointCloudButton;
+    TSharedPtr<STextBlock> PointCloudStatusText;
+    TSharedPtr<STextBlock> PointCloudColorStatusText;
+    
+    // Point cloud data
+    TArray<FRatPoint> PointCloudData;
+    TWeakObjectPtr<AActor> PointCloudActor; // Single actor with procedural mesh
+    TWeakObjectPtr<UProceduralMeshComponent> PointCloudComponent;
+    bool bPointCloudVisualized = false;
+    bool bPointCloudLoaded = false;
+    bool bPointCloudHasColors = false;
+    FString LoadedPointCloudPath;
+    int32 PointCloudCount = 0;
+    
+    // Default colors
+    FLinearColor DefaultPointColor = FLinearColor(1.0f, 0.5f, 0.0f, 1.0f);
+    float PointSize = 100.f;
+    
+    // Point cloud methods
+    FReply OnLoadPointCloudClicked();
+    FReply OnTogglePointCloudVisualizationClicked();
+    void CreateProceduralPointCloudVisualization();
+    void ClearPointCloudVisualization();
+
+    void GeneratePointCloudMesh(TArray<FVector>& Vertices, 
+                           TArray<int32>& Triangles, 
+                           TArray<FVector>& Normals,
+                           TArray<FVector2D>& UVs,
+                           TArray<FColor>& VertexColors);
+
+    void CreateAndSetVertexColorMaterial(UProceduralMeshComponent* ProcMeshComp);
 };
 
 namespace FVCCSimPanelFactory

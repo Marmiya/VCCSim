@@ -224,9 +224,9 @@ def main():
     print("=" * 30)
     
     # Configuration - Update these paths
-    csv_path = "E:/Scene/0527_filtered.csv"  # Your filtered CSV
-    source_dir = "E:/Scene/Imgs"  # Directory with original images  
-    output_dir = "E:/Scene/Filtered_Images"  # Output directory for filtered images
+    csv_path = "D:/Data/L7/0528_filtered.csv"  # Your filtered CSV
+    source_dir = "D:/Data/L7/Imgs"  # Directory with original images  
+    output_dir = "D:/Data/L7/Filtered_Images"  # Output directory for filtered images
     
     print(f"CSV file: {csv_path}")
     print(f"Source images: {source_dir}")

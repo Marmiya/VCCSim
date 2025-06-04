@@ -264,8 +264,8 @@ def main():
     print("=" * 30)
     
     # Configuration - change these paths as needed
-    input_file = "E:/Scene/Pointcloud/pcc.ply"
-    output_file = "E:/Scene/Pointcloud/filtered_pointcloud.ply"
+    input_file = "D:/Data/L7/Pointcloud/pcc.ply"
+    output_file = "D:/Data/L7/Pointcloud/filtered_pointcloud.ply"
     
     # Check if command line arguments provided
     if len(sys.argv) > 1:

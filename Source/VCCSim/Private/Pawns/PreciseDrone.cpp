@@ -112,79 +112,256 @@ void APreciseDrone::Tick(float DeltaTime)
     {
         if (ManualControl)
         {
-            // Apply manual input controls with physics-based movement
-            FVector CurrentLocation = GetActorLocation();
-            FRotator CurrentRotation = GetActorRotation();
-            
-            // Calculate desired vertical speed
-            float DesiredVerticalSpeed = VerticalInput * MaxVerticalSpeed;
-            
-            // Calculate movement direction with rotation-based direction
-            FRotator YawRotation(0.0f, CurrentRotation.Yaw, 0.0f);
-            FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
-            FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
-            
-            // Calculate desired horizontal movement
-            FVector DesiredHorizontalDir = (ForwardDirection * MovementInput.Y + RightDirection * MovementInput.X);
-            float DesiredHorizontalSpeed = MaxHorizontalSpeed;
-            if (DesiredHorizontalDir.SizeSquared() > 0.0f)
-            {
-                DesiredHorizontalDir.Normalize();
-                DesiredHorizontalSpeed = MovementInput.Size() * MaxHorizontalSpeed;
-            }
-            else
-            {
-                DesiredHorizontalSpeed = 0.0f;
-            }
-            
-            // Apply acceleration limits
-            CurrentVerticalSpeed = FMath::FInterpTo(
-                CurrentVerticalSpeed, DesiredVerticalSpeed, 
-                DeltaTime, VerticalAcceleration / 100.0f);
-                
-            CurrentHorizontalSpeed = FMath::FInterpTo(
-                CurrentHorizontalSpeed, DesiredHorizontalSpeed, 
-                DeltaTime, HorizontalAcceleration / 100.0f);
-                
-            // Apply total thrust limitation
-            float TotalThrust = FMath::Sqrt(
-                FMath::Square(CurrentHorizontalSpeed / MaxHorizontalSpeed) + 
-                FMath::Square(CurrentVerticalSpeed / MaxVerticalSpeed));
-            
-            if (TotalThrust > 1.0f)
-            {
-                CurrentHorizontalSpeed /= TotalThrust;
-                CurrentVerticalSpeed /= TotalThrust;
-            }
-            
-            // Calculate and apply movement
-            FVector HorizontalMovement = DesiredHorizontalDir * CurrentHorizontalSpeed * DeltaTime;
-            FVector VerticalMovement(0, 0, CurrentVerticalSpeed * DeltaTime);
-            CurrentLocation += HorizontalMovement + VerticalMovement;
-            
-            // Handle yaw rotation
-            CurrentRotation.Yaw += YawInput * YawAcceleration * DeltaTime;
-            
-            // Calculate pitch and roll based on movement
-            float TargetPitch = -MaxPitch * MovementInput.Y * (CurrentHorizontalSpeed / MaxHorizontalSpeed);
-            float TargetRoll = MaxRoll * MovementInput.X * (CurrentHorizontalSpeed / MaxHorizontalSpeed);
-            
-            // Apply smooth pitch and roll changes
-            CurrentRotation.Pitch = FMath::FInterpTo(
-                CurrentRotation.Pitch, TargetPitch, 
-                DeltaTime, PitchRollAcceleration);
-            
-            CurrentRotation.Roll = FMath::FInterpTo(
-                CurrentRotation.Roll, TargetRoll, 
-                DeltaTime, PitchRollAcceleration);
-            
-            // Apply the new position and rotation
-            SetActorLocationAndRotation(CurrentLocation, CurrentRotation);
+            HandleManualMovement(DeltaTime);
         }
     }
     
     // Always rotate the rotors
     RotateRotors(DeltaTime);
+}
+
+void APreciseDrone::HandleManualMovement(float DeltaTime)
+{
+    // Separate position and rotation calculations for manual control
+    FVector NewPosition = CalculateNewPosition(DeltaTime);
+    FRotator NewRotation = CalculateNewRotation(DeltaTime);
+    
+    // Apply the new position and rotation
+    SetActorLocationAndRotation(NewPosition, NewRotation);
+}
+
+FVector APreciseDrone::CalculateNewPosition(float DeltaTime)
+{
+    FVector CurrentLocation = GetActorLocation();
+    FRotator CurrentRotation = GetActorRotation();
+    
+    // Calculate desired vertical speed
+    float DesiredVerticalSpeed = VerticalInput * MaxVerticalSpeed;
+    
+    // Calculate movement direction with rotation-based direction
+    FRotator YawRotation(0.0f, CurrentRotation.Yaw, 0.0f);
+    FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
+    FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
+    
+    // Calculate desired horizontal movement
+    FVector DesiredHorizontalDir = (ForwardDirection * MovementInput.Y + RightDirection * MovementInput.X);
+    float DesiredHorizontalSpeed = MaxHorizontalSpeed;
+    if (DesiredHorizontalDir.SizeSquared() > 0.0f)
+    {
+        DesiredHorizontalDir.Normalize();
+        DesiredHorizontalSpeed = MovementInput.Size() * MaxHorizontalSpeed;
+    }
+    else
+    {
+        DesiredHorizontalSpeed = 0.0f;
+    }
+    
+    // Apply acceleration limits
+    CurrentVerticalSpeed = FMath::FInterpTo(
+        CurrentVerticalSpeed, DesiredVerticalSpeed, 
+        DeltaTime, VerticalAcceleration / 100.0f);
+        
+    CurrentHorizontalSpeed = FMath::FInterpTo(
+        CurrentHorizontalSpeed, DesiredHorizontalSpeed, 
+        DeltaTime, HorizontalAcceleration / 100.0f);
+        
+    // Apply total thrust limitation
+    float TotalThrust = FMath::Sqrt(
+        FMath::Square(CurrentHorizontalSpeed / MaxHorizontalSpeed) + 
+        FMath::Square(CurrentVerticalSpeed / MaxVerticalSpeed));
+    
+    if (TotalThrust > 1.0f)
+    {
+        CurrentHorizontalSpeed /= TotalThrust;
+        CurrentVerticalSpeed /= TotalThrust;
+    }
+    
+    // Calculate and apply movement
+    FVector HorizontalMovement = DesiredHorizontalDir * CurrentHorizontalSpeed * DeltaTime;
+    FVector VerticalMovement(0, 0, CurrentVerticalSpeed * DeltaTime);
+    
+    return CurrentLocation + HorizontalMovement + VerticalMovement;
+}
+
+FRotator APreciseDrone::CalculateNewRotation(float DeltaTime)
+{
+    FRotator CurrentRotation = GetActorRotation();
+    
+    // Handle yaw rotation from input
+    CurrentRotation.Yaw += YawInput * YawAcceleration * DeltaTime;
+    
+    // Calculate movement direction for pitch/roll
+    FRotator YawRotation(0.0f, CurrentRotation.Yaw, 0.0f);
+    FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
+    FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
+    FVector MovementDirection = (ForwardDirection * MovementInput.Y + RightDirection * MovementInput.X);
+    
+    if (MovementDirection.SizeSquared() > 0.001f)
+    {
+        MovementDirection.Normalize();
+        return CalculateMovementBasedRotation(DeltaTime, MovementDirection);
+    }
+    else
+    {
+        // No movement - return to level flight
+        float TargetPitch = 0.0f;
+        float TargetRoll = 0.0f;
+        
+        CurrentRotation.Pitch = FMath::FInterpTo(
+            CurrentRotation.Pitch, TargetPitch, 
+            DeltaTime, PitchRollAcceleration);
+        
+        CurrentRotation.Roll = FMath::FInterpTo(
+            CurrentRotation.Roll, TargetRoll, 
+            DeltaTime, PitchRollAcceleration);
+        
+        return CurrentRotation;
+    }
+}
+
+FRotator APreciseDrone::CalculateMovementBasedRotation(
+    float DeltaTime, const FVector& MovementDirection)
+{
+    FRotator CurrentRotation = GetActorRotation();
+    
+    // Calculate pitch and roll based on movement direction relative to current orientation
+    FRotator YawRotation(0.0f, CurrentRotation.Yaw, 0.0f);
+    FVector ForwardVector = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
+    FVector RightVector = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
+    
+    float ForwardDot = FVector::DotProduct(MovementDirection, ForwardVector);
+    float RightDot = FVector::DotProduct(MovementDirection, RightVector);
+    
+    // Speed factor for more realistic banking
+    float SpeedFactor = CurrentHorizontalSpeed / MaxHorizontalSpeed;
+    
+    float TargetPitch = -MaxPitch * ForwardDot * SpeedFactor;
+    float TargetRoll = MaxRoll * RightDot * SpeedFactor;
+    
+    // Apply smooth pitch and roll changes
+    CurrentRotation.Pitch = FMath::FInterpTo(
+        CurrentRotation.Pitch, TargetPitch, 
+        DeltaTime, PitchRollAcceleration);
+    
+    CurrentRotation.Roll = FMath::FInterpTo(
+        CurrentRotation.Roll, TargetRoll, 
+        DeltaTime, PitchRollAcceleration);
+    
+    return CurrentRotation;
+}
+
+void APreciseDrone::MoveToTarget(float DeltaTime)
+{
+    // Check if we're close to target first - if so, snap to target
+    if (IfCloseToTarget(TargetLocation, TargetRotation))
+    {
+        SetActorLocationAndRotation(TargetLocation, TargetRotation);
+        bUseTarget = false;
+        return;
+    }
+    
+    // Calculate new position and rotation
+    FVector NewPosition = CalculateTargetPosition(DeltaTime);
+    FRotator NewRotation = CalculateTargetRotation(DeltaTime);
+    
+    // Apply the new position and rotation
+    SetActorLocationAndRotation(NewPosition, NewRotation);
+}
+
+FVector APreciseDrone::CalculateTargetPosition(float DeltaTime)
+{
+    FVector CurrentLocation = GetActorLocation();
+    
+    // Calculate direction to target
+    FVector Direction = TargetLocation - CurrentLocation;
+    float VerticalDistance = FMath::Abs(Direction.Z);
+    
+    // Calculate horizontal direction and distance
+    FVector HorizontalDirection = Direction;
+    HorizontalDirection.Z = 0;
+    float HorizontalDistance = HorizontalDirection.Size();
+    
+    // Check if we're within position threshold - snap to target
+    if (Direction.SizeSquared() <= FMath::Square(PositionThreshold))
+    {
+        return TargetLocation;
+    }
+    
+    // Normalize horizontal direction if not zero
+    if (HorizontalDistance > 0.001f)
+    {
+        HorizontalDirection.Normalize();
+    }
+    
+    // Calculate desired speeds based on distance
+    float DesiredHorizontalSpeed = FMath::Min(
+        HorizontalDistance * 2.0f, MaxHorizontalSpeed);
+    
+    float DesiredVerticalSpeed = FMath::Min(
+        VerticalDistance * 2.0f, MaxVerticalSpeed) * 
+        FMath::Sign(TargetLocation.Z - CurrentLocation.Z);
+    
+    // Apply acceleration limits
+    CurrentHorizontalSpeed = FMath::FInterpTo(
+        CurrentHorizontalSpeed, DesiredHorizontalSpeed, 
+        DeltaTime, HorizontalAcceleration / 100.0f);
+    
+    CurrentVerticalSpeed = FMath::FInterpTo(
+        CurrentVerticalSpeed, DesiredVerticalSpeed, 
+        DeltaTime, VerticalAcceleration / 100.0f);
+    
+    // Apply total thrust limitation
+    float TotalThrust = FMath::Sqrt(
+        FMath::Square(CurrentHorizontalSpeed / MaxHorizontalSpeed) + 
+        FMath::Square(CurrentVerticalSpeed / MaxVerticalSpeed));
+    
+    if (TotalThrust > 1.0f)
+    {
+        CurrentHorizontalSpeed /= TotalThrust;
+        CurrentVerticalSpeed /= TotalThrust;
+    }
+    
+    // Calculate movement vector
+    FVector HorizontalMovement = HorizontalDirection * CurrentHorizontalSpeed * DeltaTime;
+    FVector VerticalMovement(0, 0, CurrentVerticalSpeed * DeltaTime);
+    
+    return CurrentLocation + HorizontalMovement + VerticalMovement;
+}
+
+FRotator APreciseDrone::CalculateTargetRotation(float DeltaTime)
+{
+    FRotator CurrentRotation = GetActorRotation();
+    
+    // Calculate rotation differences
+    FRotator RotationDelta = TargetRotation - CurrentRotation;
+    RotationDelta.Normalize();
+    
+    // Check if we're within rotation thresholds - snap to target
+    bool YawOK = FMath::Abs(RotationDelta.Yaw) < RotationThreshold;
+    bool PitchOK = FMath::Abs(RotationDelta.Pitch) < RotationThreshold;
+    bool RollOK = FMath::Abs(RotationDelta.Roll) < RotationThreshold;
+    
+    if (YawOK && PitchOK && RollOK)
+    {
+        return TargetRotation;
+    }
+    
+    // Normal rotation interpolation - each axis independently
+    FRotator NewRotation;
+    
+    NewRotation.Yaw = FMath::FInterpTo(
+        CurrentRotation.Yaw, TargetRotation.Yaw, 
+        DeltaTime, YawAcceleration / 120.0f);
+    
+    NewRotation.Pitch = FMath::FInterpTo(
+        CurrentRotation.Pitch, TargetRotation.Pitch, 
+        DeltaTime, PitchRollAcceleration);
+    
+    NewRotation.Roll = FMath::FInterpTo(
+        CurrentRotation.Roll, TargetRotation.Roll, 
+        DeltaTime, PitchRollAcceleration);
+    
+    return NewRotation;
 }
 
 void APreciseDrone::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -255,11 +432,11 @@ void APreciseDrone::FollowThePathAndSteer()
     // Apply acceleration limits
     CurrentHorizontalSpeed = FMath::FInterpTo(
         CurrentHorizontalSpeed, DesiredHorizontalSpeed, 
-        DeltaTime, HorizontalAcceleration / 50.0f); // Increased responsiveness
+        DeltaTime, HorizontalAcceleration / 50.0f);
     
     CurrentVerticalSpeed = FMath::FInterpTo(
         CurrentVerticalSpeed, DesiredVerticalSpeed, 
-        DeltaTime, VerticalAcceleration / 50.0f);  // Increased responsiveness
+        DeltaTime, VerticalAcceleration / 50.0f);
     
     // Apply total thrust limitation
     float TotalThrust = FMath::Sqrt(
@@ -337,14 +514,14 @@ void APreciseDrone::FollowThePathAndSteer()
     Rotation.Pitch = TargetPitch;
     Rotation.Roll = TargetRoll;
     
-    // Apply smooth rotation changes (more responsive than before)
+    // Apply smooth rotation changes
     FRotator NewRotation;
     NewRotation.Yaw = FMath::FInterpTo(CurrentRotation.Yaw, Rotation.Yaw,
-                                     DeltaTime, YawAcceleration / 45.0f); // More responsive
+                                     DeltaTime, YawAcceleration / 45.0f);
     NewRotation.Pitch = FMath::FInterpTo(CurrentRotation.Pitch, Rotation.Pitch,
-                                       DeltaTime, PitchRollAcceleration * 2.0f); // More responsive
+                                       DeltaTime, PitchRollAcceleration * 2.0f);
     NewRotation.Roll = FMath::FInterpTo(CurrentRotation.Roll, Rotation.Roll,
-                                      DeltaTime, PitchRollAcceleration * 2.0f); // More responsive
+                                      DeltaTime, PitchRollAcceleration * 2.0f);
     
     // Apply the exact position from the spline and the calculated rotation
     SetActorLocationAndRotation(TargetPosition, NewRotation);
@@ -490,136 +667,6 @@ void APreciseDrone::HandleLookInput(const FInputActionValue& Value)
         AddControllerYawInput(LookAxisVector.X);
         // Add pitch input to the camera spring arm
         AddControllerPitchInput(LookAxisVector.Y);
-    }
-}
-
-void APreciseDrone::MoveToTarget(float DeltaTime)
-{
-    // Get current state
-    FVector CurrentLocation = GetActorLocation();
-    FRotator CurrentRotation = GetActorRotation();
-    
-    // Calculate direction to target
-    FVector Direction = TargetLocation - CurrentLocation;
-    float VerticalDistance = FMath::Abs(Direction.Z);
-    
-    // Calculate horizontal direction and distance
-    FVector HorizontalDirection = Direction;
-    HorizontalDirection.Z = 0;
-    float HorizontalDistance = HorizontalDirection.Size();
-    float DistanceToTarget = FMath::Sqrt(FMath::Square(HorizontalDistance) + FMath::Square(VerticalDistance));
-    
-    // Normalize horizontal direction if not zero
-    if (HorizontalDistance > 0.001f)
-    {
-        HorizontalDirection.Normalize();
-    }
-    
-    // Calculate target yaw rotation based on movement direction
-    FRotator TargetYawRotation = FRotationMatrix::MakeFromX(HorizontalDirection).Rotator();
-    
-    // Check if we've already reached the position target
-    if (DistanceToTarget <= PositionThreshold)
-    {
-        // At target position, handle final rotation alignment
-        FRotator RotationDelta = TargetRotation - CurrentRotation;
-        RotationDelta.Normalize();
-        
-        // Smoothly interpolate to target rotation
-        CurrentRotation.Yaw = FMath::FInterpTo(
-            CurrentRotation.Yaw, TargetRotation.Yaw, 
-            DeltaTime, YawAcceleration / 90.0f);
-        
-        CurrentRotation.Pitch = FMath::FInterpTo(
-            CurrentRotation.Pitch, TargetRotation.Pitch, 
-            DeltaTime, PitchRollAcceleration);
-        
-        CurrentRotation.Roll = FMath::FInterpTo(
-            CurrentRotation.Roll, TargetRotation.Roll, 
-            DeltaTime, PitchRollAcceleration);
-        
-        // Apply the rotation
-        SetActorRotation(CurrentRotation);
-        
-        // Gradually decelerate
-        CurrentHorizontalSpeed = FMath::FInterpTo(
-            CurrentHorizontalSpeed, 0.0f, 
-            DeltaTime, HorizontalAcceleration / 100.0f);
-        
-        CurrentVerticalSpeed = FMath::FInterpTo(
-            CurrentVerticalSpeed, 0.0f, 
-            DeltaTime, VerticalAcceleration / 100.0f);
-        
-        // Check if we're close enough to the target
-        if (IfCloseToTarget(TargetLocation, TargetRotation))
-        {
-            // Reached both position and rotation targets
-            bUseTarget = false;
-        }
-    }
-    else
-    {
-        // Calculate desired speeds based on distance to target
-        float DesiredHorizontalSpeed = FMath::Min(
-            HorizontalDistance * 2.0f, MaxHorizontalSpeed);
-        
-        float DesiredVerticalSpeed = FMath::Min(
-            VerticalDistance * 2.0f, MaxVerticalSpeed) * 
-            FMath::Sign(TargetLocation.Z - CurrentLocation.Z);
-        
-        // Apply acceleration limits
-        CurrentHorizontalSpeed = FMath::FInterpTo(
-            CurrentHorizontalSpeed, DesiredHorizontalSpeed, 
-            DeltaTime, HorizontalAcceleration / 100.0f);
-        
-        CurrentVerticalSpeed = FMath::FInterpTo(
-            CurrentVerticalSpeed, DesiredVerticalSpeed, 
-            DeltaTime, VerticalAcceleration / 100.0f);
-        
-        // Apply total thrust limitation
-        float TotalThrust = FMath::Sqrt(
-            FMath::Square(CurrentHorizontalSpeed / MaxHorizontalSpeed) + 
-            FMath::Square(CurrentVerticalSpeed / MaxVerticalSpeed));
-        
-        if (TotalThrust > 1.0f)
-        {
-            CurrentHorizontalSpeed /= TotalThrust;
-            CurrentVerticalSpeed /= TotalThrust;
-        }
-        
-        // Calculate movement vector
-        FVector HorizontalMovement = HorizontalDirection * CurrentHorizontalSpeed * DeltaTime;
-        FVector VerticalMovement(0, 0, CurrentVerticalSpeed * DeltaTime);
-        
-        // Apply movement
-        CurrentLocation += HorizontalMovement + VerticalMovement;
-        
-        // Calculate pitch and roll based on movement direction
-        FVector ForwardVector = FRotationMatrix(FRotator(0, CurrentRotation.Yaw, 0)).GetUnitAxis(EAxis::X);
-        FVector RightVector = FRotationMatrix(FRotator(0, CurrentRotation.Yaw, 0)).GetUnitAxis(EAxis::Y);
-        
-        float ForwardDot = FVector::DotProduct(HorizontalDirection, ForwardVector);
-        float RightDot = FVector::DotProduct(HorizontalDirection, RightVector);
-        
-        float TargetPitch = -MaxPitch * ForwardDot * (CurrentHorizontalSpeed / MaxHorizontalSpeed);
-        float TargetRoll = MaxRoll * RightDot * (CurrentHorizontalSpeed / MaxHorizontalSpeed);
-        
-        // Apply smooth pitch and roll changes
-        CurrentRotation.Pitch = FMath::FInterpTo(
-            CurrentRotation.Pitch, TargetPitch, 
-            DeltaTime, PitchRollAcceleration);
-        
-        CurrentRotation.Roll = FMath::FInterpTo(
-            CurrentRotation.Roll, TargetRoll, 
-            DeltaTime, PitchRollAcceleration);
-        
-        // Smoothly interpolate yaw towards movement direction
-        CurrentRotation.Yaw = FMath::FInterpTo(
-            CurrentRotation.Yaw, TargetYawRotation.Yaw, 
-            DeltaTime, YawAcceleration / 90.0f);
-        
-        // Apply the new position and rotation
-        SetActorLocationAndRotation(CurrentLocation, CurrentRotation);
     }
 }
 

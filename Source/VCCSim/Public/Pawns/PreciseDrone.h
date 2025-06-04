@@ -94,10 +94,18 @@ protected:
 
 private:
     float VerticalInput = 0.0f;
-    FVector2D MovementInput = FVector2D::ZeroVector;
     float YawInput = 0.0f;
-
+    FVector2D MovementInput = FVector2D::ZeroVector;
+    
     void MoveToTarget(float DeltaTime);
+    FVector CalculateTargetPosition(float DeltaTime);
+    FRotator CalculateTargetRotation(float DeltaTime);
+    
+    void HandleManualMovement(float DeltaTime);
+    FVector CalculateNewPosition(float DeltaTime);
+    FRotator CalculateNewRotation(float DeltaTime);
+    FRotator CalculateMovementBasedRotation(
+    float DeltaTime, const FVector& MovementDirection);
     
     UFUNCTION(BlueprintCallable)
     void RotateRotors(float DeltaTime);
