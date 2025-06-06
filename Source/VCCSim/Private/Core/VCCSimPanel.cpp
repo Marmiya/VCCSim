@@ -498,31 +498,27 @@ void SVCCSimPanel::SaveDepth(int32 PoseIndex, bool& bAnyCaptured)
             int32 CameraIndex = Camera->GetCameraIndex();
             if (CameraIndex < 0) CameraIndex = i;
                     
-            // Filename for this camera
+            // Filename for this camera (16-bit depth)
             FString Filename = SaveDirectory / FString::Printf(
-                TEXT("Depth_Cam%02d_Pose%03d.png"), 
+                TEXT("Depth16_Cam%02d_Pose%03d.png"), 
                 CameraIndex, 
                 PoseIndex
             );
                     
-            // Capture the image
             FIntPoint Size = {Camera->GetImageSize().first, Camera->GetImageSize().second};
                     
-            // Get image data and save asynchronously
             Camera->AsyncGetDepthImageData(
                 [Filename, Size, JobNum = this->JobNum](const TArray<FFloat16Color>& ImageData)
                 {
-                    TArray<FColor> ConvertedImageData;
-                    ConvertedImageData.Reserve(ImageData.Num());
-                    for (const FFloat16Color& Color : ImageData)
-                    {
-                        uint8 DepthValue = FMath::Clamp(
-                            FMath::RoundToInt(Color.R / 100.f), 0, 255);
-                        ConvertedImageData.Add(FColor(DepthValue,
-                            DepthValue, DepthValue, 255));
-                    }
-                    (new FAutoDeleteAsyncTask<FAsyncImageSaveTask>(ConvertedImageData, Size, Filename))
+                    float DepthScale = 1.0f;
+                    
+                    (new FAutoDeleteAsyncTask<FAsyncDepth16SaveTask>(
+                        ImageData, 
+                        Size, 
+                        Filename, 
+                        DepthScale))
                     ->StartBackgroundTask();
+                    
                     *JobNum -= 1;
                 });
                     

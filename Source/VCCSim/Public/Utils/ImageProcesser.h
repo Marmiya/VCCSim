@@ -23,24 +23,54 @@
 class FAsyncImageSaveTask : public FNonAbandonableTask
 {
 public:
-	FAsyncImageSaveTask(
-		const TArray<FColor>& InPixels,
-		FIntPoint InSize, const FString& InFilePath)
-		: Pixels(InPixels)
-		, Size(InSize)
-		, FilePath(InFilePath)
-	{}
+    FAsyncImageSaveTask(
+       const TArray<FColor>& InPixels,
+       FIntPoint InSize, const FString& InFilePath)
+       : Pixels(InPixels)
+       , Size(InSize)
+       , FilePath(InFilePath)
+    {}
 
-	void DoWork();
+    void DoWork();
 
-	FORCEINLINE TStatId GetStatId() const
-	{
-		RETURN_QUICK_DECLARE_CYCLE_STAT(FAsyncImageSaveTask,
-			STATGROUP_ThreadPoolAsyncTasks);
-	}
+    FORCEINLINE TStatId GetStatId() const
+    {
+       RETURN_QUICK_DECLARE_CYCLE_STAT(FAsyncImageSaveTask,
+          STATGROUP_ThreadPoolAsyncTasks);
+    }
 
 private:
-	TArray<FColor> Pixels;
-	FIntPoint Size;
-	FString FilePath;
+    TArray<FColor> Pixels;
+    FIntPoint Size;
+    FString FilePath;
+};
+
+// New class for 16-bit depth image saving
+class FAsyncDepth16SaveTask : public FNonAbandonableTask
+{
+public:
+    FAsyncDepth16SaveTask(
+        const TArray<FFloat16Color>& InDepthPixels,
+        FIntPoint InSize, 
+        const FString& InFilePath,
+        float InDepthScale = 1.0f)
+        : DepthPixels(InDepthPixels)
+        , Size(InSize)
+        , FilePath(InFilePath)
+        , DepthScale(InDepthScale)
+    {}
+
+    void DoWork();
+
+    FORCEINLINE TStatId GetStatId() const
+    {
+        RETURN_QUICK_DECLARE_CYCLE_STAT(FAsyncDepth16SaveTask,
+           STATGROUP_ThreadPoolAsyncTasks);
+    }
+
+private:
+    TArray<FFloat16Color> DepthPixels;
+    FIntPoint Size;
+    FString FilePath;
+    float DepthScale;
 };
