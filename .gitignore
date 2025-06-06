@@ -98,3 +98,5 @@ Client/ros_client/install/
 Client/ros_client/share/
 
 flash_test.log
+
+Source/Tools/DGE/data/*
