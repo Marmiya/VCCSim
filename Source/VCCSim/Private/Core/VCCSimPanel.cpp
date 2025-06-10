@@ -485,6 +485,12 @@ void SVCCSimPanel::SaveRGB(int32 PoseIndex, bool& bAnyCaptured)
 
 void SVCCSimPanel::SaveDepth(int32 PoseIndex, bool& bAnyCaptured)
 {
+    if (!SelectedFlashPawn.IsValid())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("SaveDepth: Invalid FlashPawn"));
+        return;
+    }
+    
     TArray<UDepthCameraComponent*> DepthCameras;
     SelectedFlashPawn->GetComponents<UDepthCameraComponent>(DepthCameras);
     *JobNum += DepthCameras.Num();
@@ -497,36 +503,97 @@ void SVCCSimPanel::SaveDepth(int32 PoseIndex, bool& bAnyCaptured)
             // Get camera index or use iterator index
             int32 CameraIndex = Camera->GetCameraIndex();
             if (CameraIndex < 0) CameraIndex = i;
-                    
-            // Filename for this camera (16-bit depth)
-            FString Filename = SaveDirectory / FString::Printf(
+            
+            // Filename for this camera's point cloud
+            FString PLYFilename = SaveDirectory / FString::Printf(
+                TEXT("PointCloud_Cam%02d_Pose%03d.ply"), 
+                CameraIndex, 
+                PoseIndex
+            );
+            
+            // Optional: Also save 16-bit depth image
+            FString DepthFilename = SaveDirectory / FString::Printf(
                 TEXT("Depth16_Cam%02d_Pose%03d.png"), 
                 CameraIndex, 
                 PoseIndex
             );
-                    
-            FIntPoint Size = {Camera->GetImageSize().first, Camera->GetImageSize().second};
-                    
-            Camera->AsyncGetDepthImageData(
-                [Filename, Size, JobNum = this->JobNum](const TArray<FFloat16Color>& ImageData)
+            
+            // Capture point cloud data
+            Camera->AsyncGetPointCloudData(
+                [this, Camera, PLYFilename, DepthFilename, PoseIndex, CameraIndex]()
                 {
-                    float DepthScale = 1.0f;
-                    
-                    (new FAutoDeleteAsyncTask<FAsyncDepth16SaveTask>(
-                        ImageData, 
-                        Size, 
-                        Filename, 
-                        DepthScale))
-                    ->StartBackgroundTask();
-                    
-                    *JobNum -= 1;
+                    // Process the points in a background thread
+                    AsyncTask(ENamedThreads::AnyBackgroundHiPriTask,
+                        [this, Camera, PLYFilename, DepthFilename, PoseIndex, CameraIndex]()
+                        {
+                            try
+                            {
+                                // Generate point cloud
+                                TArray<FDCPoint> PointCloud = Camera->GeneratePointCloud();
+                                
+                                if (PointCloud.Num() > 0)
+                                {
+                                    // Save point cloud to PLY file asynchronously
+                                    (new FAutoDeleteAsyncTask<FAsyncPLYSaveTask>(
+                                        PointCloud, 
+                                        PLYFilename))
+                                    ->StartBackgroundTask();
+                                    
+                                    UE_LOG(LogTemp, Log, TEXT("Generated point cloud "
+                                                              "with %d points for Cam%02d_Pose%03d"), 
+                                        PointCloud.Num(), CameraIndex, PoseIndex);
+                                }
+                                else
+                                {
+                                    UE_LOG(LogTemp, Warning, TEXT("Empty point cloud "
+                                                                  "generated for Cam%02d_Pose%03d"), 
+                                        CameraIndex, PoseIndex);
+                                }
+                                
+                                Camera->AsyncGetDepthImageData(
+                                    [DepthFilename, Camera](const TArray<FFloat16Color>& ImageData)
+                                    {
+                                        FIntPoint Size = {Camera->GetImageSize().first, Camera->GetImageSize().second};
+                                        float DepthScale = 1.0f;
+                                        
+                                        (new FAutoDeleteAsyncTask<FAsyncDepth16SaveTask>(
+                                            ImageData, 
+                                            Size, 
+                                            DepthFilename,
+                                            DepthScale))
+                                        ->StartBackgroundTask();
+                                    });
+                            }
+                            catch (const std::exception& e)
+                            {
+                                UE_LOG(LogTemp, Error, TEXT("Exception in point cloud "
+                                                            "generation for Cam%02d_Pose%03d: %s"), 
+                                    CameraIndex, PoseIndex, UTF8_TO_TCHAR(e.what()));
+                            }
+                            catch (...)
+                            {
+                                UE_LOG(LogTemp, Error, TEXT("Unknown exception in point "
+                                                            "cloud generation for Cam%02d_Pose%03d"), 
+                                    CameraIndex, PoseIndex);
+                            }
+                            
+                            // Decrement job counter on game thread
+                            AsyncTask(ENamedThreads::GameThread, [this]()
+                            {
+                                *JobNum -= 1;
+                            });
+                        });
                 });
-                    
+            
             bAnyCaptured = true;
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("SaveDepth: Camera %d is not active"), i);
+            *JobNum -= 1;
         }
     }
 }
-
 void SVCCSimPanel::SaveSeg(int32 PoseIndex, bool& bAnyCaptured)
 {
     TArray<USegmentationCameraComponent*> SegmentationCameras;
@@ -680,7 +747,7 @@ void SVCCSimPanel::StartAutoCapture()
                 SelectedFlashPawn->MoveForward();
             }
         },
-        0.1f,
+        0.2f,
         true
     );
 }

@@ -114,13 +114,13 @@ public:
 
     UPROPERTY()
     UTextureRenderTarget2D* DepthRenderTarget = nullptr;
+    TArray<FDCPoint> PointCloudData;
     
 private:
     bool CheckComponentAndRenderTarget() const;
     
     UPROPERTY()
     USceneCaptureComponent2D* CaptureComponent = nullptr;
-    TArray<FDCPoint> PointCloudData;
     TArray<FFloat16Color> DepthData;
     
     UPROPERTY()

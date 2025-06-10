@@ -298,8 +298,13 @@ TArray<FDCPoint> UDepthCameraComponent::GeneratePointCloud()
 
     // Get camera transform
     const FTransform CameraTransform = GetComponentTransform();
-    const float HalfFOV = FMath::DegreesToRadians(FOV * 0.5f);
+    UE_LOG(LogTemp, Log, TEXT("Camera Transform: %s"), *CameraTransform.ToString());
     const float AspectRatio = static_cast<float>(Width) / Height;
+    
+    // Get the actual FOV from the capture component
+    float ActualFOV = CaptureComponent ? CaptureComponent->FOVAngle : FOV;
+    UE_LOG(LogTemp, Log, TEXT("Actual FOV: %f"), ActualFOV);
+    float HalfFOVRad = FMath::DegreesToRadians(ActualFOV * 0.5f);
 
     for (int32 Y = 0; Y < Height; ++Y)
     {
@@ -330,21 +335,19 @@ TArray<FDCPoint> UDepthCameraComponent::GeneratePointCloud()
             }
             else
             {
-                // New perspective calculation
-                // Range -1 to 1
-                float ScreenX = static_cast<float>(X) / Width * 2.0f - 1.0f;
-                // Range 1 to -1
-                float ScreenY = 1.0f - static_cast<float>(Y) / Height * 2.0f;
+                float NDC_X = (2.0f * X / (Width - 1)) - 1.0f;
+                float NDC_Y = 1.0f - (2.0f * Y / (Height - 1));
                 
-                // Scale by FOV
-                ScreenX *= AspectRatio * FMath::Tan(HalfFOV);
-                ScreenY *= FMath::Tan(HalfFOV);
-
-                // Create camera space position
+                float TanHalfHorizontalFOV = FMath::Tan(HalfFOVRad);
+                float TanHalfVerticalFOV = TanHalfHorizontalFOV / AspectRatio;
+                
+                float ViewX = NDC_X * TanHalfHorizontalFOV * Depth;
+                float ViewY = NDC_Y * TanHalfVerticalFOV * Depth;
+                
                 FVector CameraSpacePos(
-                    Depth,                  // Forward
-                    ScreenX * Depth,        // Right
-                    ScreenY * Depth         // Up
+                    Depth,      // Forward
+                    ViewX,      // Right
+                    ViewY       // Up
                 );
                 
                 // Transform to world space
@@ -372,13 +375,8 @@ TArray<float> UDepthCameraComponent::GetDepthImage()
         return DepthImage;
     }
     
-    // Check success: Depth Data always be empty
-    // UE_LOG(LogTemp, Log, TEXT("GetDepthImage: Depth data is available!!"));
-    
-    // Convert FFloat16Color to float depth values
     for (const FFloat16Color& Color : DepthData)
     {
-        // Usually depth is stored in the R channel for single-channel depth
         DepthImage.Add(Color.R.GetFloat());
     }
 
@@ -389,9 +387,19 @@ void UDepthCameraComponent::VisualizePointCloud()
 {
     // Draw the point cloud. Debug only
     UWorld* World = GetWorld();
-    if (!World) return;
+    if (!World)
+    {
+        UE_LOG(LogTemp, Error, TEXT("VisualizePointCloud: World is null!"));
+        return;
+    }
+    int i = 0;
     for (const FDCPoint& Point : PointCloudData)
     {
+        if (i % 100 == 0) // Draw every 100th point for performance
+        {
+            i++;
+            continue;
+        }
         DrawDebugPoint(World, Point.Location, 5.0f, FColor::Red,
             false, -1.0f);
     }

@@ -19,6 +19,7 @@
 
 #include "CoreMinimal.h"
 #include "Async/AsyncWork.h"
+#include "Sensors/DepthCamera.h"
 
 class FAsyncImageSaveTask : public FNonAbandonableTask
 {
@@ -45,7 +46,6 @@ private:
     FString FilePath;
 };
 
-// New class for 16-bit depth image saving
 class FAsyncDepth16SaveTask : public FNonAbandonableTask
 {
 public:
@@ -73,4 +73,26 @@ private:
     FIntPoint Size;
     FString FilePath;
     float DepthScale;
+};
+
+class FAsyncPLYSaveTask : public FNonAbandonableTask
+{
+public:
+    FAsyncPLYSaveTask(const TArray<FDCPoint>& InPointCloud, const FString& InFilePath)
+        : PointCloud(InPointCloud)
+        , FilePath(InFilePath)
+    {
+    }
+
+    void DoWork();
+    
+    FORCEINLINE TStatId GetStatId() const
+    {
+        RETURN_QUICK_DECLARE_CYCLE_STAT(FAsyncPLYSaveTask,
+            STATGROUP_ThreadPoolAsyncTasks);
+    }
+
+private:
+    TArray<FDCPoint> PointCloud;
+    FString FilePath;
 };
