@@ -55,7 +55,7 @@ class ImageDifferenceAnalyzer:
         self.img_height = 912
         self.fov = 67.38
         
-        # Calculate FOV parameters (using the correct approach from generator script)
+        # Calculate FOV parameters
         self.aspect_ratio = float(self.img_width) / self.img_height
         half_fov_rad = np.radians(self.fov * 0.5)
         self.tan_half_horizontal_fov = np.tan(half_fov_rad)
@@ -76,26 +76,21 @@ class ImageDifferenceAnalyzer:
         (self.output_dir / 'metrics').mkdir(exist_ok=True)
         (self.output_dir / 'data').mkdir(exist_ok=True)
         
-        print(f"Output directory created: {self.output_dir}")
-        print(f"Camera parameters: {self.img_width}x{self.img_height}, FOV: {self.fov}°, Aspect: {self.aspect_ratio:.3f}")
+        print(f"Output directory: {self.output_dir}")
         
     def load_poses(self) -> pd.DataFrame:
         """Load pose information from txt file and get corresponding image names."""
         try:
-            # Read poses from txt file (no headers, format: x y z pitch yaw roll in UE coordinates)
             poses_data = np.loadtxt(self.poses_file)
-            
-            # Get sorted list of rendered images to match with poses
             rendered_images = sorted([f.name for f in self.rendered_images_dir.glob("*.png")])
             self.image_names = rendered_images
             
             if len(poses_data) != len(rendered_images):
-                print(f"Warning: Number of poses ({len(poses_data)}) doesn't match number of images ({len(rendered_images)})")
                 min_count = min(len(poses_data), len(rendered_images))
                 poses_data = poses_data[:min_count]
                 self.image_names = rendered_images[:min_count]
             
-            # Create DataFrame with UE coordinates (in centimeters and degrees)
+            # Create DataFrame with UE coordinates
             ue_poses = []
             for i, pose in enumerate(poses_data):
                 ue_x, ue_y, ue_z, ue_pitch, ue_yaw, ue_roll = pose
@@ -103,12 +98,10 @@ class ImageDifferenceAnalyzer:
                     self.image_names[i], ue_x, ue_y, ue_z, ue_yaw, ue_pitch, ue_roll
                 ])
             
-            # Create DataFrame with UE coordinate naming
             self.poses_df = pd.DataFrame(ue_poses, 
                                        columns=['name', 'x', 'y', 'z', 'yaw', 'pitch', 'roll'])
             
             print(f"Loaded {len(self.poses_df)} pose entries")
-            print(f"Using UE coordinate system (left-handed, centimeters)")
             return self.poses_df
             
         except Exception as e:
@@ -125,8 +118,6 @@ class ImageDifferenceAnalyzer:
         
         real_img = cv2.imread(str(real_path))
         rendered_img = cv2.imread(str(rendered_path))
-        
-        # Load depth image as 16-bit (values directly in centimeters)
         depth_img = cv2.imread(str(depth_path), cv2.IMREAD_UNCHANGED) if depth_path.exists() else None
         
         if real_img is not None:
@@ -169,13 +160,10 @@ class ImageDifferenceAnalyzer:
     def create_valid_mask(self, aligned_img: np.ndarray) -> np.ndarray:
         """Create mask to exclude black edges from aligned images."""
         if len(aligned_img.shape) == 3:
-            # Color image: all channels must be non-zero
-            valid_mask = np.all(aligned_img > 5, axis=2)  # Use threshold > 5 to handle near-black artifacts
+            valid_mask = np.all(aligned_img > 5, axis=2)
         else:
-            # Grayscale image
             valid_mask = aligned_img > 5
         
-        # Morphological operations to clean up the mask
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
         valid_mask = cv2.morphologyEx(valid_mask.astype(np.uint8), cv2.MORPH_CLOSE, kernel)
         valid_mask = cv2.morphologyEx(valid_mask, cv2.MORPH_OPEN, kernel)
@@ -191,20 +179,16 @@ class ImageDifferenceAnalyzer:
             h, w = min(img1.shape[0], img2.shape[0]), min(img1.shape[1], img2.shape[1])
             img1, img2 = img1[:h, :w], img2[:h, :w]
         
-        # Create valid mask to exclude black edges
         valid_mask = self.create_valid_mask((img2 * 255).astype(np.uint8))
         
-        if np.sum(valid_mask) < 0.1 * valid_mask.size:  # Less than 10% valid pixels
-            print("Warning: Very few valid pixels after alignment, using full image")
+        if np.sum(valid_mask) < 0.1 * valid_mask.size:
             valid_mask = np.ones(img1.shape[:2], dtype=bool)
         
-        # Apply mask to flatten only valid pixels
         img1_valid = img1[valid_mask]
         img2_valid = img2[valid_mask]
         
         mse = float(mean_squared_error(img1_valid, img2_valid))
         
-        # For SSIM and PSNR, we need the full images, so create masked versions
         img1_masked = img1.copy()
         img2_masked = img2.copy()
         img1_masked[~valid_mask] = 0
@@ -225,12 +209,10 @@ class ImageDifferenceAnalyzer:
             min_h, min_w = min(img1.shape[0], img2.shape[0]), min(img1.shape[1], img2.shape[1])
             img1, img2 = img1[:min_h, :min_w], img2[:min_h, :min_w]
         
-        # Create valid mask to exclude black edges
         valid_mask = self.create_valid_mask(img2)
-        
         metrics = {}
         
-        # LAB color space analysis - only on valid pixels
+        # LAB color space analysis
         img1_lab = cv2.cvtColor(img1, cv2.COLOR_RGB2LAB)
         img2_lab = cv2.cvtColor(img2, cv2.COLOR_RGB2LAB)
         
@@ -238,7 +220,7 @@ class ImageDifferenceAnalyzer:
         img2_lab_valid = img2_lab[valid_mask]
         metrics['lab_color_diff'] = float(np.mean(np.abs(img1_lab_valid.astype(np.float32) - img2_lab_valid.astype(np.float32))))
         
-        # Histogram comparison - only on valid pixels
+        # Histogram comparison
         for i, channel in enumerate(['r', 'g', 'b']):
             img1_channel_valid = img1[valid_mask, i]
             img2_channel_valid = img2[valid_mask, i]
@@ -252,14 +234,13 @@ class ImageDifferenceAnalyzer:
             correlation = float(cv2.compareHist(hist1.astype(np.float32), hist2.astype(np.float32), cv2.HISTCMP_CORREL))
             metrics[f'hist_corr_{channel}'] = correlation
         
-        # Texture analysis using LBP - on full images but mask applied later
+        # Texture analysis using LBP
         gray1 = cv2.cvtColor(img1, cv2.COLOR_RGB2GRAY)
         gray2 = cv2.cvtColor(img2, cv2.COLOR_RGB2GRAY)
         
         lbp1 = local_binary_pattern(gray1, 24, 8, method='uniform')
         lbp2 = local_binary_pattern(gray2, 24, 8, method='uniform')
         
-        # Apply mask to LBP results
         lbp1_valid = lbp1[valid_mask]
         lbp2_valid = lbp2[valid_mask]
         
@@ -278,14 +259,11 @@ class ImageDifferenceAnalyzer:
         img1_float = img1.astype(np.float32) / 255.0
         img2_float = img2.astype(np.float32) / 255.0
         
-        # Create valid mask to exclude black edges
         valid_mask = self.create_valid_mask(img2)
         
-        # Compute difference maps
         mse_map = np.mean((img1_float - img2_float) ** 2, axis=2)
         mae_map = np.mean(np.abs(img1_float - img2_float), axis=2)
         
-        # Mask out invalid regions (set to 0 so they won't be detected as problems)
         mse_map[~valid_mask] = 0
         mae_map[~valid_mask] = 0
         
@@ -328,18 +306,13 @@ class ImageDifferenceAnalyzer:
         return problematic_mask.astype(bool)
     
     def create_rotation_matrix(self, yaw: float, pitch: float, roll: float) -> np.ndarray:
-        """
-        Create rotation matrix compatible with Unreal Engine's coordinate system.
-        Based on the correct implementation from the generator script.
-        """
-        # Adjust yaw to match UE convention
+        """Create rotation matrix compatible with Unreal Engine's coordinate system."""
         yaw = -yaw
         
         cos_yaw, sin_yaw = np.cos(yaw), np.sin(yaw)
         cos_pitch, sin_pitch = np.cos(pitch), np.sin(pitch)
         cos_roll, sin_roll = np.cos(roll), np.sin(roll)
         
-        # Individual rotation matrices
         R_roll = np.array([
             [1, 0, 0],
             [0, cos_roll, -sin_roll],
@@ -358,73 +331,115 @@ class ImageDifferenceAnalyzer:
             [0, 0, 1]
         ])
         
-        # Combined rotation: Roll -> Pitch -> Yaw
         return R_roll @ R_pitch @ R_yaw
     
     def _transform_to_original_space(self, x_aligned: float, y_aligned: float, 
                                    transform_matrix: np.ndarray) -> Tuple[float, float]:
-        """
-        Transform pixel coordinates from aligned space back to original space.
-        This ensures we use the correct depth values from the original depth image.
-        """
+        """Transform pixel coordinates from aligned space back to original space."""
         if transform_matrix is None or np.allclose(transform_matrix, np.eye(3)):
             return x_aligned, y_aligned
         
         try:
-            # Convert to homogeneous coordinates
             aligned_coords = np.array([[x_aligned, y_aligned, 1.0]]).T
-            
-            # Apply inverse transformation to get original coordinates
             inv_transform = np.linalg.inv(transform_matrix)
             original_coords = inv_transform @ aligned_coords
             
-            # Normalize homogeneous coordinates
-            if abs(original_coords[2, 0]) > 1e-10:  # Avoid division by zero
+            if abs(original_coords[2, 0]) > 1e-10:
                 x_original = original_coords[0, 0] / original_coords[2, 0]
                 y_original = original_coords[1, 0] / original_coords[2, 0]
             else:
                 x_original, y_original = x_aligned, y_aligned
             
-            # Clamp coordinates to image bounds
             x_original = np.clip(x_original, 0, self.img_width - 1)
             y_original = np.clip(y_original, 0, self.img_height - 1)
             
             return float(x_original), float(y_original)
             
-        except (np.linalg.LinAlgError, ValueError) as e:
-            # Handle singular matrix or other errors
-            print(f"Warning: Transform error ({e}), using aligned coordinates")
+        except (np.linalg.LinAlgError, ValueError):
             return x_aligned, y_aligned
+
+    def _find_nearest_valid_depth(self, depth_img: np.ndarray, x: int, y: int, radius: int = 3) -> float:
+        """Find nearest valid depth value around given coordinates."""
+        h, w = depth_img.shape[:2]
+        
+        for r in range(1, radius + 1):
+            for dy in range(-r, r + 1):
+                for dx in range(-r, r + 1):
+                    ny, nx = y + dy, x + dx
+                    if 0 <= nx < w and 0 <= ny < h:
+                        depth_val = depth_img[ny, nx]
+                        if depth_val > 0:
+                            return float(depth_val)
+        return 0.0
+
+    def _find_median_depth_location(self, region_mask: np.ndarray, depth_img: np.ndarray) -> Tuple[float, float, float]:
+        """Find a pixel location that has depth close to the median depth of the region."""
+        y_coords, x_coords = np.where(region_mask)
+        depth_values = []
+        pixel_coords = []
+        
+        for i in range(len(x_coords)):
+            x, y = x_coords[i], y_coords[i]
+            depth = depth_img[y, x]
+            if depth > 0:
+                depth_values.append(depth)
+                pixel_coords.append((x, y))
+        
+        if not depth_values:
+            return 0, 0, 0
+        
+        median_depth = np.median(depth_values)
+        depth_diffs = [abs(d - median_depth) for d in depth_values]
+        min_idx = np.argmin(depth_diffs)
+        
+        best_x, best_y = pixel_coords[min_idx]
+        actual_depth = depth_values[min_idx]
+        
+        return float(best_x), float(best_y), float(actual_depth)
+
+    def _sample_region_points(self, region_mask: np.ndarray, depth_img: np.ndarray, 
+                            num_samples: int) -> List[Tuple[float, float, float]]:
+        """Sample multiple points from the region with their actual depths."""
+        y_coords, x_coords = np.where(region_mask)
+        valid_points = []
+        
+        for i in range(len(x_coords)):
+            x, y = x_coords[i], y_coords[i]
+            depth = depth_img[y, x]
+            if depth > 0:
+                valid_points.append((float(x), float(y), float(depth)))
+        
+        if not valid_points:
+            return []
+        
+        if len(valid_points) <= num_samples:
+            return valid_points
+        
+        step = len(valid_points) // num_samples
+        sampled_points = []
+        for i in range(0, len(valid_points), step):
+            if len(sampled_points) < num_samples:
+                sampled_points.append(valid_points[i])
+        
+        return sampled_points
 
     def extract_3d_positions(self, mask: np.ndarray, depth_img: np.ndarray, 
                            pose_info: Dict, transform_matrix: np.ndarray = None) -> List[Dict]:
-        """
-        Extract 3D positions of problematic regions in UE coordinate system.
-        CORRECTED VERSION with alignment transform consideration.
-        
-        Args:
-            mask: Binary mask of problematic regions (in aligned image space)
-            depth_img: Original depth image (NOT transformed - this is the ground truth)
-            pose_info: Camera pose information
-            transform_matrix: Homography matrix from image alignment (optional)
-        """
+        """Extract 3D positions per problematic region with reduced point density."""
         if depth_img is None:
             return []
         
-        # Depth values are directly in centimeters (16-bit PNG)
         if len(depth_img.shape) == 3:
-            depth_cm = depth_img[:, :, 0].astype(np.float32)  # Take first channel if multi-channel
+            depth_cm = depth_img[:, :, 0].astype(np.float32)
         else:
             depth_cm = depth_img.astype(np.float32)
         
-        # Camera pose
         cam_pos = np.array([
             float(pose_info.get('x', 0)),
             float(pose_info.get('y', 0)),
             float(pose_info.get('z', 0))
         ])
         
-        # Create rotation matrix using the correct approach
         R = self.create_rotation_matrix(
             np.radians(float(pose_info.get('yaw', 0))), 
             np.radians(float(pose_info.get('pitch', 0))), 
@@ -436,101 +451,134 @@ class ImageDifferenceAnalyzer:
         
         for label_id in range(1, num_labels):
             region_mask = (labels == label_id)
-            if np.sum(region_mask) < 50:
+            region_size = int(np.sum(region_mask))
+            
+            if region_size < 50:
                 continue
             
             y_coords, x_coords = np.where(region_mask)
             
-            # Get center coordinates in aligned image space
             center_x_aligned = float(np.mean(x_coords))
             center_y_aligned = float(np.mean(y_coords))
             
-            # ✅ CRITICAL FIX: Transform coordinates back to original space
-            # This ensures we get the correct depth value from the original depth image
-            center_x_original, center_y_original = self._transform_to_original_space(
+            center_x_orig, center_y_orig = self._transform_to_original_space(
                 center_x_aligned, center_y_aligned, transform_matrix
             )
             
-            # Sample depth values around the original center point for robustness
-            x_int, y_int = int(round(center_x_original)), int(round(center_y_original))
+            # Reduced sampling: fewer points per region
+            if region_size < 200:
+                num_samples = 1  # Only center + median
+            elif region_size < 1000:
+                num_samples = 2  # Center + median + 2 samples
+            else:
+                num_samples = 3  # Center + median + 3 samples (max 5 total)
             
-            # Sample in a small neighborhood to get robust depth estimate
-            sample_size = 3
-            x_min = max(0, x_int - sample_size)
-            x_max = min(depth_cm.shape[1], x_int + sample_size + 1)
-            y_min = max(0, y_int - sample_size)
-            y_max = min(depth_cm.shape[0], y_int + sample_size + 1)
+            region_points = []
             
-            depth_sample = depth_cm[y_min:y_max, x_min:x_max]
-            valid_depths = depth_sample[depth_sample > 0]
-            
-            if len(valid_depths) == 0:
-                continue
+            # 1. CENTER POINT
+            x_int, y_int = int(round(center_x_orig)), int(round(center_y_orig))
+            if 0 <= x_int < depth_cm.shape[1] and 0 <= y_int < depth_cm.shape[0]:
+                center_depth = float(depth_cm[y_int, x_int])
                 
-            mean_depth = float(np.mean(valid_depths))
+                if center_depth == 0:
+                    center_depth = self._find_nearest_valid_depth(depth_cm, x_int, y_int, radius=3)
+                
+                if center_depth > 0:
+                    region_points.append({
+                        'pixel_coords_orig': (center_x_orig, center_y_orig),
+                        'pixel_coords_aligned': (center_x_aligned, center_y_aligned),
+                        'depth': center_depth,
+                        'point_type': 'center'
+                    })
             
-            # Convert to NDC coordinates using ORIGINAL coordinates
-            ndc_x = (2.0 * center_x_original / (self.img_width - 1)) - 1.0
-            ndc_y = 1.0 - (2.0 * center_y_original / (self.img_height - 1))
+            # 2. MEDIAN DEPTH POINT (only if different from center)
+            median_x, median_y, median_depth = self._find_median_depth_location(region_mask, depth_cm)
+            if median_depth > 0:
+                if transform_matrix is not None:
+                    median_x_orig, median_y_orig = self._transform_to_original_space(
+                        median_x, median_y, transform_matrix
+                    )
+                else:
+                    median_x_orig, median_y_orig = median_x, median_y
+                
+                # Only add if significantly different from center
+                if abs(median_x - center_x_aligned) > 5 or abs(median_y - center_y_aligned) > 5:
+                    region_points.append({
+                        'pixel_coords_orig': (median_x_orig, median_y_orig),
+                        'pixel_coords_aligned': (median_x, median_y),
+                        'depth': median_depth,
+                        'point_type': 'median'
+                    })
             
-            # Calculate view space coordinates
-            view_x = ndc_x * self.tan_half_horizontal_fov * mean_depth
-            view_y = ndc_y * self.tan_half_vertical_fov * mean_depth
+            # 3. ADDITIONAL SAMPLE POINTS (reduced count)
+            sample_points = self._sample_region_points(region_mask, depth_cm, num_samples)
+            for i, (sample_x, sample_y, sample_depth) in enumerate(sample_points):
+                if transform_matrix is not None:
+                    sample_x_orig, sample_y_orig = self._transform_to_original_space(
+                        sample_x, sample_y, transform_matrix
+                    )
+                else:
+                    sample_x_orig, sample_y_orig = sample_x, sample_y
+                
+                region_points.append({
+                    'pixel_coords_orig': (sample_x_orig, sample_y_orig),
+                    'pixel_coords_aligned': (sample_x, sample_y),
+                    'depth': sample_depth,
+                    'point_type': f'sample_{i+1}'
+                })
             
-            # Camera space position (UE: X=Forward, Y=Right, Z=Up)
-            camera_space = np.array([
-                mean_depth,  # Forward (X)
-                view_x,      # Right (Y)  
-                view_y       # Up (Z)
-            ])
-            
-            # Transform to world space using the corrected approach
-            world_pos = (R.T @ camera_space) + cam_pos
-            x_world, y_world, z_world = world_pos
-            
-            positions_3d.append({
-                'region_id': int(label_id),
-                'pixel_center_aligned': (center_x_aligned, center_y_aligned),      # Where problem was detected
-                'pixel_center_original': (center_x_original, center_y_original),    # Where we sample depth
-                'ndc_coords': (float(ndc_x), float(ndc_y)),
-                'view_coords': (float(view_x), float(view_y)),
-                'world_position': (float(x_world), float(y_world), float(z_world)),
-                'camera_relative': (float(camera_space[0]), float(camera_space[1]), float(camera_space[2])),
-                'region_size': int(np.sum(region_mask)),
-                'mean_depth': float(mean_depth),
-                'coordinate_transform_applied': transform_matrix is not None and not np.allclose(transform_matrix, np.eye(3))
-            })
+            # Convert all region points to 3D world coordinates
+            for point_idx, point_data in enumerate(region_points):
+                x_orig, y_orig = point_data['pixel_coords_orig']
+                x_aligned, y_aligned = point_data['pixel_coords_aligned']
+                depth = point_data['depth']
+                point_type = point_data['point_type']
+                
+                ndc_x = (2.0 * x_orig / (self.img_width - 1)) - 1.0
+                ndc_y = 1.0 - (2.0 * y_orig / (self.img_height - 1))
+                
+                view_x = ndc_x * self.tan_half_horizontal_fov * depth
+                view_y = ndc_y * self.tan_half_vertical_fov * depth
+                
+                camera_space = np.array([depth, view_x, view_y])
+                world_pos = (R.T @ camera_space) + cam_pos
+                x_world, y_world, z_world = world_pos
+                
+                positions_3d.append({
+                    'region_id': int(label_id),
+                    'point_id': f"{label_id}_{point_type}",
+                    'point_type': point_type,
+                    'point_index_in_region': point_idx,
+                    'pixel_center_aligned': (x_aligned, y_aligned),
+                    'pixel_center_original': (x_orig, y_orig),
+                    'ndc_coords': (float(ndc_x), float(ndc_y)),
+                    'view_coords': (float(view_x), float(view_y)),
+                    'world_position': (float(x_world), float(y_world), float(z_world)),
+                    'camera_relative': (float(camera_space[0]), float(camera_space[1]), float(camera_space[2])),
+                    'region_size': region_size,
+                    'mean_depth': float(depth),
+                    'total_points_in_region': len(region_points),
+                    'coordinate_transform_applied': transform_matrix is not None and not np.allclose(transform_matrix, np.eye(3))
+                })
         
         return positions_3d
 
     def validate_3d_positions(self, positions_3d: List[Dict], image_name: str):
-        """Validate extracted 3D positions with debug output including coordinate transform info."""
+        """Validate extracted 3D positions with reduced verbosity."""
         if not positions_3d:
             return
         
-        print(f"\nDEBUG - 3D Position Validation for {image_name}:")
-        print(f"Extracted {len(positions_3d)} regions")
+        regions = {}
+        for pos in positions_3d:
+            region_id = pos['region_id']
+            if region_id not in regions:
+                regions[region_id] = []
+            regions[region_id].append(pos)
         
-        transform_applied = any(pos.get('coordinate_transform_applied', False) for pos in positions_3d)
-        print(f"Coordinate transform applied: {transform_applied}")
+        total_points = len(positions_3d)
+        avg_points_per_region = total_points / len(regions) if regions else 0
         
-        for i, pos in enumerate(positions_3d[:3]):  # Show first 3 regions
-            print(f"  Region {i+1}:")
-            if 'pixel_center_aligned' in pos:
-                print(f"    Pixel (aligned): ({pos['pixel_center_aligned'][0]:.1f}, {pos['pixel_center_aligned'][1]:.1f})")
-                print(f"    Pixel (original): ({pos['pixel_center_original'][0]:.1f}, {pos['pixel_center_original'][1]:.1f})")
-            else:
-                # Backward compatibility
-                pixel_center = pos.get('pixel_center', (0, 0))
-                print(f"    Pixel: ({pixel_center[0]:.1f}, {pixel_center[1]:.1f})")
-            
-            print(f"    NDC: ({pos['ndc_coords'][0]:.3f}, {pos['ndc_coords'][1]:.3f})")
-            print(f"    View: ({pos['view_coords'][0]:.1f}, {pos['view_coords'][1]:.1f})")
-            print(f"    Depth: {pos['mean_depth']:.1f} cm")
-            print(f"    World: ({pos['world_position'][0]:.1f}, {pos['world_position'][1]:.1f}, {pos['world_position'][2]:.1f})")
-            
-            if pos.get('coordinate_transform_applied', False):
-                print(f"    ✅ Coordinates corrected for alignment")
+        print(f"3D positions for {image_name}: {total_points} points from {len(regions)} regions (avg: {avg_points_per_region:.1f}/region)")
 
     def save_visualization(self, image_name: str, real_img: np.ndarray, rendered_img: np.ndarray, 
                           depth_img: np.ndarray, basic_metrics: Dict, perceptual_metrics: Dict,
@@ -554,7 +602,6 @@ class ImageDifferenceAnalyzer:
         
         ax3 = fig.add_subplot(gs[0, 2])
         if depth_img is not None:
-            # Depth values are directly in centimeters (16-bit PNG)
             if len(depth_img.shape) == 3:
                 depth_display = depth_img[:, :, 0]
             else:
@@ -567,7 +614,7 @@ class ImageDifferenceAnalyzer:
             ax3.set_title('Depth Image', fontweight='bold')
         ax3.axis('off')
         
-        # Metrics summary with mask info
+        # Metrics summary
         ax4 = fig.add_subplot(gs[0, 3])
         ax4.axis('off')
         valid_ratio = basic_metrics.get('valid_pixel_ratio', 1.0)
@@ -579,10 +626,7 @@ MAE: {basic_metrics.get('mae', 0):.4f}
 LAB Diff: {perceptual_metrics.get('lab_color_diff', 0):.2f}
 Texture: {perceptual_metrics.get('texture_lbp_diff', 0):.3f}
 
-Valid Pixels: {valid_ratio*100:.1f}%
-Image: {self.img_width}x{self.img_height}
-FOV: {self.fov}°
-Aspect: {self.aspect_ratio:.3f}"""
+Valid Pixels: {valid_ratio*100:.1f}%"""
         
         ax4.text(0.05, 0.95, metrics_text, transform=ax4.transAxes, fontsize=9,
                 verticalalignment='top', fontfamily='monospace',
@@ -600,20 +644,19 @@ Aspect: {self.aspect_ratio:.3f}"""
                 ax.set_title(title, fontsize=10)
                 ax.axis('off')
         
-        # Problem regions: Show on RENDERED image (where the problems are)
+        # Problem regions
         region_titles = ['MSE Problems', 'LAB Problems', 'Gradient Problems', 'Combined Problems']
         region_keys = ['mse', 'lab', 'gradient']
         
         for i, (key, title) in enumerate(zip(region_keys, region_titles[:3])):
             if key in problematic_regions:
                 ax = fig.add_subplot(gs[2, i])
-                # ✅ FIXED: Show problems on the rendered image where they actually occur
                 ax.imshow(rendered_img)
                 ax.imshow(problematic_regions[key], alpha=0.6, cmap='Reds')
                 ax.set_title(title, fontsize=10)
                 ax.axis('off')
         
-        # Combined regions on rendered image
+        # Combined regions
         if problematic_regions:
             ax = fig.add_subplot(gs[2, 3])
             ax.imshow(rendered_img)
@@ -628,10 +671,8 @@ Aspect: {self.aspect_ratio:.3f}"""
         for i, (channel, color) in enumerate(zip(['R', 'G', 'B'], ['red', 'green', 'blue'])):
             ax = fig.add_subplot(gs[3, i])
             
-            # Create valid mask for histogram calculation
             valid_mask = self.create_valid_mask(rendered_img)
             
-            # Calculate histograms only on valid pixels
             real_channel_valid = real_img[valid_mask, i]
             rendered_channel_valid = rendered_img[valid_mask, i]
             
@@ -641,19 +682,17 @@ Aspect: {self.aspect_ratio:.3f}"""
             bin_centers = (bins[:-1] + bins[1:]) / 2
             ax.plot(bin_centers, hist_real, color=color, alpha=0.7, label='Real')
             ax.plot(bin_centers, hist_rendered, color=color, alpha=0.7, label='Rendered', linestyle='--')
-            ax.set_title(f'{channel} Histogram (Valid Pixels)', fontsize=10)
+            ax.set_title(f'{channel} Histogram', fontsize=10)
             ax.legend()
             ax.grid(True, alpha=0.3)
         
         # Side-by-side comparison
         ax_compare = fig.add_subplot(gs[3, 3])
-        # Create side-by-side comparison
         comparison_height = min(real_img.shape[0], rendered_img.shape[0])
         real_resized = real_img[:comparison_height, :]
         rendered_resized = rendered_img[:comparison_height, :]
         
-        # Add a separator line
-        separator = np.ones((comparison_height, 3, 3)) * 255  # White separator
+        separator = np.ones((comparison_height, 3, 3)) * 255
         comparison = np.hstack([real_resized, separator, rendered_resized])
         
         ax_compare.imshow(comparison.astype(np.uint8))
@@ -698,7 +737,7 @@ Aspect: {self.aspect_ratio:.3f}"""
                 positions_3d[map_name] = self.extract_3d_positions(
                     problematic_regions[map_name], depth_img, pose_info, transform_matrix)
             
-            # Validate 3D positions (debugging)
+            # Validate 3D positions
             if positions_3d.get('mse'):
                 self.validate_3d_positions(positions_3d['mse'], image_name)
             
@@ -733,12 +772,10 @@ Aspect: {self.aspect_ratio:.3f}"""
             
         except Exception as e:
             print(f"Error analyzing {image_name}: {e}")
-            import traceback
-            traceback.print_exc()
             return {}
 
 def analyze_image_worker(args):
-    """Worker function for parallel processing with alignment correction."""
+    """Worker function for parallel processing."""
     image_name, data_root, img_width, img_height, fov, output_dir = args
     
     try:
@@ -753,7 +790,6 @@ def analyze_image_worker(args):
         analyzer.fov = fov
         analyzer.aspect_ratio = float(img_width) / img_height
         
-        # Calculate FOV parameters correctly
         half_fov_rad = np.radians(fov * 0.5)
         analyzer.tan_half_horizontal_fov = np.tan(half_fov_rad)
         analyzer.tan_half_vertical_fov = analyzer.tan_half_horizontal_fov / analyzer.aspect_ratio
@@ -761,11 +797,9 @@ def analyze_image_worker(args):
         analyzer.output_dir = Path(output_dir)
         
         try:
-            # Load poses
             poses_data = np.loadtxt(analyzer.poses_file)
             rendered_images = sorted([f.name for f in analyzer.rendered_images_dir.glob("*.png")])
             
-            # Find index of current image
             img_index = rendered_images.index(image_name)
             if img_index < len(poses_data):
                 pose = poses_data[img_index]
@@ -778,9 +812,12 @@ def analyze_image_worker(args):
         except:
             analyzer.poses_df = None
         
-        # Add the required methods to the worker analyzer instance
+        # Add required methods
         analyzer.create_valid_mask = ImageDifferenceAnalyzer.create_valid_mask.__get__(analyzer)
         analyzer._transform_to_original_space = ImageDifferenceAnalyzer._transform_to_original_space.__get__(analyzer)
+        analyzer._find_nearest_valid_depth = ImageDifferenceAnalyzer._find_nearest_valid_depth.__get__(analyzer)
+        analyzer._find_median_depth_location = ImageDifferenceAnalyzer._find_median_depth_location.__get__(analyzer)
+        analyzer._sample_region_points = ImageDifferenceAnalyzer._sample_region_points.__get__(analyzer)
         analyzer.create_rotation_matrix = ImageDifferenceAnalyzer.create_rotation_matrix.__get__(analyzer)
         
         result = analyzer.analyze_single_image(image_name, save_vis=True)
@@ -804,8 +841,7 @@ class OptimizedImageDifferenceAnalyzer(ImageDifferenceAnalyzer):
         
         image_names = self.poses_df['name'].head(max_images).tolist() if max_images else self.poses_df['name'].tolist()
         
-        print(f"Starting parallel analysis of {len(image_names)} images using {self.n_workers} workers...")
-        print(f"Image specifications: {self.img_width}x{self.img_height}, FOV: {self.fov}°, Aspect: {self.aspect_ratio:.3f}")
+        print(f"Analyzing {len(image_names)} images using {self.n_workers} workers...")
         
         worker_args = [(name, str(self.data_root), self.img_width, self.img_height, self.fov, str(self.output_dir)) 
                       for name in image_names]
@@ -918,28 +954,24 @@ class OptimizedImageDifferenceAnalyzer(ImageDifferenceAnalyzer):
         plt.close()
         
         # Print summary
-        print(f"\n{'='*80}")
-        print("ANALYSIS SUMMARY")
-        print(f"{'='*80}")
+        print(f"\nANALYSIS SUMMARY")
         print(f"Output directory: {self.output_dir}")
         print(f"Total images: {self.results['total_images_analyzed']}")
         print(f"Processing time: {self.results['processing_time_seconds']:.2f}s")
         print(f"Speed: {self.results['images_per_second']:.2f} images/sec")
-        print(f"Image specs: {self.img_width}x{self.img_height}, FOV: {self.fov}°, Aspect: {self.aspect_ratio:.3f}")
         
-        for metric, stats in summary_stats.items():
-            print(f"\n{metric.upper().replace('_', ' ')}:")
-            print(f"  Mean: {stats['mean']:.4f} ± {stats['std']:.4f}")
-            print(f"  Range: [{stats['min']:.4f}, {stats['max']:.4f}]")
-        print(f"{'='*80}")
+        key_metrics = ['mse', 'ssim', 'psnr']
+        for metric in key_metrics:
+            if metric in summary_stats:
+                stats = summary_stats[metric]
+                print(f"{metric.upper()}: {stats['mean']:.4f} ± {stats['std']:.4f}")
 
 # Usage
 if __name__ == "__main__":
     analyzer = OptimizedImageDifferenceAnalyzer("./Source/Tools/DGE/data", n_workers=8)
     analyzer.load_poses()
     
-    # Analyze all images (remove max_images for full dataset)
-    # Now with improved coordinate alignment correction for precise 3D positioning
+    # Analyze with reduced point generation per region
     results = analyzer.analyze_all_images_parallel(max_images=5)
     
-    print("Analysis completed with alignment-corrected 3D positioning!")
+    print("Analysis completed with optimized point generation!")

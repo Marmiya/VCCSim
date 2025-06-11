@@ -98,7 +98,6 @@ def find_newest_analysis_directory(base_dir: str) -> Optional[str]:
             if match:
                 timestamp_str = match.group(1)
                 try:
-                    # Parse timestamp to ensure it's valid
                     timestamp = datetime.strptime(timestamp_str, "%Y%m%d_%H%M%S")
                     analysis_dirs.append((timestamp, item))
                 except ValueError:
@@ -112,8 +111,7 @@ def find_newest_analysis_directory(base_dir: str) -> Optional[str]:
     analysis_dirs.sort(key=lambda x: x[0], reverse=True)
     newest_dir = analysis_dirs[0][1]
     
-    print(f"Found {len(analysis_dirs)} analysis directories")
-    print(f"Selected newest directory: {newest_dir}")
+    print(f"Selected analysis directory: {newest_dir}")
     return str(newest_dir)
 
 class EnhancedErrorPointCloudGenerator:
@@ -136,9 +134,7 @@ class EnhancedErrorPointCloudGenerator:
         }
         
         print(f"Initialized Enhanced UE Error Point Cloud Generator")
-        print(f"Analysis directory: {self.analysis_dir}")
         print(f"Output directory: {self.output_dir}")
-        print(f"Depth format: 16-bit PNG with direct centimeter values")
     
     def load_analysis_results(self, image_selection_mode: str = "all", 
                             image_start: int = 0, image_end: int = None,
@@ -152,43 +148,39 @@ class EnhancedErrorPointCloudGenerator:
             return results
         
         json_files = sorted(list(self.data_dir.glob('*_data.json')))
-        print(f"Found {len(json_files)} total analysis result files")
         
         # Apply image selection filter
         selected_files = []
         
         if image_selection_mode == "all":
             selected_files = json_files
-            print("Selected: All images")
             
         elif image_selection_mode == "range":
             end_idx = image_end if image_end is not None else len(json_files)
-            end_idx = min(end_idx, len(json_files))  # Clamp to available files
-            start_idx = max(0, min(image_start, len(json_files) - 1))  # Clamp start
+            end_idx = min(end_idx, len(json_files))
+            start_idx = max(0, min(image_start, len(json_files) - 1))
             
             selected_files = json_files[start_idx:end_idx]
-            print(f"Selected: Range [{start_idx}:{end_idx}] = {len(selected_files)} images")
+            print(f"Selected range [{start_idx}:{end_idx}] = {len(selected_files)} images")
             
         elif image_selection_mode == "specific":
             if specific_images:
                 for idx in specific_images:
                     if 0 <= idx < len(json_files):
                         selected_files.append(json_files[idx])
-                print(f"Selected: Specific images {specific_images} = {len(selected_files)} images")
+                print(f"Selected specific images {specific_images} = {len(selected_files)} images")
             else:
-                print("Warning: No specific images provided, using all images")
                 selected_files = json_files
                 
         elif image_selection_mode == "single":
             if single_image is not None and 0 <= single_image < len(json_files):
                 selected_files = [json_files[single_image]]
-                print(f"Selected: Single image {single_image}")
+                print(f"Selected single image {single_image}")
             else:
-                print(f"Warning: Invalid single image index {single_image}, using first image")
+                print(f"Invalid single image index {single_image}, using first image")
                 selected_files = [json_files[0]] if json_files else []
                 
         else:
-            print(f"Warning: Unknown selection mode '{image_selection_mode}', using all images")
             selected_files = json_files
         
         # Load selected files
@@ -196,12 +188,12 @@ class EnhancedErrorPointCloudGenerator:
             try:
                 with open(json_file, 'r') as f:
                     data = json.load(f)
-                    if data:  # Only add non-empty results
+                    if data:
                         results.append(data)
             except Exception as e:
                 print(f"Error loading {json_file}: {e}")
         
-        print(f"Successfully loaded {len(results)} analysis results")
+        print(f"Loaded {len(results)} analysis results")
         return results
     
     def extract_error_points(self, results: List[Dict]) -> Tuple[List[Dict], List[Dict]]:
@@ -526,7 +518,6 @@ class EnhancedErrorPointCloudGenerator:
                             generate_both_coordinates: bool = True):
         """Main function to generate point clouds from analysis results."""
         print("Starting Enhanced UE point cloud generation...")
-        print("Depth format: 16-bit PNG with direct centimeter values")
         
         # Load analysis results with image selection
         results = self.load_analysis_results(
@@ -591,20 +582,17 @@ class EnhancedErrorPointCloudGenerator:
         self.write_summary_report(ue_points, rh_points)
         generated_files.append("pointcloud_summary.txt")
         
-        print(f"\nEnhanced point cloud generation completed!")
-        print(f"Generated files in: {self.output_dir}")
+        print(f"\nPoint cloud generation completed!")
+        print(f"Output directory: {self.output_dir}")
         print(f"UE points: {len(ue_points)}")
         if generate_both_coordinates:
             print(f"RH points: {len(rh_points)}")
-        print(f"Files generated:")
-        for file in generated_files:
-            print(f"  - {file}")
+        print(f"Files generated: {', '.join(generated_files)}")
 
 def main():
     """Main function using configuration settings."""
-    print("=" * 70)
     print("ENHANCED UE ERROR POINT CLOUD GENERATOR")
-    print("=" * 70)
+    print("=" * 40)
     
     # Determine analysis directory
     if MANUAL_ANALYSIS_DIR and not AUTO_SELECT_NEWEST:
@@ -613,34 +601,23 @@ def main():
     else:
         analysis_dir = find_newest_analysis_directory(ANALYSIS_RESULTS_BASE_DIR)
         if not analysis_dir:
-            print("❌ Could not find or access analysis directory")
+            print("Could not find or access analysis directory")
             sys.exit(1)
     
-    print("Configuration:")
-    print(f"  Analysis directory: {analysis_dir}")
-    print(f"  Image selection mode: {IMAGE_SELECTION_MODE}")
+    print(f"Analysis directory: {analysis_dir}")
+    print(f"Image selection: {IMAGE_SELECTION_MODE}")
     
     if IMAGE_SELECTION_MODE == "range":
-        print(f"  Image range: {IMAGE_START} to {IMAGE_END}")
+        print(f"Image range: {IMAGE_START} to {IMAGE_END}")
     elif IMAGE_SELECTION_MODE == "specific":
-        print(f"  Specific images: {SPECIFIC_IMAGES}")
+        print(f"Specific images: {SPECIFIC_IMAGES}")
     elif IMAGE_SELECTION_MODE == "single":
-        print(f"  Single image: {SINGLE_IMAGE}")
-    
-    print(f"  Filter error types: {FILTER_ERROR_TYPES if FILTER_ERROR_TYPES else 'All types'}")
-    print(f"  Min region size: {MIN_REGION_SIZE} pixels")
-    print(f"  Max points: {MAX_POINTS if MAX_POINTS else 'Unlimited'}")
-    print(f"  Generate camera poses: {GENERATE_CAMERA_POSES}")
-    print(f"  Generate both coordinates: {GENERATE_BOTH_COORDINATES}")
-    print(f"  Depth format: 16-bit PNG with direct centimeter values")
-    print("=" * 70)
+        print(f"Single image: {SINGLE_IMAGE}")
     
     # Check if analysis directory exists
     if not Path(analysis_dir).exists():
-        print(f"❌ Error: Analysis directory does not exist: {analysis_dir}")
+        print(f"Error: Analysis directory does not exist: {analysis_dir}")
         sys.exit(1)
-    
-    print(f"✓ Analysis directory found: {analysis_dir}")
     
     # Create generator and run
     generator = EnhancedErrorPointCloudGenerator(analysis_dir)
