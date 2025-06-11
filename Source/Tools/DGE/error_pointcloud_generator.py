@@ -1,730 +1,661 @@
+#!/usr/bin/env python3
+"""
+UE Error Point Cloud Generator - Enhanced Version
+
+This script generates point clouds from image difference analysis results,
+creating PLY files for both Unreal Engine (left-handed) and standard right-handed coordinate systems.
+
+FEATURES:
+- Automatic detection of newest analysis results directory
+- Both UE (left-handed, cm) and standard (right-handed, m) coordinate systems
+- Image range selection (specific images or ranges)
+- Comprehensive filtering options
+
+USAGE:
+1. Modify filter settings and image selection as needed
+2. Run: python ue_error_pointcloud_generator.py
+
+OUTPUT FILES:
+- error_points_ue_TIMESTAMP.ply - Error points in Unreal Engine coordinates (cm)
+- error_points_rh_TIMESTAMP.ply - Error points in right-handed coordinates (m)
+- camera_poses_ue_TIMESTAMP.ply - Camera positions in UE system (optional)
+- camera_poses_rh_TIMESTAMP.ply - Camera positions in right-handed system (optional)
+- pointcloud_summary.txt - Statistics and analysis report
+
+COORDINATE SYSTEMS:
+- UE (left-handed): X=Forward, Y=Right, Z=Up (centimeters)
+- Standard (right-handed): X=Forward, Y=Left, Z=Up (meters)
+
+DEPTH FORMAT:
+- Depth images are 16-bit PNG files with direct centimeter values (no processing required)
+- Values range from 0 to 65535 cm (0 to 655.35 meters)
+"""
+
+import json
 import numpy as np
 import pandas as pd
-import json
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-import seaborn as sns
 from pathlib import Path
-import cv2
-from typing import Dict, List, Tuple, Optional
-import open3d as o3d
-from scipy.spatial.distance import cdist
-from sklearn.cluster import DBSCAN, MiniBatchKMeans
-from sklearn.preprocessing import StandardScaler
-import warnings
-import time
-from tqdm import tqdm
-import multiprocessing as mp
-from concurrent.futures import ProcessPoolExecutor, as_completed
-warnings.filterwarnings('ignore')
+from typing import Dict, List, Tuple, Optional, Union
+import matplotlib.pyplot as plt
+from datetime import datetime
+import sys
+import glob
+import re
 
-class ErrorPointCloudGenerator:
+# ============================================================================
+# CONFIGURATION SETTINGS - Modify these values as needed
+# ============================================================================
+
+# Analysis results directory settings
+ANALYSIS_RESULTS_BASE_DIR = "./Logs/analysis_results"  # Base directory for analysis results
+AUTO_SELECT_NEWEST = True  # Automatically select newest analysis directory
+MANUAL_ANALYSIS_DIR = None  # Set this if you want to specify a particular directory
+                           # Example: "./Logs/analysis_results/20250611_173333"
+
+# Image selection settings
+IMAGE_SELECTION_MODE = "single"  # Options:
+                              # "all" - process all images
+                              # "range" - process a range of images (use IMAGE_START and IMAGE_END)
+                              # "specific" - process specific images (use SPECIFIC_IMAGES)
+                              # "single" - process a single image (use SINGLE_IMAGE)
+
+IMAGE_START = 0           # Start index for range mode (0-based)
+IMAGE_END = 10            # End index for range mode (exclusive, so 0-10 means images 0-9)
+SPECIFIC_IMAGES = [2, 5, 8, 12]  # List of specific image indices for specific mode
+SINGLE_IMAGE = 1          # Single image index for single mode
+
+# Filter settings
+FILTER_ERROR_TYPES = None  # Options:
+                          # None - include all error types
+                          # ['mse'] - only MSE errors
+                          # ['mse', 'lab'] - MSE and LAB color errors
+                          # ['mse', 'mae', 'lab', 'gradient'] - multiple types
+
+MIN_REGION_SIZE = 1      # Minimum region size in pixels (larger = fewer, bigger errors)
+MAX_POINTS = None         # Options:
+                          # None - include all points
+                          # 1000 - limit to top 1000 highest intensity errors
+                          # 5000 - limit to top 5000 points
+
+# Output settings
+GENERATE_CAMERA_POSES = True  # Generate separate PLY files with camera positions
+GENERATE_BOTH_COORDINATES = True  # Generate both UE and right-handed coordinate systems
+
+def find_newest_analysis_directory(base_dir: str) -> Optional[str]:
+    """Find the newest analysis results directory based on timestamp in directory name."""
+    base_path = Path(base_dir)
+    if not base_path.exists():
+        print(f"Base analysis directory not found: {base_dir}")
+        return None
     
-    def __init__(self, analysis_results_dir: str = "./analysis_results", 
-                 max_points: int = 100000, n_workers: int = None):
+    # Look for directories with timestamp pattern (YYYYMMDD_HHMMSS)
+    timestamp_pattern = re.compile(r'(\d{8}_\d{6})')
+    
+    analysis_dirs = []
+    for item in base_path.iterdir():
+        if item.is_dir():
+            match = timestamp_pattern.search(item.name)
+            if match:
+                timestamp_str = match.group(1)
+                try:
+                    # Parse timestamp to ensure it's valid
+                    timestamp = datetime.strptime(timestamp_str, "%Y%m%d_%H%M%S")
+                    analysis_dirs.append((timestamp, item))
+                except ValueError:
+                    continue
+    
+    if not analysis_dirs:
+        print(f"No analysis directories with timestamp pattern found in {base_dir}")
+        return None
+    
+    # Sort by timestamp and get the newest
+    analysis_dirs.sort(key=lambda x: x[0], reverse=True)
+    newest_dir = analysis_dirs[0][1]
+    
+    print(f"Found {len(analysis_dirs)} analysis directories")
+    print(f"Selected newest directory: {newest_dir}")
+    return str(newest_dir)
+
+class EnhancedErrorPointCloudGenerator:
+    """Enhanced point cloud generator with multiple coordinate systems and image selection."""
+    
+    def __init__(self, analysis_results_dir: str):
         self.analysis_dir = Path(analysis_results_dir)
-        self.data_dir = self.analysis_dir / "data"
-        self.base_output_dir = Path("./Logs/pointcloud_results")
-        self.base_output_dir.mkdir(exist_ok=True)
-        
-        self.run_timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
-        self.output_dir = self.base_output_dir / f"run_{self.run_timestamp}"
+        self.data_dir = self.analysis_dir / 'data'
+        self.output_dir = self.analysis_dir / 'pointclouds'
         self.output_dir.mkdir(exist_ok=True)
         
-        self.max_points = max_points
-        self.n_workers = n_workers or min(mp.cpu_count(), 4)
-        
-        self.error_types = ['mse', 'ssim', 'lab', 'gradient']
-        self.color_maps = {
-            'mse': np.array([1.0, 0.0, 0.0]),
-            'ssim': np.array([0.0, 0.0, 1.0]),
-            'lab': np.array([0.0, 1.0, 0.0]),
-            'gradient': np.array([1.0, 0.5, 0.0])
+        # Color schemes for different error types
+        self.error_colors = {
+            'mse': [255, 0, 0],      # Red
+            'mae': [255, 128, 0],    # Orange  
+            'lab': [255, 255, 0],    # Yellow
+            'gradient': [0, 255, 0], # Green
+            'texture': [0, 255, 255], # Cyan
+            'combined': [255, 0, 255] # Magenta
         }
         
-    def load_comprehensive_results(self) -> Dict:
-        comprehensive_file = self.analysis_dir / "comprehensive_analysis_parallel.json"
-        
-        if not comprehensive_file.exists():
-            print("Comprehensive analysis file not found!")
-            return {}
-        
-        try:
-            with open(comprehensive_file, 'r') as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"Error loading comprehensive results: {e}")
-            return {}
+        print(f"Initialized Enhanced UE Error Point Cloud Generator")
+        print(f"Analysis directory: {self.analysis_dir}")
+        print(f"Output directory: {self.output_dir}")
+        print(f"Depth format: 16-bit PNG with direct centimeter values")
     
-    def smart_filter_error_points(self, comprehensive_results: Dict, 
-                                target_points_per_type: int = 12500,
-                                max_images: int = None) -> Dict[str, List[Dict]]:
+    def load_analysis_results(self, image_selection_mode: str = "all", 
+                            image_start: int = 0, image_end: int = None,
+                            specific_images: List[int] = None, 
+                            single_image: int = None) -> List[Dict]:
+        """Load analysis result files with image selection options."""
+        results = []
         
-        print("Applying smart filtering to reduce point count...")
+        if not self.data_dir.exists():
+            print(f"Error: Data directory not found: {self.data_dir}")
+            return results
         
-        if max_images is not None:
-            print(f"Limiting to first {max_images} images for testing")
+        json_files = sorted(list(self.data_dir.glob('*_data.json')))
+        print(f"Found {len(json_files)} total analysis result files")
         
-        if 'individual_results' not in comprehensive_results:
-            return {}
+        # Apply image selection filter
+        selected_files = []
         
-        individual_results = comprehensive_results['individual_results']
-        
-        if max_images is not None:
-            image_names = list(individual_results.keys())[:max_images]
-            individual_results = {name: individual_results[name] for name in image_names}
-            print(f"Processing {len(individual_results)} images (limited from {len(comprehensive_results['individual_results'])} total)")
-        else:
-            print(f"Processing all {len(individual_results)} images")
-        
-        all_error_data = {error_type: [] for error_type in self.error_types}
-        
-        for image_name, result in tqdm(individual_results.items(), desc="Collecting error data"):
-            if 'positions_3d' not in result:
-                continue
+        if image_selection_mode == "all":
+            selected_files = json_files
+            print("Selected: All images")
+            
+        elif image_selection_mode == "range":
+            end_idx = image_end if image_end is not None else len(json_files)
+            end_idx = min(end_idx, len(json_files))  # Clamp to available files
+            start_idx = max(0, min(image_start, len(json_files) - 1))  # Clamp start
+            
+            selected_files = json_files[start_idx:end_idx]
+            print(f"Selected: Range [{start_idx}:{end_idx}] = {len(selected_files)} images")
+            
+        elif image_selection_mode == "specific":
+            if specific_images:
+                for idx in specific_images:
+                    if 0 <= idx < len(json_files):
+                        selected_files.append(json_files[idx])
+                print(f"Selected: Specific images {specific_images} = {len(selected_files)} images")
+            else:
+                print("Warning: No specific images provided, using all images")
+                selected_files = json_files
                 
-            for error_type in self.error_types:
-                if error_type not in result['positions_3d']:
+        elif image_selection_mode == "single":
+            if single_image is not None and 0 <= single_image < len(json_files):
+                selected_files = [json_files[single_image]]
+                print(f"Selected: Single image {single_image}")
+            else:
+                print(f"Warning: Invalid single image index {single_image}, using first image")
+                selected_files = [json_files[0]] if json_files else []
+                
+        else:
+            print(f"Warning: Unknown selection mode '{image_selection_mode}', using all images")
+            selected_files = json_files
+        
+        # Load selected files
+        for json_file in selected_files:
+            try:
+                with open(json_file, 'r') as f:
+                    data = json.load(f)
+                    if data:  # Only add non-empty results
+                        results.append(data)
+            except Exception as e:
+                print(f"Error loading {json_file}: {e}")
+        
+        print(f"Successfully loaded {len(results)} analysis results")
+        return results
+    
+    def extract_error_points(self, results: List[Dict]) -> Tuple[List[Dict], List[Dict]]:
+        """Extract error points for both UE and right-handed coordinate systems."""
+        ue_points = []
+        rh_points = []
+        
+        for result in results:
+            image_name = result.get('image_name', 'unknown')
+            pose_info = result.get('pose_info', {})
+            positions_3d = result.get('positions_3d', {})
+            basic_metrics = result.get('basic_metrics', {})
+            perceptual_metrics = result.get('perceptual_metrics', {})
+            
+            # Camera pose information (in UE coordinates)
+            cam_x = pose_info.get('x', 0)
+            cam_y = pose_info.get('y', 0) 
+            cam_z = pose_info.get('z', 0)
+            cam_yaw = pose_info.get('yaw', 0)
+            cam_pitch = pose_info.get('pitch', 0)
+            cam_roll = pose_info.get('roll', 0)
+            
+            # Process each error type
+            for error_type, regions in positions_3d.items():
+                if not regions:
                     continue
-                
-                for region in result['positions_3d'][error_type]:
-                    point_info = {
-                        'error_magnitude': region.get('error_magnitude', 0),
-                        'region_size': region.get('region_size', 0),
-                        'position': region['world_position'],
-                        'image_name': image_name,
-                        'region_id': region['region_id'],
-                        'pixel_center': region['pixel_center'],
-                        'mean_depth': region.get('mean_depth', 0),
+                    
+                for region in regions:
+                    world_pos = region.get('world_position', [0, 0, 0])
+                    region_size = region.get('region_size', 1)
+                    mean_depth = region.get('mean_depth', 1.0)
+                    region_id = region.get('region_id', 0)
+                    
+                    # Get error intensity from metrics
+                    error_intensity = self._get_error_intensity(error_type, basic_metrics, perceptual_metrics)
+                    
+                    # UE point (coordinates already in UE system - centimeters)
+                    ue_point = {
+                        'x': float(world_pos[0]),
+                        'y': float(world_pos[1]),
+                        'z': float(world_pos[2]), 
                         'error_type': error_type,
-                        'composite_score': region.get('error_magnitude', 0) * np.log(1 + region.get('region_size', 0))
+                        'error_intensity': error_intensity,
+                        'region_size': region_size,
+                        'depth': mean_depth,
+                        'image_name': image_name,
+                        'region_id': region_id,
+                        'camera_pose': [cam_x, cam_y, cam_z, cam_yaw, cam_pitch, cam_roll]
                     }
-                    all_error_data[error_type].append(point_info)
-        
-        filtered_points = {error_type: [] for error_type in self.error_types}
-        
-        for error_type in self.error_types:
-            error_list = all_error_data[error_type]
-            if not error_list:
-                continue
-            
-            print(f"  {error_type.upper()}: {len(error_list)} raw points")
-            
-            error_list.sort(key=lambda x: x['composite_score'], reverse=True)
-            
-            min_region_size = max(50, np.percentile([p['region_size'] for p in error_list], 25))
-            
-            selected_points = []
-            for point in error_list:
-                if len(selected_points) >= target_points_per_type:
-                    break
-                if point['region_size'] >= min_region_size:
-                    result = individual_results.get(point['image_name'], {})
-                    if 'pose_info' in result:
-                        point['camera_position'] = [
-                            result['pose_info'].get('x', 0),
-                            result['pose_info'].get('y', 0), 
-                            result['pose_info'].get('z', 0)
-                        ]
-                    if 'basic_metrics' in result:
-                        point['image_psnr'] = result['basic_metrics'].get('psnr', 0)
-                        point['image_ssim'] = result['basic_metrics'].get('ssim', 0)
+                    ue_points.append(ue_point)
                     
-                    selected_points.append(point)
-            
-            filtered_points[error_type] = selected_points
-            print(f"    → Selected {len(selected_points)} top points")
+                    # Right-handed point (convert from UE coordinates)
+                    # UE: X=Forward, Y=Right, Z=Up (left-handed, cm)
+                    # RH: X=Forward, Y=Left, Z=Up (right-handed, m)
+                    rh_point = {
+                        'x': float(world_pos[0]) / 100.0,      # Forward (cm to m)
+                        'y': -float(world_pos[1]) / 100.0,     # Right -> Left (flip Y, cm to m)
+                        'z': float(world_pos[2]) / 100.0,      # Up (cm to m)
+                        'error_type': error_type,
+                        'error_intensity': error_intensity,
+                        'region_size': region_size,
+                        'depth': mean_depth / 100.0,           # cm to m
+                        'image_name': image_name,
+                        'region_id': region_id,
+                        'camera_pose': [cam_x / 100.0, -cam_y / 100.0, cam_z / 100.0, 
+                                      cam_yaw, cam_pitch, cam_roll]  # Convert pose to RH (m)
+                    }
+                    rh_points.append(rh_point)
         
-        return filtered_points
+        print(f"Extracted {len(ue_points)} UE points and {len(rh_points)} RH points")
+        return ue_points, rh_points
     
-    def light_clustering_by_type(self, error_points: Dict[str, List[Dict]], 
-                                cluster_distance: float = 1.0,
-                                max_reduction: float = 0.3) -> Tuple[np.ndarray, np.ndarray, List[Dict]]:
-        
-        print("Applying light clustering by error type...")
-        
-        all_final_positions = []
-        all_final_colors = []
-        all_final_attributes = []
-        
-        for error_type, points_list in error_points.items():
-            if not points_list:
-                continue
-            
-            print(f"  Processing {error_type}: {len(points_list)} points")
-            
-            positions = np.array([p['position'] for p in points_list])
-            error_mags = np.array([p['error_magnitude'] for p in points_list])
-            
-            if len(error_mags) > 1:
-                min_err, max_err = np.min(error_mags), np.max(error_mags)
-                if max_err > min_err:
-                    intensities = (error_mags - min_err) / (max_err - min_err)
-                else:
-                    intensities = np.ones_like(error_mags)
-            else:
-                intensities = np.ones_like(error_mags)
-            
-            intensities = 0.4 + 0.6 * intensities
-            base_color = self.color_maps[error_type]
-            colors = base_color[np.newaxis, :] * intensities[:, np.newaxis]
-            
-            if len(positions) > 1000:
-                target_points = max(int(len(positions) * (1 - max_reduction)), len(positions) // 2)
-                
-                print(f"    Clustering {len(positions)} → ~{target_points} points")
-                
-                clustering = DBSCAN(eps=cluster_distance, min_samples=2).fit(positions)
-                labels = clustering.labels_
-                
-                clustered_positions = []
-                clustered_colors = []
-                clustered_attributes = []
-                
-                noise_mask = labels == -1
-                if np.any(noise_mask):
-                    for i in np.where(noise_mask)[0]:
-                        clustered_positions.append(positions[i])
-                        clustered_colors.append(colors[i])
-                        clustered_attributes.append(points_list[i])
-                
-                unique_labels = set(labels) - {-1}
-                for label in unique_labels:
-                    cluster_mask = labels == label
-                    cluster_indices = np.where(cluster_mask)[0]
-                    
-                    if len(cluster_indices) == 1:
-                        idx = cluster_indices[0]
-                        clustered_positions.append(positions[idx])
-                        clustered_colors.append(colors[idx])
-                        clustered_attributes.append(points_list[idx])
-                    else:
-                        cluster_positions = positions[cluster_mask]
-                        cluster_colors = colors[cluster_mask]
-                        cluster_attrs = [points_list[i] for i in cluster_indices]
-                        
-                        centroid = np.mean(cluster_positions, axis=0)
-                        avg_color = np.mean(cluster_colors, axis=0)
-                        
-                        combined_attr = {
-                            'position': centroid.tolist(),
-                            'error_magnitude': np.mean([attr['error_magnitude'] for attr in cluster_attrs]),
-                            'region_size': sum([attr['region_size'] for attr in cluster_attrs]),
-                            'cluster_size': len(cluster_attrs),
-                            'error_type': error_type,
-                            'images_involved': list(set([attr['image_name'] for attr in cluster_attrs]))
-                        }
-                        
-                        clustered_positions.append(centroid)
-                        clustered_colors.append(avg_color)
-                        clustered_attributes.append(combined_attr)
-                
-                print(f"    → {len(clustered_positions)} points after clustering")
-                
-                all_final_positions.extend(clustered_positions)
-                all_final_colors.extend(clustered_colors)
-                all_final_attributes.extend(clustered_attributes)
-            
-            else:
-                print(f"    → Keeping all {len(positions)} points (no clustering)")
-                all_final_positions.extend(positions)
-                all_final_colors.extend(colors)
-                all_final_attributes.extend(points_list)
-        
-        final_positions = np.array(all_final_positions)
-        final_colors = np.array(all_final_colors)
-        
-        error_type_counts = {}
-        for attr in all_final_attributes:
-            error_type = attr.get('error_type', 'unknown')
-            error_type_counts[error_type] = error_type_counts.get(error_type, 0) + 1
-        
-        print(f"Final distribution after clustering:")
-        for error_type, count in error_type_counts.items():
-            print(f"  {error_type}: {count:,} points")
-        
-        return final_positions, final_colors, all_final_attributes
+    def _get_error_intensity(self, error_type: str, basic_metrics: Dict, perceptual_metrics: Dict) -> float:
+        """Get normalized error intensity for a given error type."""
+        if error_type == 'mse':
+            return min(basic_metrics.get('mse', 0) * 1000, 1.0)  # Scale MSE
+        elif error_type == 'mae':
+            return min(basic_metrics.get('mae', 0) * 10, 1.0)   # Scale MAE
+        elif error_type == 'lab':
+            return min(perceptual_metrics.get('lab_color_diff', 0) / 100, 1.0)  # Scale LAB
+        elif error_type == 'gradient':
+            return min(basic_metrics.get('rmse', 0) * 5, 1.0)   # Use RMSE for gradient
+        else:
+            return 0.5  # Default intensity
     
-    def no_clustering_processing(self, error_points: Dict[str, List[Dict]]) -> Tuple[np.ndarray, np.ndarray, List[Dict]]:
+    def _get_point_color(self, error_type: str, error_intensity: float) -> List[int]:
+        """Get RGB color based on error type and intensity."""
+        base_color = self.error_colors.get(error_type, [128, 128, 128])
         
-        print("Processing points without clustering...")
+        # Modulate intensity (0.3 to 1.0 range for visibility)
+        intensity = 0.3 + 0.7 * min(error_intensity, 1.0)
         
-        all_positions = []
-        all_colors = []
-        all_attributes = []
-        
-        for error_type, points_list in error_points.items():
-            if not points_list:
-                continue
-            
-            print(f"  {error_type}: {len(points_list)} points")
-            
-            positions = np.array([p['position'] for p in points_list])
-            error_mags = np.array([p['error_magnitude'] for p in points_list])
-            
-            if len(error_mags) > 1:
-                min_err, max_err = np.min(error_mags), np.max(error_mags)
-                if max_err > min_err:
-                    intensities = (error_mags - min_err) / (max_err - min_err)
-                else:
-                    intensities = np.ones_like(error_mags)
-            else:
-                intensities = np.ones_like(error_mags)
-            
-            intensities = 0.4 + 0.6 * intensities
-            base_color = self.color_maps[error_type]
-            colors = base_color[np.newaxis, :] * intensities[:, np.newaxis]
-            
-            all_positions.extend(positions)
-            all_colors.extend(colors)
-            all_attributes.extend(points_list)
-        
-        return np.array(all_positions), np.array(all_colors), all_attributes
+        return [int(c * intensity) for c in base_color]
     
-    def save_with_ue_conversion(self, points: np.ndarray, colors: np.ndarray, 
-                              attributes: List[Dict], config_info: str = "", max_images: int = None):
+    def write_ply_file(self, points: List[Dict], filename: str, coordinate_system: str, units: str):
+        """Write points to PLY file with colors and properties."""
+        if not points:
+            print(f"No points to write for {filename}")
+            return
         
-        print(f"Saving to: {self.output_dir}")
+        ply_path = self.output_dir / filename
         
-        (self.output_dir / "ply_files").mkdir(exist_ok=True)
-        (self.output_dir / "data").mkdir(exist_ok=True)
-        (self.output_dir / "visualizations").mkdir(exist_ok=True)
+        # Group points by error type for statistics
+        error_stats = {}
+        for point in points:
+            error_type = point['error_type']
+            if error_type not in error_stats:
+                error_stats[error_type] = []
+            error_stats[error_type].append(point)
         
-        base_filename = f"error_pointcloud{config_info}"
-        if max_images is not None:
-            base_filename += f"_test{max_images}imgs"
+        # Write PLY header
+        with open(ply_path, 'w') as f:
+            f.write("ply\n")
+            f.write("format ascii 1.0\n")
+            f.write(f"comment Error Point Cloud - {coordinate_system} coordinate system\n")
+            
+            if coordinate_system.lower() == "unreal engine":
+                f.write(f"comment UE Coordinates: X=Forward, Y=Right, Z=Up (left-handed)\n")
+            else:
+                f.write(f"comment RH Coordinates: X=Forward, Y=Left, Z=Up (right-handed)\n")
+                
+            f.write(f"comment Units: {units}\n")
+            f.write(f"comment Depth format: 16-bit PNG with direct centimeter values\n")
+            f.write(f"comment Generated: {datetime.now().isoformat()}\n")
+            f.write(f"comment Total points: {len(points)}\n")
+            
+            # Write error type statistics
+            for error_type, type_points in error_stats.items():
+                f.write(f"comment {error_type}: {len(type_points)} points\n")
+            
+            f.write(f"element vertex {len(points)}\n")
+            f.write("property float x\n")
+            f.write("property float y\n") 
+            f.write("property float z\n")
+            f.write("property uchar red\n")
+            f.write("property uchar green\n")
+            f.write("property uchar blue\n")
+            f.write("property float error_intensity\n")
+            f.write("property int region_size\n")
+            f.write("property float depth\n")
+            f.write("end_header\n")
+            
+            # Write vertex data
+            for point in points:
+                color = self._get_point_color(point['error_type'], point['error_intensity'])
+                
+                f.write(f"{point['x']:.6f} {point['y']:.6f} {point['z']:.6f} ")
+                f.write(f"{color[0]} {color[1]} {color[2]} ")
+                f.write(f"{point['error_intensity']:.6f} ")
+                f.write(f"{point['region_size']} ")
+                f.write(f"{point['depth']:.6f}\n")
         
-        print("Saving standard PLY file...")
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(points)
-        pcd.colors = o3d.utility.Vector3dVector(colors)
+        print(f"Saved {len(points)} points to {ply_path}")
+    
+    def write_camera_poses_ply(self, points: List[Dict], filename: str, coordinate_system: str, units: str):
+        """Write camera poses as separate PLY file."""
+        if not points:
+            return
         
-        ply_path = self.output_dir / "ply_files" / f"{base_filename}.ply"
-        o3d.io.write_point_cloud(str(ply_path), pcd)
-        
-        print("Converting to UE coordinate system...")
-        ue_points = points.copy() * 100.0
-        
-        ue_points_converted = np.zeros_like(ue_points)
-        ue_points_converted[:, 0] = ue_points[:, 0] 
-        ue_points_converted[:, 1] = -ue_points[:, 1]
-        ue_points_converted[:, 2] = ue_points[:, 2]         
-        
-        pcd_ue = o3d.geometry.PointCloud()
-        pcd_ue.points = o3d.utility.Vector3dVector(ue_points_converted)
-        pcd_ue.colors = o3d.utility.Vector3dVector(colors)
-        
-        ue_ply_path = self.output_dir / "ply_files" / f"{base_filename}_UE.ply"
-        o3d.io.write_point_cloud(str(ue_ply_path), pcd_ue)
-        
-        print("Saving CSV data...")
-        data_rows = []
-        for i, (point, ue_point, color, attr) in enumerate(zip(points, ue_points_converted, colors, attributes)):
-            row = {
-                'x_m': float(point[0]), 'y_m': float(point[1]), 'z_m': float(point[2]),
-                'x_ue_cm': float(ue_point[0]), 'y_ue_cm': float(ue_point[1]), 'z_ue_cm': float(ue_point[2]),
-                'color_r': float(color[0]), 'color_g': float(color[1]), 'color_b': float(color[2]),
-                'error_magnitude': float(attr.get('error_magnitude', 0)),
-                'error_type': attr.get('error_type', 'unknown'),
-                'region_size': int(attr.get('region_size', 0)),
-                'cluster_size': int(attr.get('cluster_size', 1)),
-                'image_name': attr.get('image_name', 'unknown')
-            }
-            data_rows.append(row)
-        
-        df = pd.DataFrame(data_rows)
-        csv_path = self.output_dir / "data" / f"{base_filename}.csv"
-        df.to_csv(csv_path, index=False)
-        
-        print("Saving summary...")
-        summary = {
-            'generation_info': {
-                'timestamp': self.run_timestamp,
-                'total_points': len(points),
-                'config': config_info.replace("_", " ").strip(),
-                'max_images_processed': max_images,
-                'images_were_limited': max_images is not None,
-                'coordinate_systems': {
-                    'standard': 'Right-handed, meters (X=East, Y=North, Z=Up)',
-                    'unreal_engine': 'Left-handed, centimeters (X=Forward, Y=Right, Z=Up)'
+        # Extract unique camera poses
+        unique_poses = {}
+        for point in points:
+            image_name = point['image_name']
+            if image_name not in unique_poses:
+                pose = point['camera_pose']
+                unique_poses[image_name] = {
+                    'x': pose[0], 'y': pose[1], 'z': pose[2],
+                    'yaw': pose[3], 'pitch': pose[4], 'roll': pose[5]
                 }
-            },
-            'files': {
-                'standard_ply': f"ply_files/{base_filename}.ply",
-                'unreal_ply': f"ply_files/{base_filename}_UE.ply", 
-                'csv_data': f"data/{base_filename}.csv"
-            },
-            'error_distribution': {},
-            'spatial_bounds_meters': {
-                'x_range': [float(points[:, 0].min()), float(points[:, 0].max())],
-                'y_range': [float(points[:, 1].min()), float(points[:, 1].max())],
-                'z_range': [float(points[:, 2].min()), float(points[:, 2].max())]
-            },
-            'spatial_bounds_ue_cm': {
-                'x_range': [float(ue_points_converted[:, 0].min()), float(ue_points_converted[:, 0].max())],
-                'y_range': [float(ue_points_converted[:, 1].min()), float(ue_points_converted[:, 1].max())],
-                'z_range': [float(ue_points_converted[:, 2].min()), float(ue_points_converted[:, 2].max())]
-            },
-            'error_stats': {
-                'mean': float(np.mean([a.get('error_magnitude', 0) for a in attributes])),
-                'std': float(np.std([a.get('error_magnitude', 0) for a in attributes])),
-                'max': float(np.max([a.get('error_magnitude', 0) for a in attributes]))
-            }
-        }
         
-        error_type_counts = {}
-        for attr in attributes:
-            error_type = attr.get('error_type', 'unknown')
-            error_type_counts[error_type] = error_type_counts.get(error_type, 0) + 1
+        ply_path = self.output_dir / filename
         
-        for error_type, count in error_type_counts.items():
-            percentage = count / len(attributes) * 100
-            summary['error_distribution'][error_type] = {
-                'count': count,
-                'percentage': round(percentage, 1)
-            }
-        
-        summary_path = self.output_dir / f"run_summary.json"
-        with open(summary_path, 'w') as f:
-            json.dump(summary, f, indent=2)
-        
-        image_limit_text = f" (LIMITED TO {max_images} IMAGES FOR TESTING)" if max_images is not None else ""
-        config_clean = config_info.replace('_', ' ').strip()
-        images_text = f"Images processed: {max_images} (test mode)" if max_images is not None else "Images processed: All available"
-        
-        readme_content = f"""# Error Point Cloud Analysis Run{image_limit_text}
-Generated: {self.run_timestamp}
-Configuration: {config_clean}
-{images_text}
-
-## Files in this directory:
-
-### PLY Files (ply_files/)
-- {base_filename}.ply - Standard point cloud (right-handed, meters)
-- {base_filename}_UE.ply - Unreal Engine compatible (left-handed, centimeters)
-
-### Data (data/)
-- {base_filename}.csv - Point data with both coordinate systems
-
-### Summary
-- run_summary.json - Complete analysis summary
-- README.md - This file
-
-## Point Cloud Statistics:
-- Total Points: {len(points):,}
-- Error Types Distribution:
-"""
-        
-        for error_type, count in error_type_counts.items():
-            percentage = count / len(attributes) * 100
-            readme_content += f"  - {error_type}: {count:,} points ({percentage:.1f}%)\n"
-        
-        spatial_info = f"""
-## Spatial Extent:
-### Standard Coordinates (meters):
-- X: [{points[:, 0].min():.1f}, {points[:, 0].max():.1f}]
-- Y: [{points[:, 1].min():.1f}, {points[:, 1].max():.1f}]
-- Z: [{points[:, 2].min():.1f}, {points[:, 2].max():.1f}]
-
-### UE Coordinates (centimeters):
-- X (Forward): [{ue_points_converted[:, 0].min():.1f}, {ue_points_converted[:, 0].max():.1f}]
-- Y (Right): [{ue_points_converted[:, 1].min():.1f}, {ue_points_converted[:, 1].max():.1f}]
-- Z (Up): [{ue_points_converted[:, 2].min():.1f}, {ue_points_converted[:, 2].max():.1f}]
-
-## Usage:
-1. For standard 3D software: Use {base_filename}.ply
-2. For Unreal Engine: Use {base_filename}_UE.ply
-3. For data analysis: Use {base_filename}.csv
-
-## Color Coding:
-- Red = MSE errors (pixel intensity differences)
-- Blue = SSIM errors (structural differences)  
-- Green = LAB errors (color differences)
-- Orange = Gradient errors (edge/texture differences)
-"""
-        
-        readme_content += spatial_info
-        
-        if max_images is not None:
-            readme_content += f"\n## Testing Note:\nThis run was generated using only the first {max_images} images for testing purposes."
-        
-        readme_path = self.output_dir / "README.md"
-        with open(readme_path, 'w') as f:
-            f.write(readme_content)
-        
-        return {
-            'ply': ply_path,
-            'ue_ply': ue_ply_path,
-            'csv': csv_path,
-            'summary': summary_path,
-            'readme': readme_path,
-            'dataframe': df,
-            'run_directory': self.output_dir
-        }
-        
-    def create_run_visualizations(self, points: np.ndarray, colors: np.ndarray, 
-                                attributes: List[Dict], df: pd.DataFrame, max_images: int = None):
-        
-        print("Creating visualizations...")
-        
-        vis_dir = self.output_dir / "visualizations"
-        
-        fig, axes = plt.subplots(2, 3, figsize=(18, 12))
-        title_suffix = f" (Test: {max_images} images)" if max_images is not None else ""
-        fig.suptitle(f'Error Point Cloud Analysis - Run {self.run_timestamp}{title_suffix}', fontsize=16, fontweight='bold')
-        
-        ax1 = fig.add_subplot(2, 3, 1, projection='3d')
-        if len(points) > 5000:
-            indices = np.random.choice(len(points), 5000, replace=False)
-            sample_points = points[indices]
-            sample_colors = colors[indices]
-        else:
-            sample_points = points
-            sample_colors = colors
+        with open(ply_path, 'w') as f:
+            f.write("ply\n")
+            f.write("format ascii 1.0\n")
+            f.write(f"comment Camera Poses - {coordinate_system} coordinate system\n")
             
-        ax1.scatter(sample_points[:, 0], sample_points[:, 1], sample_points[:, 2], 
-                   c=sample_colors, s=2, alpha=0.7)
-        ax1.set_xlabel('X (m)')
-        ax1.set_ylabel('Y (m)')
-        ax1.set_zlabel('Z (m)')
-        ax1.set_title('3D Error Point Cloud')
+            if coordinate_system.lower() == "unreal engine":
+                f.write(f"comment UE Coordinates: X=Forward, Y=Right, Z=Up (left-handed)\n")
+            else:
+                f.write(f"comment RH Coordinates: X=Forward, Y=Left, Z=Up (right-handed)\n")
+                
+            f.write(f"comment Units: {units}, degrees\n")
+            f.write(f"comment Depth format: 16-bit PNG with direct centimeter values\n")
+            f.write(f"comment Generated: {datetime.now().isoformat()}\n")
+            f.write(f"element vertex {len(unique_poses)}\n")
+            f.write("property float x\n")
+            f.write("property float y\n")
+            f.write("property float z\n")
+            f.write("property uchar red\n")
+            f.write("property uchar green\n")
+            f.write("property uchar blue\n")
+            f.write("property float yaw\n")
+            f.write("property float pitch\n")
+            f.write("property float roll\n")
+            f.write("end_header\n")
+            
+            # Write camera positions (blue color)
+            for image_name, pose in unique_poses.items():
+                f.write(f"{pose['x']:.6f} {pose['y']:.6f} {pose['z']:.6f} ")
+                f.write(f"0 0 255 ")  # Blue for cameras
+                f.write(f"{pose['yaw']:.3f} {pose['pitch']:.3f} {pose['roll']:.3f}\n")
         
-        error_mags = [attr.get('error_magnitude', 0) for attr in attributes]
-        scatter = axes[0,1].scatter(points[:, 0], points[:, 1], c=error_mags, 
-                                   cmap='hot', s=2, alpha=0.7)
-        axes[0,1].set_xlabel('X (m)')
-        axes[0,1].set_ylabel('Y (m)')
-        axes[0,1].set_title('Top-down View (Error Magnitude)')
-        axes[0,1].set_aspect('equal')
-        plt.colorbar(scatter, ax=axes[0,1], label='Error Magnitude')
-        
-        axes[0,2].hist(error_mags, bins=50, alpha=0.7, edgecolor='black', color='skyblue')
-        axes[0,2].set_xlabel('Error Magnitude')
-        axes[0,2].set_ylabel('Frequency')
-        axes[0,2].set_title('Error Magnitude Distribution')
-        axes[0,2].set_yscale('log')
-        axes[0,2].grid(True, alpha=0.3)
-        
-        error_types = [attr.get('error_type', 'unknown') for attr in attributes]
-        type_counts = pd.Series(error_types).value_counts()
-        bars = type_counts.plot(kind='bar', ax=axes[1,0], color=['red', 'blue', 'green', 'orange'])
-        axes[1,0].set_title('Points by Error Type')
-        axes[1,0].set_ylabel('Count')
-        axes[1,0].tick_params(axis='x', rotation=45)
-        
-        for i, bar in enumerate(bars.patches):
-            height = bar.get_height()
-            axes[1,0].text(bar.get_x() + bar.get_width()/2., height + 50,
-                          f'{int(height):,}', ha='center', va='bottom')
-        
-        axes[1,1].hist2d(points[:, 0], points[:, 1], bins=50, cmap='hot')
-        axes[1,1].set_xlabel('X (m)')
-        axes[1,1].set_ylabel('Y (m)')
-        axes[1,1].set_title('Spatial Error Density')
-        
-        axes[1,2].axis('off')
-        images_info = f"Images: {max_images} (TEST MODE)" if max_images is not None else "Images: All available"
-        summary_text = f"""Run Summary:
-Timestamp: {self.run_timestamp}
-Total Points: {len(points):,}
-{images_info}
-
-Error Statistics:
-Mean: {np.mean(error_mags):.4f}
-Std:  {np.std(error_mags):.4f}
-Max:  {np.max(error_mags):.4f}
-
-Spatial Extent (meters):
-X: [{points[:, 0].min():.1f}, {points[:, 0].max():.1f}]
-Y: [{points[:, 1].min():.1f}, {points[:, 1].max():.1f}]  
-Z: [{points[:, 2].min():.1f}, {points[:, 2].max():.1f}]
-
-Error Type Distribution:
-{type_counts.to_string()}"""
-        
-        axes[1,2].text(0.05, 0.95, summary_text, transform=axes[1,2].transAxes,
-                      fontsize=10, verticalalignment='top', fontfamily='monospace',
-                      bbox=dict(boxstyle='round', facecolor='lightgray', alpha=0.8))
-        
-        plt.tight_layout()
-        plt.savefig(vis_dir / 'error_analysis_overview.png', 
-                   dpi=150, bbox_inches='tight', facecolor='white')
-        plt.close()
-        
-        fig, ax = plt.subplots(figsize=(10, 8))
-        colors_pie = ['red', 'blue', 'green', 'orange'][:len(type_counts)]
-        wedges, texts, autotexts = ax.pie(type_counts.values, labels=type_counts.index, 
-                                         colors=colors_pie, autopct='%1.1f%%', startangle=90)
-        title_suffix = f' - Test ({max_images} images)' if max_images is not None else ''
-        ax.set_title(f'Error Type Distribution - {len(points):,} Points{title_suffix}', fontsize=14, fontweight='bold')
-        
-        for autotext in autotexts:
-            autotext.set_color('white')
-            autotext.set_fontweight('bold')
-        
-        plt.savefig(vis_dir / 'error_type_distribution.png', 
-                   dpi=150, bbox_inches='tight', facecolor='white')
-        plt.close()
-        
-        print(f"Visualizations saved to: {vis_dir}")
-        
-        return {
-            'overview': vis_dir / 'error_analysis_overview.png',
-            'distribution': vis_dir / 'error_type_distribution.png'
-        }
+        print(f"Saved {len(unique_poses)} camera poses to {ply_path}")
     
-    def generate_better_point_cloud(self, max_points_per_type: int = None,
-                                   clustering_mode: str = "light",
-                                   cluster_distance: float = 1.0,
-                                   max_images: int = None):
+    def write_summary_report(self, ue_points: List[Dict], rh_points: List[Dict]):
+        """Write a summary report of the point cloud generation."""
+        report_path = self.output_dir / 'pointcloud_summary.txt'
         
-        start_time = time.time()
+        # Analyze point distributions
+        ue_stats = self._analyze_points(ue_points, "Unreal Engine (Left-handed, cm)")
+        rh_stats = self._analyze_points(rh_points, "Standard Right-handed (m)")
         
-        print("="*80)
-        print("ERROR POINT CLOUD GENERATION")
-        print("="*80)
-        print(f"Run directory: {self.output_dir}")
+        with open(report_path, 'w') as f:
+            f.write("ENHANCED UE ERROR POINT CLOUD GENERATION SUMMARY\n")
+            f.write("=" * 55 + "\n\n")
+            f.write(f"Generated: {datetime.now().isoformat()}\n")
+            f.write(f"Analysis directory: {self.analysis_dir}\n")
+            f.write(f"Output directory: {self.output_dir}\n\n")
+            
+            f.write("COORDINATE SYSTEMS:\n")
+            f.write("-" * 20 + "\n")
+            f.write("1. Unreal Engine (UE): Left-handed coordinate system\n") 
+            f.write("   - X: Forward (North)\n")
+            f.write("   - Y: Right (East)\n")
+            f.write("   - Z: Up\n")
+            f.write("   - Units: centimeters\n")
+            f.write("   - Rotations: Yaw (Z), Pitch (Y), Roll (X) in degrees\n\n")
+            
+            f.write("2. Standard Right-handed: Right-handed coordinate system\n")
+            f.write("   - X: Forward (North)\n")
+            f.write("   - Y: Left (West)\n")
+            f.write("   - Z: Up\n")
+            f.write("   - Units: meters\n")
+            f.write("   - Rotations: Yaw (Z), Pitch (Y), Roll (X) in degrees\n\n")
+            
+            f.write("COORDINATE TRANSFORMATION:\n")
+            f.write("-" * 26 + "\n")
+            f.write("UE to Right-handed conversion:\n")
+            f.write("  X_rh = X_ue / 100     (Forward, cm to m)\n")
+            f.write("  Y_rh = -Y_ue / 100    (Right to Left, cm to m)\n")
+            f.write("  Z_rh = Z_ue / 100     (Up, cm to m)\n\n")
+            
+            f.write("DEPTH FORMAT:\n")
+            f.write("-" * 13 + "\n")
+            f.write("16-bit PNG depth images with direct centimeter values\n")
+            f.write("  - No processing required\n")
+            f.write("  - Range: 0-65535 cm (0-655.35 meters)\n")
+            f.write("  - Single channel or first channel if multi-channel\n\n")
+            
+            f.write("STATISTICS:\n")
+            f.write("-" * 12 + "\n")
+            f.write(ue_stats)
+            f.write("\n")
+            f.write(rh_stats)
+            
+            f.write("\nERROR TYPE COLOR CODING:\n")
+            f.write("-" * 25 + "\n")
+            for error_type, color in self.error_colors.items():
+                f.write(f"{error_type.upper()}: RGB{color}\n")
+            
+            f.write("\nVIEWING RECOMMENDATIONS:\n")
+            f.write("-" * 25 + "\n")
+            f.write("- CloudCompare: Open PLY files directly\n")
+            f.write("- MeshLab: Import and adjust point size for visibility\n")
+            f.write("- Blender: Import as mesh, enable point cloud display\n")
+            f.write("- UE Editor: Import UE coordinate PLY as static mesh or point cloud asset\n")
+            f.write("- Python/Matplotlib: Use right-handed PLY for standard visualization\n")
         
-        if max_points_per_type is None:
-            max_points_per_type = self.max_points // len(self.error_types)
+        print(f"Summary report saved to {report_path}")
+    
+    def _analyze_points(self, points: List[Dict], system_name: str) -> str:
+        """Analyze point distribution and return statistics string."""
+        if not points:
+            return f"{system_name}: No points\n"
         
-        print(f"Target: {max_points_per_type} points per error type (max {self.max_points} total)")
-        print(f"Clustering mode: {clustering_mode}")
-        print(f"Cluster distance: {cluster_distance}m")
+        # Extract coordinates
+        coords = np.array([[p['x'], p['y'], p['z']] for p in points])
         
-        if max_images is not None:
-            print(f"TEST MODE: Processing only first {max_images} images")
-        else:
-            print("FULL MODE: Processing all available images")
+        # Calculate bounds
+        min_coords = np.min(coords, axis=0)
+        max_coords = np.max(coords, axis=0)
+        mean_coords = np.mean(coords, axis=0)
+        extent = max_coords - min_coords
         
-        print("Loading analysis results...")
-        comprehensive_results = self.load_comprehensive_results()
+        # Error type distribution
+        error_types = {}
+        for point in points:
+            error_type = point['error_type']
+            error_types[error_type] = error_types.get(error_type, 0) + 1
         
-        if not comprehensive_results:
-            print("No comprehensive results found!")
-            return None
+        # Error intensity statistics
+        intensities = [p['error_intensity'] for p in points]
         
-        filter_start = time.time()
-        error_points = self.smart_filter_error_points(
-            comprehensive_results, max_points_per_type, max_images=max_images)
-        filter_time = time.time() - filter_start
+        # Depth statistics
+        depths = [p['depth'] for p in points]
         
-        if not any(error_points.values()):
-            print("No error points found after filtering!")
-            return None
+        # Determine units
+        units = "cm" if "cm" in system_name.lower() else "m"
         
-        total_filtered = sum(len(points) for points in error_points.values())
-        print(f"Filtered to {total_filtered} high-quality points in {filter_time:.1f}s")
+        stats = f"{system_name}:\n"
+        stats += f"  Total points: {len(points)}\n"
+        stats += f"  Bounds X: [{min_coords[0]:.3f}, {max_coords[0]:.3f}] {units} (extent: {extent[0]:.3f} {units})\n"
+        stats += f"  Bounds Y: [{min_coords[1]:.3f}, {max_coords[1]:.3f}] {units} (extent: {extent[1]:.3f} {units})\n"
+        stats += f"  Bounds Z: [{min_coords[2]:.3f}, {max_coords[2]:.3f}] {units} (extent: {extent[2]:.3f} {units})\n"
+        stats += f"  Center: ({mean_coords[0]:.3f}, {mean_coords[1]:.3f}, {mean_coords[2]:.3f}) {units}\n"
+        stats += f"  Error intensity: min={min(intensities):.3f}, max={max(intensities):.3f}, avg={np.mean(intensities):.3f}\n"
+        stats += f"  Depth range: {min(depths):.3f} - {max(depths):.3f} {units} (avg: {np.mean(depths):.3f} {units})\n"
+        stats += f"  Error type distribution:\n"
+        for error_type, count in error_types.items():
+            percentage = (count / len(points)) * 100
+            stats += f"    {error_type}: {count} ({percentage:.1f}%)\n"
         
-        process_start = time.time()
+        return stats
+    
+    def generate_point_clouds(self, image_selection_mode: str = "all", 
+                            image_start: int = 0, image_end: int = None,
+                            specific_images: List[int] = None, single_image: int = None,
+                            filter_error_types: Optional[List[str]] = None,
+                            min_region_size: int = 10, max_points: Optional[int] = None,
+                            generate_camera_poses: bool = True, 
+                            generate_both_coordinates: bool = True):
+        """Main function to generate point clouds from analysis results."""
+        print("Starting Enhanced UE point cloud generation...")
+        print("Depth format: 16-bit PNG with direct centimeter values")
         
-        if clustering_mode == "none":
-            points, colors, attributes = self.no_clustering_processing(error_points)
-        elif clustering_mode == "light":
-            points, colors, attributes = self.light_clustering_by_type(
-                error_points, cluster_distance, max_reduction=0.2)
-        elif clustering_mode == "medium":
-            points, colors, attributes = self.light_clustering_by_type(
-                error_points, cluster_distance, max_reduction=0.4)
-        else:
-            print(f"Unknown clustering mode: {clustering_mode}")
-            return None
+        # Load analysis results with image selection
+        results = self.load_analysis_results(
+            image_selection_mode, image_start, image_end, 
+            specific_images, single_image
+        )
         
-        process_time = time.time() - process_start
+        if not results:
+            print("No analysis results found!")
+            return
         
-        if len(points) == 0:
-            print("No points in final point cloud!")
-            return None
+        # Extract error points for both coordinate systems
+        ue_points, rh_points = self.extract_error_points(results)
         
-        save_start = time.time()
-        config_info = f"_{clustering_mode}_clustering" if clustering_mode != "none" else "_no_clustering"
-        output_files = self.save_with_ue_conversion(points, colors, attributes, config_info, max_images)
+        # Apply filters to both coordinate systems
+        if filter_error_types:
+            ue_points = [p for p in ue_points if p['error_type'] in filter_error_types]
+            rh_points = [p for p in rh_points if p['error_type'] in filter_error_types]
+            print(f"Filtered to error types: {filter_error_types}")
         
-        vis_files = self.create_run_visualizations(points, colors, attributes, output_files['dataframe'], max_images)
-        output_files['visualizations'] = vis_files
+        if min_region_size > 0:
+            ue_points = [p for p in ue_points if p['region_size'] >= min_region_size]
+            rh_points = [p for p in rh_points if p['region_size'] >= min_region_size]
+            print(f"Filtered to minimum region size: {min_region_size}")
         
-        save_time = time.time() - save_start
+        if max_points and len(ue_points) > max_points:
+            # Sort by error intensity and take top points
+            ue_points.sort(key=lambda x: x['error_intensity'], reverse=True)
+            rh_points.sort(key=lambda x: x['error_intensity'], reverse=True)
+            ue_points = ue_points[:max_points]
+            rh_points = rh_points[:max_points]
+            print(f"Limited to top {max_points} points by error intensity")
         
-        total_time = time.time() - start_time
+        # Generate timestamp for unique filenames
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
-        print("\n" + "="*80)
-        print("GENERATION COMPLETE")
-        print("="*80)
-        print(f"Total processing time: {total_time:.1f}s")
-        print(f"  - Filtering: {filter_time:.1f}s")
-        print(f"  - Processing: {process_time:.1f}s") 
-        print(f"  - Saving: {save_time:.1f}s")
+        generated_files = []
         
-        if max_images is not None:
-            print(f"TEST RUN: Used {max_images} images only")
+        # Write UE coordinate PLY files
+        self.write_ply_file(ue_points, f"error_points_ue_{timestamp}.ply", 
+                           "Unreal Engine", "centimeters")
+        generated_files.append(f"error_points_ue_{timestamp}.ply")
         
-        print(f"Final point cloud: {len(points):,} points")
+        # Write right-handed coordinate PLY files if requested
+        if generate_both_coordinates:
+            self.write_ply_file(rh_points, f"error_points_rh_{timestamp}.ply", 
+                               "Standard Right-handed", "meters")
+            generated_files.append(f"error_points_rh_{timestamp}.ply")
         
-        error_type_counts = {}
-        for attr in attributes:
-            error_type = attr.get('error_type', 'unknown')
-            error_type_counts[error_type] = error_type_counts.get(error_type, 0) + 1
+        # Write camera poses if requested
+        if generate_camera_poses:
+            self.write_camera_poses_ply(ue_points, f"camera_poses_ue_{timestamp}.ply", 
+                                       "Unreal Engine", "centimeters")
+            generated_files.append(f"camera_poses_ue_{timestamp}.ply")
+            
+            if generate_both_coordinates:
+                self.write_camera_poses_ply(rh_points, f"camera_poses_rh_{timestamp}.ply", 
+                                           "Standard Right-handed", "meters")
+                generated_files.append(f"camera_poses_rh_{timestamp}.ply")
         
-        for error_type, count in error_type_counts.items():
-            percentage = count / len(attributes) * 100
-            print(f"  {error_type}: {count:,} points ({percentage:.1f}%)")
+        # Write summary report
+        self.write_summary_report(ue_points, rh_points)
+        generated_files.append("pointcloud_summary.txt")
         
-        print(f"Spatial extent (standard):")
-        print(f"  X: [{points[:, 0].min():.1f}, {points[:, 0].max():.1f}] m")
-        print(f"  Y: [{points[:, 1].min():.1f}, {points[:, 1].max():.1f}] m")
-        print(f"  Z: [{points[:, 2].min():.1f}, {points[:, 2].max():.1f}] m")
-        
-        print(f"All files saved to: {output_files['run_directory']}")
-        print(f"PLY files: {output_files['run_directory']}/ply_files/")
-        print(f"Data: {output_files['run_directory']}/data/")
-        print(f"Visualizations: {output_files['run_directory']}/visualizations/")
-        print(f"Run summary: {output_files['summary'].name}")
-        print(f"README: {output_files['readme'].name}")
-        print("="*80)
-        
-        return {
-            'points': points,
-            'colors': colors,
-            'attributes': attributes,
-            'output_files': output_files,
-            'processing_time': total_time,
-            'run_directory': output_files['run_directory'],
-            'max_images_used': max_images
-        }
+        print(f"\nEnhanced point cloud generation completed!")
+        print(f"Generated files in: {self.output_dir}")
+        print(f"UE points: {len(ue_points)}")
+        if generate_both_coordinates:
+            print(f"RH points: {len(rh_points)}")
+        print(f"Files generated:")
+        for file in generated_files:
+            print(f"  - {file}")
 
-# Convenience functions with max_images parameter
-def generate_no_clustering(max_points: int = 100000, max_images: int = None):
-    generator = ErrorPointCloudGenerator(max_points=max_points)
-    return generator.generate_better_point_cloud(clustering_mode="none", max_images=max_images)
-
-def generate_light_clustering(max_points: int = 100000, cluster_distance: float = 1.0, max_images: int = None):
-    generator = ErrorPointCloudGenerator(max_points=max_points)
-    return generator.generate_better_point_cloud(
-        clustering_mode="light",
-        cluster_distance=cluster_distance,
-        max_images=max_images
-    )
-
-def generate_medium_clustering(max_points: int = 100000, cluster_distance: float = 1.5, max_images: int = None):
-    generator = ErrorPointCloudGenerator(max_points=max_points)
-    return generator.generate_better_point_cloud(
-        clustering_mode="medium", 
-        cluster_distance=cluster_distance,
-        max_images=max_images
+def main():
+    """Main function using configuration settings."""
+    print("=" * 70)
+    print("ENHANCED UE ERROR POINT CLOUD GENERATOR")
+    print("=" * 70)
+    
+    # Determine analysis directory
+    if MANUAL_ANALYSIS_DIR and not AUTO_SELECT_NEWEST:
+        analysis_dir = MANUAL_ANALYSIS_DIR
+        print(f"Using manual directory: {analysis_dir}")
+    else:
+        analysis_dir = find_newest_analysis_directory(ANALYSIS_RESULTS_BASE_DIR)
+        if not analysis_dir:
+            print("❌ Could not find or access analysis directory")
+            sys.exit(1)
+    
+    print("Configuration:")
+    print(f"  Analysis directory: {analysis_dir}")
+    print(f"  Image selection mode: {IMAGE_SELECTION_MODE}")
+    
+    if IMAGE_SELECTION_MODE == "range":
+        print(f"  Image range: {IMAGE_START} to {IMAGE_END}")
+    elif IMAGE_SELECTION_MODE == "specific":
+        print(f"  Specific images: {SPECIFIC_IMAGES}")
+    elif IMAGE_SELECTION_MODE == "single":
+        print(f"  Single image: {SINGLE_IMAGE}")
+    
+    print(f"  Filter error types: {FILTER_ERROR_TYPES if FILTER_ERROR_TYPES else 'All types'}")
+    print(f"  Min region size: {MIN_REGION_SIZE} pixels")
+    print(f"  Max points: {MAX_POINTS if MAX_POINTS else 'Unlimited'}")
+    print(f"  Generate camera poses: {GENERATE_CAMERA_POSES}")
+    print(f"  Generate both coordinates: {GENERATE_BOTH_COORDINATES}")
+    print(f"  Depth format: 16-bit PNG with direct centimeter values")
+    print("=" * 70)
+    
+    # Check if analysis directory exists
+    if not Path(analysis_dir).exists():
+        print(f"❌ Error: Analysis directory does not exist: {analysis_dir}")
+        sys.exit(1)
+    
+    print(f"✓ Analysis directory found: {analysis_dir}")
+    
+    # Create generator and run
+    generator = EnhancedErrorPointCloudGenerator(analysis_dir)
+    generator.generate_point_clouds(
+        image_selection_mode=IMAGE_SELECTION_MODE,
+        image_start=IMAGE_START,
+        image_end=IMAGE_END,
+        specific_images=SPECIFIC_IMAGES,
+        single_image=SINGLE_IMAGE,
+        filter_error_types=FILTER_ERROR_TYPES,
+        min_region_size=MIN_REGION_SIZE,
+        max_points=MAX_POINTS,
+        generate_camera_poses=GENERATE_CAMERA_POSES,
+        generate_both_coordinates=GENERATE_BOTH_COORDINATES
     )
 
 if __name__ == "__main__":
-    print("ERROR POINT CLOUD GENERATOR")
-    print("===========================")
-    print("Now supports limiting the number of images for testing!")
-    print()
-    
-    results = generate_light_clustering(max_points=200000, max_images=1)
-    
-    if results:
-        print(f"Success! Generated {len(results['points']):,} points in {results['processing_time']:.1f}s")
-        print(f"Run directory: {results['run_directory']}")
-        print(f"UE PLY: {results['output_files']['ue_ply']}")
-        print(f"Standard PLY: {results['output_files']['ply']}")
-    else:
-        print("Generation failed!")
+    main()
