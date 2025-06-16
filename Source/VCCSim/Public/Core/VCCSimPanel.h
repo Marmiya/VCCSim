@@ -43,12 +43,22 @@ public:
     void OnSelectionChanged(UObject* Object);
 
 private:
-    // UI Elements - Removed combo boxes, added selection state toggles
+    // ============================================================================
+    // UI ELEMENTS
+    // ============================================================================
+    
+    // Logo brushes
     TSharedPtr<FSlateDynamicImageBrush> VCCLogoBrush;
     TSharedPtr<FSlateDynamicImageBrush> SZULogoBrush;
     
+    // Selection UI
     TSharedPtr<class STextBlock> SelectedFlashPawnText;
     TSharedPtr<class STextBlock> SelectedTargetObjectText;
+    TSharedPtr<class SCheckBox> SelectFlashPawnToggle;
+    TSharedPtr<class SCheckBox> SelectTargetToggle;
+    TSharedPtr<class SCheckBox> SelectUseLimitedToggle;
+    
+    // Configuration spinboxes
     TSharedPtr<class SNumericEntryBox<int32>> NumPosesSpinBox;
     TSharedPtr<class SNumericEntryBox<float>> RadiusSpinBox;
     TSharedPtr<class SNumericEntryBox<float>> HeightOffsetSpinBox;
@@ -62,20 +72,28 @@ private:
     TSharedPtr<class SNumericEntryBox<float>> LimitedMinZSpinBox;
     TSharedPtr<class SNumericEntryBox<float>> LimitedMaxZSpinBox;
     
-    // Camera availability indicators
-    TSharedPtr<class STextBlock> RGBCameraAvailableText;
-    TSharedPtr<class STextBlock> DepthCameraAvailableText;
-    TSharedPtr<class STextBlock> SegmentationCameraAvailableText;
-    
-    // Camera activation checkboxes
+    // Camera UI elements
     TSharedPtr<class SCheckBox> RGBCameraCheckBox;
     TSharedPtr<class SCheckBox> DepthCameraCheckBox;
     TSharedPtr<class SCheckBox> SegmentationCameraCheckBox;
     
-    // Selection state toggles
-    TSharedPtr<class SCheckBox> SelectFlashPawnToggle;
-    TSharedPtr<class SCheckBox> SelectTargetToggle;
-    TSharedPtr<class SCheckBox> SelectUseLimitedToggle;
+    // Visualization buttons
+    TSharedPtr<class SButton> VisualizePathButton;
+    TSharedPtr<class SButton> VisualizeSafeZoneButton;
+    TSharedPtr<class SButton> VisualizeCoverageButton;
+    TSharedPtr<class SButton> VisualizeComplexityButton;
+    
+    // Point cloud UI elements
+    TSharedPtr<SButton> LoadPointCloudButton;
+    TSharedPtr<SButton> VisualizePointCloudButton;
+    TSharedPtr<STextBlock> PointCloudStatusText;
+    TSharedPtr<STextBlock> PointCloudColorStatusText;
+
+    // ============================================================================
+    // STATE VARIABLES
+    // ============================================================================
+    
+    // Selection state
     bool bSelectingFlashPawn = false;
     bool bSelectingTarget = false;
     bool bUseLimited = false;
@@ -84,7 +102,7 @@ private:
     TWeakObjectPtr<AFlashPawn> SelectedFlashPawn;
     TWeakObjectPtr<AActor> SelectedTargetObject;
     
-    // Configuration
+    // Path configuration
     int32 NumPoses = 50;
     float Radius = 500.0f;
     float HeightOffset = 0.0f;
@@ -92,7 +110,7 @@ private:
     FString SaveDirectory;
     float SafeDistance = 200.0f;
     float SafeHeight = 200.0f;
-    float LimitedMinX = .0f;
+    float LimitedMinX = 0.0f;
     float LimitedMaxX = 5000.0f;
     float LimitedMinY = -9500.0f;
     float LimitedMaxY = -7000.0f;
@@ -126,8 +144,126 @@ private:
     // Auto-capture state
     bool bAutoCaptureInProgress = false;
     FTimerHandle AutoCaptureTimerHandle;
+    TSharedPtr<std::atomic<int32>> JobNum;
     
-    // UI creation helpers
+    // Path visualization state
+    bool bPathVisualized = false;
+    bool bPathNeedsUpdate = true;
+    TWeakObjectPtr<AActor> PathVisualizationActor;
+    
+    // Scene analysis state
+    TWeakObjectPtr<ASceneAnalysisManager> SceneAnalysisManager = nullptr;
+    bool bNeedScan = true;
+    bool bGenSafeZone = true;
+    bool bSafeZoneVisualized = false;
+    bool bInitCoverage = true;
+    bool bGenCoverage = true;
+    bool bCoverageVisualized = false;
+    bool bAnalyzeComplexity = true;
+    bool bComplexityVisualized = false;
+    
+    // Point cloud state
+    TArray<FRatPoint> PointCloudData;
+    TWeakObjectPtr<AActor> PointCloudActor;
+    TWeakObjectPtr<UProceduralMeshComponent> PointCloudComponent;
+    bool bPointCloudVisualized = false;
+    bool bPointCloudLoaded = false;
+    bool bPointCloudHasColors = false;
+    FString LoadedPointCloudPath;
+    int32 PointCloudCount = 0;
+    
+    // Point cloud settings
+    FLinearColor DefaultPointColor = FLinearColor(1.0f, 0.5f, 0.0f, 1.0f);
+    float PointSize = 100.f;
+
+    // ============================================================================
+    // INITIALIZATION AND CLEANUP
+    // ============================================================================
+    
+    void LoadLogoImages();
+    void InitializeSceneAnalysisManager();
+    void CreateMainLayout();
+
+    // ============================================================================
+    // SELECTION MANAGEMENT
+    // ============================================================================
+    
+    void OnSelectFlashPawnToggleChanged(ECheckBoxState NewState);
+    void OnSelectTargetToggleChanged(ECheckBoxState NewState);
+    void OnUseLimitedToggleChanged(ECheckBoxState NewState);
+
+    // ============================================================================
+    // CAMERA MANAGEMENT
+    // ============================================================================
+    
+    void OnRGBCameraCheckboxChanged(ECheckBoxState NewState);
+    void OnDepthCameraCheckboxChanged(ECheckBoxState NewState);
+    void OnSegmentationCameraCheckboxChanged(ECheckBoxState NewState);
+    void CheckCameraComponents();
+    void UpdateActiveCameras();
+
+    // ============================================================================
+    // POSE GENERATION AND MANAGEMENT
+    // ============================================================================
+    
+    FReply OnGeneratePosesClicked();
+    void GeneratePosesAroundTarget();
+    void LoadPredefinedPose();
+    void SaveGeneratedPose();
+    FReply OnLoadPoseClicked();
+    FReply OnSavePoseClicked();
+
+    // ============================================================================
+    // PATH VISUALIZATION
+    // ============================================================================
+    
+    FReply OnTogglePathVisualizationClicked();
+    void UpdatePathVisualization();
+    void ShowPathVisualization();
+    void HidePathVisualization();
+
+    // ============================================================================
+    // IMAGE CAPTURE OPERATIONS
+    // ============================================================================
+    
+    FReply OnCaptureImagesClicked();
+    void CaptureImageFromCurrentPose();
+    void SaveRGB(int32 PoseIndex, bool& bAnyCaptured);
+    void SaveDepth(int32 PoseIndex, bool& bAnyCaptured);
+    void SaveSeg(int32 PoseIndex, bool& bAnyCaptured);
+    void StartAutoCapture();
+
+    // ============================================================================
+    // SCENE ANALYSIS OPERATIONS
+    // ============================================================================
+    
+    FReply OnToggleSafeZoneVisualizationClicked();
+    FReply OnToggleCoverageVisualizationClicked();
+    FReply OnToggleComplexityVisualizationClicked();
+
+    // ============================================================================
+    // POINT CLOUD OPERATIONS
+    // ============================================================================
+    
+    FReply OnLoadPointCloudClicked();
+    FReply OnTogglePointCloudVisualizationClicked();
+    void CreateProceduralPointCloudVisualization();
+    void ClearPointCloudVisualization();
+    void GeneratePointCloudMesh(TArray<FVector>& Vertices, 
+                               TArray<int32>& Triangles, 
+                               TArray<FVector>& Normals,
+                               TArray<FVector2D>& UVs,
+                               TArray<FColor>& VertexColors);
+    void ApplyVertexColorMaterial(UProceduralMeshComponent* MeshComponent);
+    bool TryApplyFallbackMaterial(UProceduralMeshComponent* MeshComponent);
+    void CreateBasicPointCloudMaterial(UProceduralMeshComponent* MeshComponent);
+
+    // ============================================================================
+    // UI CONSTRUCTION HELPERS
+    // ============================================================================
+    
+    // Main panel creators
+    TSharedRef<SWidget> CreateLogoPanel();
     TSharedRef<SWidget> CreatePawnSelectPanel();
     TSharedRef<SWidget> CreateCameraSelectPanel();
     TSharedRef<SWidget> CreateTargetSelectPanel();
@@ -136,101 +272,64 @@ private:
     TSharedRef<SWidget> CreateSceneAnalysisPanel();
     TSharedRef<SWidget> CreatePointCloudPanel();
     
-    // UI callbacks
-    void OnSelectFlashPawnToggleChanged(ECheckBoxState NewState);
-    void OnSelectTargetToggleChanged(ECheckBoxState NewState);
-    void OnUseLimitedToggleChanged(ECheckBoxState NewState);
+    // Camera UI helpers
+    TSharedRef<SWidget> CreateCameraStatusRow();
+    TSharedRef<SWidget> CreateCameraStatusBox(
+        const FString& CameraName,
+        TFunction<bool()> HasCameraFunc,
+        TFunction<ECheckBoxState()> CheckBoxStateFunc,
+        TFunction<void(ECheckBoxState)> OnCheckBoxChangedFunc);
     
-    void OnRGBCameraCheckboxChanged(ECheckBoxState NewState);
-    void OnDepthCameraCheckboxChanged(ECheckBoxState NewState);
-    void OnSegmentationCameraCheckboxChanged(ECheckBoxState NewState);
+    // Scene analysis UI helpers
+    TSharedRef<SWidget> CreateLimitedRegionControls();
+    TSharedRef<SWidget> CreateSceneOperationButtons();
+    TSharedRef<SWidget> CreateSafeZoneButtons();
+    TSharedRef<SWidget> CreateCoverageButtons();
+    TSharedRef<SWidget> CreateComplexityButtons();
     
-    FReply OnGeneratePosesClicked();
-    FReply OnCaptureImagesClicked();
-    void SaveRGB(int32 PoseIndex, bool& bAnyCaptured);
-    void SaveDepth(int32 PoseIndex, bool& bAnyCaptured);
-    void SaveSeg(int32 PoseIndex, bool& bAnyCaptured);
-    void StartAutoCapture();
-    TSharedPtr<std::atomic<int32>> JobNum;
+    // Button group creators
+    TSharedRef<SWidget> CreatePoseFileButtons();
+    TSharedRef<SWidget> CreatePoseActionButtons();
+    TSharedRef<SWidget> CreateMovementButtons();
+    TSharedRef<SWidget> CreateCaptureButtons();
+    TSharedRef<SWidget> CreatePointCloudButtons();
     
-    // Helper functions
-    void GeneratePosesAroundTarget();
-    void CaptureImageFromCurrentPose();
-    void CheckCameraComponents();
-    void UpdateActiveCameras();
-    static FString GetTimestampedFilename();
-    
-    // New pose file functions
-    void LoadPredefinedPose();
-    void SaveGeneratedPose();
-    FReply OnLoadPoseClicked();
-    FReply OnSavePoseClicked();
-
+    // Style and layout helpers
     TSharedRef<SWidget> CreateSectionHeader(const FString& Title);
     TSharedRef<SWidget> CreateSectionContent(TSharedRef<SWidget> Content);
-    TSharedRef<SWidget> CreatePropertyRow(const FString& Label,
-        TSharedRef<SWidget> Content);
-
-    bool bPathVisualized = false;
-    bool bPathNeedsUpdate = true;
-    TWeakObjectPtr<AActor> PathVisualizationActor;
-    TSharedPtr<class SButton> VisualizePathButton;
-    FReply OnTogglePathVisualizationClicked();
-    void UpdatePathVisualization();
-    void ShowPathVisualization();
-    void HidePathVisualization();
-
-    TWeakObjectPtr<ASceneAnalysisManager> SceneAnalysisManager = nullptr;
-    bool bNeedScan = true;
-    bool bGenSafeZone = true;
-    bool bSafeZoneVisualized = false;
-    TSharedPtr<class SButton> VisualizeSafeZoneButton;
-    FReply OnToggleSafeZoneVisualizationClicked();
-
-    bool bInitCoverage = true;
-    bool bGenCoverage = true;
-    bool bCoverageVisualized = false;
-    TSharedPtr<class SButton> VisualizeCoverageButton;
-    FReply OnToggleCoverageVisualizationClicked();
-
-    bool bAnalyzeComplexity = true;
-    bool bComplexityVisualized = false;
-    TSharedPtr<class SButton> VisualizeComplexityButton;
-    FReply OnToggleComplexityVisualizationClicked();
-
-    // Point Cloud members
-    TSharedPtr<SButton> LoadPointCloudButton;
-    TSharedPtr<SButton> VisualizePointCloudButton;
-    TSharedPtr<STextBlock> PointCloudStatusText;
-    TSharedPtr<STextBlock> PointCloudColorStatusText;
+    TSharedRef<SWidget> CreatePropertyRow(const FString& Label, TSharedRef<SWidget> Content);
+    TSharedRef<SWidget> CreateSeparator();
     
-    // Point cloud data
-    TArray<FRatPoint> PointCloudData;
-    TWeakObjectPtr<AActor> PointCloudActor; // Single actor with procedural mesh
-    TWeakObjectPtr<UProceduralMeshComponent> PointCloudComponent;
-    bool bPointCloudVisualized = false;
-    bool bPointCloudLoaded = false;
-    bool bPointCloudHasColors = false;
-    FString LoadedPointCloudPath;
-    int32 PointCloudCount = 0;
-    
-    // Default colors
-    FLinearColor DefaultPointColor = FLinearColor(1.0f, 0.5f, 0.0f, 1.0f);
-    float PointSize = 100.f;
-    
-    // Point cloud methods
-    FReply OnLoadPointCloudClicked();
-    FReply OnTogglePointCloudVisualizationClicked();
-    void CreateProceduralPointCloudVisualization();
-    void ClearPointCloudVisualization();
+    // Numeric property row creators
+    TSharedRef<SWidget> CreateNumericPropertyRowInt32(
+        const FString& Label,
+        TSharedPtr<SNumericEntryBox<int32>>& SpinBox,
+        TOptional<int32>& Value,
+        int32& ActualVariable,
+        int32 MinValue,
+        int32 DeltaValue);
+        
+    TSharedRef<SWidget> CreateNumericPropertyRowFloat(
+        const FString& Label,
+        TSharedPtr<SNumericEntryBox<float>>& SpinBox,
+        TOptional<float>& Value,
+        float& ActualVariable,
+        float MinValue,
+        float DeltaValue);
 
-    void GeneratePointCloudMesh(TArray<FVector>& Vertices, 
-                           TArray<int32>& Triangles, 
-                           TArray<FVector>& Normals,
-                           TArray<FVector2D>& UVs,
-                           TArray<FColor>& VertexColors);
+    template<typename T>
+    TSharedRef<SWidget> CreateNumericPropertyRow(
+        const FString& Label,
+        TSharedPtr<SNumericEntryBox<T>>& SpinBox,
+        TOptional<T>& Value,
+        T MinValue,
+        T DeltaValue);
 
-    void CreateAndSetVertexColorMaterial(UProceduralMeshComponent* ProcMeshComp);
+    // ============================================================================
+    // UTILITY FUNCTIONS
+    // ============================================================================
+    
+    static FString GetTimestampedFilename();
 };
 
 namespace FVCCSimPanelFactory

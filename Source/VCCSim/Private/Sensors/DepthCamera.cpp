@@ -350,7 +350,6 @@ TArray<FDCPoint> UDepthCameraComponent::GeneratePointCloud()
                     ViewY       // Up
                 );
                 
-                // Transform to world space
                 WorldPos = CameraTransform.TransformPosition(CameraSpacePos);
             }
 

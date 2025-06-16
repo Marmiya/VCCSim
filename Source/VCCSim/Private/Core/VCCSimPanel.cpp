@@ -38,6 +38,9 @@
 #include "HighResScreenshot.h"
 #include "LevelEditorViewport.h"
 
+// ============================================================================
+// CONSTRUCTOR & DESTRUCTOR
+// ============================================================================
 
 SVCCSimPanel::~SVCCSimPanel()
 {
@@ -54,6 +57,7 @@ SVCCSimPanel::~SVCCSimPanel()
         bAutoCaptureInProgress = false;
     }
 
+    // Clean up path visualization
     if (PathVisualizationActor.IsValid() && GEditor)
     {
         if (UWorld* World = GEditor->GetEditorWorldContext().World())
@@ -63,6 +67,7 @@ SVCCSimPanel::~SVCCSimPanel()
         PathVisualizationActor.Reset();
     }
 
+    // Clean up scene analysis visualizations
     if (SceneAnalysisManager.IsValid())
     {
         SceneAnalysisManager->InterfaceClearSafeZoneVisualization();
@@ -71,7 +76,10 @@ SVCCSimPanel::~SVCCSimPanel()
     }
 }
 
-// Selection state toggle callbacks
+// ============================================================================
+// SELECTION MANAGEMENT
+// ============================================================================
+
 void SVCCSimPanel::OnSelectFlashPawnToggleChanged(ECheckBoxState NewState)
 {
     bSelectingFlashPawn = (NewState == ECheckBoxState::Checked);
@@ -99,12 +107,70 @@ void SVCCSimPanel::OnSelectTargetToggleChanged(ECheckBoxState NewState)
 void SVCCSimPanel::OnUseLimitedToggleChanged(ECheckBoxState NewState)
 {
     bUseLimited = (NewState == ECheckBoxState::Checked);
-
-    UE_LOG(LogTemp, Display, TEXT("Use Limited Region: %s"),
-        bUseLimited ? TEXT("Enabled") : TEXT("Disabled"));
 }
 
-// Camera checkbox callbacks
+void SVCCSimPanel::OnSelectionChanged(UObject* Object)
+{
+    // Skip if we're not in selection mode
+    if (!bSelectingFlashPawn && !bSelectingTarget)
+    {
+        return;
+    }
+    
+    USelection* Selection = GEditor->GetSelectedActors();
+    if (!Selection || Selection->Num() == 0)
+    {
+        return;
+    }
+    
+    // Process only the first selected actor
+    AActor* Actor = Cast<AActor>(Selection->GetSelectedObject(0));
+    if (!Actor)
+    {
+        return;
+    }
+    
+    // Handle FlashPawn selection
+    if (bSelectingFlashPawn)
+    {
+        AFlashPawn* FlashPawn = Cast<AFlashPawn>(Actor);
+        if (FlashPawn)
+        {
+            SelectedFlashPawn = FlashPawn;
+            SelectedFlashPawnText->SetText(FText::FromString(FlashPawn->GetActorLabel()));
+            
+            // Turn off selection mode
+            bSelectingFlashPawn = false;
+            SelectFlashPawnToggle->SetIsChecked(ECheckBoxState::Unchecked);
+            
+            // Check what camera components are available
+            CheckCameraComponents();
+        }
+    }
+    // Handle target selection
+    else if (bSelectingTarget)
+    {
+        // Skip if it's a FlashPawn (can't target itself)
+        if (!Actor->IsA<AFlashPawn>())
+        {
+            SelectedTargetObject = Actor;
+            SelectedTargetObjectText->SetText(FText::FromString(Actor->GetActorLabel()));
+            
+            // Turn off selection mode
+            bSelectingTarget = false;
+            SelectTargetToggle->SetIsChecked(ECheckBoxState::Unchecked);
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Cannot select a FlashPawn as a target"));
+        }
+    }
+}
+
+// ============================================================================
+// CAMERA MANAGEMENT
+// ============================================================================
+
 void SVCCSimPanel::OnRGBCameraCheckboxChanged(ECheckBoxState NewState)
 {
     bUseRGBCamera = (NewState == ECheckBoxState::Checked);
@@ -162,71 +228,6 @@ void SVCCSimPanel::OnSegmentationCameraCheckboxChanged(ECheckBoxState NewState)
     }
 }
 
-// Selection changed callback
-void SVCCSimPanel::OnSelectionChanged(UObject* Object)
-{
-    // Skip if we're not in selection mode
-    if (!bSelectingFlashPawn && !bSelectingTarget)
-    {
-        return;
-    }
-    
-    USelection* Selection = GEditor->GetSelectedActors();
-    if (!Selection || Selection->Num() == 0)
-    {
-        return;
-    }
-    
-    // Process only the first selected actor
-    AActor* Actor = Cast<AActor>(Selection->GetSelectedObject(0));
-    if (!Actor)
-    {
-        return;
-    }
-    
-    // If we're selecting a FlashPawn
-    if (bSelectingFlashPawn)
-    {
-        AFlashPawn* FlashPawn = Cast<AFlashPawn>(Actor);
-        if (FlashPawn)
-        {
-            SelectedFlashPawn = FlashPawn;
-            SelectedFlashPawnText->SetText(FText::FromString(FlashPawn->GetActorLabel()));
-            
-            // Turn off selection mode
-            bSelectingFlashPawn = false;
-            SelectFlashPawnToggle->SetIsChecked(ECheckBoxState::Unchecked);
-            
-            // Check what camera components are available
-            CheckCameraComponents();
-            
-            UE_LOG(LogTemp, Display, TEXT("Selected FlashPawn: %s"),
-                *FlashPawn->GetActorLabel());
-        }
-    }
-    // If we're selecting a target
-    else if (bSelectingTarget)
-    {
-        // Skip if it's a FlashPawn (can't target itself)
-        if (!Actor->IsA<AFlashPawn>())
-        {
-            SelectedTargetObject = Actor;
-            SelectedTargetObjectText->SetText(FText::FromString(Actor->GetActorLabel()));
-            
-            // Turn off selection mode
-            bSelectingTarget = false;
-            SelectTargetToggle->SetIsChecked(ECheckBoxState::Unchecked);
-            
-            UE_LOG(LogTemp, Display, TEXT("Selected Target: %s"), *Actor->GetActorLabel());
-        }
-        else
-        {
-            UE_LOG(LogTemp, Warning, TEXT("Cannot select a FlashPawn as a target"));
-        }
-    }
-}
-
-// Check what camera components are available on the selected FlashPawn
 void SVCCSimPanel::CheckCameraComponents()
 {
     bHasRGBCamera = false;
@@ -253,10 +254,6 @@ void SVCCSimPanel::CheckCameraComponents()
     SelectedFlashPawn->GetComponents<USegmentationCameraComponent>(SegmentationCameras);
     bHasSegmentationCamera = (SegmentationCameras.Num() > 0);
     
-    UE_LOG(LogTemp, Display, TEXT("FlashPawn camera components: "
-                                  "RGB=%d, Depth=%d, Segmentation=%d"),
-        bHasRGBCamera ? 1 : 0, bHasDepthCamera ? 1 : 0, bHasSegmentationCamera ? 1 : 0);
-    
     // Reset checkboxes if corresponding cameras aren't available
     if (!bHasRGBCamera)
     {
@@ -279,7 +276,6 @@ void SVCCSimPanel::CheckCameraComponents()
     UpdateActiveCameras();
 }
 
-// Update active camera components
 void SVCCSimPanel::UpdateActiveCameras()
 {
     if (!SelectedFlashPawn.IsValid())
@@ -325,15 +321,12 @@ void SVCCSimPanel::UpdateActiveCameras()
             Camera->SetCaptureComponent();
         }
     }
-    
-    UE_LOG(LogTemp, Display, TEXT("Camera activation updated: "
-                                  "RGB=%s, Depth=%s, Segmentation=%s"),
-        bUseRGBCamera ? TEXT("On") : TEXT("Off"),
-        bUseDepthCamera ? TEXT("On") : TEXT("Off"),
-        bUseSegmentationCamera ? TEXT("On") : TEXT("Off"));
 }
 
-// Generate poses around target
+// ============================================================================
+// POSE GENERATION AND MANAGEMENT
+// ============================================================================
+
 FReply SVCCSimPanel::OnGeneratePosesClicked()
 {
     GeneratePosesAroundTarget();
@@ -357,14 +350,12 @@ void SVCCSimPanel::GeneratePosesAroundTarget()
 {
     if (!SelectedFlashPawn.IsValid() || !SelectedTargetObject.IsValid())
     {
-        UE_LOG(LogTemp, Warning, 
-            TEXT("Must select both a FlashPawn and a target object"));
+        UE_LOG(LogTemp, Warning, TEXT("Must select both a FlashPawn and a target object"));
         return;
     }
 
     TArray<FVector> Positions;
     TArray<FRotator> Rotations;
-
     TArray<FMeshInfo> MeshInfos;
 
     TArray<UStaticMeshComponent*> MeshComponents;
@@ -374,10 +365,7 @@ void SVCCSimPanel::GeneratePosesAroundTarget()
         if (MeshComponent)
         {
             FMeshInfo MeshInfo;
-            ASceneAnalysisManager::ExtractMeshData(
-                MeshComponent, 
-                MeshInfo
-            );
+            ASceneAnalysisManager::ExtractMeshData(MeshComponent, MeshInfo);
             MeshInfos.Add(MeshInfo);
         }
     }
@@ -399,18 +387,381 @@ void SVCCSimPanel::GeneratePosesAroundTarget()
     GEditor->GetTimerManager()->ClearTimer(AutoCaptureTimerHandle);
 }
 
-// Capture image from current pose
+void SVCCSimPanel::LoadPredefinedPose()
+{
+    if (!SelectedFlashPawn.IsValid())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("No FlashPawn selected"));
+        return;
+    }
+    
+    // Open file dialog to select pose file
+    IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
+    if (DesktopPlatform)
+    {
+        TArray<FString> OpenFilenames;
+        FString ExtensionStr = TEXT("Pose Files (*.txt)|*.txt");
+        
+        bool bOpened = DesktopPlatform->OpenFileDialog(
+            FSlateApplication::Get().FindBestParentWindowHandleForDialogs(nullptr),
+            TEXT("Load Pose File"),
+            FPaths::ProjectSavedDir(),
+            TEXT(""),
+            *ExtensionStr,
+            EFileDialogFlags::None,
+            OpenFilenames
+        );
+        
+        if (bOpened && OpenFilenames.Num() > 0)
+        {
+            FString SelectedFile = OpenFilenames[0];
+            
+            // Read file content
+            TArray<FString> FileLines;
+            if (FFileHelper::LoadFileToStringArray(FileLines, *SelectedFile))
+            {
+                TArray<FVector> Positions;
+                TArray<FRotator> Rotations;
+                
+                for (const FString& Line : FileLines)
+                {
+                    // Parse line - Expected format: X Y Z Pitch Yaw Roll
+                    TArray<FString> Values;
+                    Line.ParseIntoArray(Values, TEXT(" "), true);
+                    
+                    if (Values.Num() >= 6)
+                    {
+                        float X = FCString::Atof(*Values[0]);
+                        float Y = FCString::Atof(*Values[1]);
+                        float Z = FCString::Atof(*Values[2]);
+                        float Pitch = FCString::Atof(*Values[3]);
+                        float Yaw = FCString::Atof(*Values[4]);
+                        float Roll = FCString::Atof(*Values[5]);
+                        
+                        Positions.Add(FVector(X, Y, Z));
+                        Rotations.Add(FRotator(Pitch, Yaw, Roll));
+                    }
+                }
+                
+                if (Positions.Num() > 0 && Positions.Num() == Rotations.Num())
+                {
+                    // Set the path on the FlashPawn
+                    SelectedFlashPawn->SetPathPanel(Positions, Rotations);
+                    
+                    // Update NumPoses
+                    NumPoses = Positions.Num();
+                    NumPosesValue = NumPoses;
+                    
+                    bPathVisualized = false;
+                    bPathNeedsUpdate = true;
+                    
+                    if (PathVisualizationActor.IsValid() && GEditor)
+                    {
+                        if (UWorld* World = GEditor->GetEditorWorldContext().World())
+                        {
+                            World->DestroyActor(PathVisualizationActor.Get());
+                        }
+                        PathVisualizationActor.Reset();
+                    }
+                    
+                    UpdatePathVisualization();
+                }
+                else
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("Failed to parse pose file: Invalid format or empty file"));
+                }
+            }
+            else
+            {
+                UE_LOG(LogTemp, Warning, TEXT("Failed to load file"));
+            }
+        }
+    }
+}
+
+void SVCCSimPanel::SaveGeneratedPose()
+{
+    if (!SelectedFlashPawn.IsValid())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("No FlashPawn selected"));
+        return;
+    }
+    
+    // Check if there are poses to save
+    int32 PoseCount = SelectedFlashPawn->GetPoseCount();
+    if (PoseCount <= 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("No poses to save"));
+        return;
+    }
+    
+    // Open file dialog to select save location
+    IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
+    if (DesktopPlatform)
+    {
+        TArray<FString> SaveFilenames;
+        FString ExtensionStr = TEXT("Pose Files (*.txt)|*.txt");
+        
+        bool bSaved = DesktopPlatform->SaveFileDialog(
+            FSlateApplication::Get().FindBestParentWindowHandleForDialogs(nullptr),
+            TEXT("Save Pose File"),
+            FPaths::ProjectSavedDir(),
+            TEXT("poses.txt"),
+            *ExtensionStr,
+            EFileDialogFlags::None,
+            SaveFilenames
+        );
+        
+        if (bSaved && SaveFilenames.Num() > 0)
+        {
+            FString SelectedFile = SaveFilenames[0];
+            
+            // Ensure the file has .txt extension
+            if (!SelectedFile.EndsWith(TEXT(".txt")))
+            {
+                SelectedFile += TEXT(".txt");
+            }
+            
+            // Get positions and rotations from FlashPawn
+            TArray<FVector> Positions;
+            TArray<FRotator> Rotations;
+            SelectedFlashPawn->GetCurrentPath(Positions, Rotations);
+            
+            // Build file content
+            FString FileContent;
+            for (int32 i = 0; i < Positions.Num(); ++i)
+            {
+                const FVector& Pos = Positions[i];
+                const FRotator& Rot = Rotations[i];
+                
+                // Format: X Y Z Pitch Yaw Roll
+                FileContent += FString::Printf(
+                    TEXT("%.6f %.6f %.6f %.6f %.6f %.6f\n"),
+                    Pos.X, Pos.Y, Pos.Z,
+                    Rot.Pitch, Rot.Yaw, Rot.Roll
+                );
+            }
+            
+            // Save to file
+            if (!FFileHelper::SaveStringToFile(FileContent, *SelectedFile))
+            {
+                UE_LOG(LogTemp, Warning, TEXT("Failed to save file"));
+            }
+        }
+    }
+}
+
+FReply SVCCSimPanel::OnLoadPoseClicked()
+{
+    LoadPredefinedPose();
+    return FReply::Handled();
+}
+
+FReply SVCCSimPanel::OnSavePoseClicked()
+{
+    SaveGeneratedPose();
+    return FReply::Handled();
+}
+
+// ============================================================================
+// PATH VISUALIZATION
+// ============================================================================
+
+FReply SVCCSimPanel::OnTogglePathVisualizationClicked()
+{
+    if (!SelectedFlashPawn.IsValid())
+    {
+        return FReply::Handled();
+    }
+    
+    // Toggle the visualization state
+    bPathVisualized = !bPathVisualized;
+
+    if (bPathVisualized)
+    {
+        ShowPathVisualization();
+    }
+    else
+    {
+        HidePathVisualization();
+    }
+
+    VisualizePathButton->SetButtonStyle(bPathVisualized ? 
+        &FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Danger") : 
+        &FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Primary"));
+    
+    return FReply::Handled();
+}
+
+void SVCCSimPanel::UpdatePathVisualization()
+{
+    const TArray<FVector> Positions = SelectedFlashPawn->PendingPositions;
+    const TArray<FRotator> Rotations = SelectedFlashPawn->PendingRotations;
+
+    if (Positions.Num() == 0 || Positions.Num() != Rotations.Num())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("No valid path available for visualization"));
+        bPathVisualized = false;
+        return;
+    }
+
+    UMaterialInterface* PathMaterial = LoadObject<UMaterialInterface>(nullptr, 
+       TEXT("/VCCSim/Materials/M_Rat_Path_ice.M_Rat_Path_ice"));
+    UMaterialInterface* CameraMaterial = LoadObject<UMaterialInterface>(nullptr, 
+        TEXT("/VCCSim/Materials/M_Rat_Path_Blue.M_Rat_Path_Blue"));
+        
+    if (!PathMaterial || !CameraMaterial)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Failed to load path visualization materials"));
+        bPathVisualized = false;
+        return;
+    }
+        
+    // Generate new visualization actor
+    PathVisualizationActor = UTrajectoryViewer::GenerateVisibleElements(
+        GEditor->GetEditorWorldContext().World(),
+        Positions,
+        Rotations,
+        PathMaterial,
+        CameraMaterial,
+        5.f,     // Path width
+        50.0f,    // Cone size
+        75.0f     // Cone length
+    );
+        
+    if (!PathVisualizationActor.IsValid())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Failed to create path visualization"));
+        bPathVisualized = false;
+        return;
+    }
+
+    if (PathVisualizationActor.IsValid())
+    { 
+        PathVisualizationActor->Tags.Add(FName("NotSMActor"));
+    }
+
+    HidePathVisualization();
+    bPathNeedsUpdate = false;
+    VisualizePathButton->SetButtonStyle(bPathVisualized ? 
+    &FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Danger") : 
+    &FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Primary"));
+}
+
+void SVCCSimPanel::ShowPathVisualization()
+{
+    if (PathVisualizationActor.IsValid())
+    {
+        // Show the actor
+        PathVisualizationActor->SetActorHiddenInGame(false);
+        PathVisualizationActor->SetIsTemporarilyHiddenInEditor(false);
+        
+        // Show all components
+        TArray<UActorComponent*> Components;
+        PathVisualizationActor->GetComponents(UStaticMeshComponent::StaticClass(), Components);
+        for (UActorComponent* Component : Components)
+        {
+            UStaticMeshComponent* MeshComp = Cast<UStaticMeshComponent>(Component);
+            if (MeshComp)
+            {
+                MeshComp->SetVisibility(true);
+                MeshComp->SetHiddenInGame(false);
+            }
+        }
+    }
+}
+
+void SVCCSimPanel::HidePathVisualization()
+{
+    if (PathVisualizationActor.IsValid())
+    {
+        // Hide the actor
+        PathVisualizationActor->SetActorHiddenInGame(true);
+        PathVisualizationActor->SetIsTemporarilyHiddenInEditor(true);
+        
+        // Hide all components
+        TArray<UActorComponent*> Components;
+        PathVisualizationActor->GetComponents(UStaticMeshComponent::StaticClass(), Components);
+        for (UActorComponent* Component : Components)
+        {
+            UStaticMeshComponent* MeshComp = Cast<UStaticMeshComponent>(Component);
+            if (MeshComp)
+            {
+                MeshComp->SetVisibility(false);
+                MeshComp->SetHiddenInGame(true);
+            }
+        }
+    }
+}
+
+// ============================================================================
+// IMAGE CAPTURE OPERATIONS
+// ============================================================================
+
 FReply SVCCSimPanel::OnCaptureImagesClicked()
 {
     CaptureImageFromCurrentPose();
     return FReply::Handled();
 }
 
+void SVCCSimPanel::CaptureImageFromCurrentPose()
+{
+    if (!SelectedFlashPawn.IsValid())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("No FlashPawn selected"));
+        return;
+    }
+    
+    // Create a directory for saving images if it doesn't exist yet
+    if (SaveDirectory.IsEmpty())
+    {
+        SaveDirectory = FPaths::ProjectSavedDir() / TEXT("VCCSimCaptures") / GetTimestampedFilename();
+        IFileManager::Get().MakeDirectory(*SaveDirectory, true);
+    }
+    
+    // Check if the FlashPawn is ready to capture
+    if (SelectedFlashPawn->IsReady())
+    {
+        // Pose index for filename
+        int32 PoseIndex = SelectedFlashPawn->GetCurrentIndex();
+        
+        // Track if any cameras were captured
+        bool bAnyCaptured = false;
+        
+        // Capture with RGB cameras if enabled
+        if (bUseRGBCamera && bHasRGBCamera)
+        {
+            SaveRGB(PoseIndex, bAnyCaptured);
+        }
+        
+        // Capture with Depth cameras if enabled
+        if (bUseDepthCamera && bHasDepthCamera)
+        {
+            SaveDepth(PoseIndex, bAnyCaptured);
+        }
+        
+        // Capture with Segmentation cameras if enabled
+        if (bUseSegmentationCamera && bHasSegmentationCamera)
+        {
+            SaveSeg(PoseIndex, bAnyCaptured);
+        }
+        
+        // Log if no images were captured
+        if (!bAnyCaptured)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("No images captured. Ensure cameras are enabled."));
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("FlashPawn not ready for capture. Wait for it to reach position."));
+    }
+}
+
 void SVCCSimPanel::SaveRGB(int32 PoseIndex, bool& bAnyCaptured)
 {
     if (!SelectedFlashPawn.IsValid())
     {
-        UE_LOG(LogTemp, Warning, TEXT("SaveRGB: Invalid FlashPawn"));
         return;
     }
     
@@ -432,8 +783,8 @@ void SVCCSimPanel::SaveRGB(int32 PoseIndex, bool& bAnyCaptured)
     
     if (!ViewportClient)
     {
-        UE_LOG(LogTemp, Error, TEXT("SaveRGB: No valid editor viewport found"));
-        *JobNum -= RGBCameras.Num(); // Adjust the job counter
+        UE_LOG(LogTemp, Error, TEXT("No valid editor viewport found"));
+        *JobNum -= RGBCameras.Num();
         return;
     }
     
@@ -477,7 +828,6 @@ void SVCCSimPanel::SaveRGB(int32 PoseIndex, bool& bAnyCaptured)
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("SaveRGB: Camera %d is not active"), i);
             *JobNum -= 1;
         }
     }
@@ -487,7 +837,6 @@ void SVCCSimPanel::SaveDepth(int32 PoseIndex, bool& bAnyCaptured)
 {
     if (!SelectedFlashPawn.IsValid())
     {
-        UE_LOG(LogTemp, Warning, TEXT("SaveDepth: Invalid FlashPawn"));
         return;
     }
     
@@ -538,16 +887,6 @@ void SVCCSimPanel::SaveDepth(int32 PoseIndex, bool& bAnyCaptured)
                                         PointCloud, 
                                         PLYFilename))
                                     ->StartBackgroundTask();
-                                    
-                                    UE_LOG(LogTemp, Log, TEXT("Generated point cloud "
-                                                              "with %d points for Cam%02d_Pose%03d"), 
-                                        PointCloud.Num(), CameraIndex, PoseIndex);
-                                }
-                                else
-                                {
-                                    UE_LOG(LogTemp, Warning, TEXT("Empty point cloud "
-                                                                  "generated for Cam%02d_Pose%03d"), 
-                                        CameraIndex, PoseIndex);
                                 }
                                 
                                 Camera->AsyncGetDepthImageData(
@@ -564,17 +903,9 @@ void SVCCSimPanel::SaveDepth(int32 PoseIndex, bool& bAnyCaptured)
                                         ->StartBackgroundTask();
                                     });
                             }
-                            catch (const std::exception& e)
-                            {
-                                UE_LOG(LogTemp, Error, TEXT("Exception in point cloud "
-                                                            "generation for Cam%02d_Pose%03d: %s"), 
-                                    CameraIndex, PoseIndex, UTF8_TO_TCHAR(e.what()));
-                            }
                             catch (...)
                             {
-                                UE_LOG(LogTemp, Error, TEXT("Unknown exception in point "
-                                                            "cloud generation for Cam%02d_Pose%03d"), 
-                                    CameraIndex, PoseIndex);
+                                // Handle any exceptions silently
                             }
                             
                             // Decrement job counter on game thread
@@ -589,11 +920,11 @@ void SVCCSimPanel::SaveDepth(int32 PoseIndex, bool& bAnyCaptured)
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("SaveDepth: Camera %d is not active"), i);
             *JobNum -= 1;
         }
     }
 }
+
 void SVCCSimPanel::SaveSeg(int32 PoseIndex, bool& bAnyCaptured)
 {
     TArray<USegmentationCameraComponent*> SegmentationCameras;
@@ -637,64 +968,6 @@ void SVCCSimPanel::SaveSeg(int32 PoseIndex, bool& bAnyCaptured)
     }
 }
 
-void SVCCSimPanel::CaptureImageFromCurrentPose()
-{
-    if (!SelectedFlashPawn.IsValid())
-    {
-        UE_LOG(LogTemp, Warning, TEXT("No FlashPawn selected"));
-        return;
-    }
-    
-    // Create a directory for saving images if it doesn't exist yet
-    if (SaveDirectory.IsEmpty())
-    {
-        SaveDirectory = FPaths::ProjectSavedDir() / TEXT("VCCSimCaptures") / GetTimestampedFilename();
-        IFileManager::Get().MakeDirectory(*SaveDirectory, true);
-        UE_LOG(LogTemp, Display, TEXT("Saving images to: %s"), *SaveDirectory);
-    }
-    
-    // Check if the FlashPawn is ready to capture
-    if (SelectedFlashPawn->IsReady())
-    {
-        // Pose index for filename
-        int32 PoseIndex = SelectedFlashPawn->GetCurrentIndex();
-        
-        // Track if any cameras were captured
-        bool bAnyCaptured = false;
-        
-        // Capture with RGB cameras if enabled
-        if (bUseRGBCamera && bHasRGBCamera)
-        {
-            SaveRGB(PoseIndex, bAnyCaptured);
-        }
-        
-        // Capture with Depth cameras if enabled
-        if (bUseDepthCamera && bHasDepthCamera)
-        {
-            SaveDepth(PoseIndex, bAnyCaptured);
-        }
-        
-        // Capture with Segmentation cameras if enabled
-        if (bUseSegmentationCamera && bHasSegmentationCamera)
-        {
-            SaveSeg(PoseIndex, bAnyCaptured);
-        }
-        
-        // Log if no images were captured
-        if (!bAnyCaptured)
-        {
-            UE_LOG(LogTemp, Warning, TEXT("No images captured. "
-                                          "Ensure cameras are enabled."));
-        }
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("FlashPawn not ready for capture. "
-                                      "Wait for it to reach position."));
-    }
-}
-
-// Start auto-capture
 void SVCCSimPanel::StartAutoCapture()
 {
     if (!SelectedFlashPawn.IsValid())
@@ -706,7 +979,6 @@ void SVCCSimPanel::StartAutoCapture()
     // Create a directory for saving images
     SaveDirectory = FPaths::ProjectSavedDir() / TEXT("VCCSimCaptures") / GetTimestampedFilename();
     IFileManager::Get().MakeDirectory(*SaveDirectory, true);
-    UE_LOG(LogTemp, Display, TEXT("Auto-capture started. Saving images to: %s"), *SaveDirectory);
     
     // Start the capture process
     bAutoCaptureInProgress = true;
@@ -737,7 +1009,6 @@ void SVCCSimPanel::StartAutoCapture()
                 if (SelectedFlashPawn->GetCurrentIndex() == NumPoses - 1)
                 {
                     SaveDirectory.Empty(); // Reset for next capture session
-                    UE_LOG(LogTemp, Display, TEXT("Auto-capture completed"));
                     bAutoCaptureInProgress = false;
                     GEditor->GetTimerManager()->ClearTimer(AutoCaptureTimerHandle);
                 }
@@ -752,447 +1023,14 @@ void SVCCSimPanel::StartAutoCapture()
     );
 }
 
-// Helper to get a timestamped filename
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
+
 FString SVCCSimPanel::GetTimestampedFilename()
 {
     FDateTime Now = FDateTime::Now();
     return FString::Printf(TEXT("%04d-%02d-%02d_%02d-%02d-%02d"),
         Now.GetYear(), Now.GetMonth(), Now.GetDay(),
         Now.GetHour(), Now.GetMinute(), Now.GetSecond());
-}
-
-// Load predefined pose from file
-void SVCCSimPanel::LoadPredefinedPose()
-{
-    if (!SelectedFlashPawn.IsValid())
-    {
-        UE_LOG(LogTemp, Warning, TEXT("No FlashPawn selected"));
-        return;
-    }
-    
-    // Open file dialog to select pose file
-    IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
-    if (DesktopPlatform)
-    {
-        TArray<FString> OpenFilenames;
-        FString ExtensionStr = TEXT("Pose Files (*.txt)|*.txt");
-        
-        bool bOpened = DesktopPlatform->OpenFileDialog(
-            FSlateApplication::Get().FindBestParentWindowHandleForDialogs(nullptr),
-            TEXT("Load Pose File"),
-            FPaths::ProjectSavedDir(),
-            TEXT(""),
-            *ExtensionStr,
-            EFileDialogFlags::None,
-            OpenFilenames
-        );
-        
-        if (bOpened && OpenFilenames.Num() > 0)
-        {
-            FString SelectedFile = OpenFilenames[0];
-            UE_LOG(LogTemp, Display, TEXT("Loading pose file: %s"), *SelectedFile);
-            
-            // Read file content
-            TArray<FString> FileLines;
-            if (FFileHelper::LoadFileToStringArray(FileLines, *SelectedFile))
-            {
-                TArray<FVector> Positions;
-                TArray<FRotator> Rotations;
-                
-                for (const FString& Line : FileLines)
-                {
-                    // Parse line
-                    // Expected format: X Y Z Pitch Yaw Roll
-                    TArray<FString> Values;
-                    Line.ParseIntoArray(Values, TEXT(" "), true);
-                    
-                    if (Values.Num() >= 6)
-                    {
-                        float X = FCString::Atof(*Values[0]);
-                        float Y = FCString::Atof(*Values[1]);
-                        float Z = FCString::Atof(*Values[2]);
-                        float Pitch = FCString::Atof(*Values[3]);
-                        float Yaw = FCString::Atof(*Values[4]);
-                        float Roll = FCString::Atof(*Values[5]);
-                        
-                        Positions.Add(FVector(X, Y, Z));
-                        Rotations.Add(FRotator(Pitch, Yaw, Roll));
-                    }
-                }
-                
-                if (Positions.Num() > 0 && Positions.Num() == Rotations.Num())
-                {
-                    // Set the path on the FlashPawn
-                    SelectedFlashPawn->SetPathPanel(Positions, Rotations);
-                    
-                    // Update NumPoses
-                    NumPoses = Positions.Num();
-                    NumPosesValue = NumPoses;
-                    
-                    UE_LOG(LogTemp, Display, TEXT("Loaded %d poses from file"),
-                        Positions.Num());
-                    bPathVisualized = false;
-                    bPathNeedsUpdate = true;
-                    
-                    if (PathVisualizationActor.IsValid() && GEditor)
-                    {
-                        if (UWorld* World = GEditor->GetEditorWorldContext().World())
-                        {
-                            World->DestroyActor(PathVisualizationActor.Get());
-                        }
-                        PathVisualizationActor.Reset();
-                    }
-                    
-                    UpdatePathVisualization();
-                }
-                else
-                {
-                    UE_LOG(LogTemp, Warning, TEXT("Failed to parse pose file: "
-                                                  "Invalid format or empty file"));
-                }
-            }
-            else
-            {
-                UE_LOG(LogTemp, Warning, TEXT("Failed to load file"));
-            }
-        }
-    }
-}
-
-// Save generated pose to file
-void SVCCSimPanel::SaveGeneratedPose()
-{
-    if (!SelectedFlashPawn.IsValid())
-    {
-        UE_LOG(LogTemp, Warning, TEXT("No FlashPawn selected"));
-        return;
-    }
-    
-    // Check if there are poses to save
-    int32 PoseCount = SelectedFlashPawn->GetPoseCount();
-    if (PoseCount <= 0)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("No poses to save"));
-        return;
-    }
-    
-    // Open file dialog to select save location
-    IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
-    if (DesktopPlatform)
-    {
-        TArray<FString> SaveFilenames;
-        FString ExtensionStr = TEXT("Pose Files (*.txt)|*.txt");
-        
-        bool bSaved = DesktopPlatform->SaveFileDialog(
-            FSlateApplication::Get().FindBestParentWindowHandleForDialogs(nullptr),
-            TEXT("Save Pose File"),
-            FPaths::ProjectSavedDir(),
-            TEXT("poses.txt"),
-            *ExtensionStr,
-            EFileDialogFlags::None,
-            SaveFilenames
-        );
-        
-        if (bSaved && SaveFilenames.Num() > 0)
-        {
-            FString SelectedFile = SaveFilenames[0];
-            
-            // Ensure the file has .txt extension
-            if (!SelectedFile.EndsWith(TEXT(".txt")))
-            {
-                SelectedFile += TEXT(".txt");
-            }
-            
-            UE_LOG(LogTemp, Display, TEXT("Saving pose file: %s"), *SelectedFile);
-            
-            // Get positions and rotations from FlashPawn
-            TArray<FVector> Positions;
-            TArray<FRotator> Rotations;
-            SelectedFlashPawn->GetCurrentPath(Positions, Rotations);
-            
-            // Build file content
-            FString FileContent;
-            for (int32 i = 0; i < Positions.Num(); ++i)
-            {
-                const FVector& Pos = Positions[i];
-                const FRotator& Rot = Rotations[i];
-                
-                // Format: X Y Z Pitch Yaw Roll
-                FileContent += FString::Printf(
-                    TEXT("%.6f %.6f %.6f %.6f %.6f %.6f\n"),
-                    Pos.X, Pos.Y, Pos.Z,
-                    Rot.Pitch, Rot.Yaw, Rot.Roll
-                );
-            }
-            
-            // Save to file
-            if (FFileHelper::SaveStringToFile(FileContent, *SelectedFile))
-            {
-                UE_LOG(LogTemp, Display, TEXT("Successfully saved %d poses to file"),
-                    Positions.Num());
-            }
-            else
-            {
-                UE_LOG(LogTemp, Warning, TEXT("Failed to save file"));
-            }
-        }
-    }
-}
-
-// Button callbacks for pose file functions
-FReply SVCCSimPanel::OnLoadPoseClicked()
-{
-    LoadPredefinedPose();
-    return FReply::Handled();
-}
-
-FReply SVCCSimPanel::OnSavePoseClicked()
-{
-    SaveGeneratedPose();
-    return FReply::Handled();
-}
-
-// Create a standardized section header with proper styling
-TSharedRef<SWidget> SVCCSimPanel::CreateSectionHeader(const FString& Title)
-{
-    return SNew(SBorder)
-        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryTop"))
-        .Padding(FMargin(10, 7))
-        [
-            SNew(STextBlock)
-            .Text(FText::FromString(Title))
-            .Font(FAppStyle::GetFontStyle("PropertyWindow.BoldFont"))
-            .ColorAndOpacity(FColor(233, 233, 233)) // Light text for dark background
-            .TransformPolicy(ETextTransformPolicy::ToUpper)
-        ];
-}
-
-// Create a standardized content container with proper styling
-TSharedRef<SWidget> SVCCSimPanel::CreateSectionContent(TSharedRef<SWidget> Content)
-{
-    return SNew(SBorder)
-        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
-        .BorderBackgroundColor(FColor(5,5, 5, 255))
-        .Padding(FMargin(15, 6))
-        [
-            Content
-        ];
-}
-
-// Create a standardized property row with label and content
-TSharedRef<SWidget> SVCCSimPanel::CreatePropertyRow(
-    const FString& Label, TSharedRef<SWidget> Content)
-{
-    return SNew(SHorizontalBox)
-    +SHorizontalBox::Slot()
-    .AutoWidth()
-    .VAlign(VAlign_Center)
-    .Padding(FMargin(0, 0, 8, 0))
-    [
-        SNew(STextBlock)
-        .Text(FText::FromString(Label))
-        .MinDesiredWidth(80)
-        .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
-        .ColorAndOpacity(FColor(233, 233, 233)) 
-    ]
-    +SHorizontalBox::Slot()
-    .FillWidth(1.0f)
-    [
-        Content
-    ];
-}
-
-FReply SVCCSimPanel::OnTogglePathVisualizationClicked()
-{
-    if (!SelectedFlashPawn.IsValid())
-    {
-        return FReply::Handled();
-    }
-    
-    // Toggle the visualization state
-    bPathVisualized = !bPathVisualized;
-
-    if (bPathVisualized)
-    {
-        // Show the path visualization
-        ShowPathVisualization();
-    }
-    else
-    {
-        // Hide the path visualization
-        HidePathVisualization();
-    }
-
-    VisualizePathButton->SetButtonStyle(bPathVisualized ? 
-        &FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Danger") : 
-        &FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Primary"));
-    
-    return FReply::Handled();
-}
-
-void SVCCSimPanel::UpdatePathVisualization()
-{
-    const TArray<FVector> Positions = SelectedFlashPawn->PendingPositions;
-    const TArray<FRotator> Rotations = SelectedFlashPawn->PendingRotations;
-
-    if (Positions.Num() == 0 || Positions.Num() != Rotations.Num())
-    {
-        UE_LOG(LogTemp, Warning, TEXT("No valid path available for visualization"));
-        bPathVisualized = false;
-    }
-
-    UMaterialInterface* PathMaterial = LoadObject<UMaterialInterface>(nullptr, 
-       TEXT("/VCCSim/Materials/M_Rat_Path_ice.M_Rat_Path_ice"));
-    UMaterialInterface* CameraMaterial = LoadObject<UMaterialInterface>(nullptr, 
-        TEXT("/VCCSim/Materials/M_Rat_Path_Blue.M_Rat_Path_Blue"));
-        
-    if (!PathMaterial || !CameraMaterial)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Failed to load path visualization materials"));
-        bPathVisualized = false;
-    }
-        
-    // Generate new visualization actor
-    PathVisualizationActor = UTrajectoryViewer::GenerateVisibleElements(
-        GEditor->GetEditorWorldContext().World(),
-        Positions,
-        Rotations,
-        PathMaterial,
-        CameraMaterial,
-        5.f,     // Path width
-        50.0f,    // Cone size
-        75.0f     // Cone length
-    );
-        
-    if (!PathVisualizationActor.IsValid())
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Failed to create path visualization"));
-        bPathVisualized = false;
-    }
-
-    if (PathVisualizationActor.IsValid())
-    { 
-        PathVisualizationActor->Tags.Add(FName("NotSMActor"));
-    }
-
-    HidePathVisualization();
-    bPathNeedsUpdate = false;
-    VisualizePathButton->SetButtonStyle(bPathVisualized ? 
-    &FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Danger") : 
-    &FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Primary"));
-}
-
-void SVCCSimPanel::ShowPathVisualization()
-{
-    if (PathVisualizationActor.IsValid())
-    {
-        // Show the actor in game
-        PathVisualizationActor->SetActorHiddenInGame(false);
-        
-        // Show the actor in editor
-        PathVisualizationActor->SetIsTemporarilyHiddenInEditor(false);
-        
-        // Show all components
-        TArray<UActorComponent*> Components;
-        PathVisualizationActor->GetComponents(UStaticMeshComponent::StaticClass(), Components);
-        for (UActorComponent* Component : Components)
-        {
-            UStaticMeshComponent* MeshComp = Cast<UStaticMeshComponent>(Component);
-            if (MeshComp)
-            {
-                MeshComp->SetVisibility(true);
-                MeshComp->SetHiddenInGame(false);
-            }
-        }
-    }
-}
-
-void SVCCSimPanel::HidePathVisualization()
-{
-    // First check if the weak pointer is valid
-    if (PathVisualizationActor.IsValid())
-    {
-        // Hide the actor in game
-        PathVisualizationActor->SetActorHiddenInGame(true);
-        
-        // Hide the actor in editor
-        PathVisualizationActor->SetIsTemporarilyHiddenInEditor(true);
-        
-        // Hide all components (for thoroughness)
-        TArray<UActorComponent*> Components;
-        PathVisualizationActor->GetComponents(UStaticMeshComponent::StaticClass(), Components);
-        for (UActorComponent* Component : Components)
-        {
-            UStaticMeshComponent* MeshComp = Cast<UStaticMeshComponent>(Component);
-            if (MeshComp)
-            {
-                MeshComp->SetVisibility(false);
-                MeshComp->SetHiddenInGame(true);
-            }
-        }
-    }
-}
-
-FReply SVCCSimPanel::OnToggleSafeZoneVisualizationClicked()
-{
-    if (!SceneAnalysisManager.IsValid())
-    {
-        return FReply::Handled();
-    }
-    
-    // Toggle the visualization state
-    bSafeZoneVisualized = !bSafeZoneVisualized;
-
-    if (bSafeZoneVisualized)
-    {
-        SceneAnalysisManager->InterfaceVisualizeSafeZone(true);
-    }
-    else
-    {
-        SceneAnalysisManager->InterfaceVisualizeSafeZone(false);
-    }
-
-    VisualizeSafeZoneButton->SetButtonStyle(bSafeZoneVisualized ? 
-        &FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Danger") : 
-        &FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Primary"));
-    
-    return FReply::Handled();
-}
-
-FReply SVCCSimPanel::OnToggleCoverageVisualizationClicked()
-{
-    if (!SceneAnalysisManager.IsValid())
-    {
-        return FReply::Handled();
-    }
-    
-    // Toggle the visualization state
-    bCoverageVisualized = !bCoverageVisualized;
-    
-    SceneAnalysisManager->InterfaceVisualizeCoverage(bCoverageVisualized);
-    
-    VisualizeCoverageButton->SetButtonStyle(bCoverageVisualized ? 
-        &FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Danger") : 
-        &FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Primary"));
-    
-    return FReply::Handled();
-}
-
-FReply SVCCSimPanel::OnToggleComplexityVisualizationClicked()
-{
-    if (!SceneAnalysisManager.IsValid())
-    {
-        return FReply::Handled();
-    }
-    
-    // Toggle the visualization state
-    bComplexityVisualized = !bComplexityVisualized;
-    
-    SceneAnalysisManager->InterfaceVisualizeComplexity(bComplexityVisualized);
-    
-    VisualizeComplexityButton->SetButtonStyle(bComplexityVisualized ? 
-        &FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Danger") : 
-        &FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Primary"));
-    
-    return FReply::Handled();
 }
