@@ -106,6 +106,14 @@ struct FSegmentationCameraData final : public FSensorData
     TArray<FColor> Data;
 };
 
+struct FNormalCameraData final : public FSensorData
+{
+    int32 Width;
+    int32 Height;
+    int32 SensorIndex;
+    TArray<FLinearColor> Data;
+};
+
 // Buffer pool for efficient memory management
 class FBufferPool
 {
@@ -286,6 +294,8 @@ struct FPawnDirectoryInfo
     bool bHasLidar = false;
     bool bHasDepth = false;
     bool bHasRGB = false;
+    bool bHasNormal = false;
+    bool bHasSegmentation = false;
     FString PawnDirectory;
     FString PoseFilePath;
 };
@@ -296,7 +306,9 @@ enum class EDataType : uint8
     Pose,
     Lidar,
     DepthC,
-    RGBC
+    RGBC,
+    NormalC,
+    SegmentationC,
 };
 
 // Unified data structure for async tasks
@@ -381,13 +393,15 @@ public:
     void ToggleRecording();
 
     // Pawn registration
-    void RegisterPawn(AActor* Pawn,  bool bHasLidar, bool bHasDepth, bool bHasRGB);
+    void RegisterPawn(AActor* Pawn,  bool bHasLidar, bool bHasDepth,
+        bool bHasRGB, bool bHasNormal,  bool bHasSegmentation);
 
     // Data submission methods
     void SubmitPoseData(AActor* Pawn, FPoseData&& Data);
     void SubmitLidarData(AActor* Pawn, FLidarData&& Data);
     void SubmitDepthData(AActor* Pawn, FDepthCameraData&& Data);
     void SubmitRGBData(AActor* Pawn, FRGBCameraData&& Data);
+    void SubmitNormalData(AActor* Pawn, FNormalCameraData&& Data);
     void SubmitSegmentationData(AActor* Pawn, FSegmentationCameraData&& Data);
 
     // Configuration properties
@@ -425,3 +439,4 @@ template void ARecorder::SubmitData<FPoseData>(AActor*, FPoseData&&, EDataType);
 template void ARecorder::SubmitData<FLidarData>(AActor*, FLidarData&&, EDataType);
 template void ARecorder::SubmitData<FDepthCameraData>(AActor*, FDepthCameraData&&, EDataType);
 template void ARecorder::SubmitData<FRGBCameraData>(AActor*, FRGBCameraData&&, EDataType);
+template void ARecorder::SubmitData<FNormalCameraData>(AActor*, FNormalCameraData&&, EDataType);

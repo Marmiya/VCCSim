@@ -28,6 +28,7 @@
 #include "Sensors/CameraSensor.h"
 #include "Sensors/DepthCamera.h"
 #include "Sensors/SegmentCamera.h"
+#include "Sensors/NormalCamera.h"
 #include "Simulation/PathPlanner.h"
 #include "Simulation/SceneAnalysisManager.h"
 #include "Utils/ImageProcesser.h"
@@ -228,10 +229,30 @@ void SVCCSimPanel::OnSegmentationCameraCheckboxChanged(ECheckBoxState NewState)
     }
 }
 
+void SVCCSimPanel::OnNormalCameraCheckboxChanged(ECheckBoxState NewState)
+{
+    bUseNormalCamera = (NewState == ECheckBoxState::Checked);
+    if (bUseNormalCamera)
+    {
+        TArray<UNormalCameraComponent*> NormalCameras;
+        SelectedFlashPawn->GetComponents<UNormalCameraComponent>(NormalCameras);
+        for (UNormalCameraComponent* Camera : NormalCameras)
+        {
+            if (Camera)
+            {
+                Camera->SetActive(bUseNormalCamera);
+                Camera->InitializeRenderTargets();
+                Camera->SetCaptureComponent();
+            }
+        }
+    }
+}
+
 void SVCCSimPanel::CheckCameraComponents()
 {
     bHasRGBCamera = false;
     bHasDepthCamera = false;
+    bHasNormalCamera = false;
     bHasSegmentationCamera = false;
     
     if (!SelectedFlashPawn.IsValid())
@@ -249,6 +270,11 @@ void SVCCSimPanel::CheckCameraComponents()
     SelectedFlashPawn->GetComponents<UDepthCameraComponent>(DepthCameras);
     bHasDepthCamera = (DepthCameras.Num() > 0);
     
+    // Check for Normal cameras
+    TArray<UNormalCameraComponent*> NormalCameras;
+    SelectedFlashPawn->GetComponents<UNormalCameraComponent>(NormalCameras);
+    bHasNormalCamera = (NormalCameras.Num() > 0);
+    
     // Check for Segmentation cameras
     TArray<USegmentationCameraComponent*> SegmentationCameras;
     SelectedFlashPawn->GetComponents<USegmentationCameraComponent>(SegmentationCameras);
@@ -265,6 +291,12 @@ void SVCCSimPanel::CheckCameraComponents()
     {
         bUseDepthCamera = false;
         DepthCameraCheckBox->SetIsChecked(ECheckBoxState::Unchecked);
+    }
+    
+    if (!bHasNormalCamera)
+    {
+        bUseNormalCamera = false;
+        NormalCameraCheckBox->SetIsChecked(ECheckBoxState::Unchecked);
     }
     
     if (!bHasSegmentationCamera)
@@ -304,6 +336,19 @@ void SVCCSimPanel::UpdateActiveCameras()
         if (Camera)
         {
             Camera->SetActive(bUseDepthCamera);
+            Camera->InitializeRenderTargets();
+            Camera->SetCaptureComponent();
+        }
+    }
+    
+    // Update Normal cameras
+    TArray<UNormalCameraComponent*> NormalCameras;
+    SelectedFlashPawn->GetComponents<UNormalCameraComponent>(NormalCameras);
+    for (UNormalCameraComponent* Camera : NormalCameras)
+    {
+        if (Camera)
+        {
+            Camera->SetActive(bUseNormalCamera);
             Camera->InitializeRenderTargets();
             Camera->SetCaptureComponent();
         }
@@ -350,7 +395,8 @@ void SVCCSimPanel::GeneratePosesAroundTarget()
 {
     if (!SelectedFlashPawn.IsValid() || !SelectedTargetObject.IsValid())
     {
-        UE_LOG(LogTemp, Warning, TEXT("Must select both a FlashPawn and a target object"));
+        UE_LOG(LogTemp, Warning, TEXT("Must select both "
+                                      "a FlashPawn and a target object"));
         return;
     }
 
@@ -468,7 +514,8 @@ void SVCCSimPanel::LoadPredefinedPose()
                 }
                 else
                 {
-                    UE_LOG(LogTemp, Warning, TEXT("Failed to parse pose file: Invalid format or empty file"));
+                    UE_LOG(LogTemp, Warning, TEXT("Failed to parse pose file:"
+                                                  " Invalid format or empty file"));
                 }
             }
             else
@@ -715,7 +762,8 @@ void SVCCSimPanel::CaptureImageFromCurrentPose()
     // Create a directory for saving images if it doesn't exist yet
     if (SaveDirectory.IsEmpty())
     {
-        SaveDirectory = FPaths::ProjectSavedDir() / TEXT("VCCSimCaptures") / GetTimestampedFilename();
+        SaveDirectory = FPaths::ProjectSavedDir() / TEXT("VCCSimCaptures")
+        / GetTimestampedFilename();
         IFileManager::Get().MakeDirectory(*SaveDirectory, true);
     }
     
@@ -740,6 +788,12 @@ void SVCCSimPanel::CaptureImageFromCurrentPose()
             SaveDepth(PoseIndex, bAnyCaptured);
         }
         
+        // Capture with Normal cameras if enabled
+        if (bUseNormalCamera && bHasNormalCamera)
+        {
+            SaveNormal(PoseIndex, bAnyCaptured);
+        }
+        
         // Capture with Segmentation cameras if enabled
         if (bUseSegmentationCamera && bHasSegmentationCamera)
         {
@@ -749,12 +803,14 @@ void SVCCSimPanel::CaptureImageFromCurrentPose()
         // Log if no images were captured
         if (!bAnyCaptured)
         {
-            UE_LOG(LogTemp, Warning, TEXT("No images captured. Ensure cameras are enabled."));
+            UE_LOG(LogTemp, Warning, TEXT("No images captured. "
+                                          "Ensure cameras are enabled."));
         }
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("FlashPawn not ready for capture. Wait for it to reach position."));
+        UE_LOG(LogTemp, Warning, TEXT("FlashPawn not ready for capture. "
+                                      "Wait for it to reach position."));
     }
 }
 
@@ -915,10 +971,12 @@ void SVCCSimPanel::SaveDepth(int32 PoseIndex, bool& bAnyCaptured)
             //             });
             //     });
             
-            FIntPoint Size = {Camera->GetImageSize().first, Camera->GetImageSize().second};
+            FIntPoint Size = {Camera->GetImageSize().first,
+                Camera->GetImageSize().second};
             
             Camera->AsyncGetDepthImageData(
-           [DepthFilename, Size, JobNum = this->JobNum](const TArray<FFloat16Color>& ImageData)
+           [DepthFilename, Size, JobNum = this->JobNum]
+           (const TArray<FFloat16Color>& ImageData)
            {
                float DepthScale = 1.0f;
     
@@ -984,6 +1042,58 @@ void SVCCSimPanel::SaveSeg(int32 PoseIndex, bool& bAnyCaptured)
     }
 }
 
+void SVCCSimPanel::SaveNormal(int32 PoseIndex, bool& bAnyCaptured)
+{
+    if (!SelectedFlashPawn.IsValid())
+    {
+        return;
+    }
+    
+    TArray<UNormalCameraComponent*> NormalCameras;
+    SelectedFlashPawn->GetComponents<UNormalCameraComponent>(NormalCameras);
+    *JobNum += NormalCameras.Num();
+
+    for (int32 i = 0; i < NormalCameras.Num(); ++i)
+    {
+        UNormalCameraComponent* Camera = NormalCameras[i];
+        if (Camera && Camera->IsActive())
+        {
+            // Get camera index or use iterator index
+            int32 CameraIndex = Camera->GetCameraIndex();
+            if (CameraIndex < 0) CameraIndex = i;
+            
+            // Generate filename for EXR format
+            FString NormalEXRFilename = SaveDirectory / FString::Printf(
+                TEXT("Normal_Cam%02d_Pose%03d.exr"), 
+                CameraIndex, 
+                PoseIndex
+            );
+            
+            FIntPoint Size = {Camera->GetImageSize().first, Camera->GetImageSize().second};
+            
+            // Save high precision normals as EXR
+            Camera->AsyncGetNormalImageData(
+                [NormalEXRFilename, Size, JobNum = this->JobNum]
+                (const TArray<FLinearColor>& NormalData)
+                {
+                    (new FAutoDeleteAsyncTask<FAsyncNormalEXRSaveTask>(
+                        NormalData, 
+                        Size, 
+                        NormalEXRFilename))
+                    ->StartBackgroundTask();
+                    
+                    *JobNum -= 1;
+                });
+            
+            bAnyCaptured = true;
+        }
+        else
+        {
+            *JobNum -= 1;
+        }
+    }
+}
+
 void SVCCSimPanel::StartAutoCapture()
 {
     if (!SelectedFlashPawn.IsValid())
@@ -993,7 +1103,8 @@ void SVCCSimPanel::StartAutoCapture()
     }
     
     // Create a directory for saving images
-    SaveDirectory = FPaths::ProjectSavedDir() / TEXT("VCCSimCaptures") / GetTimestampedFilename();
+    SaveDirectory = FPaths::ProjectSavedDir() / TEXT("VCCSimCaptures") /
+        GetTimestampedFilename();
     IFileManager::Get().MakeDirectory(*SaveDirectory, true);
     
     // Start the capture process

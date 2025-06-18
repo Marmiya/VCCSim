@@ -150,3 +150,56 @@ void FAsyncPLYSaveTask::DoWork()
             PointCloud.Num(), *FilePath);
     }
 }
+
+void FAsyncNormalEXRSaveTask::DoWork()
+{
+    // Use modern UE image API with FImage
+    FImage Image;
+    Image.Init(Size.X, Size.Y, ERawImageFormat::RGBA32F);
+    
+    // Convert FLinearColor to FImage data
+    TArrayView64<FLinearColor> ImageData = Image.AsRGBA32F();
+    
+    if (ImageData.Num() != NormalPixels.Num())
+    {
+        UE_LOG(LogTemp, Error, TEXT("Image data size mismatch: Expected %lld, got %d"), 
+            ImageData.Num(), NormalPixels.Num());
+        return;
+    }
+    
+    // Copy normal data to image
+    for (int32 i = 0; i < NormalPixels.Num(); ++i)
+    {
+        ImageData[i] = NormalPixels[i];
+    }
+    
+    // Get image wrapper module
+    IImageWrapperModule& ImageWrapperModule =
+        FModuleManager::LoadModuleChecked<IImageWrapperModule>(FName("ImageWrapper"));
+    
+    // Compress image using modern API
+    TArray64<uint8> CompressedData;
+    bool bSuccess = ImageWrapperModule.CompressImage(
+        CompressedData,
+        EImageFormat::EXR,
+        Image,
+        100
+    );
+    
+    if (bSuccess && CompressedData.Num() > 0)
+    {
+        // Save to file
+        if (!FFileHelper::SaveArrayToFile(CompressedData, *FilePath))
+        {
+            UE_LOG(LogTemp, Error, TEXT("Failed to save EXR normal image to file: %s"), *FilePath);
+        }
+        else
+        {
+            UE_LOG(LogTemp, Log, TEXT("Successfully saved EXR normal image to: %s"), *FilePath);
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("Failed to compress normal image to EXR format"));
+    }
+}

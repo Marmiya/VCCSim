@@ -27,7 +27,7 @@ public class VCCSim : ModuleRules
 			new string[]
 			{
 				"Core",
-                "ImageWrapper",
+                "ImageWrapper", "ImageCore",
                 "UMG",
                 "InputCore",
                 "RenderCore", "RHI",

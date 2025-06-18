@@ -64,6 +64,12 @@ FOV = 90
 Width = 1280
 Height = 720
 
+[Robots.ComponentConfigs.NormalCamera]
+RecordInterval = -0.033333
+FOV = 90
+Width = 1280
+Height = 720
+
 #[[Robots]]
 #
 #UETag = "Husky"

@@ -460,7 +460,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreateCameraStatusRow()
     
     // RGB Camera
     +SHorizontalBox::Slot()
-    .MaxWidth(120)
+    .MaxWidth(100)
     .HAlign(HAlign_Center)
     .Padding(FMargin(0, 0, 2, 0))
     [
@@ -472,7 +472,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreateCameraStatusRow()
     
     // Depth Camera
     +SHorizontalBox::Slot()
-    .MaxWidth(120)
+    .MaxWidth(100)
     .HAlign(HAlign_Center)
     .Padding(FMargin(0, 0, 2, 0))
     [
@@ -482,9 +482,21 @@ TSharedRef<SWidget> SVCCSimPanel::CreateCameraStatusRow()
             [this](ECheckBoxState NewState) { OnDepthCameraCheckboxChanged(NewState); })
     ]
     
+    // Normal Camera
+    +SHorizontalBox::Slot()
+    .MaxWidth(100)
+    .HAlign(HAlign_Center)
+    .Padding(FMargin(0, 0, 2, 0))
+    [
+        CreateCameraStatusBox("Normal",
+            [this]() { return bHasNormalCamera; },
+            [this]() { return bUseNormalCamera ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; },
+            [this](ECheckBoxState NewState) { OnNormalCameraCheckboxChanged(NewState); })
+    ]
+    
     // Segmentation Camera
     +SHorizontalBox::Slot()
-    .MaxWidth(140)
+    .MaxWidth(120)
     .HAlign(HAlign_Center)
     .Padding(FMargin(0, 0, 2, 0))
     [
@@ -1445,9 +1457,10 @@ TSharedRef<SWidget> SVCCSimPanel::CreateCaptureButtons()
         .OnClicked(this, &SVCCSimPanel::OnCaptureImagesClicked)
         .IsEnabled_Lambda([this]() {
             return SelectedFlashPawn.IsValid() && 
-                   (bUseRGBCamera && bHasRGBCamera) || 
-                   (bUseDepthCamera && bHasDepthCamera) || 
-                   (bUseSegmentationCamera && bHasSegmentationCamera);
+                   ((bUseRGBCamera && bHasRGBCamera) || 
+                    (bUseDepthCamera && bHasDepthCamera) || 
+                    (bUseNormalCamera && bHasNormalCamera) ||
+                    (bUseSegmentationCamera && bHasSegmentationCamera));
         })
     ]
     

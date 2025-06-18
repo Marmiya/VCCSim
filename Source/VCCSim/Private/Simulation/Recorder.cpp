@@ -553,7 +553,8 @@ void ARecorder::ToggleRecording()
     OnRecordStateChanged.Broadcast(RecordState);
 }
 
-void ARecorder::RegisterPawn(AActor* Pawn, bool bHasLidar, bool bHasDepth, bool bHasRGB)
+void ARecorder::RegisterPawn(AActor* Pawn, bool bHasLidar,
+    bool bHasDepth, bool bHasRGB, bool bHasNormal, bool bHasSegmentation)
 {
     if (!Pawn) return;
 
@@ -561,6 +562,8 @@ void ARecorder::RegisterPawn(AActor* Pawn, bool bHasLidar, bool bHasDepth, bool 
     DirInfo.bHasLidar = bHasLidar;
     DirInfo.bHasDepth = bHasDepth;
     DirInfo.bHasRGB = bHasRGB;
+    DirInfo.bHasNormal = bHasNormal;
+    DirInfo.bHasSegmentation = bHasSegmentation;
 
     // Store the full directory path
     DirInfo.PawnDirectory = FPaths::Combine(RecordingPath, Pawn->GetName());
@@ -605,7 +608,9 @@ bool ARecorder::CreatePawnDirectories(
     TArray<TPair<bool, FString>> DirectoriesToCreate = {
         {DirInfo.bHasLidar, TEXT("Lidar")},
         {DirInfo.bHasDepth, TEXT("Depth")},
-        {DirInfo.bHasRGB, TEXT("RGB")}
+        {DirInfo.bHasRGB, TEXT("RGB")},
+        {DirInfo.bHasNormal, TEXT("Normal")},
+        {DirInfo.bHasSegmentation, TEXT("Segmentation")}
     };
 
     for (const auto& DirPair : DirectoriesToCreate)
@@ -701,6 +706,12 @@ void ARecorder::SubmitData(AActor* Pawn, T&& Data, EDataType Type)
     case EDataType::RGBC:
         if (!DirInfo->bHasRGB) return;
         break;
+    case EDataType::NormalC:
+        if (!DirInfo->bHasNormal) return;
+        break;
+    case EDataType::SegmentationC:
+        if (!DirInfo->bHasSegmentation) return;
+        break;
     default:
         break;
     }
@@ -730,6 +741,11 @@ void ARecorder::SubmitDepthData(AActor* Pawn, FDepthCameraData&& Data)
     SubmitData<FDepthCameraData>(Pawn, MoveTemp(Data), EDataType::DepthC);
 }
 
+void ARecorder::SubmitNormalData(AActor* Pawn, FNormalCameraData&& Data)
+{
+    SubmitData<FNormalCameraData>(Pawn, MoveTemp(Data), EDataType::NormalC);
+}
+
 void ARecorder::SubmitRGBData(AActor* Pawn, FRGBCameraData&& Data)
 {
     // Validate data before submission
@@ -752,5 +768,5 @@ void ARecorder::SubmitRGBData(AActor* Pawn, FRGBCameraData&& Data)
 
 void ARecorder::SubmitSegmentationData(AActor* Pawn, FSegmentationCameraData&& Data)
 {
-    
+    SubmitData<FSegmentationCameraData>(Pawn, MoveTemp(Data), EDataType::SegmentationC);
 }

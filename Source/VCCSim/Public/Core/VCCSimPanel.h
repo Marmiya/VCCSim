@@ -76,6 +76,7 @@ private:
     TSharedPtr<class SCheckBox> RGBCameraCheckBox;
     TSharedPtr<class SCheckBox> DepthCameraCheckBox;
     TSharedPtr<class SCheckBox> SegmentationCameraCheckBox;
+    TSharedPtr<class SCheckBox> NormalCameraCheckBox;
     
     // Visualization buttons
     TSharedPtr<class SButton> VisualizePathButton;
@@ -135,11 +136,13 @@ private:
     bool bUseRGBCamera = true;
     bool bUseDepthCamera = false;
     bool bUseSegmentationCamera = false;
+    bool bUseNormalCamera = false;
     
     // Available cameras on current FlashPawn
     bool bHasRGBCamera = false;
     bool bHasDepthCamera = false;
     bool bHasSegmentationCamera = false;
+    bool bHasNormalCamera = false;
     
     // Auto-capture state
     bool bAutoCaptureInProgress = false;
@@ -199,6 +202,7 @@ private:
     void OnRGBCameraCheckboxChanged(ECheckBoxState NewState);
     void OnDepthCameraCheckboxChanged(ECheckBoxState NewState);
     void OnSegmentationCameraCheckboxChanged(ECheckBoxState NewState);
+    void OnNormalCameraCheckboxChanged(ECheckBoxState NewState);
     void CheckCameraComponents();
     void UpdateActiveCameras();
 
@@ -231,6 +235,7 @@ private:
     void SaveRGB(int32 PoseIndex, bool& bAnyCaptured);
     void SaveDepth(int32 PoseIndex, bool& bAnyCaptured);
     void SaveSeg(int32 PoseIndex, bool& bAnyCaptured);
+    void SaveNormal(int32 PoseIndex, bool& bAnyCaptured);
     void StartAutoCapture();
 
     // ============================================================================

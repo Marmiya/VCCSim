@@ -22,7 +22,8 @@ enum class ESensorType : uint8
 	Lidar,
 	DepthCamera,
 	RGBCamera,
-	SegmentationCamera
+	SegmentationCamera,
+	NormalCamera
 };
 
 class FSensorConfig

@@ -22,6 +22,7 @@
 #include "Sensors/DepthCamera.h"
 #include "Sensors/CameraSensor.h"
 #include "Sensors/SegmentCamera.h"
+#include "Sensors/NormalCamera.h"
 #include "Simulation/Recorder.h"
 #include "Simulation/MeshManager.h"
 #include "Simulation/SceneAnalysisManager.h"
@@ -401,6 +402,8 @@ FRobotGrpcMaps AVCCHUD::SetupActors(const FVCCSimConfig& Config)
         bool bHasLidar = false;
         bool bHasDepth = false;
         bool bHasRGB = false;
+        bool bHasNormal = false;
+        bool bHasSegmentation = false;
         
         for (const auto& Component : Robot.ComponentConfigs)
         {
@@ -478,6 +481,24 @@ FRobotGrpcMaps AVCCHUD::SetupActors(const FVCCSimConfig& Config)
                     *static_cast<FSegmentationCameraConfig*>(Component.second.get()),
                     Recorder);
                 RGrpcMaps.RCMaps.RSegMap[Robot.UETag] = SegmentationCamera;
+
+                if (SegmentationCamera->bRecorded)
+                {
+                    bHasSegmentation = true;
+                }
+            }
+            else if (Component.first == ESensorType::NormalCamera)
+            {
+                UNormalCameraComponent* NormalCamera =
+                    RobotPawn->FindComponentByClass<UNormalCameraComponent>();
+                NormalCamera->RConfigure(
+                    *static_cast<FNormalCameraConfig*>(Component.second.get()), Recorder);
+                RGrpcMaps.RCMaps.RNormalMap[Robot.UETag] = NormalCamera;
+
+                if (NormalCamera->bRecorded)
+                {
+                    bHasNormal = true;
+                }
             }
             else
             {
@@ -486,7 +507,8 @@ FRobotGrpcMaps AVCCHUD::SetupActors(const FVCCSimConfig& Config)
             }
         }
         
-        Recorder->RegisterPawn(RobotPawn, bHasLidar, bHasDepth, bHasRGB);
+        Recorder->RegisterPawn(RobotPawn, bHasLidar, bHasDepth, bHasRGB, 
+            bHasNormal, bHasSegmentation);
     }
 
     SetupMainCharacter(Config, FoundPawns);

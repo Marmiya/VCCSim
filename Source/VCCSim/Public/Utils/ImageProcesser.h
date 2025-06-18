@@ -96,3 +96,29 @@ private:
     TArray<FDCPoint> PointCloud;
     FString FilePath;
 };
+
+class FAsyncNormalEXRSaveTask : public FNonAbandonableTask
+{
+public:
+    FAsyncNormalEXRSaveTask(
+        const TArray<FLinearColor>& InNormalPixels,
+        FIntPoint InSize, 
+        const FString& InFilePath)
+        : NormalPixels(InNormalPixels)
+        , Size(InSize)
+        , FilePath(InFilePath)
+    {}
+
+    void DoWork();
+
+    FORCEINLINE TStatId GetStatId() const
+    {
+        RETURN_QUICK_DECLARE_CYCLE_STAT(FAsyncNormalEXRSaveTask,
+           STATGROUP_ThreadPoolAsyncTasks);
+    }
+
+private:
+    TArray<FLinearColor> NormalPixels;
+    FIntPoint Size;
+    FString FilePath;
+};

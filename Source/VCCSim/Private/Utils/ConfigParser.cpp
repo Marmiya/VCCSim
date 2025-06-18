@@ -20,6 +20,7 @@
 #include "Sensors/DepthCamera.h"
 #include "Sensors/CameraSensor.h"
 #include "Sensors/SegmentCamera.h"
+#include "Sensors/NormalCamera.h"
 #include "toml++/toml.hpp"
 #include <filesystem>
 #include "CoreMinimal.h"
@@ -209,6 +210,22 @@ FVCCSimConfig ParseConfig()
                                 (*Table)["Height"].value_or(SegmentationConfig->Height);
                         }
                         r.ComponentConfigs.push_back({ESensorType::SegmentationCamera, SegmentationConfig});
+                    }
+                    else if (comp_name == "NormalCamera")
+                    {
+                        auto NormalCameraConfig = std::make_shared<FNormalCameraConfig>();
+                        if (auto Table = comp_config.as_table())
+                        {
+                            NormalCameraConfig->RecordInterval =
+                                (*Table)["RecordInterval"].value_or(NormalCameraConfig->RecordInterval);
+                            NormalCameraConfig->FOV =
+                                (*Table)["FOV"].value_or(NormalCameraConfig->FOV);
+                            NormalCameraConfig->Width =
+                                (*Table)["Width"].value_or(NormalCameraConfig->Width);
+                            NormalCameraConfig->Height =
+                                (*Table)["Height"].value_or(NormalCameraConfig->Height);
+                        }
+                        r.ComponentConfigs.push_back({ESensorType::NormalCamera, NormalCameraConfig});
                     }
                     else
                     {
