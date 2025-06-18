@@ -853,6 +853,12 @@ void SVCCSimPanel::SaveDepth(int32 PoseIndex, bool& bAnyCaptured)
             int32 CameraIndex = Camera->GetCameraIndex();
             if (CameraIndex < 0) CameraIndex = i;
             
+            FString DepthFilename = SaveDirectory / FString::Printf(
+                TEXT("Depth16_Cam%02d_Pose%03d.png"), 
+                CameraIndex, 
+                PoseIndex
+            );
+            
             // Filename for this camera's point cloud
             FString PLYFilename = SaveDirectory / FString::Printf(
                 TEXT("PointCloud_Cam%02d_Pose%03d.ply"), 
@@ -860,61 +866,71 @@ void SVCCSimPanel::SaveDepth(int32 PoseIndex, bool& bAnyCaptured)
                 PoseIndex
             );
             
-            // Optional: Also save 16-bit depth image
-            FString DepthFilename = SaveDirectory / FString::Printf(
-                TEXT("Depth16_Cam%02d_Pose%03d.png"), 
-                CameraIndex, 
-                PoseIndex
-            );
-            
             // Capture point cloud data
-            Camera->AsyncGetPointCloudData(
-                [this, Camera, PLYFilename, DepthFilename, PoseIndex, CameraIndex]()
-                {
-                    // Process the points in a background thread
-                    AsyncTask(ENamedThreads::AnyBackgroundHiPriTask,
-                        [this, Camera, PLYFilename, DepthFilename, PoseIndex, CameraIndex]()
-                        {
-                            try
-                            {
-                                // Generate point cloud
-                                TArray<FDCPoint> PointCloud = Camera->GeneratePointCloud();
-                                
-                                if (PointCloud.Num() > 0)
-                                {
-                                    // Save point cloud to PLY file asynchronously
-                                    (new FAutoDeleteAsyncTask<FAsyncPLYSaveTask>(
-                                        PointCloud, 
-                                        PLYFilename))
-                                    ->StartBackgroundTask();
-                                }
-                                
-                                Camera->AsyncGetDepthImageData(
-                                    [DepthFilename, Camera](const TArray<FFloat16Color>& ImageData)
-                                    {
-                                        FIntPoint Size = {Camera->GetImageSize().first, Camera->GetImageSize().second};
-                                        float DepthScale = 1.0f;
-                                        
-                                        (new FAutoDeleteAsyncTask<FAsyncDepth16SaveTask>(
-                                            ImageData, 
-                                            Size, 
-                                            DepthFilename,
-                                            DepthScale))
-                                        ->StartBackgroundTask();
-                                    });
-                            }
-                            catch (...)
-                            {
-                                // Handle any exceptions silently
-                            }
-                            
-                            // Decrement job counter on game thread
-                            AsyncTask(ENamedThreads::GameThread, [this]()
-                            {
-                                *JobNum -= 1;
-                            });
-                        });
-                });
+            // Camera->AsyncGetPointCloudData(
+            //     [this, Camera, PLYFilename, DepthFilename, PoseIndex, CameraIndex]()
+            //     {
+            //         // Process the points in a background thread
+            //         AsyncTask(ENamedThreads::AnyBackgroundHiPriTask,
+            //             [this, Camera, PLYFilename, DepthFilename, PoseIndex, CameraIndex]()
+            //             {
+            //                 try
+            //                 {
+            //                     // Generate point cloud
+            //                     TArray<FDCPoint> PointCloud = Camera->GeneratePointCloud();
+            //                     
+            //                     if (PointCloud.Num() > 0)
+            //                     {
+            //                         // Save point cloud to PLY file asynchronously
+            //                         (new FAutoDeleteAsyncTask<FAsyncPLYSaveTask>(
+            //                             PointCloud, 
+            //                             PLYFilename))
+            //                         ->StartBackgroundTask();
+            //                     }
+            //                     
+            //                     Camera->AsyncGetDepthImageData(
+            //                         [DepthFilename, Camera](const TArray<FFloat16Color>& ImageData)
+            //                         {
+            //                             FIntPoint Size = {Camera->GetImageSize().first, Camera->GetImageSize().second};
+            //                             float DepthScale = 1.0f;
+            //                             
+            //                             (new FAutoDeleteAsyncTask<FAsyncDepth16SaveTask>(
+            //                                 ImageData, 
+            //                                 Size, 
+            //                                 DepthFilename,
+            //                                 DepthScale))
+            //                             ->StartBackgroundTask();
+            //                         });
+            //                 }
+            //                 catch (...)
+            //                 {
+            //                     // Handle any exceptions silently
+            //                 }
+            //                 
+            //                 // Decrement job counter on game thread
+            //                 AsyncTask(ENamedThreads::GameThread, [this]()
+            //                 {
+            //                     *JobNum -= 1;
+            //                 });
+            //             });
+            //     });
+            
+            FIntPoint Size = {Camera->GetImageSize().first, Camera->GetImageSize().second};
+            
+            Camera->AsyncGetDepthImageData(
+           [DepthFilename, Size, JobNum = this->JobNum](const TArray<FFloat16Color>& ImageData)
+           {
+               float DepthScale = 1.0f;
+    
+               (new FAutoDeleteAsyncTask<FAsyncDepth16SaveTask>(
+                   ImageData, 
+                   Size, 
+                   DepthFilename, 
+                   DepthScale))
+               ->StartBackgroundTask();
+    
+               *JobNum -= 1;
+           });
             
             bAnyCaptured = true;
         }
