@@ -133,10 +133,9 @@ void UNormalCameraComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 
 void UNormalCameraComponent::InitializeRenderTargets()
 {
-    // Use floating point format for high precision normals
     NormalRenderTarget = NewObject<UTextureRenderTarget2D>(this);
     NormalRenderTarget->InitCustomFormat(Width, Height,
-        PF_A32B32G32R32F, true);  // 32-bit float per channel
+        PF_A32B32G32R32F, true);
     NormalRenderTarget->UpdateResource();
     
     if (CaptureComponent)
@@ -174,7 +173,8 @@ void UNormalCameraComponent::CaptureScene()
         });
 }
 
-void UNormalCameraComponent::ProcessNormalTexture(TFunction<void(const TArray<FLinearColor>&)> OnComplete)
+void UNormalCameraComponent::ProcessNormalTexture(
+    TFunction<void(const TArray<FLinearColor>&)> OnComplete)
 {
     // Get the render target resource
     FTextureRenderTargetResource* RenderTargetResource = 
@@ -205,7 +205,8 @@ void UNormalCameraComponent::ProcessNormalTexture(TFunction<void(const TArray<FL
         FIntRect(0, 0, Width, Height)
     };
 
-    auto SharedCallback = MakeShared<TFunction<void(const TArray<FLinearColor>&)>>(OnComplete);
+    auto SharedCallback =
+        MakeShared<TFunction<void(const TArray<FLinearColor>&)>>(OnComplete);
     
     // Submit the render thread command
     ENQUEUE_RENDER_COMMAND(ReadNormalSurfaceCommand)(
@@ -239,7 +240,8 @@ TArray<FLinearColor> UNormalCameraComponent::GetNormalImage()
 void UNormalCameraComponent::AsyncGetNormalImageData(
     TFunction<void(const TArray<FLinearColor>&)> Callback)
 {
-    AsyncTask(ENamedThreads::GameThread, [this, Callback = MoveTemp(Callback)]() {
+    AsyncTask(ENamedThreads::GameThread,
+        [this, Callback = MoveTemp(Callback)]() {
         if (CheckComponentAndRenderTarget())
         {
             Callback({});

@@ -20,6 +20,7 @@
 #include "CoreMinimal.h"
 #include "Widgets/Docking/SDockTab.h"
 #include "Widgets/SCompoundWidget.h"
+#include "Widgets/Layout/SExpandableArea.h"
 #include "Editor/PropertyEditor/Public/IDetailsView.h"
 #include "DataType/PointCloud.h"
 #include "ProceduralMeshComponent.h"
@@ -28,6 +29,7 @@ class AFlashPawn;
 class AVCCSimPath;
 class USplineMeshComponent;
 class ASceneAnalysisManager;
+class UStaticMeshComponent;
 
 class VCCSIM_API SVCCSimPanel final : public SCompoundWidget
 {
@@ -50,6 +52,15 @@ private:
     // Logo brushes
     TSharedPtr<FSlateDynamicImageBrush> VCCLogoBrush;
     TSharedPtr<FSlateDynamicImageBrush> SZULogoBrush;
+    
+    // Expandable area states
+    bool bFlashPawnSectionExpanded = true;
+    bool bCameraSectionExpanded = true;
+    bool bTargetSectionExpanded = true;
+    bool bPoseConfigSectionExpanded = true;
+    bool bCaptureSectionExpanded = true;
+    bool bSceneAnalysisSectionExpanded = false;  // Collapsed by default
+    bool bPointCloudSectionExpanded = false;     // Collapsed by default
     
     // Selection UI
     TSharedPtr<class STextBlock> SelectedFlashPawnText;
@@ -87,8 +98,10 @@ private:
     // Point cloud UI elements
     TSharedPtr<SButton> LoadPointCloudButton;
     TSharedPtr<SButton> VisualizePointCloudButton;
+    TSharedPtr<SCheckBox> ShowNormalsCheckBox;
     TSharedPtr<STextBlock> PointCloudStatusText;
     TSharedPtr<STextBlock> PointCloudColorStatusText;
+    TSharedPtr<STextBlock> PointCloudNormalStatusText;
 
     // ============================================================================
     // STATE VARIABLES
@@ -168,16 +181,20 @@ private:
     // Point cloud state
     TArray<FRatPoint> PointCloudData;
     TWeakObjectPtr<AActor> PointCloudActor;
-    TWeakObjectPtr<UProceduralMeshComponent> PointCloudComponent;
+    TWeakObjectPtr<UInstancedStaticMeshComponent> PointCloudInstancedComponent;
+    TWeakObjectPtr<UInstancedStaticMeshComponent> NormalLinesInstancedComponent;
     bool bPointCloudVisualized = false;
     bool bPointCloudLoaded = false;
     bool bPointCloudHasColors = false;
+    bool bPointCloudHasNormals = false;
+    bool bShowNormals = false;
     FString LoadedPointCloudPath;
     int32 PointCloudCount = 0;
     
     // Point cloud settings
     FLinearColor DefaultPointColor = FLinearColor(1.0f, 0.5f, 0.0f, 1.0f);
-    float PointSize = 100.f;
+    float PointSize = .5f;
+    float NormalLength = 50.f;
 
     // ============================================================================
     // INITIALIZATION AND CLEANUP
@@ -252,15 +269,11 @@ private:
     
     FReply OnLoadPointCloudClicked();
     FReply OnTogglePointCloudVisualizationClicked();
-    void CreateProceduralPointCloudVisualization();
+    void OnShowNormalsCheckboxChanged(ECheckBoxState NewState);
+    void CreateSpherePointCloudVisualization();
+    void CreateNormalLinesVisualization();
     void ClearPointCloudVisualization();
-    void GeneratePointCloudMesh(TArray<FVector>& Vertices, 
-                               TArray<int32>& Triangles, 
-                               TArray<FVector>& Normals,
-                               TArray<FVector2D>& UVs,
-                               TArray<FColor>& VertexColors);
-    void ApplyVertexColorMaterial(UProceduralMeshComponent* MeshComponent);
-    bool TryApplyFallbackMaterial(UProceduralMeshComponent* MeshComponent);
+    void UpdateNormalLinesVisibility();
     void CreateBasicPointCloudMaterial(UProceduralMeshComponent* MeshComponent);
 
     // ============================================================================
@@ -298,8 +311,10 @@ private:
     TSharedRef<SWidget> CreateMovementButtons();
     TSharedRef<SWidget> CreateCaptureButtons();
     TSharedRef<SWidget> CreatePointCloudButtons();
+    TSharedRef<SWidget> CreatePointCloudNormalControls();
     
     // Style and layout helpers
+    TSharedRef<SWidget> CreateCollapsibleSection(const FString& Title, TSharedRef<SWidget> Content, bool& bExpanded);
     TSharedRef<SWidget> CreateSectionHeader(const FString& Title);
     TSharedRef<SWidget> CreateSectionContent(TSharedRef<SWidget> Content);
     TSharedRef<SWidget> CreatePropertyRow(const FString& Label, TSharedRef<SWidget> Content);
@@ -333,7 +348,15 @@ private:
     // ============================================================================
     // UTILITY FUNCTIONS
     // ============================================================================
-    
+
+    UStaticMesh* LoadBasicSphereMesh();
+    UStaticMesh* LoadBasicCylinderMesh();
+    UStaticMesh* CreateFallbackSphereMesh();
+    // Material setup
+    void SetupPointCloudMaterial(UInstancedStaticMeshComponent* MeshComponent);
+    void SetupNormalLinesMaterial(UInstancedStaticMeshComponent* MeshComponent);
+    UMaterialInterface* LoadPointCloudMaterial();
+    void CreateSimplePointCloudMaterial(UInstancedStaticMeshComponent* MeshComponent);
     static FString GetTimestampedFilename();
 };
 

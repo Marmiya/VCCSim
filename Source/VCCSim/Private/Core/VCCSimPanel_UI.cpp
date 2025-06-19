@@ -16,6 +16,9 @@
 */
 
 #include "Core/VCCSimPanel.h"
+#include "Components/InstancedStaticMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
 #include "DesktopPlatformModule.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SNumericEntryBox.h"
@@ -151,49 +154,49 @@ void SVCCSimPanel::CreateMainLayout()
                 +SVerticalBox::Slot()
                 .AutoHeight()
                 [
-                    CreatePawnSelectPanel()
+                    CreateCollapsibleSection("Flash Pawn", CreatePawnSelectPanel(), bFlashPawnSectionExpanded)
                 ]
                 
                 // Camera section
                 +SVerticalBox::Slot()
                 .AutoHeight()
                 [
-                    CreateCameraSelectPanel()
+                    CreateCollapsibleSection("Camera Selection", CreateCameraSelectPanel(), bCameraSectionExpanded)
                 ]
                 
                 // Target section
                 +SVerticalBox::Slot()
                 .AutoHeight()
                 [
-                    CreateTargetSelectPanel()
+                    CreateCollapsibleSection("Target Object", CreateTargetSelectPanel(), bTargetSectionExpanded)
                 ]
                 
                 // Pose configuration
                 +SVerticalBox::Slot()
                 .AutoHeight()
                 [
-                    CreatePoseConfigPanel()
+                    CreateCollapsibleSection("Path Configuration", CreatePoseConfigPanel(), bPoseConfigSectionExpanded)
                 ]
                 
                 // Capture panel
                 +SVerticalBox::Slot()
                 .AutoHeight()
                 [
-                    CreateCapturePanel()
+                    CreateCollapsibleSection("Image Capture", CreateCapturePanel(), bCaptureSectionExpanded)
                 ]
 
                 // Scene analysis panel
                 +SVerticalBox::Slot()
                 .AutoHeight()
                 [
-                    CreateSceneAnalysisPanel()
+                    CreateCollapsibleSection("Scene Analysis", CreateSceneAnalysisPanel(), bSceneAnalysisSectionExpanded)
                 ]
 
                 // Point Cloud panel
                 +SVerticalBox::Slot()
                 .AutoHeight()
                 [
-                    CreatePointCloudPanel()
+                    CreateCollapsibleSection("Point Cloud", CreatePointCloudPanel(), bPointCloudSectionExpanded)
                 ]
             ]
         ]
@@ -226,6 +229,36 @@ TSharedRef<SWidget> SVCCSimPanel::CreateSectionContent(TSharedRef<SWidget> Conte
         .Padding(FMargin(15, 6))
         [
             Content
+        ];
+}
+
+TSharedRef<SWidget> SVCCSimPanel::CreateCollapsibleSection(
+    const FString& Title, TSharedRef<SWidget> Content, bool& bExpanded)
+{
+    return SNew(SExpandableArea)
+        .InitiallyCollapsed(!bExpanded)
+        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryTop"))
+        .BorderBackgroundColor(FColor(48, 48, 48))
+        .OnAreaExpansionChanged_Lambda([&bExpanded](bool bIsExpanded) {
+            bExpanded = bIsExpanded;
+        })
+        .HeaderContent()
+        [
+            SNew(STextBlock)
+            .Text(FText::FromString(Title))
+            .Font(FAppStyle::GetFontStyle("PropertyWindow.BoldFont"))
+            .ColorAndOpacity(FColor(233, 233, 233))
+            .TransformPolicy(ETextTransformPolicy::ToUpper)
+        ]
+        .BodyContent()
+        [
+            SNew(SBorder)
+            .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
+            .BorderBackgroundColor(FColor(5, 5, 5, 255))
+            .Padding(FMargin(15, 6))
+            [
+                Content
+            ]
         ];
 }
 
@@ -695,105 +728,93 @@ TSharedRef<SWidget> SVCCSimPanel::CreateCapturePanel()
 TSharedRef<SWidget> SVCCSimPanel::CreateSceneAnalysisPanel()
 {
     return SNew(SVerticalBox)
+    
+    // Limited region controls
     +SVerticalBox::Slot()
     .AutoHeight()
     [
-        CreateSectionHeader("Scene Analysis")
+        CreateLimitedRegionControls()
     ]
+    
+    +SVerticalBox::Slot()
+    .MaxHeight(1)
+    [
+        CreateSeparator()
+    ]
+    
+    // Safe distance controls
     +SVerticalBox::Slot()
     .AutoHeight()
+    .Padding(FMargin(0, 4, 0, 4))
     [
-        CreateSectionContent(
-            SNew(SVerticalBox)
-            
-            // Limited region controls
-            +SVerticalBox::Slot()
-            .AutoHeight()
-            [
-                CreateLimitedRegionControls()
-            ]
-            
-            +SVerticalBox::Slot()
-            .MaxHeight(1)
-            [
-                CreateSeparator()
-            ]
-            
-            // Safe distance controls
-            +SVerticalBox::Slot()
-            .AutoHeight()
-            .Padding(FMargin(0, 4, 0, 4))
-            [
-                SNew(SHorizontalBox)
-                +SHorizontalBox::Slot()
-                .FillWidth(1.0f)
-                .Padding(FMargin(0, 0, 8, 0))
-                [
-                    CreateNumericPropertyRowFloat("Safe Distance", SafeDistanceSpinBox, SafeDistanceValue, SafeDistance, 0.0f, 10.0f)
-                ]
-                +SHorizontalBox::Slot()
-                .FillWidth(1.0f)
-                [
-                    CreateNumericPropertyRowFloat("Safe Height", SafeHeightSpinBox, SafeHeightValue, SafeHeight, 0.0f, 5.0f)
-                ]
-            ]
-            
-            +SVerticalBox::Slot()
-            .MaxHeight(1)
-            [
-                CreateSeparator()
-            ]
+        SNew(SHorizontalBox)
+        +SHorizontalBox::Slot()
+        .FillWidth(1.0f)
+        .Padding(FMargin(0, 0, 8, 0))
+        [
+            CreateNumericPropertyRowFloat("Safe Distance", SafeDistanceSpinBox, SafeDistanceValue, SafeDistance, 0.0f, 10.0f)
+        ]
+        +SHorizontalBox::Slot()
+        .FillWidth(1.0f)
+        [
+            CreateNumericPropertyRowFloat("Safe Height", SafeHeightSpinBox, SafeHeightValue, SafeHeight, 0.0f, 5.0f)
+        ]
+    ]
+    
+    +SVerticalBox::Slot()
+    .MaxHeight(1)
+    [
+        CreateSeparator()
+    ]
 
-            // Scene operations
-            +SVerticalBox::Slot()
-            .AutoHeight()
-            .Padding(0, 4, 0, 4)
-            [
-                CreateSceneOperationButtons()
-            ]
+    // Scene operations
+    +SVerticalBox::Slot()
+    .AutoHeight()
+    .Padding(0, 4, 0, 4)
+    [
+        CreateSceneOperationButtons()
+    ]
 
-            +SVerticalBox::Slot()
-            .MaxHeight(1)
-            [
-                CreateSeparator()
-            ]
-                
-            // Safe zone operations
-            +SVerticalBox::Slot()
-            .AutoHeight()
-            .Padding(0, 4, 0, 4)
-            [
-                CreateSafeZoneButtons()
-            ]
+    +SVerticalBox::Slot()
+    .MaxHeight(1)
+    [
+        CreateSeparator()
+    ]
+        
+    // Safe zone operations
+    +SVerticalBox::Slot()
+    .AutoHeight()
+    .Padding(0, 4, 0, 4)
+    [
+        CreateSafeZoneButtons()
+    ]
 
-            +SVerticalBox::Slot()
-            .MaxHeight(1)
-            [
-                CreateSeparator()
-            ]
-            
-            // Coverage operations
-            +SVerticalBox::Slot()
-            .AutoHeight()
-            .Padding(0, 4, 0, 4)
-            [
-                CreateCoverageButtons()
-            ]
+    +SVerticalBox::Slot()
+    .MaxHeight(1)
+    [
+        CreateSeparator()
+    ]
+    
+    // Coverage operations
+    +SVerticalBox::Slot()
+    .AutoHeight()
+    .Padding(0, 4, 0, 4)
+    [
+        CreateCoverageButtons()
+    ]
 
-            +SVerticalBox::Slot()
-            .MaxHeight(1)
-            [
-                CreateSeparator()
-            ]
+    +SVerticalBox::Slot()
+    .MaxHeight(1)
+    [
+        CreateSeparator()
+    ]
 
-            // Complexity operations
-            +SVerticalBox::Slot()
-            .AutoHeight()
-            .Padding(0, 4, 0, 0)
-            [
-                CreateComplexityButtons()
-            ]
-        )
+    // Complexity operations
+    +SVerticalBox::Slot()
+    .AutoHeight()
+    .Padding(0, 4, 0, 0)
+    [
+        CreateComplexityButtons()
     ];
 }
 
@@ -855,82 +876,110 @@ FReply SVCCSimPanel::OnToggleComplexityVisualizationClicked()
 TSharedRef<SWidget> SVCCSimPanel::CreatePointCloudPanel()
 {
     return SNew(SVerticalBox)
+    
+    // Point cloud status
     +SVerticalBox::Slot()
     .AutoHeight()
+    .Padding(FMargin(0, 4, 0, 4))
     [
-        CreateSectionHeader("Point Cloud")
-    ]
-    +SVerticalBox::Slot()
-    .AutoHeight()
-    [
-        CreateSectionContent(
-            SNew(SVerticalBox)
-            
-            // Point cloud status
-            +SVerticalBox::Slot()
-            .AutoHeight()
-            .Padding(FMargin(0, 4, 0, 4))
+        CreatePropertyRow(
+            "Status",
+            SNew(SBorder)
+            .Padding(4)
             [
-                CreatePropertyRow(
-                    "Status",
-                    SNew(SBorder)
-                    .Padding(4)
-                    [
-                        SAssignNew(PointCloudStatusText, STextBlock)
-                        .Text_Lambda([this]() {
-                            if (bPointCloudLoaded)
-                            {
-                                return FText::FromString(FString::Printf(TEXT("Loaded: %d points (Original scale)"), PointCloudCount));
-                            }
-                            return FText::FromString("No point cloud loaded");
-                        })
-                        .ColorAndOpacity_Lambda([this]() {
-                            return bPointCloudLoaded ? FSlateColor(FLinearColor::Green) : FSlateColor(FLinearColor::Gray);
-                        })
-                    ]
-                )
-            ]
-            
-            // Color status
-            +SVerticalBox::Slot()
-            .AutoHeight()
-            .Padding(FMargin(0, 0, 0, 4))
-            [
-                CreatePropertyRow(
-                    "Colors",
-                    SNew(SBorder)
-                    .Padding(4)
-                    [
-                        SAssignNew(PointCloudColorStatusText, STextBlock)
-                        .Text_Lambda([this]() {
-                            if (!bPointCloudLoaded)
-                            {
-                                return FText::FromString("No data");
-                            }
-                            return FText::FromString(bPointCloudHasColors ? "RGB colors detected" : "Using default orange");
-                        })
-                        .ColorAndOpacity_Lambda([this]() {
-                            if (!bPointCloudLoaded) return FSlateColor(FLinearColor::Gray);
-                            return bPointCloudHasColors ? FSlateColor(FLinearColor::Blue) : FSlateColor(FLinearColor::Yellow);
-                        })
-                    ]
-                )
-            ]
-            
-            +SVerticalBox::Slot()
-            .MaxHeight(1)
-            [
-                CreateSeparator()
-            ]
-            
-            // Control buttons
-            +SVerticalBox::Slot()
-            .AutoHeight()
-            .Padding(0, 4, 0, 4)
-            [
-                CreatePointCloudButtons()
+                SAssignNew(PointCloudStatusText, STextBlock)
+                .Text_Lambda([this]() {
+                    if (bPointCloudLoaded)
+                    {
+                        return FText::FromString(FString::Printf(TEXT("Loaded: %d points"), PointCloudCount));
+                    }
+                    return FText::FromString("No point cloud loaded");
+                })
+                .ColorAndOpacity_Lambda([this]() {
+                    return bPointCloudLoaded ? FSlateColor(FLinearColor::Green) : FSlateColor(FLinearColor::Gray);
+                })
             ]
         )
+    ]
+    
+    // Color status
+    +SVerticalBox::Slot()
+    .AutoHeight()
+    .Padding(FMargin(0, 0, 0, 4))
+    [
+        CreatePropertyRow(
+            "Colors",
+            SNew(SBorder)
+            .Padding(4)
+            [
+                SAssignNew(PointCloudColorStatusText, STextBlock)
+                .Text_Lambda([this]() {
+                    if (!bPointCloudLoaded)
+                    {
+                        return FText::FromString("No data");
+                    }
+                    return FText::FromString(bPointCloudHasColors ? "RGB colors detected" : "Using default orange");
+                })
+                .ColorAndOpacity_Lambda([this]() {
+                    if (!bPointCloudLoaded) return FSlateColor(FLinearColor::Gray);
+                    return bPointCloudHasColors ? FSlateColor(FLinearColor::Blue) : FSlateColor(FLinearColor::Yellow);
+                })
+            ]
+        )
+    ]
+    
+    // Normal status
+    +SVerticalBox::Slot()
+    .AutoHeight()
+    .Padding(FMargin(0, 0, 0, 4))
+    [
+        CreatePropertyRow(
+            "Normals",
+            SNew(SBorder)
+            .Padding(4)
+            [
+                SAssignNew(PointCloudNormalStatusText, STextBlock)
+                .Text_Lambda([this]() {
+                    if (!bPointCloudLoaded)
+                    {
+                        return FText::FromString("No data");
+                    }
+                    return FText::FromString(bPointCloudHasNormals ? "Normal vectors detected" : "No normal data");
+                })
+                .ColorAndOpacity_Lambda([this]() {
+                    if (!bPointCloudLoaded) return FSlateColor(FLinearColor::Gray);
+                    return bPointCloudHasNormals ? FSlateColor(FLinearColor::Green) : FSlateColor(FLinearColor::Gray);
+                })
+            ]
+        )
+    ]
+    
+    +SVerticalBox::Slot()
+    .MaxHeight(1)
+    [
+        CreateSeparator()
+    ]
+    
+    // Normal visualization controls
+    +SVerticalBox::Slot()
+    .AutoHeight()
+    .Padding(0, 4, 0, 4)
+    [
+        CreatePointCloudNormalControls()
+    ]
+    
+    +SVerticalBox::Slot()
+    .MaxHeight(1)
+    [
+        CreateSeparator()
+    ]
+    
+    // Control buttons
+    +SVerticalBox::Slot()
+    .AutoHeight()
+    .Padding(0, 4, 0, 4)
+    [
+        CreatePointCloudButtons()
     ];
 }
 
@@ -956,7 +1005,7 @@ FReply SVCCSimPanel::OnLoadPointCloudClicked()
         {
             const FString& SelectedFile = OpenFilenames[0];
             
-            // Use the PLY loader
+            // Use the enhanced PLY loader
             FPLYLoader::FPLYLoadResult LoadResult = FPLYLoader::LoadPLYFile(
                 SelectedFile, 
                 DefaultPointColor
@@ -968,6 +1017,7 @@ FReply SVCCSimPanel::OnLoadPointCloudClicked()
                 PointCloudData = MoveTemp(LoadResult.Points);
                 bPointCloudLoaded = true;
                 bPointCloudHasColors = LoadResult.bHasColors;
+                bPointCloudHasNormals = LoadResult.bHasNormals;
                 PointCloudCount = LoadResult.PointCount;
                 LoadedPointCloudPath = SelectedFile;
                 
@@ -976,9 +1026,15 @@ FReply SVCCSimPanel::OnLoadPointCloudClicked()
                 {
                     ClearPointCloudVisualization();
                     bPointCloudVisualized = false;
+                    bShowNormals = false;
                     VisualizePointCloudButton->SetButtonStyle(
                         &FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Primary"));
                 }
+                
+                UE_LOG(LogTemp, Warning, TEXT("Loaded point cloud: %d points, Colors: %s, Normals: %s"), 
+                       PointCloudCount,
+                       bPointCloudHasColors ? TEXT("Yes") : TEXT("No"),
+                       bPointCloudHasNormals ? TEXT("Yes") : TEXT("No"));
             }
             else
             {
@@ -989,6 +1045,7 @@ FReply SVCCSimPanel::OnLoadPointCloudClicked()
                 PointCloudData.Empty();
                 bPointCloudLoaded = false;
                 bPointCloudHasColors = false;
+                bPointCloudHasNormals = false;
                 PointCloudCount = 0;
                 LoadedPointCloudPath.Empty();
             }
@@ -1008,28 +1065,17 @@ FReply SVCCSimPanel::OnTogglePointCloudVisualizationClicked()
     if (bPointCloudVisualized)
     {
         // Hide point cloud
-        if (PointCloudActor.IsValid())
-        {
-            PointCloudActor->SetActorHiddenInGame(true);
-            PointCloudActor->SetActorEnableCollision(false);
-        }
+        ClearPointCloudVisualization();
         bPointCloudVisualized = false;
+        bShowNormals = false;
         
         VisualizePointCloudButton->SetButtonStyle(
             &FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Primary"));
     }
     else
     {
-        // Show point cloud
-        if (!PointCloudActor.IsValid())
-        {
-            CreateProceduralPointCloudVisualization();
-        }
-        else
-        {
-            PointCloudActor->SetActorHiddenInGame(false);
-            PointCloudActor->SetActorEnableCollision(true);
-        }
+        // Show point cloud with instanced spheres
+        CreateSpherePointCloudVisualization();
         bPointCloudVisualized = true;
         
         VisualizePointCloudButton->SetButtonStyle(
@@ -1039,7 +1085,13 @@ FReply SVCCSimPanel::OnTogglePointCloudVisualizationClicked()
     return FReply::Handled();
 }
 
-void SVCCSimPanel::CreateProceduralPointCloudVisualization()
+void SVCCSimPanel::OnShowNormalsCheckboxChanged(ECheckBoxState NewState)
+{
+    bShowNormals = (NewState == ECheckBoxState::Checked);
+    UpdateNormalLinesVisibility();
+}
+
+void SVCCSimPanel::CreateSpherePointCloudVisualization()
 {
     if (PointCloudData.Num() == 0)
     {
@@ -1057,41 +1109,144 @@ void SVCCSimPanel::CreateProceduralPointCloudVisualization()
     
     // Create new actor for point cloud
     AActor* NewActor = World->SpawnActor<AActor>();
-    NewActor->SetActorLabel(TEXT("ProceduralPointCloud_Visualization"));
+    NewActor->SetActorLabel(TEXT("InstancedPointCloud_Visualization"));
     PointCloudActor = NewActor;
     
-    // Create procedural mesh component
-    UProceduralMeshComponent* ProcMeshComp = NewObject<UProceduralMeshComponent>(NewActor);
-    NewActor->SetRootComponent(ProcMeshComp);
-    PointCloudComponent = ProcMeshComp;
+    // Create instanced static mesh component for spheres
+    UInstancedStaticMeshComponent* InstancedMeshComp =
+        NewObject<UInstancedStaticMeshComponent>(NewActor);
+    NewActor->SetRootComponent(InstancedMeshComp);
+    PointCloudInstancedComponent = InstancedMeshComp;
     
-    // Generate mesh data
-    TArray<FVector> Vertices;
-    TArray<int32> Triangles;
-    TArray<FVector> Normals;
-    TArray<FVector2D> UVs;
-    TArray<FColor> VertexColors;
+    // Load the basic sphere mesh from engine content
+    UStaticMesh* SphereMesh = LoadBasicSphereMesh();
+    if (!SphereMesh)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Failed to load basic sphere mesh for point cloud"));
+        return;
+    }
     
-    GeneratePointCloudMesh(Vertices, Triangles, Normals, UVs, VertexColors);
+    InstancedMeshComp->SetStaticMesh(SphereMesh);
     
-    // Create the procedural mesh
-    ProcMeshComp->CreateMeshSection(
-        0,
-        Vertices,
-        Triangles,
-        Normals,
-        UVs,
-        VertexColors,
-        TArray<FProcMeshTangent>(),
-        true
-    );
+    // Set up material
+    SetupPointCloudMaterial(InstancedMeshComp);
     
-    // Apply vertex color material
-    ApplyVertexColorMaterial(ProcMeshComp);
+    // Add instances for each point
+    for (const FRatPoint& Point : PointCloudData)
+    {
+        FTransform InstanceTransform;
+        InstanceTransform.SetLocation(Point.Position);
+        InstanceTransform.SetScale3D(FVector(PointSize));
+        
+        // Add the instance
+        int32 InstanceIndex = InstancedMeshComp->AddInstance(InstanceTransform);
+        
+        // Set per-instance color if supported
+        if (bPointCloudHasColors)
+        {
+            InstancedMeshComp->SetCustomDataValue(InstanceIndex, 0, Point.Color.R);
+            InstancedMeshComp->SetCustomDataValue(InstanceIndex, 1, Point.Color.G);
+            InstancedMeshComp->SetCustomDataValue(InstanceIndex, 2, Point.Color.B);
+            InstancedMeshComp->SetCustomDataValue(InstanceIndex, 3, Point.Color.A);
+        }
+        else
+        {
+            InstancedMeshComp->SetCustomDataValue(InstanceIndex, 0, DefaultPointColor.R);
+            InstancedMeshComp->SetCustomDataValue(InstanceIndex, 1, DefaultPointColor.G);
+            InstancedMeshComp->SetCustomDataValue(InstanceIndex, 2, DefaultPointColor.B);
+            InstancedMeshComp->SetCustomDataValue(InstanceIndex, 3, DefaultPointColor.A);
+        }
+    }
     
     // Configure component settings
-    ProcMeshComp->bUseComplexAsSimpleCollision = false;
-    ProcMeshComp->RegisterComponent();
+    InstancedMeshComp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    InstancedMeshComp->SetCastShadow(false); // Disable shadows for better performance
+    InstancedMeshComp->RegisterComponent();
+    
+    // Create normal lines if normals are available
+    if (bPointCloudHasNormals)
+    {
+        CreateNormalLinesVisualization();
+    }
+    
+    UE_LOG(LogTemp, Warning, TEXT("Created instanced point cloud visualization with %d points"), PointCloudData.Num());
+}
+
+
+void SVCCSimPanel::CreateNormalLinesVisualization()
+{
+    if (!bPointCloudHasNormals || !PointCloudActor.IsValid())
+    {
+        return;
+    }
+    
+    // Create instanced static mesh component for normal lines
+    UInstancedStaticMeshComponent* NormalLinesInstancedComp = NewObject<UInstancedStaticMeshComponent>(PointCloudActor.Get());
+    NormalLinesInstancedComp->AttachToComponent(
+        PointCloudActor->GetRootComponent(), 
+        FAttachmentTransformRules::KeepWorldTransform);
+    NormalLinesInstancedComponent = NormalLinesInstancedComp;
+    
+    // Load or create a basic cylinder mesh for lines
+    UStaticMesh* CylinderMesh = LoadBasicCylinderMesh();
+    if (!CylinderMesh)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Failed to load cylinder mesh for normal lines, skipping normal visualization"));
+        return;
+    }
+    
+    NormalLinesInstancedComp->SetStaticMesh(CylinderMesh);
+    
+    // Set up material for normal lines
+    SetupNormalLinesMaterial(NormalLinesInstancedComp);
+    
+    // Add instances for each normal
+    FLinearColor NormalColor = FLinearColor::Green;
+    for (const FRatPoint& Point : PointCloudData)
+    {
+        if (!Point.bHasNormal || Point.Normal.IsNearlyZero())
+        {
+            continue;
+        }
+        
+        FVector Start = Point.Position;
+        FVector End = Start + Point.Normal * NormalLength;
+        FVector Center = (Start + End) * 0.5f;
+        
+        // Calculate rotation to align cylinder with normal direction
+        FQuat Rotation = FQuat::FindBetweenNormals(FVector::UpVector, Point.Normal.GetSafeNormal());
+        
+        FTransform InstanceTransform;
+        InstanceTransform.SetLocation(Center);
+        InstanceTransform.SetRotation(Rotation);
+        InstanceTransform.SetScale3D(FVector(0.1f, 0.1f, NormalLength * 0.01f)); // Thin cylinder
+        
+        int32 InstanceIndex = NormalLinesInstancedComp->AddInstance(InstanceTransform);
+        
+        // Set normal line color
+        NormalLinesInstancedComp->SetCustomDataValue(InstanceIndex, 0, NormalColor.R);
+        NormalLinesInstancedComp->SetCustomDataValue(InstanceIndex, 1, NormalColor.G);
+        NormalLinesInstancedComp->SetCustomDataValue(InstanceIndex, 2, NormalColor.B);
+        NormalLinesInstancedComp->SetCustomDataValue(InstanceIndex, 3, NormalColor.A);
+    }
+    
+    // Configure component settings
+    NormalLinesInstancedComp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    NormalLinesInstancedComp->SetCastShadow(false);
+    NormalLinesInstancedComp->RegisterComponent();
+    
+    // Initially hide normal lines
+    NormalLinesInstancedComp->SetVisibility(false);
+    
+    UE_LOG(LogTemp, Warning, TEXT("Created instanced normal lines visualization"));
+}
+
+void SVCCSimPanel::UpdateNormalLinesVisibility()
+{
+    if (NormalLinesInstancedComponent.IsValid())
+    {
+        NormalLinesInstancedComponent->SetVisibility(bShowNormals);
+    }
 }
 
 void SVCCSimPanel::ClearPointCloudVisualization()
@@ -1101,150 +1256,8 @@ void SVCCSimPanel::ClearPointCloudVisualization()
         PointCloudActor->Destroy();
         PointCloudActor.Reset();
     }
-    PointCloudComponent.Reset();
-}
-
-void SVCCSimPanel::GeneratePointCloudMesh(TArray<FVector>& Vertices, 
-                                         TArray<int32>& Triangles, 
-                                         TArray<FVector>& Normals,
-                                         TArray<FVector2D>& UVs,
-                                         TArray<FColor>& VertexColors)
-{
-    // Reserve space for 24 vertices per point and 36 indices per point
-    int32 PointCount = PointCloudData.Num();
-    Vertices.Reserve(PointCount * 24);
-    Triangles.Reserve(PointCount * 36);
-    Normals.Reserve(PointCount * 24);
-    UVs.Reserve(PointCount * 24);
-    VertexColors.Reserve(PointCount * 24);
-    
-    int32 VertexIndex = 0;
-    
-    for (const FRatPoint& Point : PointCloudData)
-    {
-        FVector Center = Point.Position;
-        FColor PointColor = Point.Color.ToFColor(false);
-        
-        // Create a small cube at each point position
-        float HalfSize = PointSize * 0.5f;
-        
-        // Define 8 cube corner positions
-        TArray<FVector> CubeCorners = {
-            FVector(-HalfSize, -HalfSize, -HalfSize), // Bottom-back-left
-            FVector(HalfSize, -HalfSize, -HalfSize),  // Bottom-back-right
-            FVector(HalfSize, HalfSize, -HalfSize),   // Bottom-front-right
-            FVector(-HalfSize, HalfSize, -HalfSize),  // Bottom-front-left
-            FVector(-HalfSize, -HalfSize, HalfSize),  // Top-back-left
-            FVector(HalfSize, -HalfSize, HalfSize),   // Top-back-right
-            FVector(HalfSize, HalfSize, HalfSize),    // Top-front-right
-            FVector(-HalfSize, HalfSize, HalfSize)    // Top-front-left
-        };
-        
-        // Define each face with correct vertices, normals, and UVs
-        struct FCubeFace
-        {
-            TArray<int32> VertexIndices;
-            FVector Normal;
-            TArray<FVector2D> FaceUVs;
-        };
-        
-        TArray<FCubeFace> CubeFaces = {
-            // Bottom face (Z-)
-            {{0, 1, 2, 3}, FVector(0, 0, -1), {{0,0}, {1,0}, {1,1}, {0,1}}},
-            // Top face (Z+)
-            {{4, 7, 6, 5}, FVector(0, 0, 1), {{0,0}, {1,0}, {1,1}, {0,1}}},
-            // Front face (Y+)
-            {{3, 2, 6, 7}, FVector(0, 1, 0), {{0,0}, {1,0}, {1,1}, {0,1}}},
-            // Back face (Y-)
-            {{1, 0, 4, 5}, FVector(0, -1, 0), {{0,0}, {1,0}, {1,1}, {0,1}}},
-            // Right face (X+)
-            {{2, 1, 5, 6}, FVector(1, 0, 0), {{0,0}, {1,0}, {1,1}, {0,1}}},
-            // Left face (X-)
-            {{0, 3, 7, 4}, FVector(-1, 0, 0), {{0,0}, {1,0}, {1,1}, {0,1}}}
-        };
-        
-        // Add vertices for each face (4 vertices per face)
-        for (const FCubeFace& Face : CubeFaces)
-        {
-            for (int32 i = 0; i < 4; ++i)
-            {
-                int32 CornerIndex = Face.VertexIndices[i];
-                Vertices.Add(Center + CubeCorners[CornerIndex]);
-                Normals.Add(Face.Normal);
-                UVs.Add(Face.FaceUVs[i]);
-                VertexColors.Add(PointColor);
-            }
-        }
-        
-        // Add triangles for each face (2 triangles per face)
-        for (int32 FaceIndex = 0; FaceIndex < 6; ++FaceIndex)
-        {
-            int32 FaceVertexStart = VertexIndex + (FaceIndex * 4);
-            
-            // First triangle: 0-1-2 (counter-clockwise)
-            Triangles.Add(FaceVertexStart + 0);
-            Triangles.Add(FaceVertexStart + 1);
-            Triangles.Add(FaceVertexStart + 2);
-            
-            // Second triangle: 0-2-3 (counter-clockwise)
-            Triangles.Add(FaceVertexStart + 0);
-            Triangles.Add(FaceVertexStart + 2);
-            Triangles.Add(FaceVertexStart + 3);
-        }
-        
-        VertexIndex += 24; // 6 faces × 4 vertices per face
-    }
-}
-
-void SVCCSimPanel::ApplyVertexColorMaterial(UProceduralMeshComponent* MeshComponent)
-{
-    if (!MeshComponent)
-    {
-        return;
-    }
-    
-    const TCHAR* MaterialPath =
-        TEXT("/Script/Engine.Material'/VCCSim/Materials/M_Error_PointCloud.M_Error_PointCloud'");
-    
-    // Load the custom vertex color material
-    UMaterialInterface* VertexColorMaterial =
-        LoadObject<UMaterialInterface>(nullptr, MaterialPath);
-    
-    if (VertexColorMaterial)
-    {
-        MeshComponent->SetMaterial(0, VertexColorMaterial);
-    }
-    else
-    {
-        // Try engine vertex color materials as fallback
-        if (!TryApplyFallbackMaterial(MeshComponent))
-        {
-            // Last resort: create a basic material
-            CreateBasicPointCloudMaterial(MeshComponent);
-        }
-    }
-}
-
-bool SVCCSimPanel::TryApplyFallbackMaterial(UProceduralMeshComponent* MeshComponent)
-{
-    // Try various engine materials that support vertex colors
-    TArray<const TCHAR*> FallbackMaterials = {
-        TEXT("/Engine/EngineMaterials/VertexColorViewMode_ColorOnly"),
-        TEXT("/Engine/EngineMaterials/VertexColorViewMode_AlphaAsColor"),
-        TEXT("/Engine/BasicShapes/BasicShapeMaterial")
-    };
-    
-    for (const TCHAR* MaterialPath : FallbackMaterials)
-    {
-        UMaterialInterface* Material = LoadObject<UMaterialInterface>(nullptr, MaterialPath);
-        if (Material)
-        {
-            MeshComponent->SetMaterial(0, Material);
-            return true;
-        }
-    }
-    
-    return false;
+    PointCloudInstancedComponent.Reset();
+    NormalLinesInstancedComponent.Reset();
 }
 
 void SVCCSimPanel::CreateBasicPointCloudMaterial(UProceduralMeshComponent* MeshComponent)
@@ -1558,6 +1571,34 @@ TSharedRef<SWidget> SVCCSimPanel::CreatePointCloudButtons()
     ];
 }
 
+TSharedRef<SWidget> SVCCSimPanel::CreatePointCloudNormalControls()
+{
+    return SNew(SHorizontalBox)
+    
+    // Show normals checkbox
+    +SHorizontalBox::Slot()
+    .AutoWidth()
+    .VAlign(VAlign_Center)
+    .Padding(FMargin(0, 0, 8, 0))
+    [
+        CreatePropertyRow(
+            "Show Normals",
+            SNew(SHorizontalBox)
+            +SHorizontalBox::Slot()
+            .AutoWidth()
+            .VAlign(VAlign_Center)
+            [
+                SAssignNew(ShowNormalsCheckBox, SCheckBox)
+                .IsChecked_Lambda([this]() { return bShowNormals ?
+                    ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+                .OnCheckStateChanged(this, &SVCCSimPanel::OnShowNormalsCheckboxChanged)
+                .IsEnabled_Lambda([this]() { return bPointCloudLoaded
+                    && bPointCloudHasNormals && bPointCloudVisualized; })
+            ]
+        )
+    ];
+}
+
 // ============================================================================
 // SCENE ANALYSIS UI COMPONENTS
 // ============================================================================
@@ -1806,6 +1847,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreateSceneOperationButtons()
         .Text(FText::FromString("Limited Region"))
     ];
 }
+
 
 TSharedRef<SWidget> SVCCSimPanel::CreateSafeZoneButtons()
 {
@@ -2130,4 +2172,148 @@ void FVCCSimPanelFactory::RegisterTabSpawner(FTabManager& TabManager)
     .SetDisplayName(FText::FromString("VCCSIM"))
     .SetIcon(FSlateIcon(VCCSimStyleName, "VCCSimStyle.TabIcon"))
     .SetGroup(WorkspaceMenu::GetMenuStructure().GetLevelEditorCategory());
+}
+
+UStaticMesh* SVCCSimPanel::LoadBasicSphereMesh()
+{
+    // Try to load engine's basic sphere mesh
+    TArray<const TCHAR*> SphereMeshPaths = {
+        TEXT("/Engine/BasicShapes/Sphere"),
+        TEXT("/Engine/BasicShapes/Sphere.Sphere"),
+        TEXT("/Engine/EngineMeshes/Sphere"),
+        TEXT("/Game/BasicShapes/Sphere") // Fallback to game content if available
+    };
+    
+    for (const TCHAR* MeshPath : SphereMeshPaths)
+    {
+        UStaticMesh* SphereMesh = LoadObject<UStaticMesh>(nullptr, MeshPath);
+        if (SphereMesh)
+        {
+            return SphereMesh;
+        }
+    }
+    
+    UE_LOG(LogTemp, Warning, TEXT("Could not find basic sphere mesh, trying to create procedural fallback"));
+    return CreateFallbackSphereMesh();
+}
+
+UStaticMesh* SVCCSimPanel::LoadBasicCylinderMesh()
+{
+    // Try to load engine's basic cylinder mesh
+    TArray<const TCHAR*> CylinderMeshPaths = {
+        TEXT("/Engine/BasicShapes/Cylinder"),
+        TEXT("/Engine/BasicShapes/Cylinder.Cylinder"),
+        TEXT("/Engine/EngineMeshes/Cylinder"),
+        TEXT("/Game/BasicShapes/Cylinder") // Fallback to game content if available
+    };
+    
+    for (const TCHAR* MeshPath : CylinderMeshPaths)
+    {
+        UStaticMesh* CylinderMesh = LoadObject<UStaticMesh>(nullptr, MeshPath);
+        if (CylinderMesh)
+        {
+            return CylinderMesh;
+        }
+    }
+    
+    UE_LOG(LogTemp, Warning, TEXT("Could not find basic cylinder mesh for normal lines"));
+    return nullptr;
+}
+
+UStaticMesh* SVCCSimPanel::CreateFallbackSphereMesh()
+{
+    // If we can't find engine spheres, we could create a simple procedural one
+    // For now, return nullptr and handle gracefully
+    UE_LOG(LogTemp, Error, TEXT("No sphere mesh available for point cloud visualization"));
+    return nullptr;
+}
+
+// ============================================================================
+// MATERIAL SETUP FUNCTIONS
+// ============================================================================
+
+void SVCCSimPanel::SetupPointCloudMaterial(UInstancedStaticMeshComponent* MeshComponent)
+{
+    if (!MeshComponent)
+    {
+        return;
+    }
+    
+    // Try to load a vertex color material first
+    UMaterialInterface* VertexColorMaterial = LoadPointCloudMaterial();
+    
+    if (VertexColorMaterial)
+    {
+        MeshComponent->SetMaterial(0, VertexColorMaterial);
+    }
+    else
+    {
+        // Create a simple dynamic material as fallback
+        CreateSimplePointCloudMaterial(MeshComponent);
+    }
+}
+
+void SVCCSimPanel::SetupNormalLinesMaterial(UInstancedStaticMeshComponent* MeshComponent)
+{
+    if (!MeshComponent)
+    {
+        return;
+    }
+    
+    // Create a simple unlit material for normal lines
+    UMaterial* BaseMaterial = UMaterial::GetDefaultMaterial(MD_Surface);
+    if (BaseMaterial)
+    {
+        UMaterialInstanceDynamic* DynamicMaterial = UMaterialInstanceDynamic::Create(BaseMaterial, nullptr);
+        if (DynamicMaterial)
+        {
+            DynamicMaterial->SetVectorParameterValue(FName("BaseColor"), FLinearColor::Green);
+            DynamicMaterial->SetScalarParameterValue(FName("Roughness"), 1.0f);
+            DynamicMaterial->SetScalarParameterValue(FName("Metallic"), 0.0f);
+            MeshComponent->SetMaterial(0, DynamicMaterial);
+        }
+    }
+}
+
+UMaterialInterface* SVCCSimPanel::LoadPointCloudMaterial()
+{
+    // Try to load custom point cloud material
+    const TCHAR* MaterialPath = TEXT("/Script/Engine.Material'/VCCSim/Materials/M_PointCloud.M_PointCloud'");
+    UMaterialInterface* Material = LoadObject<UMaterialInterface>(nullptr, MaterialPath);
+    
+    if (!Material)
+    {
+        // Try engine vertex color materials
+        TArray<const TCHAR*> FallbackMaterials = {
+            TEXT("/Engine/BasicShapes/BasicShapeMaterial")
+        };
+        
+        for (const TCHAR* FallbackPath : FallbackMaterials)
+        {
+            Material = LoadObject<UMaterialInterface>(nullptr, FallbackPath);
+            if (Material)
+            {
+                break;
+            }
+        }
+    }
+    
+    return Material;
+}
+
+void SVCCSimPanel::CreateSimplePointCloudMaterial(UInstancedStaticMeshComponent* MeshComponent)
+{
+    UMaterial* BaseMaterial = UMaterial::GetDefaultMaterial(MD_Surface);
+    if (BaseMaterial)
+    {
+        UMaterialInstanceDynamic* DynamicMaterial = UMaterialInstanceDynamic::Create(BaseMaterial, nullptr);
+        if (DynamicMaterial)
+        {
+            FLinearColor MaterialColor = bPointCloudHasColors ? FLinearColor::White : DefaultPointColor;
+            DynamicMaterial->SetVectorParameterValue(FName("BaseColor"), MaterialColor);
+            DynamicMaterial->SetScalarParameterValue(FName("Roughness"), 0.8f);
+            DynamicMaterial->SetScalarParameterValue(FName("Metallic"), 0.0f);
+            MeshComponent->SetMaterial(0, DynamicMaterial);
+        }
+    }
 }

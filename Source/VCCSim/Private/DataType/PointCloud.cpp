@@ -1,3 +1,20 @@
+/*
+* Copyright (C) 2025 Visual Computing Research Center, Shenzhen University
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
 #include "DataType/PointCloud.h"
 #include "Engine/Engine.h"
 #include "Misc/DateTime.h"
@@ -21,7 +38,7 @@ FPLYLoader::FPLYProperty::FPLYProperty(const FString& InType, const FString& InN
         Size = 4; // Default
 }
 
-// Main PLY loading function - REMOVED CoordinateScale parameter
+// Main PLY loading function with normal support
 FPLYLoader::FPLYLoadResult FPLYLoader::LoadPLYFile(const FString& FilePath, 
                                                    const FLinearColor& DefaultColor)
 {
@@ -81,23 +98,25 @@ FPLYLoader::FPLYLoadResult FPLYLoader::LoadPLYFile(const FString& FilePath,
         return Result;
     }
 
-    // Check for color properties
+    // Check for color and normal properties
     Result.bHasColors = HasColorProperties(Properties);
+    Result.bHasNormals = HasNormalProperties(Properties);
     
     // Reserve space for points
     Result.Points.Reserve(VertexCount);
     
-    UE_LOG(LogTemp, Warning, TEXT("Loading PLY: Format=%s, Vertices=%d, HasColors=%s"), 
+    UE_LOG(LogTemp, Warning, TEXT("Loading PLY: Format=%s, Vertices=%d, HasColors=%s, HasNormals=%s"), 
         Format == EPLYFormat::ASCII ? TEXT("ASCII") : TEXT("Binary"), 
         VertexCount, 
-        Result.bHasColors ? TEXT("Yes") : TEXT("No"));
+        Result.bHasColors ? TEXT("Yes") : TEXT("No"),
+        Result.bHasNormals ? TEXT("Yes") : TEXT("No"));
 
-    // Load data based on format - NO coordinate scaling
+    // Load data based on format
     bool bLoadSuccess = false;
     if (Format == EPLYFormat::ASCII)
     {
         bLoadSuccess = LoadASCIIPLY(FileLines, HeaderEndIndex, VertexCount, Properties,
-                                   DefaultColor, Result.Points, Result.bHasColors);
+                                   DefaultColor, Result.Points, Result.bHasColors, Result.bHasNormals);
     }
     else
     {
@@ -110,7 +129,7 @@ FPLYLoader::FPLYLoadResult FPLYLoader::LoadPLYFile(const FString& FilePath,
         int32 HeaderSize = FTCHARToUTF8(HeaderText.GetCharArray().GetData()).Length();
         
         bLoadSuccess = LoadBinaryPLY(FilePath, HeaderSize, VertexCount, Properties, Format,
-                                    DefaultColor, Result.Points, Result.bHasColors);
+                                    DefaultColor, Result.Points, Result.bHasColors, Result.bHasNormals);
     }
 
     Result.bSuccess = bLoadSuccess;
@@ -118,7 +137,10 @@ FPLYLoader::FPLYLoadResult FPLYLoader::LoadPLYFile(const FString& FilePath,
     
     if (Result.bSuccess)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Successfully loaded %d points from PLY file (no coordinate transform)"), Result.PointCount);
+        UE_LOG(LogTemp, Warning, TEXT("Successfully loaded %d points from PLY file (Colors: %s, Normals: %s)"), 
+               Result.PointCount,
+               Result.bHasColors ? TEXT("Yes") : TEXT("No"),
+               Result.bHasNormals ? TEXT("Yes") : TEXT("No"));
     }
     else
     {
@@ -135,7 +157,8 @@ bool FPLYLoader::LoadASCIIPLY(const TArray<FString>& Lines,
                              const TArray<FPLYProperty>& Properties,
                              const FLinearColor& DefaultColor,
                              TArray<FRatPoint>& OutPoints,
-                             bool bHasColors)
+                             bool bHasColors,
+                             bool bHasNormals)
 {
     int32 CurrentVertexIndex = 0;
     
@@ -148,6 +171,8 @@ bool FPLYLoader::LoadASCIIPLY(const TArray<FString>& Lines,
         {
             FVector Position = FVector::ZeroVector;
             FLinearColor Color = DefaultColor;
+            FVector Normal = FVector::UpVector;
+            bool bHasValidNormal = false;
             
             // Parse each property
             for (int32 PropIndex = 0; PropIndex < Properties.Num() && PropIndex < Components.Num(); ++PropIndex)
@@ -157,15 +182,15 @@ bool FPLYLoader::LoadASCIIPLY(const TArray<FString>& Lines,
                 
                 if (Prop.Name == TEXT("x"))
                 {
-                    Position.X = FCString::Atod(*Value); // NO scaling
+                    Position.X = FCString::Atod(*Value);
                 }
                 else if (Prop.Name == TEXT("y"))
                 {
-                    Position.Y = FCString::Atod(*Value); // NO scaling
+                    Position.Y = FCString::Atod(*Value);
                 }
                 else if (Prop.Name == TEXT("z"))
                 {
-                    Position.Z = FCString::Atod(*Value); // NO scaling
+                    Position.Z = FCString::Atod(*Value);
                 }
                 else if (Prop.Name == TEXT("red") && bHasColors)
                 {
@@ -179,9 +204,34 @@ bool FPLYLoader::LoadASCIIPLY(const TArray<FString>& Lines,
                 {
                     Color.B = FMath::Clamp(FCString::Atoi(*Value) / 255.0f, 0.0f, 1.0f);
                 }
+                else if (Prop.Name == TEXT("nx") && bHasNormals)
+                {
+                    Normal.X = FCString::Atod(*Value);
+                    bHasValidNormal = true;
+                }
+                else if (Prop.Name == TEXT("ny") && bHasNormals)
+                {
+                    Normal.Y = FCString::Atod(*Value);
+                    bHasValidNormal = true;
+                }
+                else if (Prop.Name == TEXT("nz") && bHasNormals)
+                {
+                    Normal.Z = FCString::Atod(*Value);
+                    bHasValidNormal = true;
+                }
             }
             
-            OutPoints.Add(FRatPoint(Position, Color));
+            // Normalize normal if we have valid normal data
+            if (bHasValidNormal && !Normal.IsNearlyZero())
+            {
+                Normal.Normalize();
+                OutPoints.Add(FRatPoint(Position, Color, Normal));
+            }
+            else
+            {
+                OutPoints.Add(FRatPoint(Position, Color));
+            }
+            
             CurrentVertexIndex++;
         }
     }
@@ -196,7 +246,8 @@ bool FPLYLoader::LoadBinaryPLY(const FString& FilePath,
                               EPLYFormat Format,
                               const FLinearColor& DefaultColor,
                               TArray<FRatPoint>& OutPoints,
-                              bool bHasColors)
+                              bool bHasColors,
+                              bool bHasNormals)
 {
     // Calculate record size
     int32 RecordSize = 0;
@@ -232,6 +283,8 @@ bool FPLYLoader::LoadBinaryPLY(const FString& FilePath,
         
         FVector Position = FVector::ZeroVector;
         FLinearColor Color = DefaultColor;
+        FVector Normal = FVector::UpVector;
+        bool bHasValidNormal = false;
         
         // Parse each property in the record
         for (const FPLYProperty& Prop : Properties)
@@ -242,33 +295,33 @@ bool FPLYLoader::LoadBinaryPLY(const FString& FilePath,
             {
                 if (Prop.Type == TEXT("double"))
                 {
-                    Position.X = ReadDouble(PropertyData, bLittleEndian); // NO scaling
+                    Position.X = ReadDouble(PropertyData, bLittleEndian);
                 }
                 else if (Prop.Type == TEXT("float"))
                 {
-                    Position.X = ReadFloat(PropertyData, bLittleEndian); // NO scaling
+                    Position.X = ReadFloat(PropertyData, bLittleEndian);
                 }
             }
             else if (Prop.Name == TEXT("y"))
             {
                 if (Prop.Type == TEXT("double"))
                 {
-                    Position.Y = ReadDouble(PropertyData, bLittleEndian); // NO scaling
+                    Position.Y = ReadDouble(PropertyData, bLittleEndian);
                 }
                 else if (Prop.Type == TEXT("float"))
                 {
-                    Position.Y = ReadFloat(PropertyData, bLittleEndian); // NO scaling
+                    Position.Y = ReadFloat(PropertyData, bLittleEndian);
                 }
             }
             else if (Prop.Name == TEXT("z"))
             {
                 if (Prop.Type == TEXT("double"))
                 {
-                    Position.Z = ReadDouble(PropertyData, bLittleEndian); // NO scaling
+                    Position.Z = ReadDouble(PropertyData, bLittleEndian);
                 }
                 else if (Prop.Type == TEXT("float"))
                 {
-                    Position.Z = ReadFloat(PropertyData, bLittleEndian); // NO scaling
+                    Position.Z = ReadFloat(PropertyData, bLittleEndian);
                 }
             }
             else if (Prop.Name == TEXT("red") && bHasColors)
@@ -283,11 +336,56 @@ bool FPLYLoader::LoadBinaryPLY(const FString& FilePath,
             {
                 Color.B = FMath::Clamp(ReadUChar(PropertyData) / 255.0f, 0.0f, 1.0f);
             }
+            else if (Prop.Name == TEXT("nx") && bHasNormals)
+            {
+                if (Prop.Type == TEXT("double"))
+                {
+                    Normal.X = ReadDouble(PropertyData, bLittleEndian);
+                }
+                else if (Prop.Type == TEXT("float"))
+                {
+                    Normal.X = ReadFloat(PropertyData, bLittleEndian);
+                }
+                bHasValidNormal = true;
+            }
+            else if (Prop.Name == TEXT("ny") && bHasNormals)
+            {
+                if (Prop.Type == TEXT("double"))
+                {
+                    Normal.Y = ReadDouble(PropertyData, bLittleEndian);
+                }
+                else if (Prop.Type == TEXT("float"))
+                {
+                    Normal.Y = ReadFloat(PropertyData, bLittleEndian);
+                }
+                bHasValidNormal = true;
+            }
+            else if (Prop.Name == TEXT("nz") && bHasNormals)
+            {
+                if (Prop.Type == TEXT("double"))
+                {
+                    Normal.Z = ReadDouble(PropertyData, bLittleEndian);
+                }
+                else if (Prop.Type == TEXT("float"))
+                {
+                    Normal.Z = ReadFloat(PropertyData, bLittleEndian);
+                }
+                bHasValidNormal = true;
+            }
             
             ByteOffset += Prop.Size;
         }
         
-        OutPoints.Add(FRatPoint(Position, Color));
+        // Normalize normal if we have valid normal data
+        if (bHasValidNormal && !Normal.IsNearlyZero())
+        {
+            Normal.Normalize();
+            OutPoints.Add(FRatPoint(Position, Color, Normal));
+        }
+        else
+        {
+            OutPoints.Add(FRatPoint(Position, Color));
+        }
     }
     
     return true;
@@ -380,6 +478,14 @@ bool FPLYLoader::HasColorProperties(const TArray<FPLYProperty>& Properties)
     bool bHasGreen = Properties.ContainsByPredicate([](const FPLYProperty& Prop) { return Prop.Name == TEXT("green"); });
     bool bHasBlue = Properties.ContainsByPredicate([](const FPLYProperty& Prop) { return Prop.Name == TEXT("blue"); });
     return bHasRed && bHasGreen && bHasBlue;
+}
+
+bool FPLYLoader::HasNormalProperties(const TArray<FPLYProperty>& Properties)
+{
+    bool bHasNX = Properties.ContainsByPredicate([](const FPLYProperty& Prop) { return Prop.Name == TEXT("nx"); });
+    bool bHasNY = Properties.ContainsByPredicate([](const FPLYProperty& Prop) { return Prop.Name == TEXT("ny"); });
+    bool bHasNZ = Properties.ContainsByPredicate([](const FPLYProperty& Prop) { return Prop.Name == TEXT("nz"); });
+    return bHasNX && bHasNY && bHasNZ;
 }
 
 // Binary reading helper functions (unchanged)
