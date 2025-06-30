@@ -51,6 +51,9 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "VCCSim|Maps")
 	TArray<FString> AvailableMaps;
+	
+	UPROPERTY()
+	FString CurrentMapName;
 
 	// Settings getters/setters
 	UFUNCTION(BlueprintCallable, Category = "VCCSim|Settings")
@@ -58,6 +61,15 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "VCCSim|Settings")
 	float GetSimulationSpeed() const { return SimulationSpeed; }
+
+	UFUNCTION(BlueprintCallable)
+	FString GetCurrentMapName() const;
+
+	UFUNCTION(BlueprintCallable)
+	void ReloadCurrentMap();
+
+	UFUNCTION()
+	void DetectCurrentMapName();
 
 private:
 	UPROPERTY()

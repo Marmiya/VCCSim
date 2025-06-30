@@ -1496,7 +1496,8 @@ TSharedRef<SWidget> SVCCSimPanel::CreateCaptureButtons()
             return SelectedFlashPawn.IsValid() && 
                    ((bUseRGBCamera && bHasRGBCamera) || 
                     (bUseDepthCamera && bHasDepthCamera) || 
-                    (bUseSegmentationCamera && bHasSegmentationCamera));
+                    (bUseSegmentationCamera && bHasSegmentationCamera) ||
+                    (bUseNormalCamera && bHasNormalCamera));
         })
     ];
 }

@@ -88,7 +88,11 @@ void ACarPawn::OnConstruction(const FTransform& Transform)
 void ACarPawn::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
-	
+
+	if (bEnableManualControl)
+	{
+		return;
+	}
 	AutoMove(DeltaSeconds);
 	SetTraceIgnores();
 	CalculateDistance();

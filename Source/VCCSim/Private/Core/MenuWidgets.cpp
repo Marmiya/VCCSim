@@ -21,6 +21,7 @@
 #include "Components/Button.h"
 #include "Components/TextBlock.h"
 #include "Simulation/SceneAnalysisManager.h"
+#include "Engine/World.h"
 
 void UMenuWidgets::NativeConstruct()
 {
@@ -28,48 +29,7 @@ void UMenuWidgets::NativeConstruct()
 
     UE_LOG(LogTemp, Warning, TEXT("MenuWidgets: NativeConstruct called"));
 
-    if (!Map1Button || !Map2Button || !Map3Button || !Map4Button || !Map5Button)
-    {
-        UE_LOG(LogTemp, Error, TEXT("MenuWidgets: One or more buttons are null! "
-                                    "Map1: %s, Map2: %s, Map3: %s, Map4: %s, Map5: %s"),
-            Map1Button ? TEXT("Valid") : TEXT("Null"),
-            Map2Button ? TEXT("Valid") : TEXT("Null"),
-            Map3Button ? TEXT("Valid") : TEXT("Null"),
-            Map4Button ? TEXT("Valid") : TEXT("Null"),
-            Map5Button ? TEXT("Valid") : TEXT("Null"));
-        return;
-    }
-
-    Map1Button->SetIsEnabled(true);
-    Map2Button->SetIsEnabled(true);
-    Map3Button->SetIsEnabled(true);
-    Map4Button->SetIsEnabled(true);
-    Map5Button->SetIsEnabled(true);
-
-    Map1Button->OnClicked.AddDynamic(this, &UMenuWidgets::OnMap1Selected);
-    Map2Button->OnClicked.AddDynamic(this, &UMenuWidgets::OnMap2Selected);
-    Map3Button->OnClicked.AddDynamic(this, &UMenuWidgets::OnMap3Selected);
-    Map4Button->OnClicked.AddDynamic(this, &UMenuWidgets::OnMap4Selected);
-    Map5Button->OnClicked.AddDynamic(this, &UMenuWidgets::OnMap5Selected);
-    
-    Map1OriginalColor = Map1Button->GetColorAndOpacity();
-    Map2OriginalColor = Map2Button->GetColorAndOpacity();
-    Map3OriginalColor = Map3Button->GetColorAndOpacity();
-    Map4OriginalColor = Map4Button->GetColorAndOpacity();
-    Map5OriginalColor = Map5Button->GetColorAndOpacity();
-
-    Map1Button->OnHovered.AddDynamic(this, &UMenuWidgets::OnMap1Hovered);
-    Map1Button->OnUnhovered.AddDynamic(this, &UMenuWidgets::OnMap1Unhovered);
-    Map2Button->OnHovered.AddDynamic(this, &UMenuWidgets::OnMap2Hovered);
-    Map2Button->OnUnhovered.AddDynamic(this, &UMenuWidgets::OnMap2Unhovered);
-    Map3Button->OnHovered.AddDynamic(this, &UMenuWidgets::OnMap3Hovered);
-    Map3Button->OnUnhovered.AddDynamic(this, &UMenuWidgets::OnMap3Unhovered);
-    Map4Button->OnHovered.AddDynamic(this, &UMenuWidgets::OnMap4Hovered);
-    Map4Button->OnUnhovered.AddDynamic(this, &UMenuWidgets::OnMap4Unhovered);
-    Map5Button->OnHovered.AddDynamic(this, &UMenuWidgets::OnMap5Hovered);
-    Map5Button->OnUnhovered.AddDynamic(this, &UMenuWidgets::OnMap5Unhovered);
-
-    // Initialize game instance
+    // Initialize game instance first
     GameInstance = Cast<UVCCSimGameInstance>(GetGameInstance());
     
     if (!GameInstance)
@@ -87,6 +47,64 @@ void UMenuWidgets::NativeConstruct()
     {
         GameInstance->AvailableMaps.Add(TEXT("Bunker"));
         GameInstance->AvailableMaps.Add(TEXT("Shipping_Port"));
+        // Add more maps as needed
+        // GameInstance->AvailableMaps.Add(TEXT("Map3"));
+        // GameInstance->AvailableMaps.Add(TEXT("Map4"));
+        // GameInstance->AvailableMaps.Add(TEXT("Map5"));
+    }
+
+    // Set up each button individually
+    SetupMapButton(Map1Button, 0, Map1OriginalColor, TEXT("Bunker Map"));
+    SetupMapButton(Map2Button, 1, Map2OriginalColor, TEXT("Shipping Port Map"));
+    SetupMapButton(Map3Button, 2, Map3OriginalColor, TEXT("Map3"));
+    SetupMapButton(Map4Button, 3, Map4OriginalColor, TEXT("Test Map"));
+    SetupMapButton(Map5Button, 4, Map5OriginalColor, TEXT("Map5"));
+
+    // Bind click events only for valid buttons
+    if (Map1Button && 0 < GameInstance->AvailableMaps.Num())
+        Map1Button->OnClicked.AddDynamic(this, &UMenuWidgets::OnMap1Selected);
+    
+    if (Map2Button && 1 < GameInstance->AvailableMaps.Num())
+        Map2Button->OnClicked.AddDynamic(this, &UMenuWidgets::OnMap2Selected);
+    
+    if (Map3Button && 2 < GameInstance->AvailableMaps.Num())
+        Map3Button->OnClicked.AddDynamic(this, &UMenuWidgets::OnMap3Selected);
+    
+    if (Map4Button && 3 < GameInstance->AvailableMaps.Num())
+        Map4Button->OnClicked.AddDynamic(this, &UMenuWidgets::OnMap4Selected);
+    
+    if (Map5Button && 4 < GameInstance->AvailableMaps.Num())
+        Map5Button->OnClicked.AddDynamic(this, &UMenuWidgets::OnMap5Selected);
+
+    // Bind hover events only for valid buttons
+    if (Map1Button && 0 < GameInstance->AvailableMaps.Num())
+    {
+        Map1Button->OnHovered.AddDynamic(this, &UMenuWidgets::OnMap1Hovered);
+        Map1Button->OnUnhovered.AddDynamic(this, &UMenuWidgets::OnMap1Unhovered);
+    }
+    
+    if (Map2Button && 1 < GameInstance->AvailableMaps.Num())
+    {
+        Map2Button->OnHovered.AddDynamic(this, &UMenuWidgets::OnMap2Hovered);
+        Map2Button->OnUnhovered.AddDynamic(this, &UMenuWidgets::OnMap2Unhovered);
+    }
+    
+    if (Map3Button && 2 < GameInstance->AvailableMaps.Num())
+    {
+        Map3Button->OnHovered.AddDynamic(this, &UMenuWidgets::OnMap3Hovered);
+        Map3Button->OnUnhovered.AddDynamic(this, &UMenuWidgets::OnMap3Unhovered);
+    }
+    
+    if (Map4Button && 3 < GameInstance->AvailableMaps.Num())
+    {
+        Map4Button->OnHovered.AddDynamic(this, &UMenuWidgets::OnMap4Hovered);
+        Map4Button->OnUnhovered.AddDynamic(this, &UMenuWidgets::OnMap4Unhovered);
+    }
+    
+    if (Map5Button && 4 < GameInstance->AvailableMaps.Num())
+    {
+        Map5Button->OnHovered.AddDynamic(this, &UMenuWidgets::OnMap5Hovered);
+        Map5Button->OnUnhovered.AddDynamic(this, &UMenuWidgets::OnMap5Unhovered);
     }
 
     if (StatusText)
@@ -97,6 +115,104 @@ void UMenuWidgets::NativeConstruct()
     UE_LOG(LogTemp, Warning, TEXT("MenuWidgets: Initialization complete"));
 }
 
+void UMenuWidgets::SetupMapButton(UButton* Button, int32 MapIndex, FLinearColor& OriginalColor, const FString& MapName)
+{
+    if (!Button)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("MenuWidgets: Button for map index %d (%s) is null, skipping"), MapIndex, *MapName);
+        return;
+    }
+
+    // Check if we have a map for this button
+    if (MapIndex >= GameInstance->AvailableMaps.Num())
+    {
+        // No map available for this button, hide it
+        Button->SetVisibility(ESlateVisibility::Collapsed);
+        Button->SetIsEnabled(false);
+        UE_LOG(LogTemp, Warning, TEXT("MenuWidgets: No map available for button index %d (%s), hiding button"), MapIndex, *MapName);
+        return;
+    }
+
+    // Button exists and we have a map for it, set it up
+    Button->SetIsEnabled(true);
+    Button->SetVisibility(ESlateVisibility::Visible);
+    
+    // Store original color
+    OriginalColor = Button->GetColorAndOpacity();
+    
+    UE_LOG(LogTemp, Log, TEXT("MenuWidgets: Successfully set up button for map index %d (%s)"), MapIndex, *MapName);
+}
+
+void UMenuWidgets::LoadMapAtIndex(int32 MapIndex, const FString& LoadingText)
+{
+    if (!GameInstance)
+    {
+        UE_LOG(LogTemp, Error, TEXT("MenuWidgets: GameInstance is null"));
+        return;
+    }
+
+    if (MapIndex < 0 || MapIndex >= GameInstance->AvailableMaps.Num())
+    {
+        UE_LOG(LogTemp, Error, TEXT("MenuWidgets: Invalid map index %d"), MapIndex);
+        if (StatusText)
+        {
+            StatusText->SetText(FText::FromString(TEXT("Error: Map not available")));
+        }
+        return;
+    }
+
+    if (StatusText)
+    {
+        StatusText->SetText(FText::FromString(LoadingText));
+    }
+
+    // Add a small delay to ensure the loading text is visible
+    GetWorld()->GetTimerManager().SetTimer(
+        LoadingTimerHandle,
+        [this, MapIndex]()
+        {
+            if (GameInstance && MapIndex < GameInstance->AvailableMaps.Num())
+            {
+                GameInstance->LoadMap(GameInstance->AvailableMaps[MapIndex]);
+            }
+        },
+        0.1f,
+        false
+    );
+}
+
+// Map selection functions - now using the helper function
+void UMenuWidgets::OnMap1Selected()
+{
+    UE_LOG(LogTemp, Warning, TEXT("MenuWidgets: Map1 Button Clicked"));
+    LoadMapAtIndex(0, TEXT("Loading Bunker Map..."));
+}
+
+void UMenuWidgets::OnMap2Selected()
+{
+    UE_LOG(LogTemp, Warning, TEXT("MenuWidgets: Map2 Button Clicked"));
+    LoadMapAtIndex(1, TEXT("Loading Shipping Port Map..."));
+}
+
+void UMenuWidgets::OnMap3Selected()
+{
+    UE_LOG(LogTemp, Warning, TEXT("MenuWidgets: Map3 Button Clicked"));
+    LoadMapAtIndex(2, TEXT("Loading Map3..."));
+}
+
+void UMenuWidgets::OnMap4Selected()
+{
+    UE_LOG(LogTemp, Warning, TEXT("MenuWidgets: Map4 Button Clicked"));
+    LoadMapAtIndex(3, TEXT("Loading Test Map..."));
+}
+
+void UMenuWidgets::OnMap5Selected()
+{
+    UE_LOG(LogTemp, Warning, TEXT("MenuWidgets: Map5 Button Clicked"));
+    LoadMapAtIndex(4, TEXT("Loading Map5..."));
+}
+
+// Hover functions - with null checks
 void UMenuWidgets::OnMap1Hovered()
 {
     if (Map1Button)
@@ -177,161 +293,6 @@ void UMenuWidgets::OnMap5Unhovered()
     }
 }
 
-void UMenuWidgets::OnMap1Selected()
-{
-    UE_LOG(LogTemp, Warning, TEXT("MenuWidgets: Map1 Button Clicked"));
-    
-    if (!GameInstance)
-    {
-        UE_LOG(LogTemp, Error, TEXT("MenuWidgets: "
-                                    "GameInstance is null in OnMap1Selected"));
-        return;
-    }
-
-    if (StatusText)
-    {
-        StatusText->SetText(FText::FromString(TEXT("Loading Bunker Map...")));
-    }
-
-    // Add a small delay to ensure the loading text is visible
-    GetWorld()->GetTimerManager().SetTimer(
-        LoadingTimerHandle,
-        [this]()
-        {
-            if (GameInstance)
-            {
-                GameInstance->LoadMap(GameInstance->AvailableMaps[0]);
-            }
-        },
-        0.1f,
-        false
-    );
-}
-
-void UMenuWidgets::OnMap2Selected()
-{
-    UE_LOG(LogTemp, Warning, TEXT("MenuWidgets: Map2 Button Clicked"));
-    
-    if (!GameInstance)
-    {
-        UE_LOG(LogTemp, Error, TEXT("MenuWidgets: "
-                                    "GameInstance is null in OnMap2Selected"));
-        return;
-    }
-
-    if (StatusText)
-    {
-        StatusText->SetText(FText::FromString(TEXT("Loading Shipping Port Map...")));
-    }
-
-    // Add a small delay to ensure the loading text is visible
-    GetWorld()->GetTimerManager().SetTimer(
-        LoadingTimerHandle,
-        [this]()
-        {
-            if (GameInstance)
-            {
-                GameInstance->LoadMap(GameInstance->AvailableMaps[1]);
-            }
-        },
-        0.1f,
-        false
-    );
-}
-
-void UMenuWidgets::OnMap3Selected()
-{
-    UE_LOG(LogTemp, Warning, TEXT("MenuWidgets: Map3 Button Clicked"));
-    
-    if (!GameInstance)
-    {
-        UE_LOG(LogTemp, Error, TEXT("MenuWidgets: "
-                                    "GameInstance is null in OnMap3Selected"));
-        return;
-    }
-
-    if (StatusText)
-    {
-        StatusText->SetText(FText::FromString(TEXT("Loading Map3...")));
-    }
-
-    // Add a small delay to ensure the loading text is visible
-    GetWorld()->GetTimerManager().SetTimer(
-        LoadingTimerHandle,
-        [this]()
-        {
-            if (GameInstance)
-            {
-                GameInstance->LoadMap(GameInstance->AvailableMaps[2]);
-            }
-        },
-        0.1f,
-        false
-    );
-}
-
-void UMenuWidgets::OnMap4Selected()
-{
-    UE_LOG(LogTemp, Warning, TEXT("MenuWidgets: MapTest Button Clicked"));
-    
-    if (!GameInstance)
-    {
-        UE_LOG(LogTemp, Error, TEXT("MenuWidgets: "
-                                    "GameInstance is null in OnMapTestSelected"));
-        return;
-    }
-
-    if (StatusText)
-    {
-        StatusText->SetText(FText::FromString(TEXT("Loading Test Map...")));
-    }
-
-    // Add a small delay to ensure the loading text is visible
-    GetWorld()->GetTimerManager().SetTimer(
-        LoadingTimerHandle,
-        [this]()
-        {
-            if (GameInstance)
-            {
-                GameInstance->LoadMap(GameInstance->AvailableMaps[3]);
-            }
-        },
-        0.1f,
-        false
-    );
-}
-
-void UMenuWidgets::OnMap5Selected()
-{
-    UE_LOG(LogTemp, Warning, TEXT("MenuWidgets: Map5 Button Clicked"));
-    
-    if (!GameInstance)
-    {
-        UE_LOG(LogTemp, Error, TEXT("MenuWidgets: "
-                                    "GameInstance is null in OnMap5Selected"));
-        return;
-    }
-
-    if (StatusText)
-    {
-        StatusText->SetText(FText::FromString(TEXT("Loading Map5...")));
-    }
-
-    // Add a small delay to ensure the loading text is visible
-    GetWorld()->GetTimerManager().SetTimer(
-        LoadingTimerHandle,
-        [this]()
-        {
-            if (GameInstance)
-            {
-                GameInstance->LoadMap(GameInstance->AvailableMaps[4]);
-            }
-        },
-        0.1f,
-        false
-    );
-}
-
 /* --------------------------------Pause Menu---------------------------------*/ 
 
 void UPauseMenuWidget::NativeConstruct()
@@ -356,6 +317,12 @@ void UPauseMenuWidget::NativeConstruct()
     if (SemanticButton)
     {
         SemanticButton->OnClicked.AddDynamic(this, &UPauseMenuWidget::OnSemanticClicked);
+    }
+    
+    // Bind the new reload map button
+    if (ReloadMapButton)
+    {
+        ReloadMapButton->OnClicked.AddDynamic(this, &UPauseMenuWidget::OnReloadMapClicked);
     }
 }
 
@@ -417,4 +384,24 @@ void UPauseMenuWidget::OnSemanticClicked()
     {
         UE_LOG(LogTemp, Error, TEXT("Scene Analysis Manager not found!"));
     }
+}
+
+void UPauseMenuWidget::OnReloadMapClicked()
+{
+    UE_LOG(LogTemp, Warning, TEXT("PauseMenuWidget: Reload Map Button Clicked"));
+    
+    if (!GameInstance)
+    {
+        UE_LOG(LogTemp, Error, TEXT("PauseMenuWidget: GameInstance is null"));
+        return;
+    }
+
+    // First unpause the game
+    UGameplayStatics::SetGamePaused(GetWorld(), false);
+    
+    // Use the GameInstance's reload method
+    GameInstance->ReloadCurrentMap();
+    
+    // Remove the pause menu from view
+    RemoveFromParent();
 }

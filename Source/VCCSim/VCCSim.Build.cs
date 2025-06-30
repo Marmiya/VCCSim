@@ -34,7 +34,7 @@ public class VCCSim : ModuleRules
                 "ProceduralMeshComponent",
                 "LevelSequence",
 				"MovieScene", "EnhancedInput", 
-				"ChaosVehicles",
+				"ChaosVehicles", "PhysicsCore",
 				"LevelEditor", "UnrealEd",
 				"WorkspaceMenuStructure"
 				// "Serialization",

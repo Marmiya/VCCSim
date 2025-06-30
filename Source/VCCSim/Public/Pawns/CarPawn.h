@@ -152,6 +152,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VCCSim|Target")
 	bool bUseTarget = false;
 	bool bUsePath = false;
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category="Manual Control")
+	bool bEnableManualControl = false;
+	
 private:
 	float CourseDistance;
 	float LastCourseDistance;

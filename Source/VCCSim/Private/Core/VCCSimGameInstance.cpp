@@ -29,12 +29,14 @@ void UVCCSimGameInstance::Init()
 {
 	Super::Init();
 
-	// Initialize your game instance here
+	DetectCurrentMapName();
 	UE_LOG(LogTemp, Log, TEXT("VCCSim GameInstance Initialized"));
 }
 
 void UVCCSimGameInstance::LoadMap(const FString& MapName)
 {
+	CurrentMapName = MapName;
+	
 	// Check if the map name is valid
 	if (AvailableMaps.Contains(MapName))
 	{
@@ -63,4 +65,106 @@ void UVCCSimGameInstance::LoadGameState()
 void UVCCSimGameInstance::SetSimulationSpeed(float Speed)
 {
 	SimulationSpeed = FMath::Clamp(Speed, 0.1f, 10.0f);
+}
+
+FString UVCCSimGameInstance::GetCurrentMapName() const
+{
+	return CurrentMapName;
+}
+
+void UVCCSimGameInstance::ReloadCurrentMap()
+{
+	// If CurrentMapName is empty (like when starting from editor), detect it
+	if (CurrentMapName.IsEmpty())
+	{
+		DetectCurrentMapName();
+	}
+    
+	if (!CurrentMapName.IsEmpty())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("GameInstance: Reloading current map: %s"), *CurrentMapName);
+		LoadMap(CurrentMapName);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("GameInstance: Could not determine current map to reload"));
+	}
+}
+
+void UVCCSimGameInstance::DetectCurrentMapName()
+{
+    UWorld* CurrentWorld = GetWorld();
+    if (!CurrentWorld)
+    {
+        UE_LOG(LogTemp, Error, TEXT("GameInstance: Current world is null"));
+        return;
+    }
+    
+    // Try to get the map name from the world
+    FString DetectedMapName = CurrentWorld->GetMapName();
+    
+    UE_LOG(LogTemp, Warning, TEXT("GameInstance: Raw detected map name: %s"), *DetectedMapName);
+    
+    // Clean up the map name
+    if (DetectedMapName.StartsWith(TEXT("UEDPIE_0_")))
+    {
+        DetectedMapName = DetectedMapName.RightChop(9); // Remove "UEDPIE_0_" prefix
+    }
+    
+    // Remove /Game/ path if present
+    if (DetectedMapName.StartsWith(TEXT("/Game/")))
+    {
+        DetectedMapName = DetectedMapName.RightChop(6); // Remove "/Game/" prefix
+    }
+    
+    // Try alternative method if still empty
+    if (DetectedMapName.IsEmpty())
+    {
+        FString URL = CurrentWorld->URL.Map;
+        DetectedMapName = FPaths::GetBaseFilename(URL);
+        UE_LOG(LogTemp, Warning, TEXT("GameInstance: Using URL-based map name: %s"), *DetectedMapName);
+    }
+    
+    // Try to match with available maps
+    if (!DetectedMapName.IsEmpty())
+    {
+        // First, try exact matches
+        for (const FString& AvailableMap : AvailableMaps)
+        {
+            if (DetectedMapName.Equals(AvailableMap, ESearchCase::IgnoreCase))
+            {
+                CurrentMapName = AvailableMap;
+                UE_LOG(LogTemp, Warning, TEXT("GameInstance: Exact match - detected map '%s' matches available map '%s'"), *DetectedMapName, *AvailableMap);
+                return;
+            }
+        }
+        
+        // Then try partial matches
+        for (const FString& AvailableMap : AvailableMaps)
+        {
+            if (DetectedMapName.Contains(AvailableMap) || AvailableMap.Contains(DetectedMapName))
+            {
+                CurrentMapName = AvailableMap;
+                UE_LOG(LogTemp, Warning, TEXT("GameInstance: Partial match - detected map '%s' matched to available map '%s'"), *DetectedMapName, *AvailableMap);
+                return;
+            }
+        }
+        
+        // If no match found, use the detected name as-is
+        CurrentMapName = DetectedMapName;
+        UE_LOG(LogTemp, Warning, TEXT("GameInstance: No match found, using detected map name: %s"), *CurrentMapName);
+    }
+    else
+    {
+        // Last resort: if we have available maps and detection failed, use the first one
+        if (AvailableMaps.Num() > 0)
+        {
+            CurrentMapName = AvailableMaps[0];
+            UE_LOG(LogTemp, Warning, TEXT("GameInstance: Detection failed, defaulting to first available map: %s"), *CurrentMapName);
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("GameInstance: Could not detect current map name and no available maps"));
+        }
+    }
 }
