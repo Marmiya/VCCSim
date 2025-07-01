@@ -22,8 +22,10 @@
 #include "HAL/PlatformFilemanager.h"
 #include "GenericPlatform/GenericPlatformFile.h"
 #include "Misc/FileHelper.h"
+#include "Math/Vector.h"
+#include "PointCloud.generated.h"
 
-/**
+/*
  * Enhanced point data structure for point cloud loading with normal support
  */
 struct FRatPoint
@@ -176,3 +178,25 @@ private:
     static uint32 ReadUInt(const uint8* Data, bool bLittleEndian);
     static int32 ReadInt(const uint8* Data, bool bLittleEndian);
 };
+
+USTRUCT(BlueprintType)
+struct VCCSIM_API FLiDARPoint
+{
+    GENERATED_BODY()
+
+public:
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "LiDAR")
+    FVector Position;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "LiDAR")
+    float Intensity;
+
+    bool bHit = false;
+    
+    FLiDARPoint()
+        : Position(FVector::ZeroVector), Intensity(0.0f) {}
+
+    FLiDARPoint(const FVector& InPosition, float InIntensity = 0.0f)
+        : Position(InPosition), Intensity(InIntensity) {}
+};
+

@@ -25,12 +25,7 @@
 #include "LidarSensor.generated.h"
 
 class ARecorder;
-
-struct FLidarPoint
-{
-    FVector Location = FVector::ZeroVector;
-    bool bHit = false;
-};
+struct FLiDARPoint;
 
 class FLiDarConfig : public FSensorConfig
 {
@@ -119,7 +114,7 @@ private:
     FRotator LastRotation;
     TArray<FVector> CachedStartPoints;
     TArray<FVector> CachedEndPoints;
-    TArray<FLidarPoint> PointPool;
+    TArray<FLiDARPoint> PointPool;
     
     FCollisionQueryParams QueryParams;
     

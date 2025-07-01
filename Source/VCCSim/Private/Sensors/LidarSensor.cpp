@@ -16,6 +16,7 @@
 */
 
 #include "Sensors/LidarSensor.h"
+#include "DataType/PointCloud.h"
 #include "Simulation/Recorder.h"
 #include "DrawDebugHelpers.h"
 #include "Async/Async.h"
@@ -171,9 +172,9 @@ TArray<FVector3f> ULidarComponent::PerformLineTraces(FVCCSimOdom* Odom)
 			if (PointPool[Index].bHit)
 			{
 				ChunkValidPoints.Add({
-					static_cast<float>(PointPool[Index].Location.X),
-					static_cast<float>(PointPool[Index].Location.Y),
-					static_cast<float>(PointPool[Index].Location.Z)
+					static_cast<float>(PointPool[Index].Position.X),
+					static_cast<float>(PointPool[Index].Position.Y),
+					static_cast<float>(PointPool[Index].Position.Z)
 				});
 			}
 		}
@@ -367,9 +368,9 @@ void ULidarComponent::ProcessChunk(int32 ChunkIndex)
 				QueryParams
 			);
 
-			FLidarPoint& Point = PointPool[GroupIndex];
+			FLiDARPoint& Point = PointPool[GroupIndex];
 			Point.bHit = bHit;
-			Point.Location = bHit ? HitResult.Location : CachedEndPoints[GroupIndex];
+			Point.Position = bHit ? HitResult.Location : CachedEndPoints[GroupIndex];
 		}
 	}
 }
@@ -412,8 +413,8 @@ TArray<FTransform> ULidarComponent::GetHitTransforms() const
 	Algo::TransformIf(
 		PointPool,
 		HitTransforms,
-		[](const FLidarPoint& Point) { return Point.bHit; },
-		[](const FLidarPoint& Point) { return FTransform(Point.Location); }
+		[](const FLiDARPoint& Point) { return Point.bHit; },
+		[](const FLiDARPoint& Point) { return FTransform(Point.Position); }
 	);
 	return HitTransforms;
 }
