@@ -69,6 +69,7 @@ void UInsMeshHolder::OnRegister()
 	InstancedMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	InstancedMeshComponent->SetCollisionProfileName(UCollisionProfile::NoCollision_ProfileName);
 	InstancedMeshComponent->SetCastShadow(false);
+	DisableAllShadows(InstancedMeshComponent);
 }
 
 void UInsMeshHolder::CreateStaticMeshes()
@@ -126,6 +127,7 @@ void UInsMeshHolder::CreateStaticMeshes()
 	InstancedMeshComponentColor->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	InstancedMeshComponentColor->SetCollisionProfileName(UCollisionProfile::NoCollision_ProfileName);
 	InstancedMeshComponentColor->SetCastShadow(false);
+	DisableAllShadows(InstancedMeshComponentColor);
 }
 
 void UInsMeshHolder::ClearAndAddNewInstances(
@@ -222,4 +224,22 @@ UInstancedStaticMeshComponent*	UInsMeshHolder::GetInstancedMeshComponent() const
 UInstancedStaticMeshComponent* UInsMeshHolder::GetInstancedMeshComponentColor() const
 {
 	return InstancedMeshComponentColor;
+}
+
+void UInsMeshHolder::DisableAllShadows(UInstancedStaticMeshComponent* Component)
+{
+	if (!Component) return;
+    
+	Component->SetCastShadow(false);
+	Component->bCastDynamicShadow = false;
+	Component->bCastStaticShadow = false;
+	Component->bCastVolumetricTranslucentShadow = false;
+	Component->bCastContactShadow = false;
+	Component->bSelfShadowOnly = false;
+	Component->bCastFarShadow = false;
+	Component->bCastInsetShadow = false;
+	Component->bCastCinematicShadow = false;
+	Component->bAffectDynamicIndirectLighting = false;
+	Component->bAffectDistanceFieldLighting = false;
+	Component->CastShadow = false;
 }

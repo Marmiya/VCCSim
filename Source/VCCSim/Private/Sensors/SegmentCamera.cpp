@@ -146,7 +146,7 @@ void USegmentationCameraComponent::SetCaptureComponent() const
         // For segmentation, we want to capture the base color/diffuse
         CaptureComponent->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
         CaptureComponent->bCaptureEveryFrame = false;
-        CaptureComponent->bCaptureOnMovement = true;
+        CaptureComponent->bCaptureOnMovement = false;
         CaptureComponent->bAlwaysPersistRenderingState = true;
         
         // Apply the segmentation post-process material if available

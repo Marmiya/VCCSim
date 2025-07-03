@@ -25,6 +25,7 @@
 #include "Sensors/CameraSensor.h"
 #include "Sensors/DepthCamera.h"
 #include "Sensors/SegmentCamera.h"
+#include "Sensors/NormalCamera.h"
 #include "EngineUtils.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/TextureRenderTarget2D.h"
@@ -60,6 +61,12 @@ void UVCCSIMDisplayWidget::NativeConstruct()
         SegMaterial = UMaterialInstanceDynamic::Create(
             SegVisualizationMaterial, this);
         SegImageDisplay->SetBrushFromMaterial(SegMaterial);
+    }
+    if (NormalVisualizationMaterial && NormalImageDisplay)
+    {
+        NormalMaterial = UMaterialInstanceDynamic::Create(
+            NormalVisualizationMaterial, this);
+        NormalImageDisplay->SetBrushFromMaterial(NormalMaterial);
     }
 }
 
@@ -189,12 +196,60 @@ void UVCCSIMDisplayWidget::InitFromConfig(const struct FVCCSimConfig& Config)
                 UE_LOG(LogTemp, Error, TEXT("Failed to set MeshHandler"));
             }
         }
+        else if (SubWindows[i] == "Depth")
+        {
+            if (DepthImageDisplay)
+            {
+                DepthImageDisplay->SetVisibility(ESlateVisibility::Visible);
+                DepthImageDisplay->SetOpacity(SubWindowsOpacities[i]);
+            }
+            else
+            {
+                UE_LOG(LogTemp, Error, TEXT("DepthImageDisplay not set"));
+            }
+        }
+        else if (SubWindows[i] == "RGB")
+        {
+            if (RGBImageDisplay)
+            {
+                RGBImageDisplay->SetVisibility(ESlateVisibility::Visible);
+                RGBImageDisplay->SetOpacity(SubWindowsOpacities[i]);
+            }
+            else
+            {
+                UE_LOG(LogTemp, Error, TEXT("RGBImageDisplay not set"));
+            }
+        }
+        else if (SubWindows[i] == "Segmentation")
+        {
+            if (SegImageDisplay)
+            {
+                SegImageDisplay->SetVisibility(ESlateVisibility::Visible);
+                SegImageDisplay->SetOpacity(SubWindowsOpacities[i]);
+            }
+            else
+            {
+                UE_LOG(LogTemp, Error, TEXT("SegImageDisplay not set"));
+            }
+        }
+        else if (SubWindows[i] == "Normal")
+        {
+            if (NormalImageDisplay)
+            {
+                NormalImageDisplay->SetVisibility(ESlateVisibility::Visible);
+                NormalImageDisplay->SetOpacity(SubWindowsOpacities[i]);
+            }
+            else
+            {
+                UE_LOG(LogTemp, Error, TEXT("NormalImageDisplay not set"));
+            }
+        }
         else
         {
             UE_LOG(LogTemp, Error, TEXT("Unknown SubWindow: %s"), 
                 *FString(SubWindows[i].c_str()));
         }
-    }    
+    }
 }
 
 void UVCCSIMDisplayWidget::SetDepthContext(
@@ -248,6 +303,24 @@ void UVCCSIMDisplayWidget::SetSegContext(
             TEXT("SetSegTexture failed - Material: %s, Texture: %s"),
             SegMaterial ? TEXT("valid") : TEXT("null"),
             SegTexture ? TEXT("valid") : TEXT("null"));
+    }
+}
+
+void UVCCSIMDisplayWidget::SetNormalContext(
+    UTextureRenderTarget2D* NormalTexture, UNormalCameraComponent* InCamera)
+{
+    if (NormalMaterial && NormalTexture)
+    {
+        NormalRenderTarget = NormalTexture;
+        NormalMaterial->SetTextureParameterValue(TEXT("NormalTexture"), NormalRenderTarget);
+        NormalCameraComponent = InCamera;
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, 
+            TEXT("SetNormalTexture failed - Material: %s, Texture: %s"),
+            NormalMaterial ? TEXT("valid") : TEXT("null"),
+            NormalTexture ? TEXT("valid") : TEXT("null"));
     }
 }
 

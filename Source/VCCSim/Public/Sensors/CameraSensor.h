@@ -28,6 +28,7 @@
 #include "CameraSensor.generated.h"
 
 class ARecorder;
+class UInsMeshHolder;
 
 class FRGBCameraConfig : public FSensorConfig
 {
@@ -51,6 +52,7 @@ public:
     URGBCameraComponent();
     void RConfigure(const FRGBCameraConfig& Config, ARecorder* Recorder);
     bool IsConfigured() const { return bBPConfigured; }
+    void SetIgnoreLidar(UInsMeshHolder* MeshHolder);
     UFUNCTION()
     void SetRecordState(bool RState) { RecordState = RState; }
     

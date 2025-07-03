@@ -341,6 +341,21 @@ void AVCCHUD::SetupMainCharacter(const FVCCSimConfig& Config, TArray<AActor*> Fo
                                               "RGBCamera component not found!"));
             }
         }
+        if (Component.first == ESensorType::NormalCamera)
+        {
+            if (UNormalCameraComponent* NormalCameraComponent =
+                MainCharacter->FindComponentByClass<UNormalCameraComponent>())
+            {
+                WidgetInstance->SetNormalContext(
+                    NormalCameraComponent->NormalRenderTarget,
+                    NormalCameraComponent);
+            }
+            else
+            {
+                UE_LOG(LogTemp, Warning, TEXT("AVCCHUD: "
+                                              "NormalCamera component not found!"));
+            }
+        }
     }
 }
 
@@ -418,10 +433,7 @@ FRobotGrpcMaps AVCCHUD::SetupActors(const FVCCSimConfig& Config)
                 LidarComponent->MeshHolder = Holder->FindComponentByClass<UInsMeshHolder>();
                 RGrpcMaps.RCMaps.RLMap[Robot.UETag] = LidarComponent;
 
-                if (LidarComponent->bRecorded)
-                {
-                    bHasLidar = true;
-                }
+                bHasLidar = true;
             }
             else if (Component.first == ESensorType::DepthCamera)
             {
@@ -443,10 +455,7 @@ FRobotGrpcMaps AVCCHUD::SetupActors(const FVCCSimConfig& Config)
                         RGrpcMaps.RCMaps.RDCMap[TCHAR_TO_UTF8(*CameraKey)] = DepthCam;
                     }
 
-                    if (DepthCam->bRecorded)
-                    {
-                        bHasDepth = true;
-                    }
+                    bHasDepth = true;
                 }
             }
             else if (Component.first == ESensorType::RGBCamera)
@@ -467,10 +476,7 @@ FRobotGrpcMaps AVCCHUD::SetupActors(const FVCCSimConfig& Config)
                         RGBCam->CameraName = CameraKey;
                     }
 
-                    if (RGBCam->bRecorded)
-                    {
-                        bHasRGB = true;
-                    }
+                    bHasRGB = true;
                 }
             }
             else if (Component.first == ESensorType::SegmentationCamera)
@@ -482,10 +488,7 @@ FRobotGrpcMaps AVCCHUD::SetupActors(const FVCCSimConfig& Config)
                     Recorder);
                 RGrpcMaps.RCMaps.RSegMap[Robot.UETag] = SegmentationCamera;
 
-                if (SegmentationCamera->bRecorded)
-                {
-                    bHasSegmentation = true;
-                }
+                bHasSegmentation = true;
             }
             else if (Component.first == ESensorType::NormalCamera)
             {
@@ -495,15 +498,25 @@ FRobotGrpcMaps AVCCHUD::SetupActors(const FVCCSimConfig& Config)
                     *static_cast<FNormalCameraConfig*>(Component.second.get()), Recorder);
                 RGrpcMaps.RCMaps.RNormalMap[Robot.UETag] = NormalCamera;
 
-                if (NormalCamera->bRecorded)
-                {
-                    bHasNormal = true;
-                }
+                bHasNormal = true;
             }
             else
             {
                 UE_LOG(LogTemp, Warning, TEXT(
                     "AVCCHUD::SetupActors: Unknown component, %d"), Component.first);
+            }
+
+            if (bHasLidar && bHasRGB)
+            {
+                TArray<URGBCameraComponent*> RGBCameras;
+                RobotPawn->GetComponents<URGBCameraComponent>(RGBCameras);
+                ULidarComponent* LidarComponent =
+                    RobotPawn->FindComponentByClass<ULidarComponent>();
+
+                for (auto* RGBCam : RGBCameras)
+                {
+                    RGBCam->SetIgnoreLidar(LidarComponent->MeshHolder);
+                }
             }
         }
         

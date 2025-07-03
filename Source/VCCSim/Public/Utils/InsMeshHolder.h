@@ -58,5 +58,5 @@ private:
 	float IMCCTimer = 0.f;
 	UPROPERTY()
 	UMaterialInstanceDynamic* ColorMaterialInstance = nullptr;
-	
+	void DisableAllShadows(UInstancedStaticMeshComponent* Component);
 };

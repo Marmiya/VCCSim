@@ -20,6 +20,8 @@
 #include "RenderingThread.h"
 #include "Async/AsyncWork.h"
 #include "Windows/WindowsHWrapper.h"
+#include "Utils/InsMeshHolder.h"
+#include "Components/InstancedStaticMeshComponent.h"
 
 URGBCameraComponent::URGBCameraComponent()
     : FOV(90.0f)
@@ -144,6 +146,22 @@ void URGBCameraComponent::RConfigure(
     }
     
     bBPConfigured = true;
+}
+
+void URGBCameraComponent::SetIgnoreLidar(
+    UInsMeshHolder* MeshHolder)
+{
+    if (CaptureComponent)
+    {
+        CaptureComponent->PrimitiveRenderMode =
+            ESceneCapturePrimitiveRenderMode::PRM_RenderScenePrimitives;
+        CaptureComponent->HideComponent(MeshHolder->GetInstancedMeshComponent());
+        CaptureComponent->HideComponent(MeshHolder->GetInstancedMeshComponentColor());
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("Capture component not initialized!"));
+    }
 }
 
 void URGBCameraComponent::SetCaptureComponent() const

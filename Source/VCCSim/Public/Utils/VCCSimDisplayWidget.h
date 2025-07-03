@@ -26,6 +26,7 @@ class UMeshHandlerComponent;
 class UDepthCameraComponent;
 class URGBCameraComponent;
 class USegmentationCameraComponent;
+class UNormalCameraComponent;
 
 UCLASS()
 class VCCSIM_API UVCCSIMDisplayWidget : public UUserWidget
@@ -45,6 +46,7 @@ public:
     void SetDepthContext(UTextureRenderTarget2D* DepthTexture, UDepthCameraComponent* InCamera);
     void SetRGBContext(UTextureRenderTarget2D* RGBTexture, URGBCameraComponent* InCamera);
     void SetSegContext(UTextureRenderTarget2D* SegTexture, USegmentationCameraComponent* InCamera);
+    void SetNormalContext(UTextureRenderTarget2D* NormalTexture, UNormalCameraComponent* InCamera);
     
     UFUNCTION(BlueprintCallable, Category = "LitView")
     void SetLitMeshComponent(TArray<UStaticMeshComponent*> MeshComponent,
@@ -58,6 +60,8 @@ public:
     void SetMeshHandler(UMeshHandlerComponent* InMeshHandler, const float& Opacity);
     
     // ID:
+    // 4 -> Normal,
+    // 5 -> Segmentation,
     // 6 -> RGB,
     // 7 -> Lit,
     // 8 -> PC,
@@ -115,6 +119,18 @@ protected:
     TObjectPtr<UTextureRenderTarget2D> SegRenderTarget;
     UPROPERTY()
     USegmentationCameraComponent* SegCameraComponent = nullptr;
+
+    // Normal visualization properties
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
+    TObjectPtr<UImage> NormalImageDisplay;
+    UPROPERTY(EditDefaultsOnly, Category = "NormalView")
+    TObjectPtr<UMaterialInterface> NormalVisualizationMaterial;
+    UPROPERTY()
+    TObjectPtr<UMaterialInstanceDynamic> NormalMaterial;
+    UPROPERTY()
+    TObjectPtr<UTextureRenderTarget2D> NormalRenderTarget;
+    UPROPERTY()
+    UNormalCameraComponent* NormalCameraComponent = nullptr;
         
     // Lit image visualization properties
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
