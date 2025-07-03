@@ -56,8 +56,8 @@ class LiDARDataCollector:
             self.client.close()
             print("Disconnected from server")
     
-    def collect_lidar_data_10hz(self, duration_seconds=None, save_data=True):
-        """Collect LiDAR data at 10 Hz frequency.
+    def collect_lidar_data_5hz(self, duration_seconds=None, save_data=True):
+        """Collect LiDAR data at 5 Hz frequency.
         
         Args:
             duration_seconds: How long to collect data (None for infinite)
@@ -67,8 +67,8 @@ class LiDARDataCollector:
             print("Error: Not connected to server")
             return
         
-        target_frequency = 10.0  # Hz
-        target_period = 1.0 / target_frequency  # 0.1 seconds
+        target_frequency = 5.0  # Hz
+        target_period = 1.0 / target_frequency  # 0.2 seconds
         
         self.running = True
         start_time = time.time()
@@ -111,8 +111,8 @@ class LiDARDataCollector:
                             'actual_period': actual_period
                         })
                     
-                    # Print progress every 50 iterations (every 5 seconds at 10Hz)
-                    if iteration_count % 50 == 0:
+                    # Print progress every 25 iterations (every 5 seconds at 5Hz)
+                    if iteration_count % 25 == 0:
                         elapsed_time = timestamp - start_time
                         avg_frequency = iteration_count / elapsed_time if elapsed_time > 0 else 0
                         print(f"Iteration {iteration_count}: {len(points)} points, "
@@ -163,6 +163,36 @@ class LiDARDataCollector:
         if save_data and self.data_points:
             self.save_collected_data()
     
+    def save_pointcloud_as_ply(self, points, filename):
+        """Save point cloud data as PLY file.
+        
+        Args:
+            points: List of 3D points [(x, y, z), ...]
+            filename: Output filename
+        """
+        try:
+            with open(filename, 'w') as f:
+                # Write PLY header
+                f.write("ply\n")
+                f.write("format ascii 1.0\n")
+                f.write(f"element vertex {len(points)}\n")
+                f.write("property float x\n")
+                f.write("property float y\n")
+                f.write("property float z\n")
+                f.write("end_header\n")
+                
+                # Write point data
+                for point in points:
+                    f.write(f"{point[0]:.6f} {point[1]:.6f} {point[2]:.6f}\n")
+                
+                # Ensure data is written to disk
+                f.flush()
+                os.fsync(f.fileno())
+            
+        except Exception as e:
+            print(f"Error saving PLY file {filename}: {e}")
+            raise  # Re-raise to ensure we know about failures
+    
     def save_collected_data(self):
         """Save the collected LiDAR data to files."""
         if not self.data_points:
@@ -171,49 +201,77 @@ class LiDARDataCollector:
         
         timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
         
-        # Save summary data
-        summary_filename = f"lidar_summary_{timestamp_str}.csv"
-        with open(summary_filename, 'w', newline='') as csvfile:
-            writer = csv.writer(csvfile)
-            writer.writerow(['timestamp', 'iteration', 'point_count', 'pose_x', 'pose_y', 'pose_z', 
-                           'pose_roll', 'pose_pitch', 'pose_yaw'])
-            
-            for entry in self.data_points:
-                pose = entry['pose']
-                writer.writerow([
-                    entry['timestamp'], entry['iteration'], entry['point_count'],
-                    pose.x, pose.y, pose.z, pose.roll, pose.pitch, pose.yaw
-                ])
+        # Create output directory
+        output_dir = f"lidar_data_{timestamp_str}"
+        os.makedirs(output_dir, exist_ok=True)
         
-        print(f"Saved summary data to {summary_filename}")
+        # Save pose data in txt format: x y z pitch yaw roll
+        pose_filename = os.path.join(output_dir, f"poses_{timestamp_str}.txt")
+        try:
+            with open(pose_filename, 'w') as f:
+                f.write("# x y z pitch yaw roll\n")  # Header comment
+                for entry in self.data_points:
+                    pose = entry['pose']
+                    # Format: x y z pitch yaw roll
+                    f.write(f"{pose.x:.6f} {pose.y:.6f} {pose.z:.6f} {pose.pitch:.6f} {pose.yaw:.6f} {pose.roll:.6f}\n")
+            
+            print(f"Saved pose data to {pose_filename}")
+        except Exception as e:
+            print(f"Error saving pose file: {e}")
+        
+        # Save summary data (CSV)
+        summary_filename = os.path.join(output_dir, f"lidar_summary_{timestamp_str}.csv")
+        try:
+            with open(summary_filename, 'w', newline='') as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerow(['timestamp', 'iteration', 'point_count', 'pose_x', 'pose_y', 'pose_z', 
+                               'pose_pitch', 'pose_yaw', 'pose_roll'])
+                
+                for entry in self.data_points:
+                    pose = entry['pose']
+                    writer.writerow([
+                        entry['timestamp'], entry['iteration'], entry['point_count'],
+                        pose.x, pose.y, pose.z, pose.pitch, pose.yaw, pose.roll
+                    ])
+            
+            print(f"Saved summary data to {summary_filename}")
+        except Exception as e:
+            print(f"Error saving summary file: {e}")
         
         # Save frequency statistics
         if self.frequency_stats:
-            freq_filename = f"lidar_frequency_stats_{timestamp_str}.csv"
-            with open(freq_filename, 'w', newline='') as csvfile:
-                writer = csv.writer(csvfile)
-                writer.writerow(['timestamp', 'actual_frequency', 'actual_period'])
-                
-                for stat in self.frequency_stats:
-                    writer.writerow([stat['timestamp'], stat['actual_frequency'], stat['actual_period']])
-            
-            print(f"Saved frequency statistics to {freq_filename}")
-        
-        # Optionally save point cloud data for a few samples (to avoid huge files)
-        sample_indices = [0, len(self.data_points)//4, len(self.data_points)//2, 
-                         3*len(self.data_points)//4, -1]
-        
-        # for i, idx in enumerate(sample_indices):
-        #     if 0 <= idx < len(self.data_points):
-        #         points_filename = f"lidar_points_sample_{i}_{timestamp_str}.csv"
-        #         with open(points_filename, 'w', newline='') as csvfile:
-        #             writer = csv.writer(csvfile)
-        #             writer.writerow(['x', 'y', 'z'])
+            freq_filename = os.path.join(output_dir, f"lidar_frequency_stats_{timestamp_str}.csv")
+            try:
+                with open(freq_filename, 'w', newline='') as csvfile:
+                    writer = csv.writer(csvfile)
+                    writer.writerow(['timestamp', 'actual_frequency', 'actual_period'])
                     
-        #             for point in self.data_points[idx]['points']:
-        #                 writer.writerow([point[0], point[1], point[2]])
+                    for stat in self.frequency_stats:
+                        writer.writerow([stat['timestamp'], stat['actual_frequency'], stat['actual_period']])
                 
-        #         print(f"Saved sample point cloud {i} to {points_filename}")
+                print(f"Saved frequency statistics to {freq_filename}")
+            except Exception as e:
+                print(f"Error saving frequency stats: {e}")
+        
+        # Save point clouds as PLY files (save all frames)
+        print(f"Saving {len(self.data_points)} point cloud PLY files...")
+        ply_dir = os.path.join(output_dir, "pointclouds")
+        os.makedirs(ply_dir, exist_ok=True)
+        
+        for i, entry in enumerate(self.data_points):
+            ply_filename = os.path.join(ply_dir, f"pointcloud_{i:06d}_{timestamp_str}.ply")
+            self.save_pointcloud_as_ply(entry['points'], ply_filename)
+            
+            # Progress indicator for large datasets
+            if (i + 1) % 10 == 0 or i == len(self.data_points) - 1:
+                print(f"  Saved {i + 1}/{len(self.data_points)} PLY files...")
+        
+        # Ensure all I/O operations complete
+        import sys
+        sys.stdout.flush()
+        
+        print(f"All data saved to directory: {output_dir}")
+        print(f"Total files: {len(self.data_points)} poses, {len(self.data_points)} PLY files")
     
     def stop_collection(self):
         """Stop the data collection."""
@@ -234,12 +292,26 @@ def main():
         return
     
     try:
-        # Start data collection at 10 Hz
-        collector.collect_lidar_data_10hz(duration_seconds=DURATION, save_data=True)
+        # Start data collection at 5 Hz
+        collector.collect_lidar_data_5hz(duration_seconds=DURATION, save_data=True)
+    
+    except Exception as e:
+        print(f"Error during data collection: {e}")
     
     finally:
+        # Ensure all operations complete before cleanup
+        print("Finalizing data saving...")
+        time.sleep(0.5)  # Brief pause to ensure all I/O completes
+        
         # Clean up
         collector.disconnect()
+        
+        # Final flush of all outputs
+        import sys
+        sys.stdout.flush()
+        sys.stderr.flush()
+        
+        print("Program completed successfully.")
 
 if __name__ == "__main__":
     main()
