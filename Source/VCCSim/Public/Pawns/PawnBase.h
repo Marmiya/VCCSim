@@ -35,13 +35,13 @@ class VCCSIM_API APawnBase : public APawn
 	GENERATED_BODY()
 	
 public:
-	UFUNCTION()
+	UFUNCTION(BlueprintCallable)
 	void SetRecorder(ARecorder* InRecorder);
-	UFUNCTION()
+	UFUNCTION(BlueprintCallable)
 	void SetRecordInterval(const float& Interval);
-	UFUNCTION()
+	UFUNCTION(BlueprintCallable)
 	void SetRecordState(bool RState){ RecordState = RState; }
-	UFUNCTION()
+	UFUNCTION(BlueprintCallable)
 	void SetManualControl(bool Manual){ ManualControl = Manual; }
 
 	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Category = "VCCSim|Debug")

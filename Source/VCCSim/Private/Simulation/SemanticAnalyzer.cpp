@@ -151,8 +151,11 @@ void USemanticAnalyzer::CreateVisualizationForActor(AActor* Actor)
     // Position the text above the actor
     NameComponent->SetWorldLocation(Origin + FVector(0, 0, Extent.Z + 20.0f));
     
-    // Get the actor's label and clean it up
-    FString ActorLabel = Actor->GetActorLabel();
+    #if WITH_EDITOR
+        FString ActorLabel = Actor->GetActorLabel();
+    #else
+        FString ActorLabel = Actor->GetName(); // Runtime alternative
+    #endif
 
     if (ActorLabel.StartsWith(TEXT("SM"), ESearchCase::CaseSensitive))
     {

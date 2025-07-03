@@ -21,6 +21,8 @@
 #include "HAL/Runnable.h"
 #include "HAL/RunnableThread.h"
 #include "Containers/Queue.h"
+#include "IImageWrapper.h"
+#include "IImageWrapperModule.h"
 #include "Recorder.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
@@ -150,6 +152,12 @@ public:
         , Tail(0)
         , ItemCount(0)
     {
+        if (Size <= 0 || Size > 100000)  // Reasonable max limit
+        {
+            UE_LOG(LogTemp, Error, TEXT("Invalid TRingBuffer size: %d. Using default size 100."), Size);
+            Size = 100;  // Safe fallback
+        }
+        MaxSize = Size;
         Buffer.SetNum(Size);
     }
 

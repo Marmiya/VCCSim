@@ -185,31 +185,31 @@ void UMenuWidgets::LoadMapAtIndex(int32 MapIndex, const FString& LoadingText)
 void UMenuWidgets::OnMap1Selected()
 {
     UE_LOG(LogTemp, Warning, TEXT("MenuWidgets: Map1 Button Clicked"));
-    LoadMapAtIndex(0, TEXT("Loading Bunker Map..."));
+    LoadMapAtIndex(0, TEXT("Loading..."));
 }
 
 void UMenuWidgets::OnMap2Selected()
 {
     UE_LOG(LogTemp, Warning, TEXT("MenuWidgets: Map2 Button Clicked"));
-    LoadMapAtIndex(1, TEXT("Loading Shipping Port Map..."));
+    LoadMapAtIndex(1, TEXT("Loading..."));
 }
 
 void UMenuWidgets::OnMap3Selected()
 {
     UE_LOG(LogTemp, Warning, TEXT("MenuWidgets: Map3 Button Clicked"));
-    LoadMapAtIndex(2, TEXT("Loading Map3..."));
+    LoadMapAtIndex(2, TEXT("Loading ..."));
 }
 
 void UMenuWidgets::OnMap4Selected()
 {
     UE_LOG(LogTemp, Warning, TEXT("MenuWidgets: Map4 Button Clicked"));
-    LoadMapAtIndex(3, TEXT("Loading Test Map..."));
+    LoadMapAtIndex(3, TEXT("Loading ..."));
 }
 
 void UMenuWidgets::OnMap5Selected()
 {
     UE_LOG(LogTemp, Warning, TEXT("MenuWidgets: Map5 Button Clicked"));
-    LoadMapAtIndex(4, TEXT("Loading Map5..."));
+    LoadMapAtIndex(4, TEXT("Loading ..."));
 }
 
 // Hover functions - with null checks

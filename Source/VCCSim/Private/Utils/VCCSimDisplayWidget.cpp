@@ -129,7 +129,7 @@ void UVCCSIMDisplayWidget::InitFromConfig(const struct FVCCSimConfig& Config)
 {
     auto SubWindows = Config.VCCSim.SubWindows;
     auto SubWindowsOpacities = Config.VCCSim.SubWindowsOpacities;
-
+    
     for (int i = 0; i < SubWindows.size(); ++i)
     {
         if (SubWindows[i] == "Lit")
@@ -200,7 +200,6 @@ void UVCCSIMDisplayWidget::InitFromConfig(const struct FVCCSimConfig& Config)
         {
             if (DepthImageDisplay)
             {
-                DepthImageDisplay->SetVisibility(ESlateVisibility::Visible);
                 DepthImageDisplay->SetOpacity(SubWindowsOpacities[i]);
             }
             else
@@ -212,7 +211,6 @@ void UVCCSIMDisplayWidget::InitFromConfig(const struct FVCCSimConfig& Config)
         {
             if (RGBImageDisplay)
             {
-                RGBImageDisplay->SetVisibility(ESlateVisibility::Visible);
                 RGBImageDisplay->SetOpacity(SubWindowsOpacities[i]);
             }
             else
@@ -224,7 +222,6 @@ void UVCCSIMDisplayWidget::InitFromConfig(const struct FVCCSimConfig& Config)
         {
             if (SegImageDisplay)
             {
-                SegImageDisplay->SetVisibility(ESlateVisibility::Visible);
                 SegImageDisplay->SetOpacity(SubWindowsOpacities[i]);
             }
             else
@@ -236,7 +233,6 @@ void UVCCSIMDisplayWidget::InitFromConfig(const struct FVCCSimConfig& Config)
         {
             if (NormalImageDisplay)
             {
-                NormalImageDisplay->SetVisibility(ESlateVisibility::Visible);
                 NormalImageDisplay->SetOpacity(SubWindowsOpacities[i]);
             }
             else

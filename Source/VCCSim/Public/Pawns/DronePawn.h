@@ -36,7 +36,7 @@ public:
 	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void Tick(float DeltaSeconds) override;
 
-	UFUNCTION()
+	UFUNCTION(BlueprintCallable)
     void AddMapContext();
 
 	UFUNCTION(BlueprintCallable)

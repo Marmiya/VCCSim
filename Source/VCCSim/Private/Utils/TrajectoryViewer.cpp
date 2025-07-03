@@ -87,8 +87,9 @@ AActor* UTrajectoryViewer::GenerateVisibleElements(
     SpawnParams.ObjectFlags = RF_Transient;  // Make it not saved
     AActor* VisualizationActor = World->SpawnActor<AActor>(AActor::StaticClass(),
         FTransform::Identity, SpawnParams);
-    VisualizationActor->SetActorLabel(TEXT("PathVisualization_Temp"));
-    
+    #if WITH_EDITOR
+        VisualizationActor->SetActorLabel(TEXT("PathVisualization_Temp"));
+    #endif
     // Load meshes
     UStaticMesh* CylinderMesh = LoadObject<UStaticMesh>(nullptr,
         TEXT("/Engine/BasicShapes/Cylinder"));

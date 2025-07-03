@@ -16,60 +16,70 @@
 */
 
 #include "Core/VCCSim.h"
+
+// Only include panel header in editor builds
+#if WITH_EDITOR
 #include "Core/VCCSimPanel.h"
 #include "LevelEditor.h"
+#endif
 
 #define LOCTEXT_NAMESPACE "FVCCSimModule"
 
 void FVCCSimModule::StartupModule()
 {
-	// This code will execute after your module is loaded into memory
-	FLevelEditorModule& LevelEditorModule =
-	   FModuleManager::LoadModuleChecked<FLevelEditorModule>("LevelEditor");
+    // This code will execute after your module is loaded into memory
+    
+#if WITH_EDITOR
+    // Editor-only initialization
+    FLevelEditorModule& LevelEditorModule =
+       FModuleManager::LoadModuleChecked<FLevelEditorModule>("LevelEditor");
        
-	// Register the tab spawner
-	TSharedPtr<FTabManager> TabManager = LevelEditorModule.GetLevelEditorTabManager();
-	if (TabManager.IsValid())
-	{
-		FVCCSimPanelFactory::RegisterTabSpawner(*TabManager);
-	}
+    // Register the tab spawner
+    TSharedPtr<FTabManager> TabManager = LevelEditorModule.GetLevelEditorTabManager();
+    if (TabManager.IsValid())
+    {
+       FVCCSimPanelFactory::RegisterTabSpawner(*TabManager);
+    }
     
-	// Register for tab manager changes
-	LevelEditorTabManagerChangedHandle =
-		LevelEditorModule.OnTabManagerChanged().AddLambda([this, &LevelEditorModule]()
-	{
-	   // Get the tab manager directly when the lambda is called
-	   TSharedPtr<FTabManager> TabManager = LevelEditorModule.GetLevelEditorTabManager();
-	   if (TabManager.IsValid())
-	   {
-		  FVCCSimPanelFactory::RegisterTabSpawner(*TabManager);
-	   }
-	});
+    // Register for tab manager changes
+    LevelEditorTabManagerChangedHandle =
+       LevelEditorModule.OnTabManagerChanged().AddLambda([this, &LevelEditorModule]()
+    {
+       // Get the tab manager directly when the lambda is called
+       TSharedPtr<FTabManager> TabManager = LevelEditorModule.GetLevelEditorTabManager();
+       if (TabManager.IsValid())
+       {
+         FVCCSimPanelFactory::RegisterTabSpawner(*TabManager);
+       }
+    });
+#endif // WITH_EDITOR
     
-	UE_LOG(LogTemp, Warning, TEXT("VCCSim module has started!"));
+    UE_LOG(LogTemp, Warning, TEXT("VCCSim module has started!"));
 }
 
 void FVCCSimModule::ShutdownModule()
 {
-	if (FModuleManager::Get().IsModuleLoaded("LevelEditor"))
-	{
-		FLevelEditorModule& LevelEditorModule =
-			FModuleManager::GetModuleChecked<FLevelEditorModule>("LevelEditor");
+#if WITH_EDITOR
+    if (FModuleManager::Get().IsModuleLoaded("LevelEditor"))
+    {
+       FLevelEditorModule& LevelEditorModule =
+          FModuleManager::GetModuleChecked<FLevelEditorModule>("LevelEditor");
         
-		// Unregister delegates
-		LevelEditorModule.OnTabManagerChanged().Remove(LevelEditorTabManagerChangedHandle);
+       // Unregister delegates
+       LevelEditorModule.OnTabManagerChanged().Remove(LevelEditorTabManagerChangedHandle);
         
-		// Unregister the tab spawner
-		TSharedPtr<FTabManager> TabManager = LevelEditorModule.GetLevelEditorTabManager();
-		if (TabManager.IsValid())
-		{
-			TabManager->UnregisterTabSpawner(FVCCSimPanelFactory::TabId);
-		}
-	}
+       // Unregister the tab spawner
+       TSharedPtr<FTabManager> TabManager = LevelEditorModule.GetLevelEditorTabManager();
+       if (TabManager.IsValid())
+       {
+          TabManager->UnregisterTabSpawner(FVCCSimPanelFactory::TabId);
+       }
+    }
+#endif // WITH_EDITOR
     
-	UE_LOG(LogTemp, Warning, TEXT("VCCSim module has shut down!"));
+    UE_LOG(LogTemp, Warning, TEXT("VCCSim module has shut down!"));
 }
 
 #undef LOCTEXT_NAMESPACE
-	
+    
 IMPLEMENT_MODULE(FVCCSimModule, VCCSim)

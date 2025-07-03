@@ -41,8 +41,8 @@ void AVCCHUD::BeginPlay()
     
     FVCCSimConfig Config = ParseConfig();
     
-    SceneAnalysisManager = Cast<ASceneAnalysisManager>(UGameplayStatics::
-        GetActorOfClass(GetWorld(), ASceneAnalysisManager::StaticClass()));
+    // SceneAnalysisManager = Cast<ASceneAnalysisManager>(UGameplayStatics::
+    //     GetActorOfClass(GetWorld(), ASceneAnalysisManager::StaticClass()));
     
     SetupRecorder(Config);
     SetupWidgetsAndLS(Config);
@@ -168,7 +168,7 @@ void AVCCHUD::SetupRecorder(FVCCSimConfig& Config)
     Config.VCCSim.LogSavePath = TCHAR_TO_UTF8(*Recorder->RecordingPath);
     Recorder->BufferSize = Config.VCCSim.BufferSize;
     Recorder->RecordState = Config.VCCSim.StartWithRecording;
-    Recorder->StartRecording();
+    // Recorder->StartRecording();
 }
 
 void AVCCHUD::SetupWidgetsAndLS(const FVCCSimConfig& Config)

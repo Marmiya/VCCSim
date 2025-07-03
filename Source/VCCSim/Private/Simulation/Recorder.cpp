@@ -99,8 +99,13 @@ FRecorderWorker::FRecorderWorker(const FString& InBasePath, int32 InBufferSize)
     , Thread(nullptr)
     , bStopRequested(false)
 {
-    Thread = FRunnableThread::Create(this,
-        TEXT("RecorderWorker"), 0, TPri_Normal);
+    // Debug logging
+    UE_LOG(LogTemp, Warning, TEXT("FRecorderWorker created with BufferSize: %d"), BufferSize);
+    
+    // Validate immediately
+    check(BufferSize > 0 && BufferSize < 100000);
+    
+    Thread = FRunnableThread::Create(this, TEXT("RecorderWorker"), 0, TPri_Normal);
 }
 
 FRecorderWorker::~FRecorderWorker()
@@ -157,11 +162,19 @@ int32 FRecorderWorker::ProcessBatch(TArray<FPawnBuffers>& BatchBuffers)
     BatchBuffers.Reset();
     int32 ProcessedCount = 0;
 
+    // Validate BufferSize before using it
+    if (BufferSize <= 0 || BufferSize > 100000)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Corrupted BufferSize detected: %d."
+                                    " Stopping worker."), BufferSize);
+        return 0;  // Stop processing to prevent crashes
+    }
+
     {
         FScopeLock Lock(&QueueLock);
         while (BatchBuffers.Num() < FRecorderConfig::BatchSize && !DataQueue.IsEmpty())
         {
-            FPawnBuffers Buffer(BufferSize);
+            FPawnBuffers Buffer(BufferSize);  // Now safe to use
             if (DataQueue.Dequeue(Buffer))
             {
                 BatchBuffers.Add(MoveTemp(Buffer));
@@ -459,6 +472,13 @@ ARecorder::ARecorder()
     : PendingTasks(0)
 {
     PrimaryActorTick.bCanEverTick = false;
+    
+    // Ensure BufferSize is always valid
+    if (BufferSize <= 0 || BufferSize > 100000)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Invalid BufferSize in constructor: %d. Setting to 100."), BufferSize);
+        BufferSize = 100;
+    }
 }
 
 void ARecorder::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -471,6 +491,15 @@ void ARecorder::EndPlay(const EEndPlayReason::Type EndPlayReason)
 void ARecorder::StartRecording()
 {
     if (bRecording) return;
+
+    // Validate BufferSize before creating worker
+    if (BufferSize <= 0 || BufferSize > 100000)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Invalid BufferSize: %d. Resetting to default 100."), BufferSize);
+        BufferSize = 100;  // Reset to safe default
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("Starting recording with BufferSize: %d"), BufferSize);
 
     IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
     if (!PlatformFile.CreateDirectoryTree(*RecordingPath))
@@ -490,7 +519,7 @@ void ARecorder::StartRecording()
         }
     }
 
-    // Initialize worker
+    // Initialize worker with validated BufferSize
     RecorderWorker = MakeUnique<FRecorderWorker>(RecordingPath, BufferSize);
     bRecording = true;
 }

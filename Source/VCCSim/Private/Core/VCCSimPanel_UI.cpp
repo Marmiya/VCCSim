@@ -15,6 +15,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+#if WITH_EDITOR
+
 #include "Core/VCCSimPanel.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -2318,3 +2320,5 @@ void SVCCSimPanel::CreateSimplePointCloudMaterial(UInstancedStaticMeshComponent*
         }
     }
 }
+
+#endif

@@ -17,6 +17,8 @@
 
 #pragma once
 
+#if WITH_EDITOR
+
 #include "CoreMinimal.h"
 #include "Widgets/Docking/SDockTab.h"
 #include "Widgets/SCompoundWidget.h"
@@ -365,3 +367,5 @@ namespace FVCCSimPanelFactory
     extern const FName TabId;
     void RegisterTabSpawner(FTabManager& TabManager);
 }
+
+#endif // WITH_EDITOR
