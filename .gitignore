@@ -100,3 +100,4 @@ Client/ros_client/share/
 flash_test.log
 
 Source/Tools/DGE/data/*
+Source/Tools/DGE/data_o/*
