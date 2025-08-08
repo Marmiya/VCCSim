@@ -783,7 +783,14 @@ void UVCCSIMDisplayWidget::SaveRenderTargetToDisk(
             Pixel.A = 255; // Set alpha to 255 for segmentation
         }
     }
-
+    else if (FileName == TEXT("RGBCapture")) // Add this condition
+    {
+        for (FColor& Pixel : Pixels)
+        {
+            Pixel.A = 255; // Set alpha to 255 for RGB captures
+        }
+    }
+    
     auto CurTime = FDateTime::Now();
     FString FilePath = LogSavePath + "/LiveCaptures/" + FileName + "_" + CurTime.ToString() + ".png";
 

@@ -183,6 +183,27 @@ void UDepthCameraComponent::CaptureDepthScene()
         });
 }
 
+void UDepthCameraComponent::OnlyCaptureDepthScene()
+{
+    if (CheckComponentAndRenderTarget())
+    {
+        UE_LOG(LogTemp, Error, TEXT("UDepthCameraComponent: "
+                                    "Capture component or render target not initialized!"));
+        return;
+    }
+    if (IsInGameThread())
+    {
+        CaptureComponent->CaptureScene();
+    }
+    else
+    {
+        AsyncTask(ENamedThreads::GameThread, [this]()
+        {
+            CaptureComponent->CaptureScene();
+        });
+    }
+}
+
 void UDepthCameraComponent::ProcessDepthTexture(TFunction<void()> OnComplete)
 {
     // Get the render target resource

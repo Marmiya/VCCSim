@@ -67,6 +67,8 @@ public:
     UFUNCTION(BlueprintCallable, Category = "DepthCamera")
     void CaptureDepthScene();
     UFUNCTION(BlueprintCallable, Category = "DepthCamera")
+    void OnlyCaptureDepthScene();
+    UFUNCTION(BlueprintCallable, Category = "DepthCamera")
     void VisualizePointCloud();
     TArray<FDCPoint> GeneratePointCloud();
 
