@@ -448,10 +448,10 @@ FRobotGrpcMaps AVCCHUD::SetupActors(const FVCCSimConfig& Config)
                             *static_cast<FDepthCameraConfig*>(Component.second.get()),
                             Recorder);
                         // Use both robot tag and camera ID/index for unique identification
-                        // FString cameraKey = FString::Printf(TEXT("%s^%d"), 
-                        //     *FString(Robot.UETag.c_str()), DepthCam->GetCameraIndex());
-                        FString CameraKey = FString::Printf(TEXT("%s"),
-                            *FString(Robot.UETag.c_str()));
+                        FString CameraKey = FString::Printf(TEXT("%s^%d"), 
+                            *FString(Robot.UETag.c_str()), DepthCam->GetCameraIndex());
+                        // FString CameraKey = FString::Printf(TEXT("%s"),
+                        //     *FString(Robot.UETag.c_str()));
                         RGrpcMaps.RCMaps.RDCMap[TCHAR_TO_UTF8(*CameraKey)] = DepthCam;
                     }
 

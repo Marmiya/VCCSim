@@ -200,7 +200,7 @@ void LidarGetDataAndOdomCall::ProcessRequest()
     }
 }
 
-DepthCameraGetPointDataCall::DepthCameraGetPointDataCall(
+DepthIndexedCameraPointDataCall::DepthIndexedCameraPointDataCall(
     VCCSim::DepthCameraService::AsyncService* service,
     grpc::ServerCompletionQueue* cq,
     std::map<std::string, UDepthCameraComponent*> rdcmap)
@@ -209,29 +209,32 @@ DepthCameraGetPointDataCall::DepthCameraGetPointDataCall(
     Proceed(true);
 }
 
-void DepthCameraGetPointDataCall::PrepareNextCall()
+void DepthIndexedCameraPointDataCall::PrepareNextCall()
 {
-    new DepthCameraGetPointDataCall(service_, cq_, RCMap_);
+    new DepthIndexedCameraPointDataCall(service_, cq_, RCMap_);
 }
 
-void DepthCameraGetPointDataCall::InitializeRequest()
+void DepthIndexedCameraPointDataCall::InitializeRequest()
 {
-    service_->RequestGetDepthCameraPointData(&ctx_, &request_, &responder_, cq_, cq_, this);
+    service_->RequestGetDepthIndexedCameraPointData(&ctx_, &request_, &responder_, cq_, cq_, this);
 }
 
-void DepthCameraGetPointDataCall::ProcessRequest()
+void DepthIndexedCameraPointDataCall::ProcessRequest()
 {
-    if (!RCMap_.contains(request_.name()))
+    std::string CameraName = request_.robot_name().name() + "^" +
+                             std::to_string(request_.index());
+
+    if (!RCMap_.contains(CameraName))
     {
-        UE_LOG(LogTemp, Warning, TEXT("DepthCameraGetPointDataCall: "
+        UE_LOG(LogTemp, Warning, TEXT("DepthIndexedCameraPointDataCall: "
                                       "DepthCamera component not found!"));
         return;
     }
 
-    auto* DepthCamera = RCMap_[request_.name()];
+    auto* DepthCamera = RCMap_[CameraName];
     if (!DepthCamera)
     {
-        UE_LOG(LogTemp, Warning, TEXT("DepthCameraGetPointDataCall: "
+        UE_LOG(LogTemp, Warning, TEXT("DepthIndexedCameraPointDataCall: "
                                       "Invalid DepthCamera reference!"));
         return;
     }
@@ -247,7 +250,7 @@ void DepthCameraGetPointDataCall::ProcessRequest()
             const auto PointCloudData = DepthCamera->GeneratePointCloud();
             if (PointCloudData.Num() == 0)
             {
-                UE_LOG(LogTemp, Warning, TEXT("DepthCameraGetPointDataCall: "
+                UE_LOG(LogTemp, Warning, TEXT("DepthIndexedCameraPointDataCall: "
                                               "No point cloud data available!"));
                 status_ = FINISH;
                 responder_.Finish(response_, grpc::Status::CANCELLED, this);
@@ -268,7 +271,7 @@ void DepthCameraGetPointDataCall::ProcessRequest()
     });
 }
 
-DepthCameraGetImageSizeCall::DepthCameraGetImageSizeCall(
+DepthIndexedCameraImageSizeCall::DepthIndexedCameraImageSizeCall(
     VCCSim::DepthCameraService::AsyncService* service,
     grpc::ServerCompletionQueue* cq, std::map<std::string,
     UDepthCameraComponent*> rdcmap)
@@ -277,32 +280,34 @@ DepthCameraGetImageSizeCall::DepthCameraGetImageSizeCall(
     Proceed(true);
 }
 
-void DepthCameraGetImageSizeCall::PrepareNextCall()
+void DepthIndexedCameraImageSizeCall::PrepareNextCall()
 {
-    new DepthCameraGetImageSizeCall(service_, cq_, RCMap_);
+    new DepthIndexedCameraImageSizeCall(service_, cq_, RCMap_);
 }
 
-void DepthCameraGetImageSizeCall::InitializeRequest()
+void DepthIndexedCameraImageSizeCall::InitializeRequest()
 {
-    service_->RequestGetDepthCameraImageSize(&ctx_, &request_, &responder_, cq_, cq_, this);
+    service_->RequestGetDepthIndexedCameraImageSize(&ctx_, &request_, &responder_, cq_, cq_, this);
 }
 
-void DepthCameraGetImageSizeCall::ProcessRequest()
+void DepthIndexedCameraImageSizeCall::ProcessRequest()
 {
-    if (RCMap_.contains(request_.name()))
+    if (RCMap_.contains(request_.robot_name().name() + "^" +
+                         std::to_string(request_.index())))
     {
-        const auto& Size = RCMap_[request_.name()]->GetImageSize();
+        const auto& Size = RCMap_[request_.robot_name().name() + "^" +
+                                 std::to_string(request_.index())]->GetImageSize();
         response_.set_width(Size.first);
         response_.set_height(Size.second);
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("DepthCameraGetImageSizeCall: "
+        UE_LOG(LogTemp, Warning, TEXT("DepthIndexedCameraImageSizeCall: "
                                       "DepthCamera component not found!"));
     }
 }
 
-DepthCameraGetImageDataCall::DepthCameraGetImageDataCall(
+DepthIndexedCameraImageDataCall::DepthIndexedCameraImageDataCall(
     VCCSim::DepthCameraService::AsyncService* service,
     grpc::ServerCompletionQueue* cq,
     std::map<std::string, UDepthCameraComponent*> rdcmap)
@@ -311,29 +316,32 @@ DepthCameraGetImageDataCall::DepthCameraGetImageDataCall(
     Proceed(true);
 }
 
-void DepthCameraGetImageDataCall::PrepareNextCall()
+void DepthIndexedCameraImageDataCall::PrepareNextCall()
 {
-    new DepthCameraGetImageDataCall(service_, cq_, RCMap_);
+    new DepthIndexedCameraImageDataCall(service_, cq_, RCMap_);
 }
 
-void DepthCameraGetImageDataCall::InitializeRequest()
+void DepthIndexedCameraImageDataCall::InitializeRequest()
 {
-    service_->RequestGetDepthCameraImageData(&ctx_, &request_, &responder_, cq_, cq_, this);
+    service_->RequestGetDepthIndexedCameraImageData(&ctx_, &request_, &responder_, cq_, cq_, this);
 }
 
-void DepthCameraGetImageDataCall::ProcessRequest()
+void DepthIndexedCameraImageDataCall::ProcessRequest()
 {
-    if (!RCMap_.contains(request_.name()))
+    std::string CameraName = request_.robot_name().name() + "^" +
+                             std::to_string(request_.index());
+
+    if (!RCMap_.contains(CameraName))
     {
-        UE_LOG(LogTemp, Warning, TEXT("DepthCameraGetImageDataCall: "
+        UE_LOG(LogTemp, Warning, TEXT("DepthIndexedCameraImageDataCall: "
                                       "DepthCamera component not found!"));
         return;
     }
 
-    auto* DepthCamera = RCMap_[request_.name()];
+    auto* DepthCamera = RCMap_[CameraName];
     if (!DepthCamera)
     {
-        UE_LOG(LogTemp, Warning, TEXT("DepthCameraGetImageDataCall: "
+        UE_LOG(LogTemp, Warning, TEXT("DepthIndexedCameraImageDataCall: "
                                       "Invalid DepthCamera reference!"));
         return;
     }

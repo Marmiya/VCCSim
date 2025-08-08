@@ -229,56 +229,6 @@ protected:
     virtual void ProcessRequest() override final;
 };
 
-/* --------------------------Depth Camera---------------------------------- */
-struct FDCPoint;
-class DepthCameraGetPointDataCall : public AsyncCallTemplateImage<
-    VCCSim::RobotName, VCCSim::DepthCameraPointData,
-    VCCSim::DepthCameraService::AsyncService,
-    std::map<std::string, UDepthCameraComponent*>>
-{
-public:
-    DepthCameraGetPointDataCall(
-        VCCSim::DepthCameraService::AsyncService* service,
-        grpc::ServerCompletionQueue* cq,
-        std::map<std::string, UDepthCameraComponent*> rdcmap);
-protected:
-    virtual void PrepareNextCall() override final;
-    virtual void InitializeRequest() override final;
-    virtual void ProcessRequest() override final;
-};
-
-class DepthCameraGetImageSizeCall : public AsyncCallTemplateM<
-    VCCSim::RobotName, VCCSim::ImageSize,
-    VCCSim::DepthCameraService::AsyncService,
-    std::map<std::string, UDepthCameraComponent*>>
-{
-public:
-    DepthCameraGetImageSizeCall(
-        VCCSim::DepthCameraService::AsyncService* service,
-        grpc::ServerCompletionQueue* cq,
-        std::map<std::string, UDepthCameraComponent*> rdcmap);
-protected:
-    virtual void PrepareNextCall() override final;
-    virtual void InitializeRequest() override final;
-    virtual void ProcessRequest() override final;
-};
-
-class DepthCameraGetImageDataCall : public AsyncCallTemplateImage<
-    VCCSim::RobotName, VCCSim::DepthCameraImageData,
-    VCCSim::DepthCameraService::AsyncService,
-    std::map<std::string, UDepthCameraComponent*>>
-{
-public:
-    DepthCameraGetImageDataCall(
-        VCCSim::DepthCameraService::AsyncService* service,
-        grpc::ServerCompletionQueue* cq,
-        std::map<std::string, UDepthCameraComponent*> rdcmap);
-protected:
-    virtual void PrepareNextCall() override final;
-    virtual void InitializeRequest() override final;
-    virtual void ProcessRequest() override final;
-};
-
 class DepthCameraGetOdomCall : public AsyncCallTemplateM<
     VCCSim::RobotName, VCCSim::Odometry, VCCSim::DepthCameraService::AsyncService,
     std::map<std::string, UDepthCameraComponent*>>
@@ -293,6 +243,54 @@ protected:
     virtual void InitializeRequest() override final;
     virtual void ProcessRequest() override final;
 };
+class DepthIndexedCameraPointDataCall : public AsyncCallTemplateImage<
+    VCCSim::IndexedCamera, VCCSim::DepthCameraPointData,
+    VCCSim::DepthCameraService::AsyncService,
+    std::map<std::string, UDepthCameraComponent*>>
+{
+public:
+    DepthIndexedCameraPointDataCall(
+        VCCSim::DepthCameraService::AsyncService* service,
+        grpc::ServerCompletionQueue* cq,
+        std::map<std::string, UDepthCameraComponent*> rdcmap);
+protected:
+    virtual void PrepareNextCall() override final;
+    virtual void InitializeRequest() override final;
+    virtual void ProcessRequest() override final;
+};
+
+class DepthIndexedCameraImageSizeCall : public AsyncCallTemplateM<
+    VCCSim::IndexedCamera, VCCSim::ImageSize,
+    VCCSim::DepthCameraService::AsyncService,
+    std::map<std::string, UDepthCameraComponent*>>
+{
+public:
+    DepthIndexedCameraImageSizeCall(
+        VCCSim::DepthCameraService::AsyncService* service,
+        grpc::ServerCompletionQueue* cq,
+        std::map<std::string, UDepthCameraComponent*> rdcmap);
+protected:
+    virtual void PrepareNextCall() override final;
+    virtual void InitializeRequest() override final;
+    virtual void ProcessRequest() override final;
+};
+
+class DepthIndexedCameraImageDataCall : public AsyncCallTemplateImage<
+    VCCSim::IndexedCamera, VCCSim::DepthCameraImageData,
+    VCCSim::DepthCameraService::AsyncService,
+    std::map<std::string, UDepthCameraComponent*>>
+{
+public:
+    DepthIndexedCameraImageDataCall(
+        VCCSim::DepthCameraService::AsyncService* service,
+        grpc::ServerCompletionQueue* cq,
+        std::map<std::string, UDepthCameraComponent*> rdcmap);
+protected:
+    virtual void PrepareNextCall() override final;
+    virtual void InitializeRequest() override final;
+    virtual void ProcessRequest() override final;
+};
+
 
 /* --------------------------RGB Camera---------------------------------- */
 

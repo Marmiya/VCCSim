@@ -267,19 +267,19 @@ class DepthCameraServiceStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.GetDepthCameraPointData = channel.unary_unary(
-                '/VCCSim.DepthCameraService/GetDepthCameraPointData',
-                request_serializer=VCCSim__pb2.RobotName.SerializeToString,
+        self.GetDepthIndexedCameraPointData = channel.unary_unary(
+                '/VCCSim.DepthCameraService/GetDepthIndexedCameraPointData',
+                request_serializer=VCCSim__pb2.IndexedCamera.SerializeToString,
                 response_deserializer=VCCSim__pb2.DepthCameraPointData.FromString,
                 _registered_method=True)
-        self.GetDepthCameraImageSize = channel.unary_unary(
-                '/VCCSim.DepthCameraService/GetDepthCameraImageSize',
-                request_serializer=VCCSim__pb2.RobotName.SerializeToString,
+        self.GetDepthIndexedCameraImageSize = channel.unary_unary(
+                '/VCCSim.DepthCameraService/GetDepthIndexedCameraImageSize',
+                request_serializer=VCCSim__pb2.IndexedCamera.SerializeToString,
                 response_deserializer=VCCSim__pb2.ImageSize.FromString,
                 _registered_method=True)
-        self.GetDepthCameraImageData = channel.unary_unary(
-                '/VCCSim.DepthCameraService/GetDepthCameraImageData',
-                request_serializer=VCCSim__pb2.RobotName.SerializeToString,
+        self.GetDepthIndexedCameraImageData = channel.unary_unary(
+                '/VCCSim.DepthCameraService/GetDepthIndexedCameraImageData',
+                request_serializer=VCCSim__pb2.IndexedCamera.SerializeToString,
                 response_deserializer=VCCSim__pb2.DepthCameraImageData.FromString,
                 _registered_method=True)
         self.GetDepthCameraOdom = channel.unary_unary(
@@ -292,19 +292,19 @@ class DepthCameraServiceStub(object):
 class DepthCameraServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
-    def GetDepthCameraPointData(self, request, context):
+    def GetDepthIndexedCameraPointData(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def GetDepthCameraImageSize(self, request, context):
+    def GetDepthIndexedCameraImageSize(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def GetDepthCameraImageData(self, request, context):
+    def GetDepthIndexedCameraImageData(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -319,19 +319,19 @@ class DepthCameraServiceServicer(object):
 
 def add_DepthCameraServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'GetDepthCameraPointData': grpc.unary_unary_rpc_method_handler(
-                    servicer.GetDepthCameraPointData,
-                    request_deserializer=VCCSim__pb2.RobotName.FromString,
+            'GetDepthIndexedCameraPointData': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetDepthIndexedCameraPointData,
+                    request_deserializer=VCCSim__pb2.IndexedCamera.FromString,
                     response_serializer=VCCSim__pb2.DepthCameraPointData.SerializeToString,
             ),
-            'GetDepthCameraImageSize': grpc.unary_unary_rpc_method_handler(
-                    servicer.GetDepthCameraImageSize,
-                    request_deserializer=VCCSim__pb2.RobotName.FromString,
+            'GetDepthIndexedCameraImageSize': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetDepthIndexedCameraImageSize,
+                    request_deserializer=VCCSim__pb2.IndexedCamera.FromString,
                     response_serializer=VCCSim__pb2.ImageSize.SerializeToString,
             ),
-            'GetDepthCameraImageData': grpc.unary_unary_rpc_method_handler(
-                    servicer.GetDepthCameraImageData,
-                    request_deserializer=VCCSim__pb2.RobotName.FromString,
+            'GetDepthIndexedCameraImageData': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetDepthIndexedCameraImageData,
+                    request_deserializer=VCCSim__pb2.IndexedCamera.FromString,
                     response_serializer=VCCSim__pb2.DepthCameraImageData.SerializeToString,
             ),
             'GetDepthCameraOdom': grpc.unary_unary_rpc_method_handler(
@@ -351,7 +351,7 @@ class DepthCameraService(object):
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
-    def GetDepthCameraPointData(request,
+    def GetDepthIndexedCameraPointData(request,
             target,
             options=(),
             channel_credentials=None,
@@ -364,8 +364,8 @@ class DepthCameraService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/VCCSim.DepthCameraService/GetDepthCameraPointData',
-            VCCSim__pb2.RobotName.SerializeToString,
+            '/VCCSim.DepthCameraService/GetDepthIndexedCameraPointData',
+            VCCSim__pb2.IndexedCamera.SerializeToString,
             VCCSim__pb2.DepthCameraPointData.FromString,
             options,
             channel_credentials,
@@ -378,7 +378,7 @@ class DepthCameraService(object):
             _registered_method=True)
 
     @staticmethod
-    def GetDepthCameraImageSize(request,
+    def GetDepthIndexedCameraImageSize(request,
             target,
             options=(),
             channel_credentials=None,
@@ -391,8 +391,8 @@ class DepthCameraService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/VCCSim.DepthCameraService/GetDepthCameraImageSize',
-            VCCSim__pb2.RobotName.SerializeToString,
+            '/VCCSim.DepthCameraService/GetDepthIndexedCameraImageSize',
+            VCCSim__pb2.IndexedCamera.SerializeToString,
             VCCSim__pb2.ImageSize.FromString,
             options,
             channel_credentials,
@@ -405,7 +405,7 @@ class DepthCameraService(object):
             _registered_method=True)
 
     @staticmethod
-    def GetDepthCameraImageData(request,
+    def GetDepthIndexedCameraImageData(request,
             target,
             options=(),
             channel_credentials=None,
@@ -418,8 +418,8 @@ class DepthCameraService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/VCCSim.DepthCameraService/GetDepthCameraImageData',
-            VCCSim__pb2.RobotName.SerializeToString,
+            '/VCCSim.DepthCameraService/GetDepthIndexedCameraImageData',
+            VCCSim__pb2.IndexedCamera.SerializeToString,
             VCCSim__pb2.DepthCameraImageData.FromString,
             options,
             channel_credentials,

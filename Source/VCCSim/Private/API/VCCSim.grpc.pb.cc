@@ -228,9 +228,9 @@ LidarService::Service::~Service() {
 
 
 static const char* DepthCameraService_method_names[] = {
-  "/VCCSim.DepthCameraService/GetDepthCameraPointData",
-  "/VCCSim.DepthCameraService/GetDepthCameraImageSize",
-  "/VCCSim.DepthCameraService/GetDepthCameraImageData",
+  "/VCCSim.DepthCameraService/GetDepthIndexedCameraPointData",
+  "/VCCSim.DepthCameraService/GetDepthIndexedCameraImageSize",
+  "/VCCSim.DepthCameraService/GetDepthIndexedCameraImageData",
   "/VCCSim.DepthCameraService/GetDepthCameraOdom",
 };
 
@@ -241,77 +241,77 @@ std::unique_ptr< DepthCameraService::Stub> DepthCameraService::NewStub(const std
 }
 
 DepthCameraService::Stub::Stub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options)
-  : channel_(channel), rpcmethod_GetDepthCameraPointData_(DepthCameraService_method_names[0], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
-  , rpcmethod_GetDepthCameraImageSize_(DepthCameraService_method_names[1], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
-  , rpcmethod_GetDepthCameraImageData_(DepthCameraService_method_names[2], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  : channel_(channel), rpcmethod_GetDepthIndexedCameraPointData_(DepthCameraService_method_names[0], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_GetDepthIndexedCameraImageSize_(DepthCameraService_method_names[1], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_GetDepthIndexedCameraImageData_(DepthCameraService_method_names[2], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   , rpcmethod_GetDepthCameraOdom_(DepthCameraService_method_names[3], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   {}
 
-::grpc::Status DepthCameraService::Stub::GetDepthCameraPointData(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::VCCSim::DepthCameraPointData* response) {
-  return ::grpc::internal::BlockingUnaryCall< ::VCCSim::RobotName, ::VCCSim::DepthCameraPointData, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_GetDepthCameraPointData_, context, request, response);
+::grpc::Status DepthCameraService::Stub::GetDepthIndexedCameraPointData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::VCCSim::DepthCameraPointData* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::VCCSim::IndexedCamera, ::VCCSim::DepthCameraPointData, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_GetDepthIndexedCameraPointData_, context, request, response);
 }
 
-void DepthCameraService::Stub::async::GetDepthCameraPointData(::grpc::ClientContext* context, const ::VCCSim::RobotName* request, ::VCCSim::DepthCameraPointData* response, std::function<void(::grpc::Status)> f) {
-  ::grpc::internal::CallbackUnaryCall< ::VCCSim::RobotName, ::VCCSim::DepthCameraPointData, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_GetDepthCameraPointData_, context, request, response, std::move(f));
+void DepthCameraService::Stub::async::GetDepthIndexedCameraPointData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::DepthCameraPointData* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::VCCSim::IndexedCamera, ::VCCSim::DepthCameraPointData, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_GetDepthIndexedCameraPointData_, context, request, response, std::move(f));
 }
 
-void DepthCameraService::Stub::async::GetDepthCameraPointData(::grpc::ClientContext* context, const ::VCCSim::RobotName* request, ::VCCSim::DepthCameraPointData* response, ::grpc::ClientUnaryReactor* reactor) {
-  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_GetDepthCameraPointData_, context, request, response, reactor);
+void DepthCameraService::Stub::async::GetDepthIndexedCameraPointData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::DepthCameraPointData* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_GetDepthIndexedCameraPointData_, context, request, response, reactor);
 }
 
-::grpc::ClientAsyncResponseReader< ::VCCSim::DepthCameraPointData>* DepthCameraService::Stub::PrepareAsyncGetDepthCameraPointDataRaw(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) {
-  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::VCCSim::DepthCameraPointData, ::VCCSim::RobotName, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_GetDepthCameraPointData_, context, request);
+::grpc::ClientAsyncResponseReader< ::VCCSim::DepthCameraPointData>* DepthCameraService::Stub::PrepareAsyncGetDepthIndexedCameraPointDataRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::VCCSim::DepthCameraPointData, ::VCCSim::IndexedCamera, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_GetDepthIndexedCameraPointData_, context, request);
 }
 
-::grpc::ClientAsyncResponseReader< ::VCCSim::DepthCameraPointData>* DepthCameraService::Stub::AsyncGetDepthCameraPointDataRaw(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) {
+::grpc::ClientAsyncResponseReader< ::VCCSim::DepthCameraPointData>* DepthCameraService::Stub::AsyncGetDepthIndexedCameraPointDataRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
   auto* result =
-    this->PrepareAsyncGetDepthCameraPointDataRaw(context, request, cq);
+    this->PrepareAsyncGetDepthIndexedCameraPointDataRaw(context, request, cq);
   result->StartCall();
   return result;
 }
 
-::grpc::Status DepthCameraService::Stub::GetDepthCameraImageSize(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::VCCSim::ImageSize* response) {
-  return ::grpc::internal::BlockingUnaryCall< ::VCCSim::RobotName, ::VCCSim::ImageSize, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_GetDepthCameraImageSize_, context, request, response);
+::grpc::Status DepthCameraService::Stub::GetDepthIndexedCameraImageSize(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::VCCSim::ImageSize* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::VCCSim::IndexedCamera, ::VCCSim::ImageSize, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_GetDepthIndexedCameraImageSize_, context, request, response);
 }
 
-void DepthCameraService::Stub::async::GetDepthCameraImageSize(::grpc::ClientContext* context, const ::VCCSim::RobotName* request, ::VCCSim::ImageSize* response, std::function<void(::grpc::Status)> f) {
-  ::grpc::internal::CallbackUnaryCall< ::VCCSim::RobotName, ::VCCSim::ImageSize, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_GetDepthCameraImageSize_, context, request, response, std::move(f));
+void DepthCameraService::Stub::async::GetDepthIndexedCameraImageSize(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::ImageSize* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::VCCSim::IndexedCamera, ::VCCSim::ImageSize, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_GetDepthIndexedCameraImageSize_, context, request, response, std::move(f));
 }
 
-void DepthCameraService::Stub::async::GetDepthCameraImageSize(::grpc::ClientContext* context, const ::VCCSim::RobotName* request, ::VCCSim::ImageSize* response, ::grpc::ClientUnaryReactor* reactor) {
-  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_GetDepthCameraImageSize_, context, request, response, reactor);
+void DepthCameraService::Stub::async::GetDepthIndexedCameraImageSize(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::ImageSize* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_GetDepthIndexedCameraImageSize_, context, request, response, reactor);
 }
 
-::grpc::ClientAsyncResponseReader< ::VCCSim::ImageSize>* DepthCameraService::Stub::PrepareAsyncGetDepthCameraImageSizeRaw(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) {
-  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::VCCSim::ImageSize, ::VCCSim::RobotName, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_GetDepthCameraImageSize_, context, request);
+::grpc::ClientAsyncResponseReader< ::VCCSim::ImageSize>* DepthCameraService::Stub::PrepareAsyncGetDepthIndexedCameraImageSizeRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::VCCSim::ImageSize, ::VCCSim::IndexedCamera, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_GetDepthIndexedCameraImageSize_, context, request);
 }
 
-::grpc::ClientAsyncResponseReader< ::VCCSim::ImageSize>* DepthCameraService::Stub::AsyncGetDepthCameraImageSizeRaw(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) {
+::grpc::ClientAsyncResponseReader< ::VCCSim::ImageSize>* DepthCameraService::Stub::AsyncGetDepthIndexedCameraImageSizeRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
   auto* result =
-    this->PrepareAsyncGetDepthCameraImageSizeRaw(context, request, cq);
+    this->PrepareAsyncGetDepthIndexedCameraImageSizeRaw(context, request, cq);
   result->StartCall();
   return result;
 }
 
-::grpc::Status DepthCameraService::Stub::GetDepthCameraImageData(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::VCCSim::DepthCameraImageData* response) {
-  return ::grpc::internal::BlockingUnaryCall< ::VCCSim::RobotName, ::VCCSim::DepthCameraImageData, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_GetDepthCameraImageData_, context, request, response);
+::grpc::Status DepthCameraService::Stub::GetDepthIndexedCameraImageData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::VCCSim::DepthCameraImageData* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::VCCSim::IndexedCamera, ::VCCSim::DepthCameraImageData, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_GetDepthIndexedCameraImageData_, context, request, response);
 }
 
-void DepthCameraService::Stub::async::GetDepthCameraImageData(::grpc::ClientContext* context, const ::VCCSim::RobotName* request, ::VCCSim::DepthCameraImageData* response, std::function<void(::grpc::Status)> f) {
-  ::grpc::internal::CallbackUnaryCall< ::VCCSim::RobotName, ::VCCSim::DepthCameraImageData, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_GetDepthCameraImageData_, context, request, response, std::move(f));
+void DepthCameraService::Stub::async::GetDepthIndexedCameraImageData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::DepthCameraImageData* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::VCCSim::IndexedCamera, ::VCCSim::DepthCameraImageData, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_GetDepthIndexedCameraImageData_, context, request, response, std::move(f));
 }
 
-void DepthCameraService::Stub::async::GetDepthCameraImageData(::grpc::ClientContext* context, const ::VCCSim::RobotName* request, ::VCCSim::DepthCameraImageData* response, ::grpc::ClientUnaryReactor* reactor) {
-  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_GetDepthCameraImageData_, context, request, response, reactor);
+void DepthCameraService::Stub::async::GetDepthIndexedCameraImageData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::DepthCameraImageData* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_GetDepthIndexedCameraImageData_, context, request, response, reactor);
 }
 
-::grpc::ClientAsyncResponseReader< ::VCCSim::DepthCameraImageData>* DepthCameraService::Stub::PrepareAsyncGetDepthCameraImageDataRaw(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) {
-  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::VCCSim::DepthCameraImageData, ::VCCSim::RobotName, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_GetDepthCameraImageData_, context, request);
+::grpc::ClientAsyncResponseReader< ::VCCSim::DepthCameraImageData>* DepthCameraService::Stub::PrepareAsyncGetDepthIndexedCameraImageDataRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::VCCSim::DepthCameraImageData, ::VCCSim::IndexedCamera, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_GetDepthIndexedCameraImageData_, context, request);
 }
 
-::grpc::ClientAsyncResponseReader< ::VCCSim::DepthCameraImageData>* DepthCameraService::Stub::AsyncGetDepthCameraImageDataRaw(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) {
+::grpc::ClientAsyncResponseReader< ::VCCSim::DepthCameraImageData>* DepthCameraService::Stub::AsyncGetDepthIndexedCameraImageDataRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
   auto* result =
-    this->PrepareAsyncGetDepthCameraImageDataRaw(context, request, cq);
+    this->PrepareAsyncGetDepthIndexedCameraImageDataRaw(context, request, cq);
   result->StartCall();
   return result;
 }
@@ -343,32 +343,32 @@ DepthCameraService::Service::Service() {
   AddMethod(new ::grpc::internal::RpcServiceMethod(
       DepthCameraService_method_names[0],
       ::grpc::internal::RpcMethod::NORMAL_RPC,
-      new ::grpc::internal::RpcMethodHandler< DepthCameraService::Service, ::VCCSim::RobotName, ::VCCSim::DepthCameraPointData, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+      new ::grpc::internal::RpcMethodHandler< DepthCameraService::Service, ::VCCSim::IndexedCamera, ::VCCSim::DepthCameraPointData, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
           [](DepthCameraService::Service* service,
              ::grpc::ServerContext* ctx,
-             const ::VCCSim::RobotName* req,
+             const ::VCCSim::IndexedCamera* req,
              ::VCCSim::DepthCameraPointData* resp) {
-               return service->GetDepthCameraPointData(ctx, req, resp);
+               return service->GetDepthIndexedCameraPointData(ctx, req, resp);
              }, this)));
   AddMethod(new ::grpc::internal::RpcServiceMethod(
       DepthCameraService_method_names[1],
       ::grpc::internal::RpcMethod::NORMAL_RPC,
-      new ::grpc::internal::RpcMethodHandler< DepthCameraService::Service, ::VCCSim::RobotName, ::VCCSim::ImageSize, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+      new ::grpc::internal::RpcMethodHandler< DepthCameraService::Service, ::VCCSim::IndexedCamera, ::VCCSim::ImageSize, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
           [](DepthCameraService::Service* service,
              ::grpc::ServerContext* ctx,
-             const ::VCCSim::RobotName* req,
+             const ::VCCSim::IndexedCamera* req,
              ::VCCSim::ImageSize* resp) {
-               return service->GetDepthCameraImageSize(ctx, req, resp);
+               return service->GetDepthIndexedCameraImageSize(ctx, req, resp);
              }, this)));
   AddMethod(new ::grpc::internal::RpcServiceMethod(
       DepthCameraService_method_names[2],
       ::grpc::internal::RpcMethod::NORMAL_RPC,
-      new ::grpc::internal::RpcMethodHandler< DepthCameraService::Service, ::VCCSim::RobotName, ::VCCSim::DepthCameraImageData, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+      new ::grpc::internal::RpcMethodHandler< DepthCameraService::Service, ::VCCSim::IndexedCamera, ::VCCSim::DepthCameraImageData, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
           [](DepthCameraService::Service* service,
              ::grpc::ServerContext* ctx,
-             const ::VCCSim::RobotName* req,
+             const ::VCCSim::IndexedCamera* req,
              ::VCCSim::DepthCameraImageData* resp) {
-               return service->GetDepthCameraImageData(ctx, req, resp);
+               return service->GetDepthIndexedCameraImageData(ctx, req, resp);
              }, this)));
   AddMethod(new ::grpc::internal::RpcServiceMethod(
       DepthCameraService_method_names[3],
@@ -385,21 +385,21 @@ DepthCameraService::Service::Service() {
 DepthCameraService::Service::~Service() {
 }
 
-::grpc::Status DepthCameraService::Service::GetDepthCameraPointData(::grpc::ServerContext* context, const ::VCCSim::RobotName* request, ::VCCSim::DepthCameraPointData* response) {
+::grpc::Status DepthCameraService::Service::GetDepthIndexedCameraPointData(::grpc::ServerContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::DepthCameraPointData* response) {
   (void) context;
   (void) request;
   (void) response;
   return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
 }
 
-::grpc::Status DepthCameraService::Service::GetDepthCameraImageSize(::grpc::ServerContext* context, const ::VCCSim::RobotName* request, ::VCCSim::ImageSize* response) {
+::grpc::Status DepthCameraService::Service::GetDepthIndexedCameraImageSize(::grpc::ServerContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::ImageSize* response) {
   (void) context;
   (void) request;
   (void) response;
   return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
 }
 
-::grpc::Status DepthCameraService::Service::GetDepthCameraImageData(::grpc::ServerContext* context, const ::VCCSim::RobotName* request, ::VCCSim::DepthCameraImageData* response) {
+::grpc::Status DepthCameraService::Service::GetDepthIndexedCameraImageData(::grpc::ServerContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::DepthCameraImageData* response) {
   (void) context;
   (void) request;
   (void) response;
