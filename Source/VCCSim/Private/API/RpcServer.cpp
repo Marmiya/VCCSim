@@ -158,13 +158,13 @@ public:
         	}
         	if (!RGrpcMaps.RCMaps.RDCMap.empty())
         	{
-        		new DepthCameraGetImageDataCall(&DepthCameraService,
+        		new DepthIndexedCameraImageDataCall(&DepthCameraService,
 					CompletionQueue.get(), RGrpcMaps.RCMaps.RDCMap);
-        		new DepthCameraGetPointDataCall(&DepthCameraService,
+        		new DepthIndexedCameraPointDataCall(&DepthCameraService,
 					CompletionQueue.get(), RGrpcMaps.RCMaps.RDCMap);
         		new DepthCameraGetOdomCall(&DepthCameraService,
 					CompletionQueue.get(), RGrpcMaps.RCMaps.RDCMap);
-        		new DepthCameraGetImageSizeCall(&DepthCameraService,
+        		new DepthIndexedCameraImageSizeCall(&DepthCameraService,
         			CompletionQueue.get(), RGrpcMaps.RCMaps.RDCMap);
         	}
         	if (!RGrpcMaps.RCMaps.RRGBCMap.empty())

@@ -182,9 +182,9 @@ service LidarService {
 }
 
 service DepthCameraService {
-  rpc GetDepthCameraPointData (RobotName) returns (DepthCameraPointData);
-  rpc GetDepthCameraImageSize (RobotName) returns (ImageSize);
-  rpc GetDepthCameraImageData (RobotName) returns (DepthCameraImageData);
+  rpc GetDepthIndexedCameraPointData (IndexedCamera) returns (DepthCameraPointData);
+  rpc GetDepthIndexedCameraImageSize (IndexedCamera) returns (ImageSize);
+  rpc GetDepthIndexedCameraImageData (IndexedCamera) returns (DepthCameraImageData);
   rpc GetDepthCameraOdom (RobotName) returns (Odometry);
 }
 

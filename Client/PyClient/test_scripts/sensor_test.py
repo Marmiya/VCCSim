@@ -13,11 +13,12 @@ from VCCSim import VCCSimClient
 from VCCSim import VCCSim_pb2
 from VCCSim.VCCSimClient import RGBImageUtils
 
+ip = "172.31.178.19"
 # Test script for RGB camera functionality
 def test_rgb_camera():
     # Create VCCSim client with default connection settings
-    client = VCCSimClient(host="172.31.178.18", port=50996)
-    
+    client = VCCSimClient(host=ip, port=50996)
+
     try:
         # Configuration settings
         robot_name = "Mavic"  # Change to your robot name
@@ -95,19 +96,20 @@ def test_rgb_camera():
 
 def test_depth_camera():
     # Create VCCSim client with default connection settings
-    client = VCCSimClient(host="172.31.178.18", port=50996)
-    
+    client = VCCSimClient(host=ip, port=50996)
+
     try:
         # Configuration settings
         robot_name = "Mavic"  # Change to your robot name
+        camera_index = 0       # Camera index to use
         
         print(f"Connecting to robot: {robot_name}")
-        print("Requesting depth camera data")
+        print(f"Requesting depth camera data from camera index: {camera_index}")
         
         # Get and process depth image data
         try:
             start_time = time.time()
-            depth_data = client.get_depth_camera_image_data(robot_name)
+            depth_data = client.get_depth_camera_image_data(robot_name=robot_name, index=camera_index)
             elapsed = time.time() - start_time
             
             print(f"Received {len(depth_data)} depth values in {elapsed:.3f} seconds")
@@ -116,14 +118,13 @@ def test_depth_camera():
             depth_array = np.array(depth_data)
             print(f"Mean depth: {np.mean(depth_array):.2f} m")
             print(f"Min/Max depths: {np.min(depth_array):.2f}/{np.max(depth_array):.2f} m")
-            
-            width, height = client.get_depth_camera_image_size(robot_name)
+
+            width, height = client.get_depth_camera_image_size(robot_name=robot_name, index=camera_index)
             # Reshape depth data into a 2D image
             depth_image = depth_array.reshape((height, width))
             print(f"Depth image shape: {depth_image.shape}")
             
-            # Get metadata from point data to determine image dimensions
-            point_data = client.get_depth_camera_point_data(robot_name)
+            point_data = client.get_depth_camera_point_data(robot_name=robot_name, index=camera_index)
             
             # Save depth visualization
             plt.figure(figsize=(10, 8))
@@ -141,7 +142,7 @@ def test_depth_camera():
             
             # Get 3D point cloud data
             start_time = time.time()
-            point_data = client.get_depth_camera_point_data(robot_name)
+            point_data = client.get_depth_camera_point_data(robot_name=robot_name, index=camera_index)
             elapsed = time.time() - start_time
             
             print(f"Received {len(point_data)} 3D points in {elapsed:.3f} seconds")
@@ -190,5 +191,5 @@ def test_depth_camera():
 
 if __name__ == "__main__":
     
-    test_rgb_camera()
-    # test_depth_camera()
+    # test_rgb_camera()
+    test_depth_camera()

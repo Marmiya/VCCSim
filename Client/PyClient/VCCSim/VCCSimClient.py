@@ -88,22 +88,31 @@ class VCCSimClient:
         return points, response.odom
 
     # Depth Camera Service Methods
-    def get_depth_camera_point_data(self, robot_name: str) -> List[Tuple[float, float, float]]:
+    def get_depth_camera_point_data(self, robot_name: str, index: int) -> List[Tuple[float, float, float]]:
         """Get depth camera point data for a robot."""
-        request = self._create_robot_name(robot_name)
-        response = self.depth_camera_service.GetDepthCameraPointData(request)
+        request = VCCSim_pb2.IndexedCamera(
+            robot_name=self._create_robot_name(robot_name), 
+            index=index
+            )
+        response = self.depth_camera_service.GetDepthIndexedCameraPointData(request)
         return [(point.x, point.y, point.z) for point in response.data]
 
-    def get_depth_camera_image_size(self, robot_name: str) -> Tuple[int, int]:
+    def get_depth_camera_image_size(self, robot_name: str, index: int) -> Tuple[int, int]:
         """Get depth camera image size (width, height) for a robot."""
-        request = self._create_robot_name(robot_name)
-        response = self.depth_camera_service.GetDepthCameraImageSize(request)
+        request = VCCSim_pb2.IndexedCamera(
+            robot_name=self._create_robot_name(robot_name), 
+            index=index
+            )
+        response = self.depth_camera_service.GetDepthIndexedCameraImageSize(request)
         return response.width, response.height
 
-    def get_depth_camera_image_data(self, robot_name: str) -> List[float]:
+    def get_depth_camera_image_data(self, robot_name: str, index: int) -> List[float]:
         """Get depth camera image data for a robot."""
-        request = self._create_robot_name(robot_name)
-        response = self.depth_camera_service.GetDepthCameraImageData(request)
+        request = VCCSim_pb2.IndexedCamera(
+            robot_name = self._create_robot_name(robot_name), 
+            index=index
+            )
+        response = self.depth_camera_service.GetDepthIndexedCameraImageData(request)
         return list(response.data)
 
     def get_depth_camera_odom(self, robot_name: str) -> VCCSim_pb2.Odometry:
