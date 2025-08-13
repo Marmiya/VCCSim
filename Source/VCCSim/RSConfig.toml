@@ -102,11 +102,11 @@ MaxRange = 6000.0
 MinRange = 0.0
 bOrthographic = false
 
-[Robots.ComponentConfigs.SegmentationCamera]
-RecordInterval = -0.033333
-FOV = 90
-Width = 1280
-Height = 720
+#[Robots.ComponentConfigs.SegmentationCamera]
+#RecordInterval = -0.033333
+#FOV = 90
+#Width = 1280
+#Height = 720
 
 [Robots.ComponentConfigs.NormalCamera]
 RecordInterval = -0.033333
