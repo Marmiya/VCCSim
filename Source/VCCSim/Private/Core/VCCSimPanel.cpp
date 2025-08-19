@@ -40,6 +40,7 @@
 #include "Misc/FileHelper.h"
 #include "HighResScreenshot.h"
 #include "LevelEditorViewport.h"
+#include "Utils/TriangleSplattingManager.h"
 
 // ============================================================================
 // CONSTRUCTOR & DESTRUCTOR
@@ -76,6 +77,19 @@ SVCCSimPanel::~SVCCSimPanel()
         SceneAnalysisManager->InterfaceClearSafeZoneVisualization();
         SceneAnalysisManager->InterfaceClearCoverageVisualization();
         SceneAnalysisManager->InterfaceClearComplexityVisualization();
+    }
+
+    // Clean up Triangle Splatting resources
+    if (GSTrainingManager.IsValid() && GSTrainingManager->IsTrainingInProgress())
+    {
+        GSTrainingManager->StopTraining();
+    }
+    
+    // Clear Triangle Splatting timer
+    if (GEditor && GSStatusUpdateTimerHandle.IsValid())
+    {
+        GEditor->GetTimerManager()->ClearTimer(GSStatusUpdateTimerHandle);
+        GSStatusUpdateTimerHandle.Invalidate();
     }
 }
 

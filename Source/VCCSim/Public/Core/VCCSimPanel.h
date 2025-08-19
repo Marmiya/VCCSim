@@ -26,12 +26,51 @@
 #include "Editor/PropertyEditor/Public/IDetailsView.h"
 #include "DataType/PointCloud.h"
 #include "ProceduralMeshComponent.h"
+#include "Misc/Paths.h"
+#include "AssetRegistry/AssetData.h"
+#include "VCCSimPanel.generated.h"
 
 class AFlashPawn;
 class AVCCSimPath;
 class USplineMeshComponent;
 class ASceneAnalysisManager;
 class UStaticMeshComponent;
+class FTriangleSplattingManager;
+
+/**
+ * Triangle Splatting configuration structure
+ */
+USTRUCT()
+struct VCCSIM_API FTriangleSplattingConfig
+{
+    GENERATED_BODY()
+
+    // Input paths
+    FString ImageDirectory;
+    FString PoseFilePath;
+    FString OutputDirectory;
+    
+    // Mesh configuration
+    TWeakObjectPtr<UStaticMesh> SelectedMesh;
+    bool bUseMeshInitialization = true;
+    
+    // Camera parameters (user inputs)
+    float FOVDegrees = 90.0f;
+    int32 ImageWidth = 1920;
+    int32 ImageHeight = 1080;
+    
+    // Training parameters
+    int32 MaxIterations = 30000;
+    float LearningRate = 0.01f;
+    
+    // Constructor
+    FTriangleSplattingConfig()
+    {
+        ImageDirectory = TEXT("");
+        PoseFilePath = TEXT("");
+        OutputDirectory = FPaths::ProjectSavedDir() / TEXT("TriangleSplatting");
+    }
+};
 
 class VCCSIM_API SVCCSimPanel final : public SCompoundWidget
 {
@@ -56,13 +95,14 @@ private:
     TSharedPtr<FSlateDynamicImageBrush> SZULogoBrush;
     
     // Expandable area states
-    bool bFlashPawnSectionExpanded = true;
-    bool bCameraSectionExpanded = true;
-    bool bTargetSectionExpanded = true;
-    bool bPoseConfigSectionExpanded = true;
-    bool bCaptureSectionExpanded = true;
-    bool bSceneAnalysisSectionExpanded = false;  // Collapsed by default
-    bool bPointCloudSectionExpanded = false;     // Collapsed by default
+    bool bFlashPawnSectionExpanded = false;
+    bool bCameraSectionExpanded = false;
+    bool bTargetSectionExpanded = false;
+    bool bPoseConfigSectionExpanded = false;
+    bool bCaptureSectionExpanded = false;
+    bool bSceneAnalysisSectionExpanded = false;  
+    bool bPointCloudSectionExpanded = false;
+    bool bTriangleSplattingSectionExpanded = true;
     
     // Selection UI
     TSharedPtr<class STextBlock> SelectedFlashPawnText;
@@ -104,6 +144,19 @@ private:
     TSharedPtr<STextBlock> PointCloudStatusText;
     TSharedPtr<STextBlock> PointCloudColorStatusText;
     TSharedPtr<STextBlock> PointCloudNormalStatusText;
+
+    // Triangle Splatting UI elements (simplified with UE official asset picker)
+    TSharedPtr<SEditableTextBox> GSImageDirectoryTextBox;
+    TSharedPtr<SEditableTextBox> GSPoseFileTextBox;
+    TSharedPtr<SEditableTextBox> GSOutputDirectoryTextBox;
+    TSharedPtr<SNumericEntryBox<float>> GSFOVSpinBox;
+    TSharedPtr<SNumericEntryBox<int32>> GSImageWidthSpinBox;
+    TSharedPtr<SNumericEntryBox<int32>> GSImageHeightSpinBox;
+    TSharedPtr<SNumericEntryBox<int32>> GSMaxIterationsSpinBox;
+    TSharedPtr<SNumericEntryBox<float>> GSLearningRateSpinBox;
+    TSharedPtr<SButton> GSStartTrainingButton;
+    TSharedPtr<SButton> GSStopTrainingButton;
+    TSharedPtr<STextBlock> GSTrainingStatusText;
 
     // ============================================================================
     // STATE VARIABLES
@@ -198,6 +251,21 @@ private:
     float PointSize = .5f;
     float NormalLength = 50.f;
 
+    // Triangle Splatting state (simplified)
+    FTriangleSplattingConfig GSConfig;
+    bool bGSTrainingInProgress = false;
+    float GSTrainingProgress = 0.0f;
+    FString GSTrainingStatusMessage = TEXT("Ready");
+    TSharedPtr<FTriangleSplattingManager> GSTrainingManager;
+    FTimerHandle GSStatusUpdateTimerHandle;
+    
+    // TOptional attributes for Triangle Splatting SpinBox values
+    TOptional<float> GSFOVValue;
+    TOptional<int32> GSImageWidthValue;
+    TOptional<int32> GSImageHeightValue;
+    TOptional<int32> GSMaxIterationsValue;
+    TOptional<float> GSLearningRateValue;
+
     // ============================================================================
     // INITIALIZATION AND CLEANUP
     // ============================================================================
@@ -279,6 +347,29 @@ private:
     void CreateBasicPointCloudMaterial(UProceduralMeshComponent* MeshComponent);
 
     // ============================================================================
+    // TRIANGLE SPLATTING OPERATIONS (implemented in VCCSimPanel_gs.cpp)
+    // ============================================================================
+    
+    // Initialization (simplified)
+    void InitializeGSManager();
+    
+    // UI event handlers (simplified - removed mesh management functions)
+    FReply OnGSBrowseImageDirectoryClicked();
+    FReply OnGSBrowsePoseFileClicked();
+    FReply OnGSBrowseOutputDirectoryClicked();
+    void OnGSFOVChanged(float NewValue);
+    void OnGSImageWidthChanged(int32 NewValue);
+    void OnGSImageHeightChanged(int32 NewValue);
+    void OnGSMaxIterationsChanged(int32 NewValue);
+    void OnGSLearningRateChanged(float NewValue);
+    
+    // Training control
+    FReply OnGSStartTrainingClicked();
+    FReply OnGSStopTrainingClicked();
+    bool ValidateGSConfiguration();
+    void ShowGSNotification(const FString& Message, bool bIsError = false);
+
+    // ============================================================================
     // UI CONSTRUCTION HELPERS
     // ============================================================================
     
@@ -291,6 +382,7 @@ private:
     TSharedRef<SWidget> CreateCapturePanel();
     TSharedRef<SWidget> CreateSceneAnalysisPanel();
     TSharedRef<SWidget> CreatePointCloudPanel();
+    TSharedRef<SWidget> CreateTriangleSplattingPanel();
     
     // Camera UI helpers
     TSharedRef<SWidget> CreateCameraStatusRow();
@@ -314,6 +406,22 @@ private:
     TSharedRef<SWidget> CreateCaptureButtons();
     TSharedRef<SWidget> CreatePointCloudButtons();
     TSharedRef<SWidget> CreatePointCloudNormalControls();
+    
+    // Triangle Splatting UI creators (implemented in VCCSimPanel_gs.cpp)
+    TSharedRef<SWidget> CreateGSDataInputSection();
+    TSharedRef<SWidget> CreateGSCameraParamsSection();
+    TSharedRef<SWidget> CreateGSTrainingParamsSection();
+    TSharedRef<SWidget> CreateGSTrainingControlSection();
+    
+    template<typename T>
+    TSharedRef<SWidget> CreateGSNumericPropertyRow(
+        const FString& Label,
+        TSharedPtr<SNumericEntryBox<T>>& SpinBox,
+        TOptional<T>& Value,
+        T MinValue,
+        T MaxValue,
+        T DeltaValue,
+        TFunction<void(T)> OnValueChanged);
     
     // Style and layout helpers
     TSharedRef<SWidget> CreateCollapsibleSection(const FString& Title, TSharedRef<SWidget> Content, bool& bExpanded);

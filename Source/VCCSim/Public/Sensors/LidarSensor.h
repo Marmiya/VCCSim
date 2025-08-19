@@ -21,11 +21,11 @@
 #include "GameFramework/Actor.h"
 #include "SensorBase.h"
 #include "Utils/InsMeshHolder.h"
+#include "DataType/PointCloud.h"
 
 #include "LidarSensor.generated.h"
 
 class ARecorder;
-struct FLiDARPoint;
 
 class FLiDarConfig : public FSensorConfig
 {

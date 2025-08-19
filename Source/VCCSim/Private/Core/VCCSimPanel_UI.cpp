@@ -77,6 +77,9 @@ void SVCCSimPanel::Construct(const FArguments& InArgs)
     // Initialize scene analysis manager
     InitializeSceneAnalysisManager();
     
+    // Initialize Triangle Splatting manager
+    InitializeGSManager();
+    
     // Create the main widget layout
     CreateMainLayout();
 }
@@ -199,6 +202,13 @@ void SVCCSimPanel::CreateMainLayout()
                 .AutoHeight()
                 [
                     CreateCollapsibleSection("Point Cloud", CreatePointCloudPanel(), bPointCloudSectionExpanded)
+                ]
+
+                // Triangle Splatting panel
+                +SVerticalBox::Slot()
+                .AutoHeight()
+                [
+                    CreateTriangleSplattingPanel()
                 ]
             ]
         ]
