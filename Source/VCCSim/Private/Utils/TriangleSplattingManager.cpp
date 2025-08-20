@@ -16,7 +16,7 @@
 */
 
 #include "Utils/TriangleSplattingManager.h"
-#include "Core/VCCSimPanel.h"
+#include "Editor/VCCSimPanel.h"
 #include "Utils/VCCSimDataConverter.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"

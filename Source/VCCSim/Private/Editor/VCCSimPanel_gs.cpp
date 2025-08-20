@@ -17,7 +17,7 @@
 
 #if WITH_EDITOR
 
-#include "Core/VCCSimPanel.h"
+#include "Editor/VCCSimPanel.h"
 #include "Utils/TriangleSplattingManager.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SScrollBox.h"

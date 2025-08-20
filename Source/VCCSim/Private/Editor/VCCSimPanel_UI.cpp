@@ -17,7 +17,7 @@
 
 #if WITH_EDITOR
 
-#include "Core/VCCSimPanel.h"
+#include "Editor/VCCSimPanel.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"

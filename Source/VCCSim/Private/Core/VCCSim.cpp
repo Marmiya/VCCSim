@@ -19,7 +19,7 @@
 
 // Only include panel header in editor builds
 #if WITH_EDITOR
-#include "Core/VCCSimPanel.h"
+#include "Editor/VCCSimPanel.h"
 #include "LevelEditor.h"
 #endif
 

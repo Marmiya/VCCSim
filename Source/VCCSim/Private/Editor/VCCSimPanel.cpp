@@ -17,7 +17,7 @@
 
 #if WITH_EDITOR
 
-#include "Core/VCCSimPanel.h"
+#include "Editor/VCCSimPanel.h"
 #include "Engine/Selection.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Layout/SBox.h"
