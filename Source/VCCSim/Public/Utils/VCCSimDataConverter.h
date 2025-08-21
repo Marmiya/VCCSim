@@ -23,7 +23,7 @@
 #include "VCCSimDataConverter.generated.h"
 
 /**
- * Camera information structure for Triangle Splatting
+ * Camera information structure for right-handed coordinate system models
  */
 USTRUCT()
 struct VCCSIM_API FCameraInfo
@@ -122,7 +122,8 @@ public:
     {
     }
     
-    FCameraIntrinsics(int32 InWidth, int32 InHeight, float InFocalX, float InFocalY, float InCenterX, float InCenterY)
+    FCameraIntrinsics(int32 InWidth, int32 InHeight, float InFocalX,
+        float InFocalY, float InCenterX, float InCenterY)
         : Width(InWidth)
         , Height(InHeight)
         , FocalX(InFocalX)
@@ -161,9 +162,7 @@ public:
     }
 };
 
-/**
- * VCCSim Data Converter for Triangle Splatting integration
- */
+
 class VCCSIM_API FVCCSimDataConverter
 {
 public:
@@ -203,25 +202,16 @@ public:
     // ============================================================================
     
     /**
-     * Convert UE coordinate system to Triangle Splatting coordinate system
-     * UE: Left-handed, Z-up, centimeters -> TS: Right-handed, Y-up, meters
-     * @param UELocation Location in UE coordinates
-     * @param UERotation Rotation in UE coordinates
-     * @return Transformation matrix for Triangle Splatting
-     */
-    static FMatrix ConvertCoordinateSystem(const FVector& UELocation, const FRotator& UERotation);
-    
-    /**
-     * Convert UE location to Triangle Splatting location
+     * Convert UE location to right-handed coordinates
      * @param UELocation Location in UE coordinates (cm, left-handed, Z-up)
-     * @return Location in Triangle Splatting coordinates (m, right-handed, Y-up)
+     * @return Location in right-handed coordinates (m, right-handed, Z-up)
      */
     static FVector ConvertLocation(const FVector& UELocation);
     
     /**
-     * Convert UE rotation to Triangle Splatting rotation
+     * Convert UE rotation to right-handed rotation
      * @param UERotation Rotation in UE coordinates
-     * @return Rotation matrix for Triangle Splatting coordinate system
+     * @return Rotation matrix for the right-handed coordinate system
      */
     static FMatrix ConvertRotation(const FRotator& UERotation);
 
@@ -230,7 +220,7 @@ public:
     // ============================================================================
     
     /**
-     * Convert UE camera parameters to Triangle Splatting format
+     * Convert UE camera parameters to right-handed coordinate system format
      * @param FOVDegrees Field of view in degrees
      * @param Width Image width in pixels
      * @param Height Image height in pixels
@@ -254,13 +244,13 @@ public:
      * Convert UE Static Mesh to point cloud for initialization
      * @param Mesh Static mesh to convert
      * @param SampleCount Number of points to sample from the mesh
-     * @param bRandomSampling If true, use random sampling; if false, use uniform sampling
+     * @param bApplyCoordinateTransformation If true, apply UE to right-handed coordinate transformation
      * @return Point cloud data structure
      */
     static FPointCloudData ConvertMeshToPointCloud(
         UStaticMesh* Mesh, 
         int32 SampleCount = 10000, 
-        bool bRandomSampling = true);
+        bool bApplyCoordinateTransformation = true);
     
     /**
      * Generate random point cloud for initialization when no mesh is provided
@@ -268,20 +258,21 @@ public:
      * @param PointCount Number of points to generate
      * @return Point cloud data structure
      */
-    static FPointCloudData GenerateRandomPointCloud(const TArray<FCameraInfo>& CameraInfos, int32 PointCount = 10000);
-
+    static FPointCloudData GenerateRandomPointCloud(
+        const TArray<FCameraInfo>& CameraInfos, int32 PointCount = 10000);
+    
     // ============================================================================
     // FILE I/O OPERATIONS
     // ============================================================================
     
     /**
-     * Save camera information to Triangle Splatting compatible format
+     * Save camera information to right-handed coordinate system compatible format
      * @param CameraInfos Array of camera information
      * @param OutputPath Output directory path
-     * @param bCreateCOLMAPFormat If true, create COLMAP-compatible format
      * @return True if successful
      */
-    static bool SaveCameraInfo(const TArray<FCameraInfo>& CameraInfos, const FString& OutputPath, bool bCreateCOLMAPFormat = false);
+    static bool SaveCameraInfo(const TArray<FCameraInfo>& CameraInfos,
+        const FString& OutputPath);
     
     /**
      * Save point cloud data to PLY format
@@ -289,14 +280,15 @@ public:
      * @param OutputFilePath Output PLY file path
      * @return True if successful
      */
-    static bool SavePointCloudToPLY(const FPointCloudData& PointCloudData, const FString& OutputFilePath);
+    static bool SavePointCloudToPLY(const FPointCloudData& PointCloudData,
+        const FString& OutputFilePath);
     
     /**
-     * Create Triangle Splatting compatible directory structure
+     * Create directory structure for right-handed coordinate system models
      * @param OutputPath Base output directory
      * @return True if successful
      */
-    static bool CreateTriangleSplattingDirectoryStructure(const FString& OutputPath);
+    static bool CreateModelDirectoryStructure(const FString& OutputPath);
 
     // ============================================================================
     // UTILITY FUNCTIONS
@@ -308,7 +300,8 @@ public:
      * @param ValidExtensions Array of valid image extensions (e.g., "jpg", "png")
      * @return Array of valid image file paths
      */
-    static TArray<FString> ValidateImageDirectory(const FString& ImageDirectory, const TArray<FString>& ValidExtensions = {"jpg", "png", "jpeg"});
+    static TArray<FString> ValidateImageDirectory(const FString& ImageDirectory,
+        const TArray<FString>& ValidExtensions = {"jpg", "png", "jpeg"});
     
     /**
      * Generate image file name for given pose index
@@ -316,7 +309,8 @@ public:
      * @param Extension File extension (without dot)
      * @return Generated file name
      */
-    static FString GenerateImageFileName(int32 PoseIndex, const FString& Extension = TEXT("jpg"));
+    static FString GenerateImageFileName(int32 PoseIndex,
+        const FString& Extension = TEXT("jpg"));
     
     /**
      * Calculate scene bounding box from camera positions
@@ -325,6 +319,14 @@ public:
      */
     static FBox CalculateSceneBounds(const TArray<FCameraInfo>& CameraInfos);
 
+    static bool SaveColmapFormat(
+        const TArray<FCameraInfo>& CameraInfos, 
+        const FString& OutputPath);
+
+    static FVector GetCameraForwardDirection(const FMatrix& ConvertedRotationMatrix);
+    static FVector GetCameraRightDirection(const FMatrix& ConvertedRotationMatrix);
+    static FVector GetCameraUpDirection(const FMatrix& ConvertedRotationMatrix);
+    
 private:
     /**
      * Sample points from mesh vertices
@@ -333,7 +335,9 @@ private:
      * @param bRandomSampling Use random or uniform sampling
      * @return Array of sampled points
      */
-    static TArray<FVector> SampleMeshVertices(UStaticMesh* Mesh, int32 SampleCount, bool bRandomSampling);
+    static TArray<FVector> SampleMeshVertices(UStaticMesh* Mesh,
+        int32 SampleCount, bool bRandomSampling);
+    
     
     /**
      * Generate colors for point cloud based on position
@@ -348,4 +352,12 @@ private:
      * @return Array of normals corresponding to points
      */
     static TArray<FVector> CalculatePointNormals(const TArray<FVector>& Points);
+    
+    // TODO: Remove them and use true colmap
+    static bool CreateColmapDirectoryStructure(const FString& OutputPath);
+    static bool SaveColmapCameras(
+        const TArray<FCameraInfo>& CameraInfos, const FString& OutputPath);
+    static bool SaveColmapImages(
+        const TArray<FCameraInfo>& CameraInfos, const FString& OutputPath);
+    static bool SaveColmapPoints3D(const FString& OutputPath);
 };

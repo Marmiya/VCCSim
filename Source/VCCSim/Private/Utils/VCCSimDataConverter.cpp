@@ -22,7 +22,6 @@
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshSourceData.h"
 #include "MeshDescription.h"
-#include "StaticMeshAttributes.h"
 #include "Math/UnrealMathUtility.h"
 #include "Math/RandomStream.h"
 
@@ -83,9 +82,8 @@ TArray<FCameraInfo> FVCCSimDataConverter::ConvertPoseFile(
         CameraInfo.UID = ValidPoseIndex;
         
         // Convert coordinate system
-        FMatrix TransformMatrix = ConvertCoordinateSystem(PoseData.Location, PoseData.Rotation);
-        CameraInfo.RotationMatrix = TransformMatrix.GetMatrixWithoutScale();
-        CameraInfo.Translation = TransformMatrix.GetOrigin();
+        CameraInfo.RotationMatrix = ConvertRotation(PoseData.Rotation);
+        CameraInfo.Translation = ConvertLocation(PoseData.Location);
         
         // Set camera parameters
         CameraInfo.FOVDegrees = FMath::RadiansToDegrees(2.0f * FMath::Atan(Intrinsics.Width * 0.5f / Intrinsics.FocalX));
@@ -152,8 +150,9 @@ FVCCSimPoseData FVCCSimDataConverter::ParsePoseLine(const FString& Line, bool& b
     {
         // Invalid format
         UE_LOG(LogTemp, Warning, TEXT("Invalid pose line format: %s"), *Line);
-        PoseData = FVCCSimPoseData(); // Return zero data
+        return FVCCSimPoseData(); // Return zero data
     }
+    
     
     return PoseData;
 }
@@ -180,73 +179,61 @@ bool FVCCSimDataConverter::DeterminePoseFileFormat(const FString& PoseFilePath)
     return false; // Default to Panel format
 }
 
+
 // ============================================================================
 // COORDINATE SYSTEM CONVERSION
 // ============================================================================
 
-FMatrix FVCCSimDataConverter::ConvertCoordinateSystem(const FVector& UELocation, const FRotator& UERotation)
-{
-    // Convert location
-    FVector TSLocation = ConvertLocation(UELocation);
-    
-    // Convert rotation
-    FMatrix TSRotation = ConvertRotation(UERotation);
-    
-    // Combine into transformation matrix
-    FVector XAxis = TSRotation.GetColumn(0);
-    FVector YAxis = TSRotation.GetColumn(1);
-    FVector ZAxis = TSRotation.GetColumn(2);
-    
-    FMatrix TransformMatrix = FMatrix::Identity;
-    TransformMatrix.SetAxes(&XAxis, &YAxis, &ZAxis);
-    TransformMatrix.SetOrigin(TSLocation);
-    
-    return TransformMatrix;
-}
-
 FVector FVCCSimDataConverter::ConvertLocation(const FVector& UELocation)
 {
-    // UE: X-forward, Y-right, Z-up (left-handed, cm)
-    // TS: X-right, Y-up, Z-backward (right-handed, m)
-    
-    // Convert units: cm -> m
-    FVector LocationM = UELocation * 0.01f;
-    
-    // Convert coordinate system
-    FVector TSLocation;
-    TSLocation.X = LocationM.Y;  // UE Y -> TS X
-    TSLocation.Y = LocationM.Z;  // UE Z -> TS Y  
-    TSLocation.Z = -LocationM.X; // UE X -> TS -Z
-    
-    return TSLocation;
+    // Convert from UE left-handed system (cm) to right-handed system (m)
+    // X and Z axes maintain direction, Y axis flipped, units converted to meters
+    return FVector(
+        UELocation.X * 0.01f,  // X: forward direction unchanged, cm to m
+        -UELocation.Y * 0.01f, // Y: right to left (flipped for right-handed), cm to m  
+        UELocation.Z * 0.01f   // Z: up direction unchanged, cm to m
+    );
 }
 
 FMatrix FVCCSimDataConverter::ConvertRotation(const FRotator& UERotation)
-{
-    // Convert UE rotation to matrix first
+{    
+    // Get UE rotation matrix
     FMatrix UEMatrix = FRotationMatrix::Make(UERotation);
     
-    // Apply coordinate system conversion to rotation matrix
-    // This is a simplified approach - in practice, you might need more sophisticated conversion
-    FMatrix ConversionMatrix = FMatrix::Identity;
+    FMatrix CoordTransform = FMatrix::Identity;
+    CoordTransform.M[0][0] = 1.0f;   // X -> X
+    CoordTransform.M[1][1] = -1.0f;  // Y -> -Y  
+    CoordTransform.M[2][2] = 1.0f;   // Z -> Z
     
-    // Conversion matrix from UE to Triangle Splatting coordinates
-    // UE: X-forward, Y-right, Z-up -> TS: X-right, Y-up, Z-backward
-    ConversionMatrix.SetColumn(0, FVector(0, 1, 0));  // UE Y -> TS X
-    ConversionMatrix.SetColumn(1, FVector(0, 0, 1));  // UE Z -> TS Y
-    ConversionMatrix.SetColumn(2, FVector(-1, 0, 0)); // UE X -> TS -Z
-    
-    // Apply conversion: TSRotation = ConversionMatrix * UEMatrix * ConversionMatrix^T
-    FMatrix TSMatrix = ConversionMatrix * UEMatrix * ConversionMatrix.GetTransposed();
-    
-    return TSMatrix;
+    // Apply transformation: ConvertedMatrix = CoordTransform * UEMatrix * CoordTransform^T
+    // Since CoordTransform is diagonal, CoordTransform^T = CoordTransform
+    return CoordTransform * UEMatrix * CoordTransform;
+}
+
+FVector FVCCSimDataConverter::GetCameraForwardDirection(const FMatrix& ConvertedRotationMatrix)
+{
+    // Camera forward direction is the first column of the rotation matrix
+    return ConvertedRotationMatrix.GetColumn(0).GetSafeNormal();
+}
+
+FVector FVCCSimDataConverter::GetCameraRightDirection(const FMatrix& ConvertedRotationMatrix)
+{
+    // Camera right direction is the second column of the rotation matrix
+    return ConvertedRotationMatrix.GetColumn(1).GetSafeNormal();
+}
+
+FVector FVCCSimDataConverter::GetCameraUpDirection(const FMatrix& ConvertedRotationMatrix)
+{
+    // Camera up direction is the third column of the rotation matrix
+    return ConvertedRotationMatrix.GetColumn(2).GetSafeNormal();
 }
 
 // ============================================================================
 // CAMERA PARAMETER CONVERSION
 // ============================================================================
 
-FCameraIntrinsics FVCCSimDataConverter::ConvertCameraParams(float FOVDegrees, int32 Width, int32 Height)
+FCameraIntrinsics FVCCSimDataConverter::ConvertCameraParams(
+    float FOVDegrees, int32 Width, int32 Height)
 {
     // Calculate focal lengths from FOV
     float FocalX = CalculateFocalLength(FOVDegrees, Width);
@@ -272,7 +259,7 @@ float FVCCSimDataConverter::CalculateFocalLength(float FOVDegrees, int32 ImageDi
 FPointCloudData FVCCSimDataConverter::ConvertMeshToPointCloud(
     UStaticMesh* Mesh, 
     int32 SampleCount, 
-    bool bRandomSampling)
+    bool bApplyCoordinateTransformation)
 {
     FPointCloudData PointCloudData;
     
@@ -282,8 +269,25 @@ FPointCloudData FVCCSimDataConverter::ConvertMeshToPointCloud(
         return PointCloudData;
     }
     
-    // Sample points from mesh
-    TArray<FVector> SampledPoints = SampleMeshVertices(Mesh, SampleCount, bRandomSampling);
+    // Sample points from mesh (in UE coordinates)
+    TArray<FVector> SampledPoints = SampleMeshVertices(Mesh, SampleCount, true);
+    
+    // Apply coordinate transformation if requested
+    if (bApplyCoordinateTransformation)
+    {
+        UE_LOG(LogTemp, Log, TEXT("Applying coordinate transformation to mesh points"));
+        
+        // Transform each point from UE to right-handed coordinates
+        for (int32 i = 0; i < SampledPoints.Num(); ++i)
+        {
+            FVector UEPoint = SampledPoints[i];
+            FVector TSPoint = ConvertLocation(UEPoint);
+            SampledPoints[i] = TSPoint;
+        }
+        
+        UE_LOG(LogTemp, Log, TEXT("Transformed %d mesh points from UE to "
+                                  "right-handed coordinates"), SampledPoints.Num());
+    }
     
     // Generate colors and normals
     TArray<FLinearColor> Colors = GeneratePointColors(SampledPoints);
@@ -294,12 +298,14 @@ FPointCloudData FVCCSimDataConverter::ConvertMeshToPointCloud(
     PointCloudData.Colors = Colors;
     PointCloudData.Normals = Normals;
     
-    UE_LOG(LogTemp, Log, TEXT("Converted mesh to point cloud with %d points"), PointCloudData.GetPointCount());
+    UE_LOG(LogTemp, Log, TEXT("Converted mesh to point cloud with %d points"),
+        PointCloudData.GetPointCount());
     
     return PointCloudData;
 }
 
-FPointCloudData FVCCSimDataConverter::GenerateRandomPointCloud(const TArray<FCameraInfo>& CameraInfos, int32 PointCount)
+FPointCloudData FVCCSimDataConverter::GenerateRandomPointCloud(
+    const TArray<FCameraInfo>& CameraInfos, int32 PointCount)
 {
     FPointCloudData PointCloudData;
     
@@ -344,24 +350,27 @@ FPointCloudData FVCCSimDataConverter::GenerateRandomPointCloud(const TArray<FCam
         PointCloudData.AddPoint(RandomPoint, RandomColor, RandomNormal);
     }
     
-    UE_LOG(LogTemp, Log, TEXT("Generated random point cloud with %d points"), PointCloudData.GetPointCount());
+    UE_LOG(LogTemp, Log, TEXT("Generated random point cloud with %d points"),
+        PointCloudData.GetPointCount());
     
     return PointCloudData;
 }
+
 
 // ============================================================================
 // FILE I/O OPERATIONS
 // ============================================================================
 
-bool FVCCSimDataConverter::SaveCameraInfo(const TArray<FCameraInfo>& CameraInfos, const FString& OutputPath, bool bCreateCOLMAPFormat)
+bool FVCCSimDataConverter::SaveCameraInfo(
+    const TArray<FCameraInfo>& CameraInfos, const FString& OutputPath)
 {
     // Create output directory
-    if (!CreateTriangleSplattingDirectoryStructure(OutputPath))
+    if (!CreateModelDirectoryStructure(OutputPath))
     {
         return false;
     }
     
-    // Save camera info in JSON format for VCCSim Triangle Splatting
+    // Save camera info in JSON format for right-handed coordinate system models
     FString CameraInfoPath = FPaths::Combine(OutputPath, TEXT("camera_info.json"));
     FString JsonContent = TEXT("[\n");
     
@@ -406,7 +415,8 @@ bool FVCCSimDataConverter::SaveCameraInfo(const TArray<FCameraInfo>& CameraInfos
     return FFileHelper::SaveStringToFile(JsonContent, *CameraInfoPath);
 }
 
-bool FVCCSimDataConverter::SavePointCloudToPLY(const FPointCloudData& PointCloudData, const FString& OutputFilePath)
+bool FVCCSimDataConverter::SavePointCloudToPLY(const FPointCloudData& PointCloudData,
+    const FString& OutputFilePath)
 {
     if (PointCloudData.GetPointCount() == 0)
     {
@@ -469,7 +479,7 @@ bool FVCCSimDataConverter::SavePointCloudToPLY(const FPointCloudData& PointCloud
     return FFileHelper::SaveStringToFile(PlyContent, *OutputFilePath);
 }
 
-bool FVCCSimDataConverter::CreateTriangleSplattingDirectoryStructure(const FString& OutputPath)
+bool FVCCSimDataConverter::CreateModelDirectoryStructure(const FString& OutputPath)
 {
     IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
     
@@ -504,7 +514,8 @@ bool FVCCSimDataConverter::CreateTriangleSplattingDirectoryStructure(const FStri
 // UTILITY FUNCTIONS
 // ============================================================================
 
-TArray<FString> FVCCSimDataConverter::ValidateImageDirectory(const FString& ImageDirectory, const TArray<FString>& ValidExtensions)
+TArray<FString> FVCCSimDataConverter::ValidateImageDirectory(
+    const FString& ImageDirectory, const TArray<FString>& ValidExtensions)
 {
     TArray<FString> ValidImages;
     
@@ -529,7 +540,8 @@ TArray<FString> FVCCSimDataConverter::ValidateImageDirectory(const FString& Imag
     
     ValidImages.Sort();
     
-    UE_LOG(LogTemp, Log, TEXT("Found %d valid images in directory: %s"), ValidImages.Num(), *ImageDirectory);
+    UE_LOG(LogTemp, Log, TEXT("Found %d valid images in directory: %s"),
+        ValidImages.Num(), *ImageDirectory);
     
     return ValidImages;
 }
@@ -562,7 +574,9 @@ FBox FVCCSimDataConverter::CalculateSceneBounds(const TArray<FCameraInfo>& Camer
 // PRIVATE HELPER FUNCTIONS
 // ============================================================================
 
-TArray<FVector> FVCCSimDataConverter::SampleMeshVertices(UStaticMesh* Mesh, int32 SampleCount, bool bRandomSampling)
+
+TArray<FVector> FVCCSimDataConverter::SampleMeshVertices(
+    UStaticMesh* Mesh, int32 SampleCount, bool bRandomSampling)
 {
     TArray<FVector> SampledPoints;
     
@@ -647,4 +661,146 @@ TArray<FVector> FVCCSimDataConverter::CalculatePointNormals(const TArray<FVector
     }
     
     return Normals;
+}
+
+// ============================================================================
+// COLMAP FORMAT OUTPUT
+// ============================================================================
+
+bool FVCCSimDataConverter::SaveColmapFormat(
+    const TArray<FCameraInfo>& CameraInfos, 
+    const FString& OutputPath)
+{
+    // Create COLMAP directory structure
+    if (!CreateColmapDirectoryStructure(OutputPath))
+    {
+        return false;
+    }
+    
+    // Save cameras.txt
+    if (!SaveColmapCameras(CameraInfos, OutputPath))
+    {
+        return false;
+    }
+    
+    // Save images.txt  
+    if (!SaveColmapImages(CameraInfos, OutputPath))
+    {
+        return false;
+    }
+    
+    // Save empty points3D.txt
+    if (!SaveColmapPoints3D(OutputPath))
+    {
+        return false;
+    }
+    
+    UE_LOG(LogTemp, Log, TEXT("Successfully saved COLMAP format to: %s"), *OutputPath);
+    return true;
+}
+
+bool FVCCSimDataConverter::CreateColmapDirectoryStructure(const FString& OutputPath)
+{
+    IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
+    
+    // Create main output directory
+    if (!PlatformFile.CreateDirectoryTree(*OutputPath))
+    {
+        UE_LOG(LogTemp, Error, TEXT("Failed to create output directory: %s"), *OutputPath);
+        return false;
+    }
+    
+    // Create COLMAP sparse reconstruction directory
+    FString SparseDir = FPaths::Combine(OutputPath, TEXT("sparse"), TEXT("0"));
+    if (!PlatformFile.CreateDirectoryTree(*SparseDir))
+    {
+        UE_LOG(LogTemp, Error, TEXT("Failed to create sparse directory: %s"), *SparseDir);
+        return false;
+    }
+    
+    return true;
+}
+
+bool FVCCSimDataConverter::SaveColmapCameras(
+    const TArray<FCameraInfo>& CameraInfos, const FString& OutputPath)
+{
+    if (CameraInfos.Num() == 0)
+    {
+        return false;
+    }
+    
+    FString CamerasPath = FPaths::Combine(OutputPath, TEXT("sparse"), TEXT("0"), TEXT("cameras.txt"));
+    FString Content;
+    
+    // Header
+    Content += TEXT("# Camera list with one line of data per camera:\n");
+    Content += TEXT("# CAMERA_ID, MODEL, WIDTH, HEIGHT, PARAMS[]\n");
+    Content += TEXT("# Number of cameras: 1\n");
+    
+    // Assume all cameras have same parameters (use first camera)
+    const FCameraInfo& FirstCamera = CameraInfos[0];
+    Content += FString::Printf(TEXT("1 PINHOLE %d %d %.6f %.6f %.6f %.6f\n"),
+        FirstCamera.Width,
+        FirstCamera.Height,
+        FirstCamera.FocalX,
+        FirstCamera.FocalY,
+        FirstCamera.CenterX,
+        FirstCamera.CenterY
+    );
+    
+    return FFileHelper::SaveStringToFile(Content, *CamerasPath);
+}
+
+bool FVCCSimDataConverter::SaveColmapImages(
+    const TArray<FCameraInfo>& CameraInfos, const FString& OutputPath)
+{
+    FString ImagesPath = FPaths::Combine(OutputPath, TEXT("sparse"), TEXT("0"), TEXT("images.txt"));
+    FString Content;
+    
+    // Header
+    Content += TEXT("# Image list with two lines of data per image:\n");
+    Content += TEXT("# IMAGE_ID, QW, QX, QY, QZ, TX, TY, TZ, CAMERA_ID, NAME\n");
+    Content += TEXT("# POINTS2D[] as (X, Y, POINT3D_ID)\n");
+    Content += FString::Printf(TEXT("# Number of images: %d, mean observations per image: 0\n"),
+        CameraInfos.Num());
+    
+    // Convert each camera pose
+    for (int32 i = 0; i < CameraInfos.Num(); ++i)
+    {
+        const FCameraInfo& CameraInfo = CameraInfos[i];
+        
+        // Convert rotation matrix to quaternion
+        FQuat Quaternion = FQuat(CameraInfo.RotationMatrix);
+        
+        // COLMAP uses camera-to-world transformation, but we have world-to-camera
+        // So we need to invert the transformation
+        FQuat InvQuaternion = Quaternion.Inverse();
+        FVector InvTranslation = -(InvQuaternion * CameraInfo.Translation);
+        
+        // Write image line
+        Content += FString::Printf(TEXT("%d %.6f %.6f %.6f %.6f %.6f %.6f %.6f 1 %s\n"),
+            i + 1,  // IMAGE_ID (1-based)
+            InvQuaternion.W, InvQuaternion.X, InvQuaternion.Y, InvQuaternion.Z,  // Quaternion
+            InvTranslation.X, InvTranslation.Y, InvTranslation.Z,  // Translation
+            *CameraInfo.ImageName  // Image name
+        );
+        
+        // Empty points2D line
+        Content += TEXT("\n");
+    }
+    
+    return FFileHelper::SaveStringToFile(Content, *ImagesPath);
+}
+
+bool FVCCSimDataConverter::SaveColmapPoints3D(const FString& OutputPath)
+{
+    FString Points3DPath = FPaths::Combine(OutputPath, TEXT("sparse"), TEXT("0"), TEXT("points3D.txt"));
+    FString Content;
+    
+    // Header for empty points3D file
+    Content += TEXT("# 3D point list with one line of data per point:\n");
+    Content += TEXT("# POINT3D_ID, X, Y, Z, R, G, B, ERROR, TRACK[] as (IMAGE_ID, POINT2D_IDX)\n");
+    Content += TEXT("# Number of points: 0, mean track length: 0\n");
+    
+    return FFileHelper::SaveStringToFile(Content, *Points3DPath);
 }

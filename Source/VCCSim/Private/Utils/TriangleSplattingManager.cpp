@@ -456,14 +456,22 @@ FString FTriangleSplattingManager::GetTrainingScriptPath()
 {
     // Path to the VCCSim-specific Triangle Splatting training script
     FString PluginDir = FPaths::ProjectPluginsDir() / TEXT("VCCSim");
-    FString ScriptPath = PluginDir / TEXT("Source/VCCSim/triangle-splatting/train_vccsim.py");
     
+    // Try improved script first
+    FString ImprovedScriptPath = PluginDir / TEXT("Source/VCCSim/triangle-splatting/train_vccsim_improved.py");
+    if (FPaths::FileExists(ImprovedScriptPath))
+    {
+        return ImprovedScriptPath;
+    }
+    
+    // Try original VCCSim script
+    FString ScriptPath = PluginDir / TEXT("Source/VCCSim/triangle-splatting/train_vccsim.py");
     if (FPaths::FileExists(ScriptPath))
     {
         return ScriptPath;
     }
     
-    // Alternative path
+    // Try game engine script
     FString AlternativeScriptPath = PluginDir / TEXT("Source/VCCSim/triangle-splatting/train_game_engine.py");
     if (FPaths::FileExists(AlternativeScriptPath))
     {

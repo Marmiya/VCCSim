@@ -36,6 +36,7 @@ class USplineMeshComponent;
 class ASceneAnalysisManager;
 class UStaticMeshComponent;
 class FTriangleSplattingManager;
+struct FCameraInfo;
 
 /**
  * Triangle Splatting configuration structure
@@ -366,8 +367,13 @@ private:
     // Training control
     FReply OnGSStartTrainingClicked();
     FReply OnGSStopTrainingClicked();
+    FReply OnGSTestTransformationClicked();
+    FReply OnGSExportColmapClicked();
     bool ValidateGSConfiguration();
     void ShowGSNotification(const FString& Message, bool bIsError = false);
+    
+    // Test and validation helpers
+    void ExportCamerasToPLY(const TArray<FCameraInfo>& CameraInfos, const FString& OutputPath);
 
     // ============================================================================
     // UI CONSTRUCTION HELPERS

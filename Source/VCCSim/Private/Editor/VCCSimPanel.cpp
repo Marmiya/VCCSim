@@ -501,7 +501,10 @@ void SVCCSimPanel::LoadPredefinedPose()
                         float Roll = FCString::Atof(*Values[5]);
                         
                         Positions.Add(FVector(X, Y, Z));
-                        Rotations.Add(FRotator(Pitch, Yaw, Roll));
+    
+                        FRotator Rotation(Pitch, Yaw, Roll);
+                        Rotation.Normalize();
+                        Rotations.Add(Rotation);
                     }
                 }
                 
@@ -679,7 +682,8 @@ void SVCCSimPanel::UpdatePathVisualization()
         bPathVisualized = false;
         return;
     }
-        
+
+    // TODO: Why there is a wired bias?
     // Generate new visualization actor
     PathVisualizationActor = UTrajectoryViewer::GenerateVisibleElements(
         GEditor->GetEditorWorldContext().World(),

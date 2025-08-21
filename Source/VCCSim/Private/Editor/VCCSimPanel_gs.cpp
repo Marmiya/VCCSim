@@ -19,6 +19,8 @@
 
 #include "Editor/VCCSimPanel.h"
 #include "Utils/TriangleSplattingManager.h"
+#include "Utils/VCCSimDataConverter.h"
+#include "HAL/PlatformFilemanager.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SScrollBox.h"
 #include "Widgets/Layout/SSeparator.h"
@@ -403,22 +405,60 @@ TSharedRef<SWidget> SVCCSimPanel::CreateGSTrainingControlSection()
             SNew(SHorizontalBox)
             
             + SHorizontalBox::Slot()
-            .AutoWidth()
+            .MaxWidth(150)
             .Padding(0, 0, 5, 0)
             [
                 SAssignNew(GSStartTrainingButton, SButton)
                 .Text(FText::FromString(TEXT("Start Training")))
+                .VAlign(VAlign_Center)
+                .HAlign(HAlign_Center)
                 .IsEnabled_Lambda([this]() { return !bGSTrainingInProgress; })
                 .OnClicked(this, &SVCCSimPanel::OnGSStartTrainingClicked)
             ]
             
             + SHorizontalBox::Slot()
-            .AutoWidth()
+            .MaxWidth(150)
             [
                 SAssignNew(GSStopTrainingButton, SButton)
                 .Text(FText::FromString(TEXT("Stop Training")))
+                .VAlign(VAlign_Center)
+                .HAlign(HAlign_Center)
                 .IsEnabled_Lambda([this]() { return bGSTrainingInProgress; })
                 .OnClicked(this, &SVCCSimPanel::OnGSStopTrainingClicked)
+            ]
+        ]
+
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        .Padding(0, 2)
+        [
+            SNew(SHorizontalBox)
+            
+            + SHorizontalBox::Slot()
+            .MaxWidth(150)
+            .Padding(0, 0, 5, 0)
+            [
+                SNew(SButton)
+                .Text(FText::FromString(TEXT("Test Transform")))
+                .VAlign(VAlign_Center)
+                .HAlign(HAlign_Center)
+                .IsEnabled_Lambda([this]() { return !bGSTrainingInProgress; })
+                .OnClicked(this, &SVCCSimPanel::OnGSTestTransformationClicked)
+                .ToolTipText(FText::FromString(TEXT("Export mesh and camera poses "
+                                                    "as PLY files for MeshLab validation")))
+            ]
+            
+            + SHorizontalBox::Slot()
+            .MaxWidth(150)
+            [
+                SNew(SButton)
+                .Text(FText::FromString(TEXT("COLMAP")))
+                .VAlign(VAlign_Center)
+                .HAlign(HAlign_Center)
+                .IsEnabled_Lambda([this]() { return !bGSTrainingInProgress; })
+                .OnClicked(this, &SVCCSimPanel::OnGSExportColmapClicked)
+                .ToolTipText(FText::FromString(TEXT("Export COLMAP dataset format"
+                                                    " for validation and external use")))
             ]
         ]
         
@@ -429,7 +469,10 @@ TSharedRef<SWidget> SVCCSimPanel::CreateGSTrainingControlSection()
         [
             CreatePropertyRow(TEXT("Status"),
                 SAssignNew(GSTrainingStatusText, STextBlock)
-                .Text_Lambda([this]() { return FText::FromString(GSTrainingStatusMessage); })
+                .Text_Lambda([this]()
+                {
+                    return FText::FromString(GSTrainingStatusMessage);
+                })
             )
         ];
 }
@@ -637,6 +680,230 @@ FReply SVCCSimPanel::OnGSStopTrainingClicked()
     return FReply::Handled();
 }
 
+FReply SVCCSimPanel::OnGSTestTransformationClicked()
+{
+    // Validate basic configuration first
+    if (GSConfig.OutputDirectory.IsEmpty())
+    {
+        ShowGSNotification(TEXT("Please specify an output directory first"), true);
+        return FReply::Handled();
+    }
+    
+    // Ensure output directory exists
+    IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
+    if (!PlatformFile.DirectoryExists(*GSConfig.OutputDirectory))
+    {
+        if (!PlatformFile.CreateDirectoryTree(*GSConfig.OutputDirectory))
+        {
+            ShowGSNotification(TEXT("Failed to create output directory"), true);
+            return FReply::Handled();
+        }
+    }
+    
+    bool bExportedAny = false;
+    FString StatusMessage;
+    
+    // Export selected mesh to PLY (both original UE and transformed Triangle Splatting coordinates)
+    if (GSConfig.SelectedMesh.IsValid())
+    {
+        try 
+        {
+            // Export original UE coordinates
+            FPointCloudData OriginalMesh = FVCCSimDataConverter::ConvertMeshToPointCloud(
+                GSConfig.SelectedMesh.Get(), 10000, false); 
+            
+            FString MeshUEPath = FPaths::Combine(GSConfig.OutputDirectory,
+                TEXT("test_mesh_ue_coordinates.ply"));
+            if (FVCCSimDataConverter::SavePointCloudToPLY(OriginalMesh, MeshUEPath))
+            {
+                StatusMessage += FString::Printf(TEXT("Original mesh (UE coords)\n"));
+                bExportedAny = true;
+            }
+            
+            // Export transformed Triangle Splatting coordinates
+            FPointCloudData TransformedMesh = FVCCSimDataConverter::ConvertMeshToPointCloud(
+                GSConfig.SelectedMesh.Get(), 10000, true);
+            
+            FString MeshTSPath = FPaths::Combine(GSConfig.OutputDirectory,
+                TEXT("test_mesh_ts_coordinates.ply"));
+            if (FVCCSimDataConverter::SavePointCloudToPLY(TransformedMesh, MeshTSPath))
+            {
+                StatusMessage += FString::Printf(TEXT("Transformed mesh (TS coords)\n"));
+                bExportedAny = true;
+                
+                // Log bounding boxes for comparison
+                FVector UEMin = FVector(FLT_MAX), UEMax = FVector(-FLT_MAX);
+                FVector TSMin = FVector(FLT_MAX), TSMax = FVector(-FLT_MAX);
+                
+                for (const FVector& Point : OriginalMesh.Points)
+                {
+                    UEMin = FVector::Min(UEMin, Point);
+                    UEMax = FVector::Max(UEMax, Point);
+                }
+                
+                for (const FVector& Point : TransformedMesh.Points)
+                {
+                    TSMin = FVector::Min(TSMin, Point);
+                    TSMax = FVector::Max(TSMax, Point);
+                }
+                
+                StatusMessage += FString::Printf(
+                TEXT("UE mesh bbox: Min(%.2f,%.2f,%.2f) Max(%.2f,%.2f,%.2f)\n"), 
+                    UEMin.X, UEMin.Y, UEMin.Z, UEMax.X, UEMax.Y, UEMax.Z);
+                StatusMessage += FString::Printf(
+                TEXT("TS mesh bbox: Min(%.2f,%.2f,%.2f) Max(%.2f,%.2f,%.2f)\n"), 
+                        TSMin.X, TSMin.Y, TSMin.Z, TSMax.X, TSMax.Y, TSMax.Z);
+            }
+            else
+            {
+                StatusMessage += TEXT("✗ Failed to export transformed mesh\n");
+            }
+        }
+        catch (...)
+        {
+            StatusMessage += TEXT("✗ Error converting mesh\n");
+        }
+    }
+    else
+    {
+        StatusMessage += TEXT("⚠ No mesh selected\n");
+    }
+    
+    // Export camera poses as points with normals (camera orientations)
+    if (!GSConfig.PoseFilePath.IsEmpty() && FPaths::FileExists(GSConfig.PoseFilePath))
+    {
+        try
+        {
+            FCameraIntrinsics Intrinsics = FVCCSimDataConverter::ConvertCameraParams(
+                GSConfig.FOVDegrees, GSConfig.ImageWidth, GSConfig.ImageHeight);
+            
+            TArray<FCameraInfo> CameraInfos = FVCCSimDataConverter::ConvertPoseFile(
+                GSConfig.PoseFilePath, GSConfig.ImageDirectory, Intrinsics);
+            
+            if (CameraInfos.Num() > 0)
+            {
+                FString CameraPLYPath = FPaths::Combine(GSConfig.OutputDirectory,
+                    TEXT("test_cameras_transformed.ply"));
+                ExportCamerasToPLY(CameraInfos, CameraPLYPath);
+                StatusMessage += FString::Printf(
+                    TEXT("✓ %d cameras exported\n"), CameraInfos.Num());
+                bExportedAny = true;
+            }
+            else
+            {
+                StatusMessage += TEXT("✗ No valid cameras found in pose file\n");
+            }
+        }
+        catch (...)
+        {
+            StatusMessage += TEXT("✗ Error converting camera poses\n");
+        }
+    }
+    else
+    {
+        StatusMessage += TEXT("⚠ No valid pose file specified\n");
+    }
+    
+    // Show result
+    if (bExportedAny)
+    {
+        StatusMessage += TEXT("\nOpen the PLY files to verify coordinate transformation!");
+        ShowGSNotification(StatusMessage);
+    }
+    else
+    {
+        ShowGSNotification(TEXT("No data was exported. Please check "
+                                "mesh selection and pose file."), true);
+    }
+    
+    return FReply::Handled();
+}
+
+FReply SVCCSimPanel::OnGSExportColmapClicked()
+{
+    // Validate basic configuration first
+    if (GSConfig.OutputDirectory.IsEmpty())
+    {
+        ShowGSNotification(TEXT("Please specify an output directory first"), true);
+        return FReply::Handled();
+    }
+    
+    if (GSConfig.PoseFilePath.IsEmpty() || !FPaths::FileExists(GSConfig.PoseFilePath))
+    {
+        ShowGSNotification(TEXT("Please specify a valid pose file"), true);
+        return FReply::Handled();
+    }
+    
+    if (GSConfig.ImageDirectory.IsEmpty() || !FPaths::DirectoryExists(GSConfig.ImageDirectory))
+    {
+        ShowGSNotification(TEXT("Please specify a valid image directory"), true);
+        return FReply::Handled();
+    }
+    
+    try
+    {
+        // Convert camera intrinsics
+        FCameraIntrinsics Intrinsics = FVCCSimDataConverter::ConvertCameraParams(
+            GSConfig.FOVDegrees, GSConfig.ImageWidth, GSConfig.ImageHeight);
+        
+        // Convert UE poses to COLMAP format
+        TArray<FCameraInfo> ColmapCameraInfos = FVCCSimDataConverter::ConvertPoseFile(
+            GSConfig.PoseFilePath, GSConfig.ImageDirectory, Intrinsics);
+        
+        if (ColmapCameraInfos.Num() == 0)
+        {
+            ShowGSNotification(TEXT("No valid camera poses found for COLMAP conversion"), true);
+            return FReply::Handled();
+        }
+        
+        // Create COLMAP output directory
+        FString ColmapOutputDir = FPaths::Combine(GSConfig.OutputDirectory, TEXT("colmap_dataset"));
+        
+        // Use enhanced COLMAP export with mesh support
+        bool bSuccess = FVCCSimDataConverter::SaveColmapFormat(ColmapCameraInfos, ColmapOutputDir);
+        
+        if (bSuccess)
+        {
+            FString SuccessMessage;
+            
+            if (GSConfig.SelectedMesh.IsValid())
+            {
+                SuccessMessage = FString::Printf(
+                    TEXT("Enhanced COLMAP dataset exported!\n")
+                    TEXT("Output: %s\n")
+                    TEXT("Cameras: %d\n")
+                    TEXT("Ready for COLMAP GUI visualization\n")
+                    TEXT("Camera trajectory and mesh geometry now visible"),
+                    *ColmapOutputDir, ColmapCameraInfos.Num()
+                );
+            }
+            else
+            {
+                SuccessMessage = FString::Printf(
+                    TEXT("COLMAP dataset exported with trajectory points!\n")
+                    TEXT("Output: %s\n")
+                    TEXT("Cameras: %d\n")
+                    TEXT("Camera path and reference points now visible\n")
+                    TEXT("Tip: Select a mesh for more detailed 3D points"),
+                    *ColmapOutputDir, ColmapCameraInfos.Num()
+                );
+            }
+            
+            ShowGSNotification(SuccessMessage);
+        }
+        else
+        {
+            ShowGSNotification(TEXT("Failed to export COLMAP dataset"), true);
+        }
+    }
+    catch (...)
+    {
+        ShowGSNotification(TEXT("Error occurred during COLMAP export"), true);
+    }
+    
+    return FReply::Handled();
+}
+
 // ============================================================================
 // TRIANGLE SPLATTING TRAINING VALIDATION AND UTILITIES
 // ============================================================================
@@ -716,6 +983,47 @@ void SVCCSimPanel::ShowGSNotification(const FString& Message, bool bIsError)
     }
     
     FSlateNotificationManager::Get().AddNotification(NotificationInfo);
+}
+
+void SVCCSimPanel::ExportCamerasToPLY(
+    const TArray<FCameraInfo>& CameraInfos, const FString& OutputPath)
+{
+    FString PlyContent;
+    
+    PlyContent += TEXT("ply\n");
+    PlyContent += TEXT("format ascii 1.0\n");
+    PlyContent += FString::Printf(TEXT("element vertex %d\n"), CameraInfos.Num());
+    PlyContent += TEXT("property float x\n");
+    PlyContent += TEXT("property float y\n");
+    PlyContent += TEXT("property float z\n");
+    PlyContent += TEXT("property float nx\n");
+    PlyContent += TEXT("property float ny\n");
+    PlyContent += TEXT("property float nz\n");
+    PlyContent += TEXT("property uchar red\n");
+    PlyContent += TEXT("property uchar green\n");
+    PlyContent += TEXT("property uchar blue\n");
+    PlyContent += TEXT("end_header\n");
+    
+    for (const FCameraInfo& CameraInfo : CameraInfos)
+    {
+        FVector CameraPosition = CameraInfo.Translation;
+        
+        // Get camera forward direction using the converter function
+        FVector CameraForward = CameraInfo.RotationMatrix.Rotator().RotateVector(FVector(1,0,0));
+                
+        int32 ColorIndex = CameraInfo.UID % 6;
+        uint8 Red = (ColorIndex & 1) ? 255 : 0;
+        uint8 Green = (ColorIndex & 2) ? 255 : 0;
+        uint8 Blue = (ColorIndex & 4) ? 255 : 128;
+        
+        PlyContent += FString::Printf(TEXT("%.6f %.6f %.6f %.6f %.6f %.6f %d %d %d\n"),
+            CameraPosition.X, CameraPosition.Y, CameraPosition.Z,
+            CameraForward.X, CameraForward.Y, CameraForward.Z,
+            Red, Green, Blue
+        );
+    }
+    
+    FFileHelper::SaveStringToFile(PlyContent, *OutputPath);
 }
 
 END_SLATE_FUNCTION_BUILD_OPTIMIZATION
