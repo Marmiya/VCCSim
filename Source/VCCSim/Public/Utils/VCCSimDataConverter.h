@@ -83,7 +83,8 @@ public:
         Normals.Empty();
     }
     
-    void AddPoint(const FVector& Point, const FLinearColor& Color = FLinearColor::White, const FVector& Normal = FVector::UpVector)
+    void AddPoint(const FVector& Point, const FLinearColor& Color =
+        FLinearColor::White, const FVector& Normal = FVector::UpVector)
     {
         Points.Add(Point);
         Colors.Add(Color);
