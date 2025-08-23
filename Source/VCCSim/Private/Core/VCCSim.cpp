@@ -24,13 +24,13 @@
 void FVCCSimModule::StartupModule()
 {
     // Runtime module initialization
-    UE_LOG(LogTemp, Warning, TEXT("VCCSim module has started!"));
+    UE_LOG(LogTemp, Warning, TEXT("VCCSim module starting up."));
 }
 
 void FVCCSimModule::ShutdownModule()
 {
     // Runtime module shutdown
-    UE_LOG(LogTemp, Warning, TEXT("VCCSim module has shut down!"));
+    UE_LOG(LogTemp, Warning, TEXT("VCCSim module shutting down."));
 }
 
 #undef LOCTEXT_NAMESPACE

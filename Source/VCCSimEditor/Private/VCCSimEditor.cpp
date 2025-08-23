@@ -29,7 +29,7 @@ DEFINE_LOG_CATEGORY(LogVCCSimEditor);
 
 void FVCCSimEditorModule::StartupModule()
 {
-    UE_LOG(LogVCCSimEditor, Log, TEXT("VCCSimEditor module starting up"));
+    UE_LOG(LogVCCSimEditor, Warning, TEXT("VCCSimEditor module starting up."));
     
     // Register tab spawner
     RegisterTabSpawner();
@@ -40,7 +40,7 @@ void FVCCSimEditorModule::StartupModule()
 
 void FVCCSimEditorModule::ShutdownModule()
 {
-    UE_LOG(LogVCCSimEditor, Log, TEXT("VCCSimEditor module shutting down"));
+    UE_LOG(LogVCCSimEditor, Warning, TEXT("VCCSimEditor module shutting down."));
     
     // Unregister menu extensions
     UnregisterMenuExtensions();
@@ -56,18 +56,51 @@ void FVCCSimEditorModule::RegisterTabSpawner()
     
     if (LevelEditorTabManager.IsValid())
     {
+        // TabManager is available, register immediately
         FVCCSimPanelFactory::RegisterTabSpawner(*LevelEditorTabManager);
+    }
+    else
+    {
+        // TabManager not ready yet, defer registration until it becomes available
+        TabManagerChangedHandle = LevelEditorModule.OnTabManagerChanged().AddLambda([this]()
+        {
+            FLevelEditorModule& LevelEditorModule = FModuleManager::LoadModuleChecked<FLevelEditorModule>("LevelEditor");
+            TSharedPtr<FTabManager> TabManager = LevelEditorModule.GetLevelEditorTabManager();
+            if (TabManager.IsValid())
+            {
+                FVCCSimPanelFactory::RegisterTabSpawner(*TabManager);
+                
+                // Remove the delegate since we no longer need it
+                LevelEditorModule.OnTabManagerChanged().Remove(TabManagerChangedHandle);
+                TabManagerChangedHandle.Reset();
+            }
+        });
     }
 }
 
 void FVCCSimEditorModule::UnregisterTabSpawner()
 {
-    FLevelEditorModule& LevelEditorModule = FModuleManager::LoadModuleChecked<FLevelEditorModule>("LevelEditor");
-    TSharedPtr<FTabManager> LevelEditorTabManager = LevelEditorModule.GetLevelEditorTabManager();
-    
-    if (LevelEditorTabManager.IsValid())
+    // Clean up any pending deferred registration delegate
+    if (TabManagerChangedHandle.IsValid())
     {
-        LevelEditorTabManager->UnregisterTabSpawner(FVCCSimPanelFactory::TabId);
+        if (FModuleManager::Get().IsModuleLoaded("LevelEditor"))
+        {
+            FLevelEditorModule& LevelEditorModule = FModuleManager::GetModuleChecked<FLevelEditorModule>("LevelEditor");
+            LevelEditorModule.OnTabManagerChanged().Remove(TabManagerChangedHandle);
+        }
+        TabManagerChangedHandle.Reset();
+    }
+    
+    // Unregister the actual tab spawner
+    if (FModuleManager::Get().IsModuleLoaded("LevelEditor"))
+    {
+        FLevelEditorModule& LevelEditorModule = FModuleManager::GetModuleChecked<FLevelEditorModule>("LevelEditor");
+        TSharedPtr<FTabManager> LevelEditorTabManager = LevelEditorModule.GetLevelEditorTabManager();
+        
+        if (LevelEditorTabManager.IsValid())
+        {
+            LevelEditorTabManager->UnregisterTabSpawner(FVCCSimPanelFactory::TabId);
+        }
     }
 }
 

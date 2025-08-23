@@ -19,6 +19,7 @@
 
 #include "CoreMinimal.h"
 #include "Modules/ModuleInterface.h"
+#include "Delegates/Delegate.h"
 
 DECLARE_LOG_CATEGORY_EXTERN(LogVCCSimEditor, Log, All);
 
@@ -50,4 +51,7 @@ private:
     
     /** Unregister menu extensions */
     void UnregisterMenuExtensions();
+    
+    /** Handle for deferred tab registration */
+    FDelegateHandle TabManagerChangedHandle;
 };
