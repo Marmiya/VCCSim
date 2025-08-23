@@ -40,6 +40,7 @@
 #include "Editor/UnrealEd/Public/Selection.h"
 #include "EngineUtils.h"
 #include "MaterialDomain.h"
+#include "DataStruct_IO/IOUtils.h"
 
 // ============================================================================
 // MAIN CONSTRUCTION

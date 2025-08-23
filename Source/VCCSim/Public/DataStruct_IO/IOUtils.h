@@ -18,52 +18,14 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Engine/Engine.h"
-#include "HAL/PlatformFilemanager.h"
-#include "GenericPlatform/GenericPlatformFile.h"
-#include "Misc/FileHelper.h"
 #include "Math/Vector.h"
-#include "PointCloud.generated.h"
-
-/*
- * Enhanced point data structure for point cloud loading with normal support
- */
-struct FRatPoint
-{
-    FVector Position;
-    FLinearColor Color;
-    FVector Normal;
-    bool bHasNormal;
-
-    FRatPoint()
-        : Position(FVector::ZeroVector)
-        , Color(FLinearColor::White)
-        , Normal(FVector::UpVector)
-        , bHasNormal(false)
-    {
-    }
-
-    FRatPoint(const FVector& InPosition, const FLinearColor& InColor)
-        : Position(InPosition)
-        , Color(InColor)
-        , Normal(FVector::UpVector)
-        , bHasNormal(false)
-    {
-    }
-
-    FRatPoint(const FVector& InPosition, const FLinearColor& InColor, const FVector& InNormal)
-        : Position(InPosition)
-        , Color(InColor)
-        , Normal(InNormal)
-        , bHasNormal(true)
-    {
-    }
-};
+#include "DataStruct_IO/PointCloud.h"
+#include "DataStruct_IO/CameraData.h"
 
 /**
  * PLY file loader utility class with enhanced normal support
  */
-class FPLYLoader
+class VCCSIM_API FPLYLoader
 {
 public:
     /**
@@ -179,24 +141,80 @@ private:
     static int32 ReadInt(const uint8* Data, bool bLittleEndian);
 };
 
-USTRUCT(BlueprintType)
-struct VCCSIM_API FLiDARPoint
+/**
+ * PLY file writer utility class for exporting various data types
+ */
+class VCCSIM_API FPLYWriter
 {
-    GENERATED_BODY()
+public:
+    /**
+     * PLY property configuration structure
+     */
+    struct FPLYWriteConfig
+    {
+        bool bIncludeColors = true;
+        bool bIncludeNormals = true;
+        bool bBinaryFormat = false;  // Currently ASCII only supported
+        
+        FPLYWriteConfig() = default;
+    };
 
 public:
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "LiDAR")
-    FVector Position;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "LiDAR")
-    float Intensity;
-
-    bool bHit = false;
+    /**
+     * Write point cloud data to PLY file
+     * @param PointCloudData Point cloud data to export
+     * @param OutputFilePath Output PLY file path
+     * @param Config Export configuration options
+     * @return True if successful
+     */
+    static bool WritePointCloudToPLY(
+        const FPointCloudData& PointCloudData,
+        const FString& OutputFilePath,
+        const FPLYWriteConfig& Config = FPLYWriteConfig());
     
-    FLiDARPoint()
-        : Position(FVector::ZeroVector), Intensity(0.0f) {}
+    /**
+     * Write camera positions to PLY file for visualization
+     * @param CameraInfos Array of camera information
+     * @param OutputFilePath Output PLY file path
+     * @param Config Export configuration options
+     * @return True if successful
+     */
+    static bool WriteCamerasToPLY(
+        const TArray<FCameraInfo>& CameraInfos,
+        const FString& OutputFilePath,
+        const FPLYWriteConfig& Config = FPLYWriteConfig());
+    
+    /**
+     * Write custom point data to PLY file
+     * @param Points Array of 3D positions
+     * @param Colors Array of colors (optional, can be empty)
+     * @param Normals Array of normals (optional, can be empty)
+     * @param OutputFilePath Output PLY file path
+     * @param Config Export configuration options
+     * @return True if successful
+     */
+    static bool WritePointArrayToPLY(
+        const TArray<FVector>& Points,
+        const TArray<FLinearColor>& Colors,
+        const TArray<FVector>& Normals,
+        const FString& OutputFilePath,
+        const FPLYWriteConfig& Config = FPLYWriteConfig());
 
-    FLiDARPoint(const FVector& InPosition, float InIntensity = 0.0f)
-        : Position(InPosition), Intensity(InIntensity) {}
+private:
+    /**
+     * Generate PLY header based on data configuration
+     */
+    static FString GeneratePLYHeader(
+        int32 VertexCount,
+        bool bHasColors,
+        bool bHasNormals,
+        bool bBinaryFormat = false);
+    
+    /**
+     * Write vertex data line for ASCII format
+     */
+    static FString FormatVertexLine(
+        const FVector& Position,
+        const FLinearColor* Color = nullptr,
+        const FVector* Normal = nullptr);
 };
-

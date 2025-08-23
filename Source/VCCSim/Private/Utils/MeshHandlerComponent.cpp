@@ -17,7 +17,7 @@
 
 #include "Utils/MeshHandlerComponent.h"
 #include "UObject/ConstructorHelpers.h"
-#include "DataType/DataMesh.h"
+#include "DataStruct_IO/Mesh.h"
 
 UMeshHandlerComponent::UMeshHandlerComponent()
 {

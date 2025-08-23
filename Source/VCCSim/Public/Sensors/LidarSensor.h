@@ -21,7 +21,7 @@
 #include "GameFramework/Actor.h"
 #include "SensorBase.h"
 #include "Utils/InsMeshHolder.h"
-#include "DataType/PointCloud.h"
+#include "DataStruct_IO/PointCloud.h"
 
 #include "LidarSensor.generated.h"
 

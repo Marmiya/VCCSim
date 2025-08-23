@@ -22,6 +22,7 @@
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshSourceData.h"
 #include "MeshDescription.h"
+#include "DataStruct_IO/IOUtils.h"
 #include "Math/UnrealMathUtility.h"
 #include "Math/RandomStream.h"
 
@@ -293,10 +294,12 @@ FPointCloudData FVCCSimDataConverter::ConvertMeshToPointCloud(
     TArray<FLinearColor> Colors = GeneratePointColors(SampledPoints);
     TArray<FVector> Normals = CalculatePointNormals(SampledPoints);
     
-    // Fill point cloud data
-    PointCloudData.Points = SampledPoints;
-    PointCloudData.Colors = Colors;
-    PointCloudData.Normals = Normals;
+    // Fill point cloud data using FRatPoint
+    PointCloudData.Reserve(SampledPoints.Num());
+    for (int32 i = 0; i < SampledPoints.Num(); ++i)
+    {
+        PointCloudData.AddPoint(SampledPoints[i], Colors[i], Normals[i], true);
+    }
     
     UE_LOG(LogTemp, Log, TEXT("Converted mesh to point cloud with %d points"),
         PointCloudData.GetPointCount());
@@ -324,6 +327,7 @@ FPointCloudData FVCCSimDataConverter::GenerateRandomPointCloud(
     // Generate random points within scene bounds
     FRandomStream RandomStream(FMath::Rand());
     
+    PointCloudData.Reserve(PointCount);
     for (int32 i = 0; i < PointCount; ++i)
     {
         FVector RandomPoint = FVector(
@@ -347,7 +351,7 @@ FPointCloudData FVCCSimDataConverter::GenerateRandomPointCloud(
             RandomStream.FRandRange(-1.0f, 1.0f)
         ).GetSafeNormal();
         
-        PointCloudData.AddPoint(RandomPoint, RandomColor, RandomNormal);
+        PointCloudData.AddPoint(RandomPoint, RandomColor, RandomNormal, true);
     }
     
     UE_LOG(LogTemp, Log, TEXT("Generated random point cloud with %d points"),
@@ -418,65 +422,13 @@ bool FVCCSimDataConverter::SaveCameraInfo(
 bool FVCCSimDataConverter::SavePointCloudToPLY(const FPointCloudData& PointCloudData,
     const FString& OutputFilePath)
 {
-    if (PointCloudData.GetPointCount() == 0)
-    {
-        UE_LOG(LogTemp, Error, TEXT("No points to save to PLY file"));
-        return false;
-    }
+    // Use the new unified FPLYWriter class
+    FPLYWriter::FPLYWriteConfig Config;
+    Config.bIncludeColors = true;
+    Config.bIncludeNormals = true;
+    Config.bBinaryFormat = false;
     
-    // Create PLY content
-    FString PlyContent;
-    
-    // Header
-    PlyContent += TEXT("ply\n");
-    PlyContent += TEXT("format ascii 1.0\n");
-    PlyContent += FString::Printf(TEXT("element vertex %d\n"), PointCloudData.GetPointCount());
-    PlyContent += TEXT("property float x\n");
-    PlyContent += TEXT("property float y\n");
-    PlyContent += TEXT("property float z\n");
-    
-    if (PointCloudData.Colors.Num() == PointCloudData.Points.Num())
-    {
-        PlyContent += TEXT("property uchar red\n");
-        PlyContent += TEXT("property uchar green\n");
-        PlyContent += TEXT("property uchar blue\n");
-    }
-    
-    if (PointCloudData.Normals.Num() == PointCloudData.Points.Num())
-    {
-        PlyContent += TEXT("property float nx\n");
-        PlyContent += TEXT("property float ny\n");
-        PlyContent += TEXT("property float nz\n");
-    }
-    
-    PlyContent += TEXT("end_header\n");
-    
-    // Vertex data
-    for (int32 i = 0; i < PointCloudData.GetPointCount(); ++i)
-    {
-        const FVector& Point = PointCloudData.Points[i];
-        PlyContent += FString::Printf(TEXT("%.6f %.6f %.6f"), Point.X, Point.Y, Point.Z);
-        
-        if (PointCloudData.Colors.Num() > i)
-        {
-            const FLinearColor& Color = PointCloudData.Colors[i];
-            PlyContent += FString::Printf(TEXT(" %d %d %d"), 
-                FMath::RoundToInt(Color.R * 255.0f),
-                FMath::RoundToInt(Color.G * 255.0f),
-                FMath::RoundToInt(Color.B * 255.0f)
-            );
-        }
-        
-        if (PointCloudData.Normals.Num() > i)
-        {
-            const FVector& Normal = PointCloudData.Normals[i];
-            PlyContent += FString::Printf(TEXT(" %.6f %.6f %.6f"), Normal.X, Normal.Y, Normal.Z);
-        }
-        
-        PlyContent += TEXT("\n");
-    }
-    
-    return FFileHelper::SaveStringToFile(PlyContent, *OutputFilePath);
+    return FPLYWriter::WritePointCloudToPLY(PointCloudData, OutputFilePath, Config);
 }
 
 bool FVCCSimDataConverter::CreateModelDirectoryStructure(const FString& OutputPath)

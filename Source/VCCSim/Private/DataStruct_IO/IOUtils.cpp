@@ -15,9 +15,15 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "DataType/PointCloud.h"
+#include "DataStruct_IO/IOUtils.h"
+#include "DataStruct_IO/CameraData.h"
 #include "Engine/Engine.h"
 #include "Misc/DateTime.h"
+#include "Misc/FileHelper.h"
+
+// ============================================================================
+// FPLYLoader Implementation
+// ============================================================================
 
 // FPLYProperty Constructor
 FPLYLoader::FPLYProperty::FPLYProperty(const FString& InType, const FString& InName)
@@ -488,7 +494,7 @@ bool FPLYLoader::HasNormalProperties(const TArray<FPLYProperty>& Properties)
     return bHasNX && bHasNY && bHasNZ;
 }
 
-// Binary reading helper functions (unchanged)
+// Binary reading helper functions
 float FPLYLoader::ReadFloat(const uint8* Data, bool bLittleEndian)
 {
     uint32 IntValue;
@@ -564,4 +570,226 @@ int32 FPLYLoader::ReadInt(const uint8* Data, bool bLittleEndian)
 {
     uint32 UIntValue = ReadUInt(Data, bLittleEndian);
     return *reinterpret_cast<const int32*>(&UIntValue);
+}
+
+// ============================================================================
+// FPLYWriter Implementation
+// ============================================================================
+
+bool FPLYWriter::WritePointCloudToPLY(
+    const FPointCloudData& PointCloudData,
+    const FString& OutputFilePath,
+    const FPLYWriteConfig& Config)
+{
+    if (PointCloudData.GetPointCount() == 0)
+    {
+        UE_LOG(LogTemp, Error, TEXT("FPLYWriter: No points to write to PLY file"));
+        return false;
+    }
+    
+    // Determine what data we have
+    bool bHasColors = PointCloudData.Points.Num() > 0 && Config.bIncludeColors;
+    bool bHasNormals = PointCloudData.HasNormals() && Config.bIncludeNormals;
+    
+    // Generate header
+    FString PlyContent = GeneratePLYHeader(
+        PointCloudData.GetPointCount(),
+        bHasColors,
+        bHasNormals,
+        Config.bBinaryFormat
+    );
+    
+    // Write vertex data
+    for (const FRatPoint& Point : PointCloudData.Points)
+    {
+        const FLinearColor* Color = bHasColors ? &Point.Color : nullptr;
+        const FVector* Normal = (bHasNormals && Point.bHasNormal) ? &Point.Normal : nullptr;
+        
+        PlyContent += FormatVertexLine(Point.Position, Color, Normal);
+    }
+    
+    // Save to file
+    bool bSuccess = FFileHelper::SaveStringToFile(PlyContent, *OutputFilePath);
+    if (bSuccess)
+    {
+        UE_LOG(LogTemp, Log, TEXT("FPLYWriter: Successfully wrote %d points to %s"), 
+            PointCloudData.GetPointCount(), *OutputFilePath);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("FPLYWriter: Failed to write PLY file: %s"), *OutputFilePath);
+    }
+    
+    return bSuccess;
+}
+
+bool FPLYWriter::WriteCamerasToPLY(
+    const TArray<FCameraInfo>& CameraInfos,
+    const FString& OutputFilePath,
+    const FPLYWriteConfig& Config)
+{
+    if (CameraInfos.Num() == 0)
+    {
+        UE_LOG(LogTemp, Error, TEXT("FPLYWriter: No cameras to write to PLY file"));
+        return false;
+    }
+    
+    // Always include colors and normals for cameras
+    FString PlyContent = GeneratePLYHeader(
+        CameraInfos.Num(),
+        true,  // Always include colors for cameras
+        true,  // Always include normals (forward direction)
+        Config.bBinaryFormat
+    );
+    
+    // Write camera data
+    for (const FCameraInfo& CameraInfo : CameraInfos)
+    {
+        FVector CameraPosition = CameraInfo.Translation;
+        
+        // Get camera forward direction using rotation matrix
+        FVector CameraForward = CameraInfo.RotationMatrix.Rotator().RotateVector(FVector(1,0,0));
+        
+        // Generate color based on camera UID for visualization
+        int32 ColorIndex = CameraInfo.UID % 6;
+        FLinearColor CameraColor(
+            (ColorIndex & 1) ? 1.0f : 0.0f,
+            (ColorIndex & 2) ? 1.0f : 0.0f,
+            (ColorIndex & 4) ? 1.0f : 0.5f,
+            1.0f
+        );
+        
+        PlyContent += FormatVertexLine(CameraPosition, &CameraColor, &CameraForward);
+    }
+    
+    // Save to file
+    bool bSuccess = FFileHelper::SaveStringToFile(PlyContent, *OutputFilePath);
+    if (bSuccess)
+    {
+        UE_LOG(LogTemp, Log, TEXT("FPLYWriter: Successfully wrote %d cameras to %s"), 
+            CameraInfos.Num(), *OutputFilePath);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("FPLYWriter: Failed to write camera PLY file: %s"), *OutputFilePath);
+    }
+    
+    return bSuccess;
+}
+
+bool FPLYWriter::WritePointArrayToPLY(
+    const TArray<FVector>& Points,
+    const TArray<FLinearColor>& Colors,
+    const TArray<FVector>& Normals,
+    const FString& OutputFilePath,
+    const FPLYWriteConfig& Config)
+{
+    if (Points.Num() == 0)
+    {
+        UE_LOG(LogTemp, Error, TEXT("FPLYWriter: No points to write to PLY file"));
+        return false;
+    }
+    
+    // Determine what data we have
+    bool bHasColors = Colors.Num() == Points.Num() && Config.bIncludeColors;
+    bool bHasNormals = Normals.Num() == Points.Num() && Config.bIncludeNormals;
+    
+    // Generate header
+    FString PlyContent = GeneratePLYHeader(
+        Points.Num(),
+        bHasColors,
+        bHasNormals,
+        Config.bBinaryFormat
+    );
+    
+    // Write vertex data
+    for (int32 i = 0; i < Points.Num(); ++i)
+    {
+        const FLinearColor* Color = bHasColors ? &Colors[i] : nullptr;
+        const FVector* Normal = bHasNormals ? &Normals[i] : nullptr;
+        
+        PlyContent += FormatVertexLine(Points[i], Color, Normal);
+    }
+    
+    // Save to file
+    bool bSuccess = FFileHelper::SaveStringToFile(PlyContent, *OutputFilePath);
+    if (bSuccess)
+    {
+        UE_LOG(LogTemp, Log, TEXT("FPLYWriter: Successfully wrote %d points to %s"), 
+            Points.Num(), *OutputFilePath);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("FPLYWriter: Failed to write PLY file: %s"), *OutputFilePath);
+    }
+    
+    return bSuccess;
+}
+
+FString FPLYWriter::GeneratePLYHeader(
+    int32 VertexCount,
+    bool bHasColors,
+    bool bHasNormals,
+    bool bBinaryFormat)
+{
+    FString Header;
+    
+    Header += TEXT("ply\n");
+    Header += bBinaryFormat ? TEXT("format binary_little_endian 1.0\n") : TEXT("format ascii 1.0\n");
+    Header += FString::Printf(TEXT("element vertex %d\n"), VertexCount);
+    
+    // Position properties (always present)
+    Header += TEXT("property float x\n");
+    Header += TEXT("property float y\n");
+    Header += TEXT("property float z\n");
+    
+    // Normal properties
+    if (bHasNormals)
+    {
+        Header += TEXT("property float nx\n");
+        Header += TEXT("property float ny\n");
+        Header += TEXT("property float nz\n");
+    }
+    
+    // Color properties
+    if (bHasColors)
+    {
+        Header += TEXT("property uchar red\n");
+        Header += TEXT("property uchar green\n");
+        Header += TEXT("property uchar blue\n");
+    }
+    
+    Header += TEXT("end_header\n");
+    
+    return Header;
+}
+
+FString FPLYWriter::FormatVertexLine(
+    const FVector& Position,
+    const FLinearColor* Color,
+    const FVector* Normal)
+{
+    // Start with position
+    FString Line = FString::Printf(TEXT("%.6f %.6f %.6f"), 
+        Position.X, Position.Y, Position.Z);
+    
+    // Add normal if present
+    if (Normal)
+    {
+        Line += FString::Printf(TEXT(" %.6f %.6f %.6f"), 
+            Normal->X, Normal->Y, Normal->Z);
+    }
+    
+    // Add color if present
+    if (Color)
+    {
+        Line += FString::Printf(TEXT(" %d %d %d"), 
+            FMath::RoundToInt(Color->R * 255.0f),
+            FMath::RoundToInt(Color->G * 255.0f),
+            FMath::RoundToInt(Color->B * 255.0f)
+        );
+    }
+    
+    Line += TEXT("\n");
+    return Line;
 }

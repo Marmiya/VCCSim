@@ -16,7 +16,6 @@
 */
 
 #include "Sensors/LidarSensor.h"
-#include "DataType/PointCloud.h"
 #include "Simulation/Recorder.h"
 #include "DrawDebugHelpers.h"
 #include "Async/Async.h"

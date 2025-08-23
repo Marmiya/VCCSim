@@ -20,6 +20,7 @@
 #include "Editor/VCCSimPanel.h"
 #include "Utils/TriangleSplattingManager.h"
 #include "Utils/VCCSimDataConverter.h"
+#include "DataStruct_IO/IOUtils.h"
 #include "HAL/PlatformFilemanager.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SScrollBox.h"
@@ -735,16 +736,16 @@ FReply SVCCSimPanel::OnGSTestTransformationClicked()
                 FVector UEMin = FVector(FLT_MAX), UEMax = FVector(-FLT_MAX);
                 FVector TSMin = FVector(FLT_MAX), TSMax = FVector(-FLT_MAX);
                 
-                for (const FVector& Point : OriginalMesh.Points)
+                for (const FRatPoint& Point : OriginalMesh.Points)
                 {
-                    UEMin = FVector::Min(UEMin, Point);
-                    UEMax = FVector::Max(UEMax, Point);
+                    UEMin = FVector::Min(UEMin, Point.Position);
+                    UEMax = FVector::Max(UEMax, Point.Position);
                 }
                 
-                for (const FVector& Point : TransformedMesh.Points)
+                for (const FRatPoint& Point : TransformedMesh.Points)
                 {
-                    TSMin = FVector::Min(TSMin, Point);
-                    TSMax = FVector::Max(TSMax, Point);
+                    TSMin = FVector::Min(TSMin, Point.Position);
+                    TSMax = FVector::Max(TSMax, Point.Position);
                 }
                 
                 StatusMessage += FString::Printf(
@@ -988,42 +989,18 @@ void SVCCSimPanel::ShowGSNotification(const FString& Message, bool bIsError)
 void SVCCSimPanel::ExportCamerasToPLY(
     const TArray<FCameraInfo>& CameraInfos, const FString& OutputPath)
 {
-    FString PlyContent;
+    // Use the new unified FPLYWriter class
+    FPLYWriter::FPLYWriteConfig Config;
+    Config.bIncludeColors = true;
+    Config.bIncludeNormals = true;
+    Config.bBinaryFormat = false;
     
-    PlyContent += TEXT("ply\n");
-    PlyContent += TEXT("format ascii 1.0\n");
-    PlyContent += FString::Printf(TEXT("element vertex %d\n"), CameraInfos.Num());
-    PlyContent += TEXT("property float x\n");
-    PlyContent += TEXT("property float y\n");
-    PlyContent += TEXT("property float z\n");
-    PlyContent += TEXT("property float nx\n");
-    PlyContent += TEXT("property float ny\n");
-    PlyContent += TEXT("property float nz\n");
-    PlyContent += TEXT("property uchar red\n");
-    PlyContent += TEXT("property uchar green\n");
-    PlyContent += TEXT("property uchar blue\n");
-    PlyContent += TEXT("end_header\n");
+    bool bSuccess = FPLYWriter::WriteCamerasToPLY(CameraInfos, OutputPath, Config);
     
-    for (const FCameraInfo& CameraInfo : CameraInfos)
+    if (!bSuccess)
     {
-        FVector CameraPosition = CameraInfo.Translation;
-        
-        // Get camera forward direction using the converter function
-        FVector CameraForward = CameraInfo.RotationMatrix.Rotator().RotateVector(FVector(1,0,0));
-                
-        int32 ColorIndex = CameraInfo.UID % 6;
-        uint8 Red = (ColorIndex & 1) ? 255 : 0;
-        uint8 Green = (ColorIndex & 2) ? 255 : 0;
-        uint8 Blue = (ColorIndex & 4) ? 255 : 128;
-        
-        PlyContent += FString::Printf(TEXT("%.6f %.6f %.6f %.6f %.6f %.6f %d %d %d\n"),
-            CameraPosition.X, CameraPosition.Y, CameraPosition.Z,
-            CameraForward.X, CameraForward.Y, CameraForward.Z,
-            Red, Green, Blue
-        );
+        UE_LOG(LogTemp, Error, TEXT("Failed to export cameras to PLY file: %s"), *OutputPath);
     }
-    
-    FFileHelper::SaveStringToFile(PlyContent, *OutputPath);
 }
 
 END_SLATE_FUNCTION_BUILD_OPTIMIZATION
