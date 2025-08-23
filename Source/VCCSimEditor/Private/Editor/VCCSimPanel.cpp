@@ -15,8 +15,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#if WITH_EDITOR
-
 #include "Editor/VCCSimPanel.h"
 #include "Engine/Selection.h"
 #include "Widgets/Input/SButton.h"
@@ -1182,4 +1180,3 @@ FString SVCCSimPanel::GetTimestampedFilename()
         Now.GetHour(), Now.GetMinute(), Now.GetSecond());
 }
 
-#endif

@@ -17,66 +17,19 @@
 
 #include "Core/VCCSim.h"
 
-// Only include panel header in editor builds
-#if WITH_EDITOR
-#include "Editor/VCCSimPanel.h"
-#include "LevelEditor.h"
-#endif
+// Editor functionality moved to VCCSimEditor module
 
 #define LOCTEXT_NAMESPACE "FVCCSimModule"
 
 void FVCCSimModule::StartupModule()
 {
-    // This code will execute after your module is loaded into memory
-    
-#if WITH_EDITOR
-    // Editor-only initialization
-    FLevelEditorModule& LevelEditorModule =
-       FModuleManager::LoadModuleChecked<FLevelEditorModule>("LevelEditor");
-       
-    // Register the tab spawner
-    TSharedPtr<FTabManager> TabManager = LevelEditorModule.GetLevelEditorTabManager();
-    if (TabManager.IsValid())
-    {
-       FVCCSimPanelFactory::RegisterTabSpawner(*TabManager);
-    }
-    
-    // Register for tab manager changes
-    LevelEditorTabManagerChangedHandle =
-       LevelEditorModule.OnTabManagerChanged().AddLambda([this, &LevelEditorModule]()
-    {
-       // Get the tab manager directly when the lambda is called
-       TSharedPtr<FTabManager> TabManager = LevelEditorModule.GetLevelEditorTabManager();
-       if (TabManager.IsValid())
-       {
-         FVCCSimPanelFactory::RegisterTabSpawner(*TabManager);
-       }
-    });
-#endif // WITH_EDITOR
-    
+    // Runtime module initialization
     UE_LOG(LogTemp, Warning, TEXT("VCCSim module has started!"));
 }
 
 void FVCCSimModule::ShutdownModule()
 {
-#if WITH_EDITOR
-    if (FModuleManager::Get().IsModuleLoaded("LevelEditor"))
-    {
-       FLevelEditorModule& LevelEditorModule =
-          FModuleManager::GetModuleChecked<FLevelEditorModule>("LevelEditor");
-        
-       // Unregister delegates
-       LevelEditorModule.OnTabManagerChanged().Remove(LevelEditorTabManagerChangedHandle);
-        
-       // Unregister the tab spawner
-       TSharedPtr<FTabManager> TabManager = LevelEditorModule.GetLevelEditorTabManager();
-       if (TabManager.IsValid())
-       {
-          TabManager->UnregisterTabSpawner(FVCCSimPanelFactory::TabId);
-       }
-    }
-#endif // WITH_EDITOR
-    
+    // Runtime module shutdown
     UE_LOG(LogTemp, Warning, TEXT("VCCSim module has shut down!"));
 }
 

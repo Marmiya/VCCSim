@@ -25,7 +25,7 @@
 #include "TrajectoryViewer.generated.h"
 
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
-class UTrajectoryViewer : public USceneComponent
+class VCCSIM_API UTrajectoryViewer : public USceneComponent
 {
     GENERATED_BODY()
     

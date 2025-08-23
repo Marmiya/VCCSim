@@ -27,7 +27,5 @@ public:
 	virtual void ShutdownModule() override;
     
 private:
-#if WITH_EDITOR
-	FDelegateHandle LevelEditorTabManagerChangedHandle;
-#endif
+	// Editor functionality moved to VCCSimEditor module
 };

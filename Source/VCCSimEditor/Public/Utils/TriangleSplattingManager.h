@@ -45,7 +45,7 @@ enum class ETrainingStatus : uint8
  * Triangle Splatting Training Manager
  * Handles Python process execution and monitoring for Triangle Splatting training
  */
-class VCCSIM_API FTriangleSplattingManager
+class VCCSIMEDITOR_API FTriangleSplattingManager
 {
 public:
     // ============================================================================

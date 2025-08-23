@@ -21,7 +21,7 @@
 #include "Async/AsyncWork.h"
 #include "Sensors/DepthCamera.h"
 
-class FAsyncImageSaveTask : public FNonAbandonableTask
+class VCCSIM_API FAsyncImageSaveTask : public FNonAbandonableTask
 {
 public:
     FAsyncImageSaveTask(
@@ -46,7 +46,7 @@ private:
     FString FilePath;
 };
 
-class FAsyncDepth16SaveTask : public FNonAbandonableTask
+class VCCSIM_API FAsyncDepth16SaveTask : public FNonAbandonableTask
 {
 public:
     FAsyncDepth16SaveTask(
@@ -97,7 +97,7 @@ private:
     FString FilePath;
 };
 
-class FAsyncNormalEXRSaveTask : public FNonAbandonableTask
+class VCCSIM_API FAsyncNormalEXRSaveTask : public FNonAbandonableTask
 {
 public:
     FAsyncNormalEXRSaveTask(

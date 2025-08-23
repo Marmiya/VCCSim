@@ -43,19 +43,7 @@ public class VCCSim : ModuleRules
             }
         );
         
-        // Editor-only modules - only include for editor builds
-        if (Target.Type == TargetType.Editor)
-        {
-            PublicDependencyModuleNames.AddRange(
-                new string[]
-                {
-                    "LevelEditor",
-                    "UnrealEd",
-                    "WorkspaceMenuStructure",
-                    "PropertyEditor"  // Added for IDetailsView and related functionality
-                }
-            );
-        }
+        // Editor dependencies removed - now handled by VCCSimEditor module
         
         PrivateDependencyModuleNames.AddRange(
             new string[]

@@ -17,8 +17,6 @@
 
 #pragma once
 
-#if WITH_EDITOR
-
 #include "CoreMinimal.h"
 #include "Widgets/Docking/SDockTab.h"
 #include "Widgets/SCompoundWidget.h"
@@ -42,7 +40,7 @@ struct FCameraInfo;
  * Triangle Splatting configuration structure
  */
 USTRUCT()
-struct VCCSIM_API FTriangleSplattingConfig
+struct VCCSIMEDITOR_API FTriangleSplattingConfig
 {
     GENERATED_BODY()
 
@@ -73,7 +71,7 @@ struct VCCSIM_API FTriangleSplattingConfig
     }
 };
 
-class VCCSIM_API SVCCSimPanel final : public SCompoundWidget
+class VCCSIMEDITOR_API SVCCSimPanel final : public SCompoundWidget
 {
 public:
     SLATE_BEGIN_ARGS(SVCCSimPanel) {}
@@ -482,4 +480,3 @@ namespace FVCCSimPanelFactory
     void RegisterTabSpawner(FTabManager& TabManager);
 }
 
-#endif // WITH_EDITOR

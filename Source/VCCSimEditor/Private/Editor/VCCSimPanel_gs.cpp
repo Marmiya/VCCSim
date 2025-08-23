@@ -15,8 +15,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#if WITH_EDITOR
-
 #include "Editor/VCCSimPanel.h"
 #include "Utils/TriangleSplattingManager.h"
 #include "Utils/VCCSimDataConverter.h"
@@ -1005,4 +1003,3 @@ void SVCCSimPanel::ExportCamerasToPLY(
 
 END_SLATE_FUNCTION_BUILD_OPTIMIZATION
 
-#endif // WITH_EDITOR

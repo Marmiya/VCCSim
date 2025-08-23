@@ -25,7 +25,7 @@
 class AVCCSimPath;
 
 UCLASS()
-class AFlashPawn final: public APawnBase
+class VCCSIM_API AFlashPawn final: public APawnBase
 {
 	GENERATED_BODY()
 	
