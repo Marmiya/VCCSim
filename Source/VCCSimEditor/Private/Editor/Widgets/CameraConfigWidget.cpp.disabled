@@ -1,0 +1,476 @@
+/*
+* Copyright (C) 2025 Visual Computing Research Center, Shenzhen University
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+#include "Editor/Widgets/CameraConfigWidget.h"
+#include "Widgets/Input/SButton.h"
+#include "Widgets/Layout/SBox.h"
+#include "Widgets/Layout/SSeparator.h"
+#include "Widgets/Text/STextBlock.h"
+#include "Widgets/Views/STableRow.h"
+#include "Framework/Notifications/NotificationManager.h"
+#include "Widgets/Notifications/SNotificationList.h"
+#include "Styling/AppStyle.h"
+#include "Editor/VCCSimModuleFactory.h"
+#include "Pawns/FlashPawn.h"
+
+#define LOCTEXT_NAMESPACE "CameraConfigWidget"
+
+void SCameraConfigWidget::Construct(const FArguments& InArgs)
+{
+    // Initialize camera status list
+    UpdateCameraStatusList();
+
+    // Create header row
+    HeaderRow = SNew(SHeaderRow)
+        + SHeaderRow::Column("CameraType")
+        .DefaultLabel(LOCTEXT("CameraTypeHeader", "Camera Type"))
+        .FillWidth(0.3f)
+        + SHeaderRow::Column("Available")
+        .DefaultLabel(LOCTEXT("AvailableHeader", "Available"))
+        .FillWidth(0.2f)
+        .HAlignHeader(HAlign_Center)
+        .HAlignCell(HAlign_Center)
+        + SHeaderRow::Column("Enabled")
+        .DefaultLabel(LOCTEXT("EnabledHeader", "Enabled"))
+        .FillWidth(0.2f)
+        .HAlignHeader(HAlign_Center)
+        .HAlignCell(HAlign_Center)
+        + SHeaderRow::Column("Status")
+        .DefaultLabel(LOCTEXT("StatusHeader", "Status"))
+        .FillWidth(0.3f);
+
+    // Create main widget layout
+    ChildSlot
+    [
+        SNew(SVerticalBox)
+        
+        // Header section
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        .Padding(0, 0, 0, 8)
+        [
+            SNew(STextBlock)
+            .Text(LOCTEXT("CameraConfigTitle", "Camera Configuration"))
+            .Font(FVCCSimModuleFactory::GetBoldFont())
+        ]
+
+        // Camera list view
+        + SVerticalBox::Slot()
+        .FillHeight(1.0f)
+        .Padding(0, 0, 0, 8)
+        [
+            SNew(SBorder)
+            .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryTop"))
+            .Padding(1)
+            [
+                SAssignNew(CameraListView, SListView<TSharedPtr<FCameraStatusInfo>>)
+                .ListItemsSource(&CameraStatusList)
+                .OnGenerateRow(this, &SCameraConfigWidget::OnGenerateCameraRow)
+                .HeaderRow(HeaderRow)
+                .SelectionMode(ESelectionMode::None)
+            ]
+        ]
+
+        // Control buttons
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        .HAlign(HAlign_Right)
+        [
+            SNew(SHorizontalBox)
+            
+            + SHorizontalBox::Slot()
+            .AutoWidth()
+            .Padding(0, 0, 8, 0)
+            [
+                SNew(SButton)
+                .ButtonStyle(FAppStyle::Get(), "FlatButton.Success")
+                .Text(LOCTEXT("RefreshCameras", "Refresh"))
+                .ContentPadding(FMargin(8, 2))
+                .OnClicked(this, &SCameraConfigWidget::OnUpdateCamerasClicked)
+                .ToolTipText(LOCTEXT("RefreshCamerasTooltip", "Refresh camera component information"))
+            ]
+            
+            + SHorizontalBox::Slot()
+            .AutoWidth()
+            [
+                SNew(SButton)
+                .ButtonStyle(FAppStyle::Get(), "FlatButton.Primary")
+                .Text(LOCTEXT("UpdateCameras", "Update Active"))
+                .ContentPadding(FMargin(8, 2))
+                .OnClicked(this, &SCameraConfigWidget::OnUpdateCamerasClicked)
+                .IsEnabled(this, &SCameraConfigWidget::IsUpdateButtonEnabled)
+                .ToolTipText(LOCTEXT("UpdateCamerasTooltip", "Apply camera configuration changes"))
+            ]
+        ]
+
+        // Status/Summary section
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        .Padding(0, 8, 0, 0)
+        [
+            CreateSeparator()
+        ]
+
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        .Padding(0, 4, 0, 0)
+        [
+            SNew(SHorizontalBox)
+            
+            + SHorizontalBox::Slot()
+            .FillWidth(1.0f)
+            [
+                SNew(STextBlock)
+                .Text_Lambda([this]() { return GetSummaryText(); })
+                .Font(FVCCSimModuleFactory::GetDefaultFont())
+                .ColorAndOpacity(FVCCSimModuleFactory::GetSecondaryTextColor())
+            ]
+        ]
+    ];
+}
+
+void SCameraConfigWidget::Initialize(TSharedPtr<IVCCSimModule> InModule)
+{
+    // Call base class implementation
+    SVCCSimModuleWidget::Initialize(InModule);
+}
+
+void SCameraConfigWidget::Initialize(TSharedPtr<IVCCSimCameraModule> InCameraModule)
+{
+    CameraModule = InCameraModule;
+    
+    if (CameraModule.IsValid())
+    {
+        // Bind to configuration change events
+        CameraModule->OnCameraConfigChanged.BindLambda([this](bool bIsValid)
+        {
+            OnConfigurationChanged();
+        });
+        
+        // Get current configuration
+        CurrentConfig = CameraModule->GetCameraConfiguration();
+        
+        // Update the UI
+        RefreshContent();
+    }
+}
+
+void SCameraConfigWidget::UpdateCameraComponents(TWeakObjectPtr<AFlashPawn> FlashPawn)
+{
+    if (CameraModule.IsValid())
+    {
+        CameraModule->UpdateCameraComponents(FlashPawn);
+        RefreshContent();
+    }
+}
+
+void SCameraConfigWidget::RefreshContent()
+{
+    UpdateCameraStatusList();
+    
+    if (CameraListView.IsValid())
+    {
+        CameraListView->RequestListRefresh();
+    }
+}
+
+void SCameraConfigWidget::OnConfigurationChanged()
+{
+    if (CameraModule.IsValid())
+    {
+        CurrentConfig = CameraModule->GetCameraConfiguration();
+        RefreshContent();
+    }
+}
+
+void SCameraConfigWidget::UpdateCameraStatusList()
+{
+    CameraStatusList.Empty();
+
+    if (CameraModule.IsValid())
+    {
+        TArray<FCameraStatusInfo> StatusInfoArray = CameraModule->GetCameraStatusInfo();
+        
+        for (const FCameraStatusInfo& StatusInfo : StatusInfoArray)
+        {
+            CameraStatusList.Add(MakeShareable(new FCameraStatusInfo(StatusInfo)));
+        }
+    }
+    else
+    {
+        // Fallback to default camera types
+        CameraStatusList.Add(MakeShareable(new FCameraStatusInfo("RGB", IsRGBCameraAvailable(), CurrentConfig.bUseRGB, TEXT("Standard RGB camera"))));
+        CameraStatusList.Add(MakeShareable(new FCameraStatusInfo("Depth", IsDepthCameraAvailable(), CurrentConfig.bUseDepth, TEXT("Depth information camera"))));
+        CameraStatusList.Add(MakeShareable(new FCameraStatusInfo("Segmentation", IsSegmentationCameraAvailable(), CurrentConfig.bUseSegmentation, TEXT("Semantic segmentation camera"))));
+        CameraStatusList.Add(MakeShareable(new FCameraStatusInfo("Normal", IsNormalCameraAvailable(), CurrentConfig.bUseNormal, TEXT("Surface normal camera"))));
+    }
+}
+
+TSharedRef<ITableRow> SCameraConfigWidget::OnGenerateCameraRow(
+    TSharedPtr<FCameraStatusInfo> InItem, 
+    const TSharedRef<STableViewBase>& OwnerTable)
+{
+    return SNew(STableRow<TSharedPtr<FCameraStatusInfo>>, OwnerTable)
+        .Padding(FMargin(4, 2))
+        [
+            SNew(SHorizontalBox)
+            
+            // Camera Name Column
+            + SHorizontalBox::Slot()
+            .FillWidth(0.3f)
+            .VAlign(VAlign_Center)
+            [
+                GenerateCameraNameColumn(InItem)
+            ]
+            
+            // Available Column
+            + SHorizontalBox::Slot()
+            .FillWidth(0.2f)
+            .VAlign(VAlign_Center)
+            .HAlign(HAlign_Center)
+            [
+                GenerateAvailabilityColumn(InItem)
+            ]
+            
+            // Enabled Column  
+            + SHorizontalBox::Slot()
+            .FillWidth(0.2f)
+            .VAlign(VAlign_Center)
+            .HAlign(HAlign_Center)
+            [
+                GenerateEnabledColumn(InItem)
+            ]
+            
+            // Status Column
+            + SHorizontalBox::Slot()
+            .FillWidth(0.3f)
+            .VAlign(VAlign_Center)
+            [
+                GenerateStatusColumn(InItem)
+            ]
+        ];
+}
+
+TSharedRef<SWidget> SCameraConfigWidget::GenerateCameraNameColumn(TSharedPtr<FCameraStatusInfo> InItem)
+{
+    return SNew(STextBlock)
+        .Text(InItem->GetDisplayName())
+        .Font(FVCCSimModuleFactory::GetDefaultFont());
+}
+
+TSharedRef<SWidget> SCameraConfigWidget::GenerateAvailabilityColumn(TSharedPtr<FCameraStatusInfo> InItem)
+{
+    return SNew(STextBlock)
+        .Text(InItem->bIsAvailable ? LOCTEXT("Available", "Yes") : LOCTEXT("NotAvailable", "No"))
+        .ColorAndOpacity(InItem->bIsAvailable ? FVCCSimModuleFactory::GetSuccessColor() : FVCCSimModuleFactory::GetErrorColor())
+        .Justification(ETextJustify::Center);
+}
+
+TSharedRef<SWidget> SCameraConfigWidget::GenerateEnabledColumn(TSharedPtr<FCameraStatusInfo> InItem)
+{
+    // Create checkbox based on camera type
+    TFunction<ECheckBoxState()> GetCheckStateFunc;
+    TFunction<void(ECheckBoxState)> OnCheckStateChangedFunc;
+
+    if (InItem->CameraName == TEXT("RGB"))
+    {
+        GetCheckStateFunc = [this]() { return GetRGBCameraCheckState(); };
+        OnCheckStateChangedFunc = [this](ECheckBoxState NewState) { OnRGBCameraCheckboxChanged(NewState); };
+    }
+    else if (InItem->CameraName == TEXT("Depth"))
+    {
+        GetCheckStateFunc = [this]() { return GetDepthCameraCheckState(); };
+        OnCheckStateChangedFunc = [this](ECheckBoxState NewState) { OnDepthCameraCheckboxChanged(NewState); };
+    }
+    else if (InItem->CameraName == TEXT("Segmentation"))
+    {
+        GetCheckStateFunc = [this]() { return GetSegmentationCameraCheckState(); };
+        OnCheckStateChangedFunc = [this](ECheckBoxState NewState) { OnSegmentationCameraCheckboxChanged(NewState); };
+    }
+    else if (InItem->CameraName == TEXT("Normal"))
+    {
+        GetCheckStateFunc = [this]() { return GetNormalCameraCheckState(); };
+        OnCheckStateChangedFunc = [this](ECheckBoxState NewState) { OnNormalCameraCheckboxChanged(NewState); };
+    }
+    else
+    {
+        // Default case
+        GetCheckStateFunc = []() { return ECheckBoxState::Unchecked; };
+        OnCheckStateChangedFunc = [](ECheckBoxState) {};
+    }
+
+    return SNew(SBox)
+        .HAlign(HAlign_Center)
+        [
+            SNew(SCheckBox)
+            .IsChecked_Lambda([GetCheckStateFunc]() { return GetCheckStateFunc(); })
+            .OnCheckStateChanged_Lambda([OnCheckStateChangedFunc](ECheckBoxState NewState) { OnCheckStateChangedFunc(NewState); })
+            .IsEnabled(InItem->bIsAvailable)
+        ];
+}
+
+TSharedRef<SWidget> SCameraConfigWidget::GenerateStatusColumn(TSharedPtr<FCameraStatusInfo> InItem)
+{
+    return SNew(STextBlock)
+        .Text(InItem->GetStatusText())
+        .ColorAndOpacity(InItem->GetStatusColor())
+        .Font(FVCCSimModuleFactory::GetDefaultFont());
+}
+
+void SCameraConfigWidget::OnRGBCameraCheckboxChanged(ECheckBoxState NewState)
+{
+    CurrentConfig.bUseRGB = (NewState == ECheckBoxState::Checked);
+    
+    if (CameraModule.IsValid())
+    {
+        CameraModule->SetCameraConfiguration(CurrentConfig);
+    }
+}
+
+void SCameraConfigWidget::OnDepthCameraCheckboxChanged(ECheckBoxState NewState)
+{
+    CurrentConfig.bUseDepth = (NewState == ECheckBoxState::Checked);
+    
+    if (CameraModule.IsValid())
+    {
+        CameraModule->SetCameraConfiguration(CurrentConfig);
+    }
+}
+
+void SCameraConfigWidget::OnSegmentationCameraCheckboxChanged(ECheckBoxState NewState)
+{
+    CurrentConfig.bUseSegmentation = (NewState == ECheckBoxState::Checked);
+    
+    if (CameraModule.IsValid())
+    {
+        CameraModule->SetCameraConfiguration(CurrentConfig);
+    }
+}
+
+void SCameraConfigWidget::OnNormalCameraCheckboxChanged(ECheckBoxState NewState)
+{
+    CurrentConfig.bUseNormal = (NewState == ECheckBoxState::Checked);
+    
+    if (CameraModule.IsValid())
+    {
+        CameraModule->SetCameraConfiguration(CurrentConfig);
+    }
+}
+
+ECheckBoxState SCameraConfigWidget::GetRGBCameraCheckState() const
+{
+    return CurrentConfig.bUseRGB ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
+}
+
+ECheckBoxState SCameraConfigWidget::GetDepthCameraCheckState() const
+{
+    return CurrentConfig.bUseDepth ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
+}
+
+ECheckBoxState SCameraConfigWidget::GetSegmentationCameraCheckState() const
+{
+    return CurrentConfig.bUseSegmentation ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
+}
+
+ECheckBoxState SCameraConfigWidget::GetNormalCameraCheckState() const
+{
+    return CurrentConfig.bUseNormal ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
+}
+
+bool SCameraConfigWidget::IsRGBCameraAvailable() const
+{
+    return CurrentConfig.bHasRGBCamera;
+}
+
+bool SCameraConfigWidget::IsDepthCameraAvailable() const
+{
+    return CurrentConfig.bHasDepthCamera;
+}
+
+bool SCameraConfigWidget::IsSegmentationCameraAvailable() const
+{
+    return CurrentConfig.bHasSegmentationCamera;
+}
+
+bool SCameraConfigWidget::IsNormalCameraAvailable() const
+{
+    return CurrentConfig.bHasNormalCamera;
+}
+
+FReply SCameraConfigWidget::OnUpdateCamerasClicked()
+{
+    if (CameraModule.IsValid() && ValidateConfiguration())
+    {
+        // Apply the configuration
+        CameraModule->SetCameraConfiguration(CurrentConfig);
+        
+        ShowNotification(TEXT("Camera configuration updated successfully"), false);
+        
+        // Refresh the display
+        RefreshContent();
+        
+        return FReply::Handled();
+    }
+    else
+    {
+        ShowNotification(TEXT("Failed to update camera configuration. Please check your settings."), true);
+        return FReply::Handled();
+    }
+}
+
+bool SCameraConfigWidget::IsUpdateButtonEnabled() const
+{
+    return CameraModule.IsValid() && 
+           ValidateConfiguration() && 
+           CurrentConfig.HasAnyActiveCamera();
+}
+
+bool SCameraConfigWidget::ValidateConfiguration() const
+{
+    // At least one camera should be available and enabled
+    return CurrentConfig.HasAnyActiveCamera() &&
+           (CurrentConfig.bHasRGBCamera || CurrentConfig.bHasDepthCamera || 
+            CurrentConfig.bHasSegmentationCamera || CurrentConfig.bHasNormalCamera);
+}
+
+void SCameraConfigWidget::ShowNotification(const FString& Message, bool bIsError)
+{
+    if (bIsError)
+    {
+        FVCCSimNotificationHelper::ShowError(Message);
+    }
+    else
+    {
+        FVCCSimNotificationHelper::ShowSuccess(Message);
+    }
+}
+
+FText SCameraConfigWidget::GetSummaryText() const
+{
+    int32 ActiveCount = CurrentConfig.GetActiveCameraCount();
+    int32 AvailableCount = 0;
+    
+    if (CurrentConfig.bHasRGBCamera) AvailableCount++;
+    if (CurrentConfig.bHasDepthCamera) AvailableCount++;
+    if (CurrentConfig.bHasSegmentationCamera) AvailableCount++;
+    if (CurrentConfig.bHasNormalCamera) AvailableCount++;
+    
+    return FText::FromString(FString::Printf(TEXT("Active: %d/%d cameras"), ActiveCount, AvailableCount));
+}
+
+
+#undef LOCTEXT_NAMESPACE

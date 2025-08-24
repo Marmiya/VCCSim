@@ -33,17 +33,23 @@ public class VCCSimEditor : ModuleRules
                 "LevelEditor",
                 "UnrealEd",
                 "WorkspaceMenuStructure",
-                "PropertyEditor",
+                // "PropertyEditor",  // Temporarily disabled due to UE 5.6 compatibility issues
                 "EditorStyle",
                 "EditorWidgets",
                 "ToolMenus",
                 "EditorSubsystem",
+                "DesktopWidgets",
                 
                 // UI modules
                 "Slate",
                 "SlateCore",
                 "UMG",
                 "InputCore",
+                "ApplicationCore",
+                
+                // JSON and serialization
+                "Json",
+                "JsonUtilities",
                 
                 // Asset management
                 "AssetTools",

@@ -1,0 +1,161 @@
+/*
+* Copyright (C) 2025 Visual Computing Research Center, Shenzhen University
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Widgets/SCompoundWidget.h"
+#include "Widgets/Views/SListView.h"
+#include "Widgets/Views/SHeaderRow.h"
+#include "Widgets/Input/SCheckBox.h"
+#include "Editor/VCCSimDataStructures.h"
+#include "Editor/IVCCSimModule.h"
+
+class AFlashPawn;
+
+/**
+ * Modern camera configuration widget using SListView for better UX
+ */
+class VCCSIMEDITOR_API SCameraConfigWidget : public SVCCSimModuleWidget
+{
+public:
+    SLATE_BEGIN_ARGS(SCameraConfigWidget) {}
+    SLATE_END_ARGS()
+
+    void Construct(const FArguments& InArgs);
+
+    /**
+     * Initialize widget with parent panel and camera module
+     */
+    void Initialize(TSharedPtr<IVCCSimCameraModule> InCameraModule);
+
+    /**
+     * Override base Initialize to avoid hiding warnings
+     */
+    virtual void Initialize(TSharedPtr<IVCCSimModule> InModule) override;
+
+    /**
+     * Update camera information based on selected FlashPawn
+     */
+    void UpdateCameraComponents(TWeakObjectPtr<AFlashPawn> FlashPawn);
+
+    /**
+     * Refresh the list view content
+     */
+    virtual void RefreshContent() override;
+
+    /**
+     * Handle configuration changes
+     */
+    virtual void OnConfigurationChanged() override;
+
+private:
+    /**
+     * Camera module reference
+     */
+    TSharedPtr<IVCCSimCameraModule> CameraModule;
+
+    /**
+     * List view for camera status
+     */
+    TSharedPtr<SListView<TSharedPtr<FCameraStatusInfo>>> CameraListView;
+
+    /**
+     * Camera status data for list view
+     */
+    TArray<TSharedPtr<FCameraStatusInfo>> CameraStatusList;
+
+    /**
+     * Header row for the list view
+     */
+    TSharedPtr<SHeaderRow> HeaderRow;
+
+    /**
+     * Current configuration
+     */
+    FCameraConfiguration CurrentConfig;
+
+    /**
+     * Update camera status list
+     */
+    void UpdateCameraStatusList();
+
+    /**
+     * List view row generation
+     */
+    TSharedRef<ITableRow> OnGenerateCameraRow(
+        TSharedPtr<FCameraStatusInfo> InItem, 
+        const TSharedRef<STableViewBase>& OwnerTable);
+
+    /**
+     * Column content generators
+     */
+    TSharedRef<SWidget> GenerateCameraNameColumn(TSharedPtr<FCameraStatusInfo> InItem);
+    TSharedRef<SWidget> GenerateAvailabilityColumn(TSharedPtr<FCameraStatusInfo> InItem);
+    TSharedRef<SWidget> GenerateEnabledColumn(TSharedPtr<FCameraStatusInfo> InItem);
+    TSharedRef<SWidget> GenerateStatusColumn(TSharedPtr<FCameraStatusInfo> InItem);
+
+    /**
+     * Checkbox change handlers for each camera type
+     */
+    void OnRGBCameraCheckboxChanged(ECheckBoxState NewState);
+    void OnDepthCameraCheckboxChanged(ECheckBoxState NewState);
+    void OnSegmentationCameraCheckboxChanged(ECheckBoxState NewState);
+    void OnNormalCameraCheckboxChanged(ECheckBoxState NewState);
+
+    /**
+     * Get checkbox state for specific camera type
+     */
+    ECheckBoxState GetRGBCameraCheckState() const;
+    ECheckBoxState GetDepthCameraCheckState() const;
+    ECheckBoxState GetSegmentationCameraCheckState() const;
+    ECheckBoxState GetNormalCameraCheckState() const;
+
+    /**
+     * Check if camera type is available
+     */
+    bool IsRGBCameraAvailable() const;
+    bool IsDepthCameraAvailable() const;
+    bool IsSegmentationCameraAvailable() const;
+    bool IsNormalCameraAvailable() const;
+
+    /**
+     * Update cameras button handler
+     */
+    FReply OnUpdateCamerasClicked();
+
+    /**
+     * Check if update button should be enabled
+     */
+    bool IsUpdateButtonEnabled() const;
+
+    /**
+     * Configuration validation
+     */
+    bool ValidateConfiguration() const;
+
+    /**
+     * Show notification message
+     */
+    void ShowNotification(const FString& Message, bool bIsError = false);
+
+    /**
+     * Get summary text for current configuration
+     */
+    FText GetSummaryText() const;
+};
+

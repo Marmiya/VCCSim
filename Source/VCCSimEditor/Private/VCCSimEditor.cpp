@@ -21,6 +21,7 @@
 #include "WorkspaceMenuStructure.h"
 #include "WorkspaceMenuStructureModule.h"
 #include "Framework/Docking/TabManager.h"
+#include "Widgets/Docking/SDockTab.h"
 #include "LevelEditor.h"
 
 DEFINE_LOG_CATEGORY(LogVCCSimEditor);
@@ -57,7 +58,17 @@ void FVCCSimEditorModule::RegisterTabSpawner()
     if (LevelEditorTabManager.IsValid())
     {
         // TabManager is available, register immediately
-        FVCCSimPanelFactory::RegisterTabSpawner(*LevelEditorTabManager);
+        // Register VCCSimPanel tab directly
+        LevelEditorTabManager->RegisterTabSpawner(TEXT("VCCSimPanel"), FOnSpawnTab::CreateLambda([](const FSpawnTabArgs& Args)
+        {
+            return SNew(SDockTab)
+                .TabRole(ETabRole::NomadTab)
+                [
+                    SNew(SVCCSimPanel)
+                ];
+        }))
+        .SetDisplayName(FText::FromString(TEXT("VCCSim Panel")))
+        .SetMenuType(ETabSpawnerMenuType::Hidden);
     }
     else
     {
@@ -68,7 +79,17 @@ void FVCCSimEditorModule::RegisterTabSpawner()
             TSharedPtr<FTabManager> TabManager = LevelEditorModule.GetLevelEditorTabManager();
             if (TabManager.IsValid())
             {
-                FVCCSimPanelFactory::RegisterTabSpawner(*TabManager);
+                // Register VCCSimPanel tab directly
+                TabManager->RegisterTabSpawner(TEXT("VCCSimPanel"), FOnSpawnTab::CreateLambda([](const FSpawnTabArgs& Args)
+                {
+                    return SNew(SDockTab)
+                        .TabRole(ETabRole::NomadTab)
+                        [
+                            SNew(SVCCSimPanel)
+                        ];
+                }))
+                .SetDisplayName(FText::FromString(TEXT("VCCSim Panel")))
+                .SetMenuType(ETabSpawnerMenuType::Hidden);
                 
                 // Remove the delegate since we no longer need it
                 LevelEditorModule.OnTabManagerChanged().Remove(TabManagerChangedHandle);
@@ -99,7 +120,7 @@ void FVCCSimEditorModule::UnregisterTabSpawner()
         
         if (LevelEditorTabManager.IsValid())
         {
-            LevelEditorTabManager->UnregisterTabSpawner(FVCCSimPanelFactory::TabId);
+            LevelEditorTabManager->UnregisterTabSpawner(TEXT("VCCSimPanel"));
         }
     }
 }

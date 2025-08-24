@@ -1,0 +1,419 @@
+/*
+* Copyright (C) 2025 Visual Computing Research Center, Shenzhen University
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+#include "Editor/VCCSimModuleFactory.h"
+#include "Widgets/Layout/SSeparator.h"
+#include "Widgets/Layout/SBox.h"
+#include "Widgets/Layout/SSpacer.h"
+#include "Framework/Notifications/NotificationManager.h"
+#include "Widgets/Notifications/SNotificationList.h"
+#include "Styling/AppStyle.h"
+#include "Framework/Docking/TabManager.h"
+#include "Widgets/Docking/SDockTab.h"
+
+// ============================================================================
+// FVCCSimModuleFactory Implementation
+// ============================================================================
+
+TSharedPtr<IVCCSimCameraModule> FVCCSimModuleFactory::CreateCameraModule()
+{
+    // TODO: Implement camera module creation
+    // For now, return nullptr as modules will be implemented in later phases
+    return nullptr;
+}
+
+TSharedPtr<IVCCSimPoseModule> FVCCSimModuleFactory::CreatePoseModule()
+{
+    // TODO: Implement pose module creation
+    return nullptr;
+}
+
+TSharedPtr<IVCCSimPointCloudModule> FVCCSimModuleFactory::CreatePointCloudModule()
+{
+    // TODO: Implement point cloud module creation
+    return nullptr;
+}
+
+TSharedPtr<IVCCSimTriangleSplattingModule> FVCCSimModuleFactory::CreateTriangleSplattingModule()
+{
+    // TODO: Implement triangle splatting module creation
+    return nullptr;
+}
+
+TSharedPtr<IVCCSimSceneAnalysisModule> FVCCSimModuleFactory::CreateSceneAnalysisModule()
+{
+    // TODO: Implement scene analysis module creation
+    return nullptr;
+}
+
+TSharedPtr<IDetailsView> FVCCSimModuleFactory::CreateDetailsView()
+{
+    // PropertyEditor module causes compilation issues in UE 5.6
+    // Return nullptr for now - this will be implemented when PropertyEditor issues are resolved
+    UE_LOG(LogTemp, Warning, TEXT("CreateDetailsView: PropertyEditor module not available"));
+    return nullptr;
+}
+
+TSharedRef<SWidget> FVCCSimModuleFactory::CreateObjectPropertyEntryBox(
+    UClass* AllowedClass,
+    TFunction<FString()> GetObjectPathFunc,
+    TFunction<void(const FAssetData&)> OnObjectChangedFunc,
+    bool bAllowClear)
+{
+    // TODO: Implement object property entry box
+    // For now, return a placeholder
+    return SNew(STextBlock)
+        .Text(FText::FromString(TEXT("Object Property Entry Box - TODO")));
+}
+
+TSharedRef<SWidget> FVCCSimModuleFactory::CreateFilePathPicker(
+    const FString& DialogTitle,
+    const FString& FileTypeFilter,
+    TFunction<FString()> GetPathFunc,
+    TFunction<void(const FString&)> OnPathChangedFunc)
+{
+    // Simplified implementation - returns placeholder until PropertyEditor issues are resolved
+    return SNew(STextBlock)
+        .Text(FText::FromString(TEXT("File Path Picker - TODO")));
+}
+
+TSharedRef<SWidget> FVCCSimModuleFactory::CreateDirectoryPathPicker(
+    const FString& DialogTitle,
+    TFunction<FString()> GetPathFunc,
+    TFunction<void(const FString&)> OnPathChangedFunc)
+{
+    // Simplified implementation - returns placeholder until PropertyEditor issues are resolved
+    return SNew(STextBlock)
+        .Text(FText::FromString(TEXT("Directory Path Picker - TODO")));
+}
+
+const FSlateFontInfo& FVCCSimModuleFactory::GetDefaultFont()
+{
+    static FSlateFontInfo DefaultFont = FAppStyle::GetFontStyle("PropertyWindow.NormalFont");
+    return DefaultFont;
+}
+
+const FSlateFontInfo& FVCCSimModuleFactory::GetBoldFont()
+{
+    static FSlateFontInfo BoldFont = FAppStyle::GetFontStyle("PropertyWindow.BoldFont");
+    return BoldFont;
+}
+
+const FSlateFontInfo& FVCCSimModuleFactory::GetHeaderFont()
+{
+    static FSlateFontInfo HeaderFont = FAppStyle::GetFontStyle("DetailsView.CategoryFontStyle");
+    return HeaderFont;
+}
+
+FSlateColor FVCCSimModuleFactory::GetPrimaryTextColor()
+{
+    return FSlateColor::UseForeground();
+}
+
+FSlateColor FVCCSimModuleFactory::GetSecondaryTextColor()
+{
+    return FSlateColor::UseSubduedForeground();
+}
+
+FSlateColor FVCCSimModuleFactory::GetSuccessColor()
+{
+    return FSlateColor(FLinearColor::Green);
+}
+
+FSlateColor FVCCSimModuleFactory::GetWarningColor()
+{
+    return FSlateColor(FLinearColor::Yellow);
+}
+
+FSlateColor FVCCSimModuleFactory::GetErrorColor()
+{
+    return FSlateColor(FLinearColor::Red);
+}
+
+// ============================================================================
+// FVCCSimUIHelpers Implementation
+// ============================================================================
+
+TSharedRef<SWidget> FVCCSimUIHelpers::CreatePropertyRow(
+    const FString& Label, 
+    TSharedRef<SWidget> Content,
+    bool bFillWidth)
+{
+    TSharedRef<SHorizontalBox> HorizontalBox = SNew(SHorizontalBox);
+    
+    // Add label slot
+    auto& LabelSlot = HorizontalBox->AddSlot()
+        .VAlign(VAlign_Center)
+        .Padding(0, 2, 8, 2);
+        
+    if (bFillWidth)
+    {
+        LabelSlot.FillWidth(0.4f);
+    }
+    else
+    {
+        LabelSlot.AutoWidth();
+    }
+    
+    LabelSlot[
+        SNew(STextBlock)
+        .Text(FText::FromString(Label))
+        .Font(FVCCSimModuleFactory::GetDefaultFont())
+    ];
+    
+    // Add content slot
+    HorizontalBox->AddSlot()
+        .FillWidth(bFillWidth ? 0.6f : 1.0f)
+        .VAlign(VAlign_Center)
+        .Padding(0, 2)
+        [
+            Content
+        ];
+        
+    return HorizontalBox;
+}
+
+TSharedRef<SWidget> FVCCSimUIHelpers::CreateCollapsibleSection(
+    const FString& Title,
+    TSharedRef<SWidget> Content,
+    bool& bExpanded)
+{
+    return SNew(SVerticalBox)
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        [
+            SNew(SButton)
+            .ButtonStyle(FAppStyle::Get(), "DetailsView.CategoryButton")
+            .ContentPadding(FMargin(2, 2))
+            .OnClicked_Lambda([&bExpanded]()
+            {
+                bExpanded = !bExpanded;
+                return FReply::Handled();
+            })
+            [
+                SNew(SHorizontalBox)
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .VAlign(VAlign_Center)
+                .Padding(0, 0, 4, 0)
+                [
+                    SNew(STextBlock)
+                    .Text_Lambda([&bExpanded]()
+                    {
+                        return FText::FromString(bExpanded ? TEXT("▼") : TEXT("▶"));
+                    })
+                    .Font(FVCCSimModuleFactory::GetDefaultFont())
+                ]
+                + SHorizontalBox::Slot()
+                .FillWidth(1.0f)
+                .VAlign(VAlign_Center)
+                [
+                    SNew(STextBlock)
+                    .Text(FText::FromString(Title))
+                    .Font(FVCCSimModuleFactory::GetBoldFont())
+                ]
+            ]
+        ]
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        [
+            SNew(SBox)
+            .Visibility_Lambda([&bExpanded]()
+            {
+                return bExpanded ? EVisibility::Visible : EVisibility::Collapsed;
+            })
+            .Padding(FMargin(8, 4))
+            [
+                Content
+            ]
+        ];
+}
+
+TSharedRef<SWidget> FVCCSimUIHelpers::CreateStandardButton(
+    const FString& ButtonText,
+    FOnClicked OnClicked,
+    bool bEnabled,
+    const FString& ToolTip)
+{
+    auto Button = SNew(SButton)
+        .ButtonStyle(FAppStyle::Get(), "FlatButton.Default")
+        .Text(FText::FromString(ButtonText))
+        .ContentPadding(FMargin(8, 2))
+        .OnClicked(OnClicked)
+        .IsEnabled(bEnabled);
+    
+    if (!ToolTip.IsEmpty())
+    {
+        Button->SetToolTipText(FText::FromString(ToolTip));
+    }
+    
+    return Button;
+}
+
+TSharedRef<SWidget> FVCCSimUIHelpers::CreateStatusText(
+    TAttribute<FText> Text,
+    TAttribute<FSlateColor> Color)
+{
+    return SNew(STextBlock)
+        .Text(Text)
+        .ColorAndOpacity(Color)
+        .Font(FVCCSimModuleFactory::GetDefaultFont());
+}
+
+TSharedRef<SWidget> FVCCSimUIHelpers::CreateProgressBar(
+    TAttribute<TOptional<float>> Percent,
+    TAttribute<FText> Text)
+{
+    // Simplified implementation - returns placeholder
+    return SNew(STextBlock)
+        .Text(FText::FromString(TEXT("Progress Bar - TODO")));
+}
+
+TSharedRef<SWidget> FVCCSimUIHelpers::CreateSeparator()
+{
+    return SNew(SSeparator)
+        .Orientation(Orient_Horizontal)
+        .Thickness(1.0f);
+}
+
+TSharedRef<SWidget> FVCCSimUIHelpers::CreateHorizontalSpacer(float Width)
+{
+    return SNew(SBox)
+        .WidthOverride(Width)
+        [
+            SNew(SSpacer)
+        ];
+}
+
+TSharedRef<SWidget> FVCCSimUIHelpers::CreateVerticalSpacer(float Height)
+{
+    return SNew(SBox)
+        .HeightOverride(Height)
+        [
+            SNew(SSpacer)
+        ];
+}
+
+// ============================================================================
+// FVCCSimNotificationHelper Implementation
+// ============================================================================
+
+void FVCCSimNotificationHelper::ShowSuccess(const FString& Message, float Duration)
+{
+    FNotificationInfo Info(FText::FromString(Message));
+    Info.Image = FAppStyle::GetBrush("NotificationList.SuccessImage");
+    Info.ExpireDuration = Duration;
+    Info.bFireAndForget = true;
+    Info.bUseLargeFont = false;
+    Info.bUseSuccessFailIcons = true;
+    
+    FSlateNotificationManager::Get().AddNotification(Info);
+}
+
+void FVCCSimNotificationHelper::ShowWarning(const FString& Message, float Duration)
+{
+    FNotificationInfo Info(FText::FromString(Message));
+    Info.Image = FAppStyle::GetBrush("NotificationList.DefaultMessage");
+    Info.ExpireDuration = Duration;
+    Info.bFireAndForget = true;
+    Info.bUseLargeFont = false;
+    Info.bUseSuccessFailIcons = false;
+    
+    FSlateNotificationManager::Get().AddNotification(Info);
+}
+
+void FVCCSimNotificationHelper::ShowError(const FString& Message, float Duration)
+{
+    FNotificationInfo Info(FText::FromString(Message));
+    Info.Image = FAppStyle::GetBrush("NotificationList.FailImage");
+    Info.ExpireDuration = Duration;
+    Info.bFireAndForget = true;
+    Info.bUseLargeFont = false;
+    Info.bUseSuccessFailIcons = true;
+    
+    FSlateNotificationManager::Get().AddNotification(Info);
+}
+
+TSharedPtr<SNotificationItem> FVCCSimNotificationHelper::ShowProgress(const FString& Message)
+{
+    FNotificationInfo Info(FText::FromString(Message));
+    Info.Image = FAppStyle::GetBrush("NotificationList.DefaultMessage");
+    Info.bFireAndForget = false;
+    Info.bUseLargeFont = false;
+    Info.bUseSuccessFailIcons = false;
+    Info.bUseThrobber = true;
+    
+    return FSlateNotificationManager::Get().AddNotification(Info);
+}
+
+void FVCCSimNotificationHelper::UpdateProgress(TSharedPtr<SNotificationItem> Notification, float Progress, const FString& Message)
+{
+    if (Notification.IsValid())
+    {
+        Notification->SetText(FText::FromString(Message));
+        // Note: SNotificationItem doesn't have direct progress support, 
+        // but we can update the text to show progress
+        FString ProgressText = FString::Printf(TEXT("%s (%.1f%%)"), *Message, Progress * 100.0f);
+        Notification->SetText(FText::FromString(ProgressText));
+    }
+}
+
+void FVCCSimNotificationHelper::CompleteProgress(TSharedPtr<SNotificationItem> Notification, const FString& Message, bool bSuccess)
+{
+    if (Notification.IsValid())
+    {
+        Notification->SetText(FText::FromString(Message));
+        
+        if (bSuccess)
+        {
+            Notification->SetCompletionState(SNotificationItem::CS_Success);
+        }
+        else
+        {
+            Notification->SetCompletionState(SNotificationItem::CS_Fail);
+        }
+        
+        Notification->ExpireAndFadeout();
+    }
+}
+
+// ============================================================================
+// FVCCSimPanelFactory Implementation
+// ============================================================================
+
+namespace FVCCSimPanelFactory
+{
+    const FName TabId(TEXT("VCCSimPanel"));
+    
+    void RegisterTabSpawner(FTabManager& TabManager)
+    {
+        // Forward declaration used to avoid circular includes
+        // SVCCSimPanel will be created via the tab spawner
+        TabManager.RegisterTabSpawner(TabId, FOnSpawnTab::CreateLambda([](const FSpawnTabArgs& Args)
+        {
+            // Delay include until needed to avoid circular dependency
+            #include "Editor/VCCSimPanel.h"
+            return SNew(SDockTab)
+                .TabRole(ETabRole::NomadTab)
+                [
+                    SNew(SVCCSimPanel)
+                ];
+        }))
+        .SetDisplayName(FText::FromString(TEXT("VCCSim Panel")))
+        .SetMenuType(ETabSpawnerMenuType::Hidden);
+    }
+}

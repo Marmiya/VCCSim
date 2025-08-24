@@ -1,0 +1,693 @@
+/*
+* Copyright (C) 2025 Visual Computing Research Center, Shenzhen University
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+#include "Editor/Widgets/ConfigurationDetailsWidget.h"
+#include "PropertyEditorModule.h"
+#include "Modules/ModuleManager.h"
+#include "Widgets/Input/SButton.h"
+#include "Widgets/Input/SComboBox.h"
+#include "Widgets/Layout/SBox.h"
+#include "Widgets/Layout/SSeparator.h"
+#include "Widgets/Text/STextBlock.h"
+#include "Framework/Notifications/NotificationManager.h"
+#include "Widgets/Notifications/SNotificationList.h"
+#include "Styling/AppStyle.h"
+#include "Editor/VCCSimModuleFactory.h"
+#include "HAL/FileManager.h"
+#include "Misc/FileHelper.h"
+#include "Dom/JsonObject.h"
+#include "Serialization/JsonSerializer.h"
+#include "Serialization/JsonWriter.h"
+
+#define LOCTEXT_NAMESPACE "ConfigurationDetailsWidget"
+
+// ============================================================================
+// UVCCSimConfigurationObject Implementation
+// ============================================================================
+
+FPoseConfiguration UVCCSimConfigurationObject::GetPoseConfiguration() const
+{
+    FPoseConfiguration Config;
+    Config.NumPoses = NumPoses;
+    Config.Radius = Radius;
+    Config.HeightOffset = HeightOffset;
+    Config.VerticalGap = VerticalGap;
+    Config.SafeDistance = SafeDistance;
+    Config.SafeHeight = SafeHeight;
+    return Config;
+}
+
+FLimitedRegionConfiguration UVCCSimConfigurationObject::GetLimitedRegionConfiguration() const
+{
+    FLimitedRegionConfiguration Config;
+    Config.bUseLimited = bUseLimitedRegion;
+    Config.MinX = LimitedMinX;
+    Config.MaxX = LimitedMaxX;
+    Config.MinY = LimitedMinY;
+    Config.MaxY = LimitedMaxY;
+    Config.MinZ = LimitedMinZ;
+    Config.MaxZ = LimitedMaxZ;
+    return Config;
+}
+
+FTriangleSplattingConfiguration UVCCSimConfigurationObject::GetTriangleSplattingConfiguration() const
+{
+    FTriangleSplattingConfiguration Config;
+    Config.FOVDegrees = CameraFOV;
+    Config.ImageWidth = ImageWidth;
+    Config.ImageHeight = ImageHeight;
+    Config.MaxIterations = MaxIterations;
+    Config.LearningRate = LearningRate;
+    return Config;
+}
+
+void UVCCSimConfigurationObject::SetPoseConfiguration(const FPoseConfiguration& Config)
+{
+    NumPoses = Config.NumPoses;
+    Radius = Config.Radius;
+    HeightOffset = Config.HeightOffset;
+    VerticalGap = Config.VerticalGap;
+    SafeDistance = Config.SafeDistance;
+    SafeHeight = Config.SafeHeight;
+}
+
+void UVCCSimConfigurationObject::SetLimitedRegionConfiguration(const FLimitedRegionConfiguration& Config)
+{
+    bUseLimitedRegion = Config.bUseLimited;
+    LimitedMinX = Config.MinX;
+    LimitedMaxX = Config.MaxX;
+    LimitedMinY = Config.MinY;
+    LimitedMaxY = Config.MaxY;
+    LimitedMinZ = Config.MinZ;
+    LimitedMaxZ = Config.MaxZ;
+}
+
+void UVCCSimConfigurationObject::SetTriangleSplattingConfiguration(const FTriangleSplattingConfiguration& Config)
+{
+    CameraFOV = Config.FOVDegrees;
+    ImageWidth = Config.ImageWidth;
+    ImageHeight = Config.ImageHeight;
+    MaxIterations = Config.MaxIterations;
+    LearningRate = Config.LearningRate;
+}
+
+// ============================================================================
+// SConfigurationDetailsWidget Implementation
+// ============================================================================
+
+void SConfigurationDetailsWidget::Construct(const FArguments& InArgs)
+{
+    ConfigurationName = InArgs._ConfigurationName;
+    bShowResetButton = InArgs._ShowResetButton;
+    bShowPresets = InArgs._ShowPresets;
+
+    // Create configuration object if not provided
+    if (!ConfigurationObject)
+    {
+        ConfigurationObject = NewObject<UVCCSimConfigurationObject>();
+    }
+
+    // Load presets
+    LoadPresetsFromFile();
+    RefreshPresetOptions();
+
+    // Create details view
+    CreateDetailsView();
+
+    // Build main widget layout
+    ChildSlot
+    [
+        SNew(SVerticalBox)
+        
+        // Header with configuration name
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        .Padding(0, 0, 0, 8)
+        [
+            SNew(STextBlock)
+            .Text(FText::FromString(ConfigurationName))
+            .Font(FVCCSimModuleFactory::GetHeaderFont())
+            .Justification(ETextJustify::Center)
+        ]
+
+        // Control buttons
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        .Padding(0, 0, 0, 8)
+        [
+            CreateControlButtons()
+        ]
+
+        // Details view
+        + SVerticalBox::Slot()
+        .FillHeight(1.0f)
+        [
+            SNew(SBorder)
+            .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryTop"))
+            .Padding(1)
+            [
+                DetailsView.ToSharedRef()
+            ]
+        ]
+
+        // Validation status
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        .Padding(0, 4, 0, 0)
+        [
+            SNew(SSeparator)
+            .Orientation(Orient_Horizontal)
+        ]
+
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        .Padding(0, 4, 0, 0)
+        [
+            SNew(STextBlock)
+            .Text_Lambda([this]()
+            {
+                FString Error;
+                bool bIsValid = ValidateConfiguration(Error);
+                if (bIsValid)
+                {
+                    return LOCTEXT("ConfigurationValid", "Configuration is valid");
+                }
+                else
+                {
+                    return FText::FromString(FString::Printf(TEXT("Configuration Error: %s"), *Error));
+                }
+            })
+            .ColorAndOpacity_Lambda([this]()
+            {
+                FString Error;
+                bool bIsValid = ValidateConfiguration(Error);
+                return bIsValid ? FVCCSimModuleFactory::GetSuccessColor() : FVCCSimModuleFactory::GetErrorColor();
+            })
+            .Font(FVCCSimModuleFactory::GetDefaultFont())
+        ]
+    ];
+}
+
+void SConfigurationDetailsWidget::Initialize(TSharedPtr<IVCCSimModule> InModule)
+{
+    // Call base class implementation
+    SVCCSimModuleWidget::Initialize(InModule);
+}
+
+void SConfigurationDetailsWidget::Initialize(UVCCSimConfigurationObject* InConfigObject)
+{
+    if (InConfigObject)
+    {
+        ConfigurationObject = InConfigObject;
+        
+        if (DetailsView.IsValid())
+        {
+            DetailsView->SetObject(ConfigurationObject);
+        }
+    }
+}
+
+UVCCSimConfigurationObject* SConfigurationDetailsWidget::GetConfigurationObject() const
+{
+    return ConfigurationObject;
+}
+
+void SConfigurationDetailsWidget::ResetToDefaults()
+{
+    if (ConfigurationObject)
+    {
+        // Create new default object and copy properties
+        UVCCSimConfigurationObject* DefaultObject = NewObject<UVCCSimConfigurationObject>();
+        
+        // Copy default values
+        ConfigurationObject->NumPoses = DefaultObject->NumPoses;
+        ConfigurationObject->Radius = DefaultObject->Radius;
+        ConfigurationObject->HeightOffset = DefaultObject->HeightOffset;
+        ConfigurationObject->VerticalGap = DefaultObject->VerticalGap;
+        ConfigurationObject->SafeDistance = DefaultObject->SafeDistance;
+        ConfigurationObject->SafeHeight = DefaultObject->SafeHeight;
+        ConfigurationObject->bUseLimitedRegion = DefaultObject->bUseLimitedRegion;
+        ConfigurationObject->LimitedMinX = DefaultObject->LimitedMinX;
+        ConfigurationObject->LimitedMaxX = DefaultObject->LimitedMaxX;
+        ConfigurationObject->LimitedMinY = DefaultObject->LimitedMinY;
+        ConfigurationObject->LimitedMaxY = DefaultObject->LimitedMaxY;
+        ConfigurationObject->LimitedMinZ = DefaultObject->LimitedMinZ;
+        ConfigurationObject->LimitedMaxZ = DefaultObject->LimitedMaxZ;
+        ConfigurationObject->CameraFOV = DefaultObject->CameraFOV;
+        ConfigurationObject->ImageWidth = DefaultObject->ImageWidth;
+        ConfigurationObject->ImageHeight = DefaultObject->ImageHeight;
+        ConfigurationObject->MaxIterations = DefaultObject->MaxIterations;
+        ConfigurationObject->LearningRate = DefaultObject->LearningRate;
+        ConfigurationObject->PointSize = DefaultObject->PointSize;
+        ConfigurationObject->NormalLength = DefaultObject->NormalLength;
+        ConfigurationObject->bShowNormals = DefaultObject->bShowNormals;
+        ConfigurationObject->DefaultPointColor = DefaultObject->DefaultPointColor;
+        
+        RefreshContent();
+        
+        FVCCSimNotificationHelper::ShowSuccess(TEXT("Configuration reset to defaults"));
+    }
+}
+
+void SConfigurationDetailsWidget::LoadPreset(const FString& PresetName)
+{
+    if (FVCCSimConfigPresetManager::Get().LoadPreset(PresetName, ConfigurationObject))
+    {
+        RefreshContent();
+        FVCCSimNotificationHelper::ShowSuccess(FString::Printf(TEXT("Loaded preset: %s"), *PresetName));
+    }
+    else
+    {
+        FVCCSimNotificationHelper::ShowError(FString::Printf(TEXT("Failed to load preset: %s"), *PresetName));
+    }
+}
+
+void SConfigurationDetailsWidget::SavePreset(const FString& PresetName)
+{
+    if (FVCCSimConfigPresetManager::Get().SavePreset(PresetName, ConfigurationObject))
+    {
+        SavedPresets.Empty(); // Force reload
+        LoadPresetsFromFile();
+        RefreshPresetOptions(); // Refresh combo box options
+        FVCCSimNotificationHelper::ShowSuccess(FString::Printf(TEXT("Saved preset: %s"), *PresetName));
+    }
+    else
+    {
+        FVCCSimNotificationHelper::ShowError(FString::Printf(TEXT("Failed to save preset: %s"), *PresetName));
+    }
+}
+
+bool SConfigurationDetailsWidget::ValidateConfiguration(FString& OutError) const
+{
+    if (!ConfigurationObject)
+    {
+        OutError = TEXT("Configuration object is null");
+        return false;
+    }
+
+    // Validate pose configuration
+    FPoseConfiguration PoseConfig = ConfigurationObject->GetPoseConfiguration();
+    if (!PoseConfig.IsValid())
+    {
+        OutError = TEXT("Invalid pose configuration values");
+        return false;
+    }
+
+    // Validate Triangle Splatting configuration
+    FTriangleSplattingConfiguration TSConfig = ConfigurationObject->GetTriangleSplattingConfiguration();
+    if (!TSConfig.IsValid())
+    {
+        OutError = TSConfig.GetValidationError();
+        return false;
+    }
+
+    // Validate limited region if enabled
+    if (ConfigurationObject->bUseLimitedRegion)
+    {
+        if (ConfigurationObject->LimitedMinX >= ConfigurationObject->LimitedMaxX ||
+            ConfigurationObject->LimitedMinY >= ConfigurationObject->LimitedMaxY ||
+            ConfigurationObject->LimitedMinZ >= ConfigurationObject->LimitedMaxZ)
+        {
+            OutError = TEXT("Invalid limited region bounds");
+            return false;
+        }
+    }
+
+    return true;
+}
+
+void SConfigurationDetailsWidget::OnConfigurationChanged()
+{
+    // Trigger validation and UI update
+    RefreshContent();
+}
+
+void SConfigurationDetailsWidget::RefreshContent()
+{
+    if (DetailsView.IsValid())
+    {
+        DetailsView->ForceRefresh();
+    }
+}
+
+void SConfigurationDetailsWidget::CreateDetailsView()
+{
+    FPropertyEditorModule& PropertyEditorModule = FModuleManager::GetModuleChecked<FPropertyEditorModule>("PropertyEditor");
+
+    FDetailsViewArgs DetailsViewArgs;
+    DetailsViewArgs.bUpdatesFromSelection = false;
+    DetailsViewArgs.bLockable = false;
+    DetailsViewArgs.bAllowSearch = true;
+    DetailsViewArgs.NameAreaSettings = FDetailsViewArgs::HideNameArea;
+    DetailsViewArgs.bHideSelectionTip = true;
+    DetailsViewArgs.bShowOptions = false;
+    DetailsViewArgs.bShowModifiedPropertiesOption = false;
+    DetailsViewArgs.bShowKeyablePropertiesOption = false;
+    DetailsViewArgs.bShowAnimatedPropertiesOption = false;
+    DetailsViewArgs.bForceHiddenPropertyVisibility = false;
+
+    DetailsView = PropertyEditorModule.CreateDetailView(DetailsViewArgs);
+    
+    // Set the object to display
+    if (ConfigurationObject)
+    {
+        DetailsView->SetObject(ConfigurationObject);
+    }
+
+    // Bind to property changes
+    DetailsView->OnFinishedChangingProperties().AddSP(this, &SConfigurationDetailsWidget::OnPropertyChanged);
+}
+
+void SConfigurationDetailsWidget::OnPropertyChanged(const FPropertyChangedEvent& PropertyChangedEvent)
+{
+    // Notify of configuration changes
+    OnConfigurationChanged();
+    
+    // Show validation feedback
+    FString Error;
+    bool bIsValid = ValidateConfiguration(Error);
+    ShowValidationFeedback(bIsValid, Error);
+}
+
+TSharedRef<SWidget> SConfigurationDetailsWidget::CreateControlButtons()
+{
+    TSharedRef<SHorizontalBox> ButtonBox = SNew(SHorizontalBox);
+
+    // Reset button
+    if (bShowResetButton)
+    {
+        ButtonBox->AddSlot()
+        .AutoWidth()
+        .Padding(0, 0, 4, 0)
+        [
+            SNew(SButton)
+            .ButtonStyle(FAppStyle::Get(), "FlatButton.Default")
+            .Text(LOCTEXT("ResetButton", "Reset"))
+            .ContentPadding(FMargin(8, 2))
+            .OnClicked(this, &SConfigurationDetailsWidget::OnResetButtonClicked)
+            .ToolTipText(LOCTEXT("ResetButtonTooltip", "Reset all settings to default values"))
+        ];
+    }
+
+    // Preset dropdown
+    if (bShowPresets)
+    {
+        ButtonBox->AddSlot()
+        .AutoWidth()
+        .Padding(0, 0, 4, 0)
+        [
+            SNew(SComboBox<TSharedPtr<FString>>)
+            .OptionsSource(&PresetOptions)
+            .OnGenerateWidget_Lambda([](TSharedPtr<FString> Option)
+            {
+                return SNew(STextBlock).Text(FText::FromString(*Option));
+            })
+            .OnSelectionChanged(this, &SConfigurationDetailsWidget::OnPresetSelected)
+            .Content()
+            [
+                SNew(STextBlock)
+                .Text(LOCTEXT("LoadPreset", "Load Preset..."))
+            ]
+        ];
+    }
+
+    return ButtonBox;
+}
+
+FReply SConfigurationDetailsWidget::OnResetButtonClicked()
+{
+    ResetToDefaults();
+    return FReply::Handled();
+}
+
+void SConfigurationDetailsWidget::OnPresetSelected(TSharedPtr<FString> SelectedPreset, ESelectInfo::Type SelectInfo)
+{
+    if (SelectedPreset.IsValid() && SelectInfo == ESelectInfo::OnMouseClick)
+    {
+        LoadPreset(*SelectedPreset);
+    }
+}
+
+TArray<TSharedPtr<FString>> SConfigurationDetailsWidget::GetPresetOptions() const
+{
+    // This method now returns a copy for backward compatibility
+    // The actual options are stored in PresetOptions member variable
+    return PresetOptions;
+}
+
+void SConfigurationDetailsWidget::RefreshPresetOptions()
+{
+    PresetOptions.Empty();
+    TArray<FString> PresetNames = FVCCSimConfigPresetManager::Get().GetPresetNames();
+    
+    for (const FString& PresetName : PresetNames)
+    {
+        PresetOptions.Add(MakeShareable(new FString(PresetName)));
+    }
+}
+
+void SConfigurationDetailsWidget::LoadPresetsFromFile()
+{
+    // This is handled by the preset manager now
+    SavedPresets.Empty();
+}
+
+void SConfigurationDetailsWidget::SavePresetsToFile()
+{
+    // This is handled by the preset manager now
+}
+
+void SConfigurationDetailsWidget::ShowValidationFeedback(bool bIsValid, const FString& ErrorMessage)
+{
+    if (!bIsValid && !ErrorMessage.IsEmpty())
+    {
+        FVCCSimNotificationHelper::ShowWarning(FString::Printf(TEXT("Configuration Warning: %s"), *ErrorMessage), 5.0f);
+    }
+}
+
+// ============================================================================
+// Specialized Configuration Widgets
+// ============================================================================
+
+void SPoseConfigWidget::Construct(const FArguments& InArgs)
+{
+    SConfigurationDetailsWidget::Construct(
+        SConfigurationDetailsWidget::FArguments()
+        .ConfigurationName(TEXT("Pose Configuration"))
+        .ShowResetButton(true)
+        .ShowPresets(true)
+    );
+}
+
+FPoseConfiguration SPoseConfigWidget::GetPoseConfiguration() const
+{
+    return GetConfigurationObject() ? GetConfigurationObject()->GetPoseConfiguration() : FPoseConfiguration();
+}
+
+void SPoseConfigWidget::SetPoseConfiguration(const FPoseConfiguration& Config)
+{
+    if (GetConfigurationObject())
+    {
+        GetConfigurationObject()->SetPoseConfiguration(Config);
+        RefreshContent();
+    }
+}
+
+void STriangleSplattingConfigWidget::Construct(const FArguments& InArgs)
+{
+    SConfigurationDetailsWidget::Construct(
+        SConfigurationDetailsWidget::FArguments()
+        .ConfigurationName(TEXT("Triangle Splatting Configuration"))
+        .ShowResetButton(true)
+        .ShowPresets(true)
+    );
+}
+
+FTriangleSplattingConfiguration STriangleSplattingConfigWidget::GetTriangleSplattingConfiguration() const
+{
+    return GetConfigurationObject() ? GetConfigurationObject()->GetTriangleSplattingConfiguration() : FTriangleSplattingConfiguration();
+}
+
+void STriangleSplattingConfigWidget::SetTriangleSplattingConfiguration(const FTriangleSplattingConfiguration& Config)
+{
+    if (GetConfigurationObject())
+    {
+        GetConfigurationObject()->SetTriangleSplattingConfiguration(Config);
+        RefreshContent();
+    }
+}
+
+// ============================================================================
+// FVCCSimConfigPresetManager Implementation
+// ============================================================================
+
+TSharedPtr<FVCCSimConfigPresetManager> FVCCSimConfigPresetManager::Instance = nullptr;
+
+FVCCSimConfigPresetManager& FVCCSimConfigPresetManager::Get()
+{
+    if (!Instance.IsValid())
+    {
+        Instance = MakeShareable(new FVCCSimConfigPresetManager());
+        Instance->LoadFromDisk();
+    }
+    return *Instance;
+}
+
+bool FVCCSimConfigPresetManager::LoadPreset(const FString& PresetName, UVCCSimConfigurationObject* ConfigObject)
+{
+    if (!ConfigObject || !HasPreset(PresetName))
+    {
+        return false;
+    }
+
+    TSharedPtr<FJsonObject> PresetData = Presets[PresetName];
+    
+    // Load properties from JSON
+    ConfigObject->NumPoses = PresetData->GetIntegerField(TEXT("NumPoses"));
+    ConfigObject->Radius = PresetData->GetNumberField(TEXT("Radius"));
+    ConfigObject->HeightOffset = PresetData->GetNumberField(TEXT("HeightOffset"));
+    ConfigObject->VerticalGap = PresetData->GetNumberField(TEXT("VerticalGap"));
+    ConfigObject->SafeDistance = PresetData->GetNumberField(TEXT("SafeDistance"));
+    ConfigObject->SafeHeight = PresetData->GetNumberField(TEXT("SafeHeight"));
+    ConfigObject->bUseLimitedRegion = PresetData->GetBoolField(TEXT("UseLimitedRegion"));
+    ConfigObject->LimitedMinX = PresetData->GetNumberField(TEXT("LimitedMinX"));
+    ConfigObject->LimitedMaxX = PresetData->GetNumberField(TEXT("LimitedMaxX"));
+    ConfigObject->LimitedMinY = PresetData->GetNumberField(TEXT("LimitedMinY"));
+    ConfigObject->LimitedMaxY = PresetData->GetNumberField(TEXT("LimitedMaxY"));
+    ConfigObject->LimitedMinZ = PresetData->GetNumberField(TEXT("LimitedMinZ"));
+    ConfigObject->LimitedMaxZ = PresetData->GetNumberField(TEXT("LimitedMaxZ"));
+    ConfigObject->CameraFOV = PresetData->GetNumberField(TEXT("CameraFOV"));
+    ConfigObject->ImageWidth = PresetData->GetIntegerField(TEXT("ImageWidth"));
+    ConfigObject->ImageHeight = PresetData->GetIntegerField(TEXT("ImageHeight"));
+    ConfigObject->MaxIterations = PresetData->GetIntegerField(TEXT("MaxIterations"));
+    ConfigObject->LearningRate = PresetData->GetNumberField(TEXT("LearningRate"));
+
+    return true;
+}
+
+bool FVCCSimConfigPresetManager::SavePreset(const FString& PresetName, const UVCCSimConfigurationObject* ConfigObject)
+{
+    if (!ConfigObject)
+    {
+        return false;
+    }
+
+    // Create JSON object from configuration
+    TSharedPtr<FJsonObject> PresetData = MakeShareable(new FJsonObject);
+    PresetData->SetNumberField(TEXT("NumPoses"), ConfigObject->NumPoses);
+    PresetData->SetNumberField(TEXT("Radius"), ConfigObject->Radius);
+    PresetData->SetNumberField(TEXT("HeightOffset"), ConfigObject->HeightOffset);
+    PresetData->SetNumberField(TEXT("VerticalGap"), ConfigObject->VerticalGap);
+    PresetData->SetNumberField(TEXT("SafeDistance"), ConfigObject->SafeDistance);
+    PresetData->SetNumberField(TEXT("SafeHeight"), ConfigObject->SafeHeight);
+    PresetData->SetBoolField(TEXT("UseLimitedRegion"), ConfigObject->bUseLimitedRegion);
+    PresetData->SetNumberField(TEXT("LimitedMinX"), ConfigObject->LimitedMinX);
+    PresetData->SetNumberField(TEXT("LimitedMaxX"), ConfigObject->LimitedMaxX);
+    PresetData->SetNumberField(TEXT("LimitedMinY"), ConfigObject->LimitedMinY);
+    PresetData->SetNumberField(TEXT("LimitedMaxY"), ConfigObject->LimitedMaxY);
+    PresetData->SetNumberField(TEXT("LimitedMinZ"), ConfigObject->LimitedMinZ);
+    PresetData->SetNumberField(TEXT("LimitedMaxZ"), ConfigObject->LimitedMaxZ);
+    PresetData->SetNumberField(TEXT("CameraFOV"), ConfigObject->CameraFOV);
+    PresetData->SetNumberField(TEXT("ImageWidth"), ConfigObject->ImageWidth);
+    PresetData->SetNumberField(TEXT("ImageHeight"), ConfigObject->ImageHeight);
+    PresetData->SetNumberField(TEXT("MaxIterations"), ConfigObject->MaxIterations);
+    PresetData->SetNumberField(TEXT("LearningRate"), ConfigObject->LearningRate);
+
+    Presets.Add(PresetName, PresetData);
+    SaveToDisk();
+    
+    return true;
+}
+
+bool FVCCSimConfigPresetManager::DeletePreset(const FString& PresetName)
+{
+    if (Presets.Remove(PresetName) > 0)
+    {
+        SaveToDisk();
+        return true;
+    }
+    return false;
+}
+
+TArray<FString> FVCCSimConfigPresetManager::GetPresetNames() const
+{
+    TArray<FString> Names;
+    Presets.GetKeys(Names);
+    return Names;
+}
+
+bool FVCCSimConfigPresetManager::HasPreset(const FString& PresetName) const
+{
+    return Presets.Contains(PresetName);
+}
+
+FString FVCCSimConfigPresetManager::GetPresetFilePath() const
+{
+    return FPaths::ProjectSavedDir() / TEXT("VCCSimEditor") / TEXT("ConfigPresets.json");
+}
+
+void FVCCSimConfigPresetManager::LoadFromDisk()
+{
+    FString FilePath = GetPresetFilePath();
+    FString JsonContent;
+    
+    if (FFileHelper::LoadFileToString(JsonContent, *FilePath))
+    {
+        TSharedPtr<FJsonObject> RootObject;
+        TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonContent);
+        
+        if (FJsonSerializer::Deserialize(Reader, RootObject) && RootObject.IsValid())
+        {
+            for (const auto& Pair : RootObject->Values)
+            {
+                if (Pair.Value->Type == EJson::Object)
+                {
+                    Presets.Add(Pair.Key, Pair.Value->AsObject());
+                }
+            }
+        }
+    }
+}
+
+void FVCCSimConfigPresetManager::SaveToDisk()
+{
+    FString FilePath = GetPresetFilePath();
+    
+    // Ensure directory exists
+    FString DirectoryPath = FPaths::GetPath(FilePath);
+    if (!FPaths::DirectoryExists(DirectoryPath))
+    {
+        IFileManager::Get().MakeDirectory(*DirectoryPath, true);
+    }
+
+    // Create root JSON object
+    TSharedPtr<FJsonObject> RootObject = MakeShareable(new FJsonObject);
+    
+    for (const auto& Pair : Presets)
+    {
+        RootObject->SetObjectField(Pair.Key, Pair.Value);
+    }
+
+    // Serialize and save
+    FString OutputString;
+    TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&OutputString);
+    FJsonSerializer::Serialize(RootObject.ToSharedRef(), Writer);
+    
+    FFileHelper::SaveStringToFile(OutputString, *FilePath);
+}
+
+#undef LOCTEXT_NAMESPACE

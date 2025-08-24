@@ -22,7 +22,7 @@
 #include "Misc/DateTime.h"
 
 // Forward declarations
-struct FTriangleSplattingConfig;
+struct FTriangleSplattingConfiguration;
 
 DECLARE_DELEGATE_TwoParams(FOnTrainingProgressUpdated, float /* Progress */, FString /* StatusMessage */);
 DECLARE_DELEGATE_TwoParams(FOnTrainingCompleted, bool /* bSuccessful */, FString /* ResultMessage */);
@@ -64,7 +64,7 @@ public:
      * @param Config Training configuration
      * @return True if training started successfully
      */
-    bool StartTraining(const FTriangleSplattingConfig& Config);
+    bool StartTraining(const FTriangleSplattingConfiguration& Config);
     
     /**
      * Stop currently running training process
@@ -126,7 +126,7 @@ private:
     // ============================================================================
     
     // Current training configuration (using pointer to avoid circular dependency)
-    TSharedPtr<FTriangleSplattingConfig> CurrentConfig;
+    TSharedPtr<FTriangleSplattingConfiguration> CurrentConfig;
     
     // Process management
     FProcHandle TrainingProcessHandle;
@@ -159,21 +159,21 @@ private:
      * @param Config Configuration to validate
      * @return True if configuration is valid
      */
-    bool ValidateConfiguration(const FTriangleSplattingConfig& Config);
+    bool ValidateConfiguration(const FTriangleSplattingConfiguration& Config);
     
     /**
      * Prepare data and create configuration files for training
      * @param Config Training configuration
      * @return True if preparation succeeded
      */
-    bool PrepareTrainingData(const FTriangleSplattingConfig& Config);
+    bool PrepareTrainingData(const FTriangleSplattingConfiguration& Config);
     
     /**
      * Create JSON configuration file for Python training script
      * @param Config Training configuration
      * @return Path to created config file, or empty string if failed
      */
-    FString CreateConfigurationFile(const FTriangleSplattingConfig& Config);
+    FString CreateConfigurationFile(const FTriangleSplattingConfiguration& Config);
     
     /**
      * Launch Python training process
@@ -279,7 +279,7 @@ private:
      * @param Config Configuration to convert
      * @return JSON string representation
      */
-    FString ConfigToJsonString(const FTriangleSplattingConfig& Config);
+    FString ConfigToJsonString(const FTriangleSplattingConfiguration& Config);
     
     /**
      * Log message to both UE log and training log file

@@ -1,0 +1,381 @@
+/*
+* Copyright (C) 2025 Visual Computing Research Center, Shenzhen University
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Widgets/SCompoundWidget.h"
+#include "IDetailsView.h"
+#include "PropertyEditorModule.h"
+#include "Editor/VCCSimDataStructures.h"
+#include "Editor/IVCCSimModule.h"
+#include "ConfigurationDetailsWidget.generated.h"
+
+/**
+ * Configuration object for UE Details View integration
+ * This allows us to use UPROPERTY meta tags for automatic UI generation
+ */
+UCLASS(BlueprintType, Transient)
+class VCCSIMEDITOR_API UVCCSimConfigurationObject : public UObject
+{
+    GENERATED_BODY()
+
+public:
+    // Pose Configuration
+    UPROPERTY(EditAnywhere, Category = "Pose Generation", meta = (
+        ClampMin = "1", ClampMax = "1000", 
+        ToolTip = "Number of camera poses to generate around the target"))
+    int32 NumPoses = 50;
+    
+    UPROPERTY(EditAnywhere, Category = "Pose Generation", meta = (
+        ClampMin = "10.0", ClampMax = "10000.0", Units = "cm",
+        ToolTip = "Radius of the circular path around the target"))
+    float Radius = 500.0f;
+    
+    UPROPERTY(EditAnywhere, Category = "Pose Generation", meta = (
+        Units = "cm", ToolTip = "Vertical offset from the target center"))
+    float HeightOffset = 0.0f;
+    
+    UPROPERTY(EditAnywhere, Category = "Advanced Pose Settings", meta = (
+        ClampMin = "1.0", ClampMax = "1000.0", Units = "cm",
+        ToolTip = "Vertical spacing between pose layers"))
+    float VerticalGap = 50.0f;
+    
+    // Safety Configuration
+    UPROPERTY(EditAnywhere, Category = "Safety", meta = (
+        ClampMin = "1.0", ClampMax = "5000.0", Units = "cm",
+        ToolTip = "Minimum safe distance from obstacles"))
+    float SafeDistance = 200.0f;
+    
+    UPROPERTY(EditAnywhere, Category = "Safety", meta = (
+        ClampMin = "1.0", ClampMax = "5000.0", Units = "cm",
+        ToolTip = "Minimum safe height above ground"))
+    float SafeHeight = 200.0f;
+    
+    // Limited Region Configuration
+    UPROPERTY(EditAnywhere, Category = "Region Limits", meta = (
+        ToolTip = "Enable bounded region for pose generation"))
+    bool bUseLimitedRegion = false;
+    
+    UPROPERTY(EditAnywhere, Category = "Region Bounds", meta = (
+        EditCondition = "bUseLimitedRegion", Units = "cm"))
+    float LimitedMinX = 0.0f;
+    
+    UPROPERTY(EditAnywhere, Category = "Region Bounds", meta = (
+        EditCondition = "bUseLimitedRegion", Units = "cm"))
+    float LimitedMaxX = 5000.0f;
+    
+    UPROPERTY(EditAnywhere, Category = "Region Bounds", meta = (
+        EditCondition = "bUseLimitedRegion", Units = "cm"))
+    float LimitedMinY = -9500.0f;
+    
+    UPROPERTY(EditAnywhere, Category = "Region Bounds", meta = (
+        EditCondition = "bUseLimitedRegion", Units = "cm"))
+    float LimitedMaxY = -7000.0f;
+    
+    UPROPERTY(EditAnywhere, Category = "Region Bounds", meta = (
+        EditCondition = "bUseLimitedRegion", Units = "cm"))
+    float LimitedMinZ = -20.0f;
+    
+    UPROPERTY(EditAnywhere, Category = "Region Bounds", meta = (
+        EditCondition = "bUseLimitedRegion", Units = "cm"))
+    float LimitedMaxZ = 2000.0f;
+    
+    // Triangle Splatting Configuration
+    UPROPERTY(EditAnywhere, Category = "Camera Parameters", meta = (
+        ClampMin = "10.0", ClampMax = "180.0", Units = "deg",
+        ToolTip = "Field of view for camera rendering"))
+    float CameraFOV = 90.0f;
+    
+    UPROPERTY(EditAnywhere, Category = "Camera Parameters", meta = (
+        ClampMin = "64", ClampMax = "8192",
+        ToolTip = "Image width for rendering"))
+    int32 ImageWidth = 1920;
+    
+    UPROPERTY(EditAnywhere, Category = "Camera Parameters", meta = (
+        ClampMin = "64", ClampMax = "8192",
+        ToolTip = "Image height for rendering"))
+    int32 ImageHeight = 1080;
+    
+    UPROPERTY(EditAnywhere, Category = "Training Parameters", meta = (
+        ClampMin = "100", ClampMax = "100000",
+        ToolTip = "Maximum number of training iterations"))
+    int32 MaxIterations = 30000;
+    
+    UPROPERTY(EditAnywhere, Category = "Training Parameters", meta = (
+        ClampMin = "0.0001", ClampMax = "1.0",
+        ToolTip = "Learning rate for training"))
+    float LearningRate = 0.01f;
+    
+    // Point Cloud Configuration
+    UPROPERTY(EditAnywhere, Category = "Point Cloud Visualization", meta = (
+        ClampMin = "0.1", ClampMax = "10.0", Units = "cm",
+        ToolTip = "Size of rendered point sprites"))
+    float PointSize = 0.5f;
+    
+    UPROPERTY(EditAnywhere, Category = "Point Cloud Visualization", meta = (
+        ClampMin = "1.0", ClampMax = "1000.0", Units = "cm",
+        ToolTip = "Length of normal lines when displayed"))
+    float NormalLength = 50.0f;
+    
+    UPROPERTY(EditAnywhere, Category = "Point Cloud Visualization", meta = (
+        ToolTip = "Show surface normal lines"))
+    bool bShowNormals = false;
+    
+    UPROPERTY(EditAnywhere, Category = "Point Cloud Visualization", meta = (
+        ToolTip = "Default color for points without color information"))
+    FLinearColor DefaultPointColor = FLinearColor(1.0f, 0.5f, 0.0f, 1.0f);
+
+    /**
+     * Convert to individual configuration structs
+     */
+    FPoseConfiguration GetPoseConfiguration() const;
+    FLimitedRegionConfiguration GetLimitedRegionConfiguration() const;
+    FTriangleSplattingConfiguration GetTriangleSplattingConfiguration() const;
+    
+    /**
+     * Update from individual configuration structs
+     */
+    void SetPoseConfiguration(const FPoseConfiguration& Config);
+    void SetLimitedRegionConfiguration(const FLimitedRegionConfiguration& Config);
+    void SetTriangleSplattingConfiguration(const FTriangleSplattingConfiguration& Config);
+};
+
+/**
+ * Enhanced configuration widget using UE's Details View for automatic UI generation
+ */
+class VCCSIMEDITOR_API SConfigurationDetailsWidget : public SVCCSimModuleWidget
+{
+public:
+    SLATE_BEGIN_ARGS(SConfigurationDetailsWidget) {}
+        SLATE_ARGUMENT(FString, ConfigurationName)
+        SLATE_ARGUMENT(bool, ShowResetButton)
+        SLATE_ARGUMENT(bool, ShowPresets)
+    SLATE_END_ARGS()
+
+    void Construct(const FArguments& InArgs);
+
+    /**
+     * Initialize with configuration object
+     */
+    void Initialize(UVCCSimConfigurationObject* InConfigObject);
+
+    /**
+     * Override base Initialize to avoid hiding warnings
+     */
+    virtual void Initialize(TSharedPtr<IVCCSimModule> InModule) override;
+
+    /**
+     * Get the configuration object
+     */
+    UVCCSimConfigurationObject* GetConfigurationObject() const;
+
+    /**
+     * Reset to default values
+     */
+    void ResetToDefaults();
+
+    /**
+     * Load preset configuration
+     */
+    void LoadPreset(const FString& PresetName);
+
+    /**
+     * Save current configuration as preset
+     */
+    void SavePreset(const FString& PresetName);
+
+    /**
+     * Validate current configuration
+     */
+    bool ValidateConfiguration(FString& OutError) const;
+
+    /**
+     * Handle configuration changes
+     */
+    virtual void OnConfigurationChanged() override;
+
+    /**
+     * Refresh details view
+     */
+    virtual void RefreshContent() override;
+
+private:
+    /** Configuration object for details view */
+    UPROPERTY()
+    TObjectPtr<UVCCSimConfigurationObject> ConfigurationObject;
+
+    /** Details view widget */
+    TSharedPtr<IDetailsView> DetailsView;
+
+    /** Configuration name for display */
+    FString ConfigurationName;
+
+    /** UI options */
+    bool bShowResetButton;
+    bool bShowPresets;
+
+    /** Available presets */
+    TMap<FString, TSharedPtr<FJsonObject>> SavedPresets;
+
+    /** Preset options for combo box */
+    TArray<TSharedPtr<FString>> PresetOptions;
+
+    /**
+     * Create details view with proper settings
+     */
+    void CreateDetailsView();
+
+    /**
+     * Handle property changes in details view
+     */
+    void OnPropertyChanged(const FPropertyChangedEvent& PropertyChangedEvent);
+
+    /**
+     * Create control buttons
+     */
+    TSharedRef<SWidget> CreateControlButtons();
+
+    /**
+     * Reset button clicked
+     */
+    FReply OnResetButtonClicked();
+
+    /**
+     * Preset dropdown selection
+     */
+    void OnPresetSelected(TSharedPtr<FString> SelectedPreset, ESelectInfo::Type SelectInfo);
+
+    /**
+     * Get preset options for dropdown
+     */
+    TArray<TSharedPtr<FString>> GetPresetOptions() const;
+
+    /**
+     * Refresh preset options from manager
+     */
+    void RefreshPresetOptions();
+
+    /**
+     * Load presets from file
+     */
+    void LoadPresetsFromFile();
+
+    /**
+     * Save presets to file
+     */
+    void SavePresetsToFile();
+
+    /**
+     * Show validation feedback
+     */
+    void ShowValidationFeedback(bool bIsValid, const FString& ErrorMessage = FString());
+};
+
+/**
+ * Specialized configuration widgets for different areas
+ */
+class VCCSIMEDITOR_API SPoseConfigWidget : public SConfigurationDetailsWidget
+{
+public:
+    SLATE_BEGIN_ARGS(SPoseConfigWidget) {}
+    SLATE_END_ARGS()
+
+    void Construct(const FArguments& InArgs);
+    
+    /**
+     * Get pose configuration
+     */
+    FPoseConfiguration GetPoseConfiguration() const;
+    
+    /**
+     * Set pose configuration
+     */
+    void SetPoseConfiguration(const FPoseConfiguration& Config);
+};
+
+class VCCSIMEDITOR_API STriangleSplattingConfigWidget : public SConfigurationDetailsWidget
+{
+public:
+    SLATE_BEGIN_ARGS(STriangleSplattingConfigWidget) {}
+    SLATE_END_ARGS()
+
+    void Construct(const FArguments& InArgs);
+    
+    /**
+     * Get Triangle Splatting configuration
+     */
+    FTriangleSplattingConfiguration GetTriangleSplattingConfiguration() const;
+    
+    /**
+     * Set Triangle Splatting configuration
+     */
+    void SetTriangleSplattingConfiguration(const FTriangleSplattingConfiguration& Config);
+};
+
+/**
+ * Configuration preset manager
+ */
+class VCCSIMEDITOR_API FVCCSimConfigPresetManager
+{
+public:
+    /**
+     * Get singleton instance
+     */
+    static FVCCSimConfigPresetManager& Get();
+
+    /**
+     * Load preset by name
+     */
+    bool LoadPreset(const FString& PresetName, UVCCSimConfigurationObject* ConfigObject);
+
+    /**
+     * Save current configuration as preset
+     */
+    bool SavePreset(const FString& PresetName, const UVCCSimConfigurationObject* ConfigObject);
+
+    /**
+     * Delete preset
+     */
+    bool DeletePreset(const FString& PresetName);
+
+    /**
+     * Get all preset names
+     */
+    TArray<FString> GetPresetNames() const;
+
+    /**
+     * Check if preset exists
+     */
+    bool HasPreset(const FString& PresetName) const;
+
+private:
+    /** Preset storage */
+    TMap<FString, TSharedPtr<FJsonObject>> Presets;
+
+    /** Preset file path */
+    FString GetPresetFilePath() const;
+
+    /** Load presets from disk */
+    void LoadFromDisk();
+
+    /** Save presets to disk */
+    void SaveToDisk();
+
+    /** Singleton instance */
+    static TSharedPtr<FVCCSimConfigPresetManager> Instance;
+};

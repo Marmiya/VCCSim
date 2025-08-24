@@ -1,0 +1,433 @@
+/*
+* Copyright (C) 2025 Visual Computing Research Center, Shenzhen University
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+#include "Editor/Widgets/AssetSelectorWidget.h"
+#include "Widgets/Layout/SBox.h"
+#include "Widgets/Layout/SBorder.h"
+#include "Widgets/Text/STextBlock.h"
+#include "Widgets/Input/SButton.h"
+#include "Widgets/Images/SImage.h"
+#include "Engine/StaticMesh.h"
+#include "Engine/Texture2D.h"
+#include "Materials/Material.h"
+#include "Materials/MaterialInstance.h"
+#include "Sound/SoundBase.h"
+#include "Animation/AnimSequence.h"
+#include "Styling/AppStyle.h"
+#include "Editor/VCCSimModuleFactory.h"
+#include "HAL/FileManager.h"
+
+#define LOCTEXT_NAMESPACE "AssetSelectorWidget"
+
+// ============================================================================
+// FAssetSelectorFactory Implementation
+// ============================================================================
+
+TSharedRef<SWidget> FAssetSelectorFactory::CreateObjectSelector(
+    UClass* AllowedClass,
+    TFunction<FString()> GetObjectPathFunc,
+    TFunction<void(const FAssetData&)> OnObjectChangedFunc,
+    const FString& Label,
+    bool bAllowClear,
+    bool bShowThumbnail)
+{
+    TSharedRef<SEnhancedObjectSelector> Selector = SNew(SEnhancedObjectSelector)
+        .AllowedClass(AllowedClass)
+        .ObjectPath(GetObjectPathFunc())
+        .AllowClear(bAllowClear)
+        .ShowThumbnail(bShowThumbnail)
+        .ShowTypeIcon(true)
+        .PlaceholderText(FString::Printf(TEXT("Select %s..."), AllowedClass ? *AllowedClass->GetName() : TEXT("Object")))
+        .OnAssetSelected_Lambda(OnObjectChangedFunc);
+
+    if (!Label.IsEmpty())
+    {
+        return CreatePropertyRow(Label, Selector);
+    }
+
+    return Selector;
+}
+
+TSharedRef<SWidget> FAssetSelectorFactory::CreateStaticMeshSelector(
+    TFunction<FString()> GetMeshPathFunc,
+    TFunction<void(const FAssetData&)> OnMeshChangedFunc,
+    const FString& Label,
+    bool bAllowClear)
+{
+    return CreateObjectSelector(
+        UStaticMesh::StaticClass(),
+        GetMeshPathFunc,
+        OnMeshChangedFunc,
+        Label,
+        bAllowClear,
+        true);
+}
+
+TSharedRef<SWidget> FAssetSelectorFactory::CreateTextureSelector(
+    TFunction<FString()> GetTexturePathFunc,
+    TFunction<void(const FAssetData&)> OnTextureChangedFunc,
+    const FString& Label,
+    bool bAllowClear)
+{
+    return CreateObjectSelector(
+        UTexture2D::StaticClass(),
+        GetTexturePathFunc,
+        OnTextureChangedFunc,
+        Label,
+        bAllowClear,
+        true);
+}
+
+TSharedRef<SWidget> FAssetSelectorFactory::CreateMaterialSelector(
+    TFunction<FString()> GetMaterialPathFunc,
+    TFunction<void(const FAssetData&)> OnMaterialChangedFunc,
+    const FString& Label,
+    bool bAllowClear)
+{
+    return CreateObjectSelector(
+        UMaterial::StaticClass(),
+        GetMaterialPathFunc,
+        OnMaterialChangedFunc,
+        Label,
+        bAllowClear,
+        true);
+}
+
+TSharedRef<SWidget> FAssetSelectorFactory::CreateFilePathSelector(
+    const FString& DialogTitle,
+    const FString& FileTypeFilter,
+    TFunction<FString()> GetPathFunc,
+    TFunction<void(const FString&)> OnPathChangedFunc,
+    const FString& Label,
+    bool bDirectoryMode)
+{
+    TSharedRef<SEnhancedFilePathSelector> Selector = SNew(SEnhancedFilePathSelector)
+        .DialogTitle(DialogTitle)
+        .FileTypeFilter(FileTypeFilter)
+        .FilePath(GetPathFunc())
+        .DirectoryMode(bDirectoryMode)
+        .ShowValidationIcon(true)
+        .PlaceholderText(bDirectoryMode ? TEXT("Select directory...") : TEXT("Select file..."))
+        .OnPathPicked_Lambda(OnPathChangedFunc);
+
+    if (!Label.IsEmpty())
+    {
+        return CreatePropertyRow(Label, Selector);
+    }
+
+    return Selector;
+}
+
+TSharedRef<SWidget> FAssetSelectorFactory::CreateDirectorySelector(
+    const FString& DialogTitle,
+    TFunction<FString()> GetPathFunc,
+    TFunction<void(const FString&)> OnPathChangedFunc,
+    const FString& Label)
+{
+    return CreateFilePathSelector(DialogTitle, FString(), GetPathFunc, OnPathChangedFunc, Label, true);
+}
+
+TSharedRef<SWidget> FAssetSelectorFactory::CreatePropertyRow(
+    const FString& Label,
+    TSharedRef<SWidget> Selector,
+    bool bRequired,
+    const FString& ToolTip)
+{
+    return SNew(SHorizontalBox)
+        + SHorizontalBox::Slot()
+        .FillWidth(0.4f)
+        .VAlign(VAlign_Center)
+        .Padding(0, 2, 8, 2)
+        [
+            SNew(SHorizontalBox)
+            + SHorizontalBox::Slot()
+            .AutoWidth()
+            [
+                SNew(STextBlock)
+                .Text(FText::FromString(Label))
+                .Font(FVCCSimModuleFactory::GetDefaultFont())
+                .ColorAndOpacity_Lambda([bRequired]()
+                {
+                    return bRequired ? FVCCSimModuleFactory::GetErrorColor() : FVCCSimModuleFactory::GetPrimaryTextColor();
+                })
+            ]
+            + SHorizontalBox::Slot()
+            .AutoWidth()
+            .VAlign(VAlign_Center)
+            .Padding(2, 0, 0, 0)
+            [
+                SNew(STextBlock)
+                .Text(bRequired ? FText::FromString(TEXT("*")) : FText::GetEmpty())
+                .Font(FVCCSimModuleFactory::GetBoldFont())
+                .ColorAndOpacity(FVCCSimModuleFactory::GetErrorColor())
+                .Visibility(bRequired ? EVisibility::Visible : EVisibility::Collapsed)
+            ]
+        ]
+        + SHorizontalBox::Slot()
+        .FillWidth(0.6f)
+        .VAlign(VAlign_Center)
+        .Padding(0, 2)
+        [
+            SNew(SBox)
+            .ToolTipText(!ToolTip.IsEmpty() ? FText::FromString(ToolTip) : FText::GetEmpty())
+            [
+                Selector
+            ]
+        ];
+}
+
+// ============================================================================
+// SEnhancedObjectSelector Implementation
+// ============================================================================
+
+void SEnhancedObjectSelector::Construct(const FArguments& InArgs)
+{
+    AllowedClass = InArgs._AllowedClass;
+    CurrentObjectPath = InArgs._ObjectPath;
+    bAllowClear = InArgs._AllowClear;
+    bShowThumbnail = InArgs._ShowThumbnail;
+    bShowTypeIcon = InArgs._ShowTypeIcon;
+    PlaceholderText = InArgs._PlaceholderText;
+    OnAssetSelected = InArgs._OnAssetSelected;
+
+    ChildSlot
+    [
+        SNew(SBorder)
+        .BorderImage(FAppStyle::GetBrush("PropertyEditor.AssetTileItem.DropShadow"))
+        .Padding(1)
+        [
+            SAssignNew(ObjectSelector, SObjectPropertyEntryBox)
+            .AllowedClass(AllowedClass)
+            .ObjectPath(this, &SEnhancedObjectSelector::GetObjectPathForDisplay)
+            .OnObjectChanged(this, &SEnhancedObjectSelector::OnObjectChanged)
+            .AllowClear(bAllowClear)
+            .DisplayUseSelected(true)
+            .DisplayBrowse(true)
+            .EnableContentPicker(true)
+            .DisplayCompactSize(false)
+        ]
+    ];
+}
+
+FString SEnhancedObjectSelector::GetObjectPath() const
+{
+    return CurrentObjectPath;
+}
+
+void SEnhancedObjectSelector::SetObjectPath(const FString& InObjectPath)
+{
+    CurrentObjectPath = InObjectPath;
+}
+
+void SEnhancedObjectSelector::ClearSelection()
+{
+    CurrentObjectPath.Empty();
+    OnObjectChanged(FAssetData());
+}
+
+void SEnhancedObjectSelector::OnObjectChanged(const FAssetData& AssetData)
+{
+    if (AssetData.IsValid())
+    {
+        CurrentObjectPath = AssetData.GetObjectPathString();
+    }
+    else
+    {
+        CurrentObjectPath.Empty();
+    }
+
+    if (OnAssetSelected.IsBound())
+    {
+        OnAssetSelected.ExecuteIfBound(AssetData);
+    }
+}
+
+FText SEnhancedObjectSelector::GetDisplayText() const
+{
+    if (CurrentObjectPath.IsEmpty())
+    {
+        return FText::FromString(PlaceholderText);
+    }
+
+    // Extract just the asset name from the path
+    FString AssetName = FPaths::GetBaseFilename(CurrentObjectPath);
+    return FText::FromString(AssetName);
+}
+
+FString SEnhancedObjectSelector::GetObjectPathForDisplay() const
+{
+    return CurrentObjectPath;
+}
+
+// ============================================================================
+// SEnhancedFilePathSelector Implementation  
+// ============================================================================
+
+void SEnhancedFilePathSelector::Construct(const FArguments& InArgs)
+{
+    DialogTitle = InArgs._DialogTitle;
+    FileTypeFilter = InArgs._FileTypeFilter;
+    CurrentFilePath = InArgs._FilePath;
+    bDirectoryMode = InArgs._DirectoryMode;
+    bShowValidationIcon = InArgs._ShowValidationIcon;
+    PlaceholderText = InArgs._PlaceholderText;
+    OnPathPicked = InArgs._OnPathPicked;
+
+    ChildSlot
+    [
+        SNew(SHorizontalBox)
+        
+        // File path picker
+        + SHorizontalBox::Slot()
+        .FillWidth(1.0f)
+        [
+            SAssignNew(FilePathPicker, SFilePathPicker)
+            .BrowseButtonImage(FAppStyle::GetBrush("PropertyWindow.Button_Ellipsis"))
+            .BrowseButtonStyle(FAppStyle::Get(), "HoverHintOnly")
+            .BrowseButtonToolTip(FText::FromString(DialogTitle))
+            .BrowseDirectory_Lambda([this]() { return FPaths::GetPath(CurrentFilePath); })
+            .BrowseTitle(FText::FromString(DialogTitle))
+            .FilePath_Lambda([this]() { return CurrentFilePath; })
+            .FileTypeFilter(FileTypeFilter)
+            .OnPathPicked(this, &SEnhancedFilePathSelector::OnPathChanged)
+        ]
+        
+        // Validation icon
+        + SHorizontalBox::Slot()
+        .AutoWidth()
+        .VAlign(VAlign_Center)
+        .Padding(4, 0, 0, 0)
+        [
+            SNew(SImage)
+            .Image(this, &SEnhancedFilePathSelector::GetValidationIcon)
+            .ColorAndOpacity(this, &SEnhancedFilePathSelector::GetValidationIconColor)
+            .ToolTipText(this, &SEnhancedFilePathSelector::GetValidationTooltip)
+            .Visibility(bShowValidationIcon ? EVisibility::Visible : EVisibility::Collapsed)
+        ]
+    ];
+}
+
+FString SEnhancedFilePathSelector::GetFilePath() const
+{
+    return CurrentFilePath;
+}
+
+void SEnhancedFilePathSelector::SetFilePath(const FString& InFilePath)
+{
+    CurrentFilePath = InFilePath;
+}
+
+bool SEnhancedFilePathSelector::IsPathValid() const
+{
+    if (CurrentFilePath.IsEmpty())
+    {
+        return false;
+    }
+
+    if (bDirectoryMode)
+    {
+        return FPaths::DirectoryExists(CurrentFilePath);
+    }
+    else
+    {
+        return FPaths::FileExists(CurrentFilePath);
+    }
+}
+
+void SEnhancedFilePathSelector::OnPathChanged(const FString& NewPath)
+{
+    CurrentFilePath = NewPath;
+    
+    if (OnPathPicked.IsBound())
+    {
+        OnPathPicked.ExecuteIfBound(NewPath);
+    }
+}
+
+const FSlateBrush* SEnhancedFilePathSelector::GetValidationIcon() const
+{
+    if (CurrentFilePath.IsEmpty())
+    {
+        return FAppStyle::GetBrush("Icons.Warning");
+    }
+    
+    return IsPathValid() ? 
+        FAppStyle::GetBrush("Icons.Check") : 
+        FAppStyle::GetBrush("Icons.Error");
+}
+
+FSlateColor SEnhancedFilePathSelector::GetValidationIconColor() const
+{
+    if (CurrentFilePath.IsEmpty())
+    {
+        return FVCCSimModuleFactory::GetWarningColor();
+    }
+    
+    return IsPathValid() ? 
+        FVCCSimModuleFactory::GetSuccessColor() : 
+        FVCCSimModuleFactory::GetErrorColor();
+}
+
+FText SEnhancedFilePathSelector::GetValidationTooltip() const
+{
+    if (CurrentFilePath.IsEmpty())
+    {
+        return LOCTEXT("EmptyPath", "No path specified");
+    }
+    
+    if (IsPathValid())
+    {
+        return bDirectoryMode ? 
+            LOCTEXT("ValidDirectory", "Directory exists") : 
+            LOCTEXT("ValidFile", "File exists");
+    }
+    else
+    {
+        return bDirectoryMode ? 
+            LOCTEXT("InvalidDirectory", "Directory does not exist") : 
+            LOCTEXT("InvalidFile", "File does not exist");
+    }
+}
+
+// ============================================================================
+// FAssetSelectorPresets Implementation
+// ============================================================================
+
+const FString FAssetSelectorPresets::ImageFileFilter = TEXT("Image Files (*.png;*.jpg;*.jpeg;*.bmp;*.tga;*.exr;*.hdr)|*.png;*.jpg;*.jpeg;*.bmp;*.tga;*.exr;*.hdr");
+const FString FAssetSelectorPresets::MeshFileFilter = TEXT("Mesh Files (*.obj;*.fbx;*.dae;*.3ds;*.ply)|*.obj;*.fbx;*.dae;*.3ds;*.ply");
+const FString FAssetSelectorPresets::TextFileFilter = TEXT("Text Files (*.txt;*.log;*.csv;*.json;*.xml)|*.txt;*.log;*.csv;*.json;*.xml");
+const FString FAssetSelectorPresets::ConfigFileFilter = TEXT("Configuration Files (*.ini;*.cfg;*.config;*.toml;*.yaml)|*.ini;*.cfg;*.config;*.toml;*.yaml");
+const FString FAssetSelectorPresets::AllFilesFilter = TEXT("All Files (*.*)|*.*");
+
+UClass* FAssetSelectorPresets::StaticMeshClass = nullptr;
+UClass* FAssetSelectorPresets::TextureClass = nullptr;
+UClass* FAssetSelectorPresets::MaterialClass = nullptr;
+UClass* FAssetSelectorPresets::MaterialInstanceClass = nullptr;
+UClass* FAssetSelectorPresets::SoundClass = nullptr;
+UClass* FAssetSelectorPresets::AnimationSequenceClass = nullptr;
+
+void FAssetSelectorPresets::Initialize()
+{
+    StaticMeshClass = UStaticMesh::StaticClass();
+    TextureClass = UTexture2D::StaticClass();
+    MaterialClass = UMaterial::StaticClass();
+    MaterialInstanceClass = UMaterialInstance::StaticClass();
+    SoundClass = USoundBase::StaticClass();
+    AnimationSequenceClass = UAnimSequence::StaticClass();
+}
+
+#undef LOCTEXT_NAMESPACE

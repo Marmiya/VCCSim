@@ -1,0 +1,171 @@
+/*
+* Copyright (C) 2025 Visual Computing Research Center, Shenzhen University
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+#include "Editor/VCCSimPanel.h"
+#include "Editor/Widgets/CameraConfigWidget.h"
+
+/**
+ * Integration guide for the new Camera Configuration Widget
+ * 
+ * This file shows how to integrate the new SCameraConfigWidget into the existing
+ * VCCSimPanel. The new widget provides a modern, table-based interface for
+ * camera configuration instead of the old simple checkbox layout.
+ */
+
+// ============================================================================
+// PHASE 1B INTEGRATION: Replace Camera UI
+// ============================================================================
+
+/**
+ * To integrate the new camera widget into VCCSimPanel, replace the existing
+ * CreateCameraSelectPanel() method with this new implementation:
+ */
+
+/*
+TSharedRef<SWidget> SVCCSimPanel::CreateCameraSelectPanel()
+{
+    // Create the new camera configuration widget
+    TSharedRef<SCameraConfigWidget> CameraWidget = SNew(SCameraConfigWidget);
+    
+    // Initialize with camera module (when modules are implemented)
+    // CameraWidget->Initialize(CameraModule);
+    
+    // For now, initialize with current data
+    FCameraConfiguration CurrentConfig;
+    CurrentConfig.bUseRGB = bUseRGBCamera;
+    CurrentConfig.bUseDepth = bUseDepthCamera;
+    CurrentConfig.bUseSegmentation = bUseSegmentationCamera;
+    CurrentConfig.bUseNormal = bUseNormalCamera;
+    CurrentConfig.bHasRGBCamera = bHasRGBCamera;
+    CurrentConfig.bHasDepthCamera = bHasDepthCamera;
+    CurrentConfig.bHasSegmentationCamera = bHasSegmentationCamera;
+    CurrentConfig.bHasNormalCamera = bHasNormalCamera;
+    
+    // Store reference for later updates
+    CameraConfigWidget = CameraWidget;
+    
+    return SNew(SBorder)
+        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryTop"))
+        .Padding(8)
+        [
+            CameraWidget
+        ];
+}
+*/
+
+/**
+ * Add this member to SVCCSimPanel header file:
+ */
+
+/*
+// In VCCSimPanel.h, add to private members:
+TSharedPtr<SCameraConfigWidget> CameraConfigWidget;
+*/
+
+/**
+ * Update camera information when FlashPawn selection changes:
+ */
+
+/*
+// Modify OnSelectionChanged method in VCCSimPanel.cpp:
+void SVCCSimPanel::OnSelectionChanged(UObject* Object)
+{
+    // ... existing selection logic ...
+    
+    // Update camera widget if available
+    if (CameraConfigWidget.IsValid())
+    {
+        CameraConfigWidget->UpdateCameraComponents(SelectedFlashPawn);
+    }
+}
+*/
+
+/**
+ * Benefits of the new Camera Configuration Widget:
+ * 
+ * 1. Modern Table-Based UI:
+ *    - Uses SListView with SHeaderRow for professional appearance
+ *    - Clear column-based layout: Camera Type | Available | Enabled | Status
+ *    - Consistent with UE Editor standards
+ * 
+ * 2. Better User Experience:
+ *    - Color-coded status indicators (Green=Available, Red=Unavailable)
+ *    - Clear checkbox controls for enabling/disabling cameras
+ *    - Summary information showing active camera count
+ *    - Tooltip support for better usability
+ * 
+ * 3. Improved Code Organization:
+ *    - Dedicated widget class for camera configuration
+ *    - Structured data using FCameraConfiguration
+ *    - Module-ready architecture for future expansion
+ *    - Separation of UI and business logic
+ * 
+ * 4. Enhanced Functionality:
+ *    - Real-time configuration validation
+ *    - Notification system for user feedback
+ *    - Progress tracking capabilities
+ *    - Easy integration with future module system
+ */
+
+// ============================================================================
+// MIGRATION STEPS
+// ============================================================================
+
+/**
+ * Step 1: Update VCCSimPanel.h
+ * - Add #include "Editor/Widgets/CameraConfigWidget.h"
+ * - Add TSharedPtr<SCameraConfigWidget> CameraConfigWidget; to private members
+ * 
+ * Step 2: Update VCCSimPanel_UI.cpp  
+ * - Replace CreateCameraSelectPanel() implementation with new code above
+ * - Update OnSelectionChanged() to notify camera widget
+ * - Remove old camera UI creation methods (CreateCameraStatusRow, CreateCameraStatusBox)
+ * 
+ * Step 3: Update Build Dependencies
+ * - Ensure VCCSimEditor.Build.cs includes necessary modules:
+ *   - "Slate", "SlateCore", "EditorStyle", "ToolWidgets"
+ * 
+ * Step 4: Testing
+ * - Verify camera detection works correctly
+ * - Test checkbox state changes
+ * - Confirm notification system works
+ * - Validate with different FlashPawn configurations
+ */
+
+// ============================================================================
+// FUTURE ENHANCEMENTS (Phase 2+)
+// ============================================================================
+
+/**
+ * When implementing Phase 2 (Module System):
+ * 
+ * 1. Create Camera Module Implementation:
+ *    - Implement IVCCSimCameraModule interface
+ *    - Move camera detection logic to module
+ *    - Handle camera component management
+ * 
+ * 2. Enhanced Configuration:
+ *    - Add camera-specific settings (resolution, frame rate, etc.)
+ *    - Support for custom camera types
+ *    - Per-camera quality settings
+ * 
+ * 3. Advanced Features:
+ *    - Camera preview thumbnails in table
+ *    - Drag-and-drop reordering
+ *    - Export/import camera configurations
+ *    - Integration with UE's Details View for complex settings
+ */

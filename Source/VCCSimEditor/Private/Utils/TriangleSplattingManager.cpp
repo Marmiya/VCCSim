@@ -17,12 +17,12 @@
 
 #include "Utils/TriangleSplattingManager.h"
 #include "Editor/VCCSimPanel.h"
+#include "Editor/VCCSimDataStructures.h"
 #include "Utils/VCCSimDataConverter.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "HAL/PlatformFilemanager.h"
 #include "Misc/DateTime.h"
-#include "Engine/Engine.h"
 
 // ============================================================================
 // CONSTRUCTION / DESTRUCTION
@@ -50,7 +50,7 @@ FTriangleSplattingManager::~FTriangleSplattingManager()
 // TRAINING CONTROL
 // ============================================================================
 
-bool FTriangleSplattingManager::StartTraining(const FTriangleSplattingConfig& Config)
+bool FTriangleSplattingManager::StartTraining(const FTriangleSplattingConfiguration& Config)
 {
     if (IsTrainingInProgress())
     {
@@ -58,7 +58,7 @@ bool FTriangleSplattingManager::StartTraining(const FTriangleSplattingConfig& Co
         return false;
     }
     
-    CurrentConfig = MakeShared<FTriangleSplattingConfig>(Config);
+    CurrentConfig = MakeShared<FTriangleSplattingConfiguration>(Config);
     CurrentStatus = ETrainingStatus::Preparing;
     TrainingProgress = 0.0f;
     StatusMessage = TEXT("Preparing training...");
@@ -197,7 +197,7 @@ void FTriangleSplattingManager::RefreshStatus()
 // INTERNAL VALIDATION AND PREPARATION
 // ============================================================================
 
-bool FTriangleSplattingManager::ValidateConfiguration(const FTriangleSplattingConfig& Config)
+bool FTriangleSplattingManager::ValidateConfiguration(const FTriangleSplattingConfiguration& Config)
 {
     TArray<FString> ErrorMessages;
     
@@ -249,7 +249,7 @@ bool FTriangleSplattingManager::ValidateConfiguration(const FTriangleSplattingCo
     return true;
 }
 
-bool FTriangleSplattingManager::PrepareTrainingData(const FTriangleSplattingConfig& Config)
+bool FTriangleSplattingManager::PrepareTrainingData(const FTriangleSplattingConfiguration& Config)
 {
     OutputDirectory = Config.OutputDirectory;
     
@@ -321,7 +321,7 @@ bool FTriangleSplattingManager::PrepareTrainingData(const FTriangleSplattingConf
     return true;
 }
 
-FString FTriangleSplattingManager::CreateConfigurationFile(const FTriangleSplattingConfig& Config)
+FString FTriangleSplattingManager::CreateConfigurationFile(const FTriangleSplattingConfiguration& Config)
 {
     FString ConfigPath = FPaths::Combine(OutputDirectory, TEXT("config"), TEXT("vccsim_training_config.json"));
     
@@ -713,7 +713,7 @@ FString FTriangleSplattingManager::GenerateTimestampedFilename(const FString& Ba
     return FString::Printf(TEXT("%s_%s.%s"), *BaseName, *Timestamp, *Extension);
 }
 
-FString FTriangleSplattingManager::ConfigToJsonString(const FTriangleSplattingConfig& Config)
+FString FTriangleSplattingManager::ConfigToJsonString(const FTriangleSplattingConfiguration& Config)
 {
     return FString::Printf(TEXT(
         "{\n"

@@ -26,7 +26,13 @@
 #include "ProceduralMeshComponent.h"
 #include "Misc/Paths.h"
 #include "AssetRegistry/AssetData.h"
-#include "VCCSimPanel.generated.h"
+
+// Phase 2: Structured configuration system
+#include "Editor/VCCSimDataStructures.h"
+#include "Editor/IVCCSimModule.h"
+// #include "Editor/Widgets/CameraConfigWidget.h" // Temporarily disabled
+// #include "Editor/Widgets/ConfigurationDetailsWidget.h" // Temporarily disabled
+// #include "Editor/Widgets/AssetSelectorWidget.h" // Temporarily disabled
 
 class AFlashPawn;
 class AVCCSimPath;
@@ -36,40 +42,7 @@ class UStaticMeshComponent;
 class FTriangleSplattingManager;
 struct FCameraInfo;
 
-/**
- * Triangle Splatting configuration structure
- */
-USTRUCT()
-struct VCCSIMEDITOR_API FTriangleSplattingConfig
-{
-    GENERATED_BODY()
-
-    // Input paths
-    FString ImageDirectory;
-    FString PoseFilePath;
-    FString OutputDirectory;
-    
-    // Mesh configuration
-    TWeakObjectPtr<UStaticMesh> SelectedMesh;
-    bool bUseMeshInitialization = true;
-    
-    // Camera parameters (user inputs)
-    float FOVDegrees = 90.0f;
-    int32 ImageWidth = 1920;
-    int32 ImageHeight = 1080;
-    
-    // Training parameters
-    int32 MaxIterations = 30000;
-    float LearningRate = 0.01f;
-    
-    // Constructor
-    FTriangleSplattingConfig()
-    {
-        ImageDirectory = TEXT("");
-        PoseFilePath = TEXT("");
-        OutputDirectory = FPaths::ProjectSavedDir() / TEXT("TriangleSplatting");
-    }
-};
+// Clean Phase 2: All configurations now use structured system from VCCSimDataStructures.h
 
 class VCCSIMEDITOR_API SVCCSimPanel final : public SCompoundWidget
 {
@@ -156,60 +129,62 @@ private:
     TSharedPtr<SButton> GSStartTrainingButton;
     TSharedPtr<SButton> GSStopTrainingButton;
     TSharedPtr<STextBlock> GSTrainingStatusText;
+    
+    // Camera status row data structure
+    struct FCameraStatusRow
+    {
+        FString Name;
+        bool bIsActive;
+        bool bIsConfigured;
+        FLinearColor StatusColor;
+        
+        FCameraStatusRow(const FString& InName, bool bActive, bool bConfigured)
+            : Name(InName), bIsActive(bActive), bIsConfigured(bConfigured)
+        {
+            if (bIsActive && bIsConfigured)
+                StatusColor = FLinearColor::Green;
+            else if (bIsConfigured)
+                StatusColor = FLinearColor::Yellow;
+            else
+                StatusColor = FLinearColor::Red;
+        }
+    };
+    
+    // Camera status list data
+    TSharedPtr<TArray<TSharedPtr<FCameraStatusRow>>> CameraStatusRows;
 
     // ============================================================================
-    // STATE VARIABLES
+    // PHASE 2: STRUCTURED CONFIGURATION SYSTEM  
     // ============================================================================
     
-    // Selection state
+    // Selection state (keeping as-is for now)
     bool bSelectingFlashPawn = false;
     bool bSelectingTarget = false;
-    bool bUseLimited = false;
     
-    // Selected objects
+    // Selected objects (keeping as-is for now)
     TWeakObjectPtr<AFlashPawn> SelectedFlashPawn;
     TWeakObjectPtr<AActor> SelectedTargetObject;
     
-    // Path configuration
-    int32 NumPoses = 50;
-    float Radius = 500.0f;
-    float HeightOffset = 0.0f;
-    float VerticalGap = 50.0f;
-    FString SaveDirectory;
-    float SafeDistance = 200.0f;
-    float SafeHeight = 200.0f;
-    float LimitedMinX = 0.0f;
-    float LimitedMaxX = 5000.0f;
-    float LimitedMinY = -9500.0f;
-    float LimitedMaxY = -7000.0f;
-    float LimitedMinZ = -20.0f;
-    float LimitedMaxZ = 2000.0f;
+    // Structured configuration objects (replacing 50+ scattered variables)
+    FPoseConfiguration PoseConfig;
+    FCameraConfiguration CameraConfig; 
+    FLimitedRegionConfiguration RegionConfig;
+    FPointCloudInfo PointCloudInfo;  // Using existing structure for point cloud data
     
-    // TOptional attributes for SpinBox values
-    TOptional<int32> NumPosesValue;
-    TOptional<float> RadiusValue;
-    TOptional<float> HeightOffsetValue;
-    TOptional<float> VerticalGapValue;
-    TOptional<float> SafeDistanceValue;
-    TOptional<float> SafeHeightValue;
-    TOptional<float> LimitedMinXValue;
-    TOptional<float> LimitedMaxXValue;
-    TOptional<float> LimitedMinYValue;
-    TOptional<float> LimitedMaxYValue;
-    TOptional<float> LimitedMinZValue;
-    TOptional<float> LimitedMaxZValue;
+    // Triangle Splatting configuration (clean structured system)
+    FTriangleSplattingConfiguration GSConfig;
     
-    // Camera settings
-    bool bUseRGBCamera = true;
-    bool bUseDepthCamera = false;
-    bool bUseSegmentationCamera = false;
-    bool bUseNormalCamera = false;
+    // ============================================================================
+    // PHASE 2: ADVANCED UI WIDGETS (replacing individual widget pointers)
+    // ============================================================================
     
-    // Available cameras on current FlashPawn
-    bool bHasRGBCamera = false;
-    bool bHasDepthCamera = false;
-    bool bHasSegmentationCamera = false;
-    bool bHasNormalCamera = false;
+    // Modern structured widgets - temporarily disabled due to UE 5.6 compatibility
+    // TSharedPtr<SCameraConfigWidget> CameraWidget;
+    // TSharedPtr<SPoseConfigWidget> PoseWidget; 
+    // TSharedPtr<STriangleSplattingConfigWidget> GSWidget; // Temporarily disabled
+    
+    // Configuration management - temporarily disabled
+    // UVCCSimConfigurationObject* ConfigurationObject;
     
     // Auto-capture state
     bool bAutoCaptureInProgress = false;
@@ -245,20 +220,28 @@ private:
     FString LoadedPointCloudPath;
     int32 PointCloudCount = 0;
     
-    // Point cloud settings
+    // Point cloud settings (moved to static variables for Phase 2 compatibility)
     FLinearColor DefaultPointColor = FLinearColor(1.0f, 0.5f, 0.0f, 1.0f);
-    float PointSize = .5f;
-    float NormalLength = 50.f;
+    float NormalLength = 10.0f;
+    float PointSize = 0.5f;
+    FString SaveDirectory;
 
-    // Triangle Splatting state (simplified)
-    FTriangleSplattingConfig GSConfig;
+    // Triangle Splatting state (simplified) - GSConfig now moved to structured configuration section
     bool bGSTrainingInProgress = false;
     float GSTrainingProgress = 0.0f;
     FString GSTrainingStatusMessage = TEXT("Ready");
     TSharedPtr<FTriangleSplattingManager> GSTrainingManager;
     FTimerHandle GSStatusUpdateTimerHandle;
     
-    // TOptional attributes for Triangle Splatting SpinBox values
+    // UI binding variables for SpinBox widgets (required for CreateNumericPropertyRow functions)
+    TOptional<int32> NumPosesValue;
+    TOptional<float> RadiusValue;
+    TOptional<float> VerticalGapValue;
+    TOptional<float> HeightOffsetValue;
+    TOptional<float> SafeDistanceValue;
+    TOptional<float> SafeHeightValue;
+    
+    // Triangle Splatting UI binding variables
     TOptional<float> GSFOVValue;
     TOptional<int32> GSImageWidthValue;
     TOptional<int32> GSImageHeightValue;
@@ -272,6 +255,21 @@ private:
     void LoadLogoImages();
     void InitializeSceneAnalysisManager();
     void CreateMainLayout();
+    void CreateModernUILayout();
+    TSharedRef<SWidget> CreateModernControlPanel();
+    TSharedRef<SWidget> CreateModernStatusPanel();
+    TSharedRef<SWidget> CreateModernDetailsView();
+    
+    TSharedRef<SWidget> CreatePawnTargetSelector();
+    TSharedRef<SWidget> CreateCameraConfigurationWidget();
+    TSharedRef<SWidget> CreatePoseConfigurationWidget();
+    TSharedRef<SWidget> CreateActionButtons();
+    TSharedRef<SWidget> CreateTriangleSplattingWidget();
+    TSharedRef<SWidget> CreateSceneAnalysisWidget();
+    TSharedRef<SWidget> CreateCameraStatusListView();
+    TSharedRef<SWidget> CreateConfigurationDetailsView();
+    TSharedRef<SWidget> CreateCameraRow(const FString& CameraName, bool bHasCamera, bool bUseCamera, 
+        TFunction<void(ECheckBoxState)> OnCheckStateChanged);
 
     // ============================================================================
     // SELECTION MANAGEMENT
@@ -458,6 +456,41 @@ private:
         TOptional<T>& Value,
         T MinValue,
         T DeltaValue);
+
+    // ============================================================================
+    // PHASE 2: STRUCTURED CONFIGURATION METHODS
+    // ============================================================================
+    
+    // Configuration initialization
+    void InitializeStructuredConfigurations();
+    
+    // Configuration change handlers
+    void OnPoseConfigurationChanged();
+    void OnCameraConfigurationChanged();
+    void OnTriangleSplattingConfigurationChanged();
+    void OnRegionConfigurationChanged();
+    void OnPointCloudConfigurationChanged();
+    
+    // Widget creation and management
+    void CreateModernUIWidgets();
+    TSharedRef<SWidget> CreateStructuredCameraSection();
+    TSharedRef<SWidget> CreateStructuredPoseSection();
+    TSharedRef<SWidget> CreateStructuredTriangleSplattingSection();
+    
+    // Configuration management
+    void LoadConfigurationPreset(const FString& PresetName);
+    void SaveConfigurationPreset(const FString& PresetName);
+    void ResetConfigurationsToDefaults();
+    void ValidateConfigurations();
+    
+    // ============================================================================
+    // PHASE 2: CLEAN CONFIGURATION ACCESS
+    // ============================================================================
+    
+    // Direct access to structured configurations
+    // Usage: Panel.PoseConfig.NumPoses instead of Panel.GetNumPoses()
+    // Usage: Panel.CameraConfig.bUseRGB instead of Panel.GetUseRGBCamera()
+    // Usage: Panel.GSConfig.FOVDegrees instead of Panel.GetGSFOV()
 
     // ============================================================================
     // UTILITY FUNCTIONS

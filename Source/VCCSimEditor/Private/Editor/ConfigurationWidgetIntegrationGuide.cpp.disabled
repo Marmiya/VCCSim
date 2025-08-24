@@ -1,0 +1,451 @@
+/*
+* Copyright (C) 2025 Visual Computing Research Center, Shenzhen University
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+/**
+ * Integration guide for enhanced configuration widgets in VCCSimEditor
+ * 
+ * This file demonstrates how to replace existing manual SpinBox controls
+ * with modern UE Details View-based configuration panels.
+ */
+
+#include "Editor/Widgets/ConfigurationDetailsWidget.h"
+
+// ============================================================================
+// PHASE 1B CONTINUATION: Configuration Panel Enhancement
+// ============================================================================
+
+/**
+ * Example 1: Replace Pose Configuration Panel
+ * 
+ * Current implementation uses individual SNumericEntryBox widgets.
+ * The new approach uses UE's Details View with automatic UI generation.
+ */
+
+/*
+// OLD CODE (in VCCSimPanel_UI.cpp):
+TSharedRef<SWidget> SVCCSimPanel::CreatePoseConfigPanel()
+{
+    return SNew(SVerticalBox)
+        
+        // Number of poses
+        +SVerticalBox::Slot()
+        .AutoHeight()
+        [
+            CreateNumericPropertyRowInt32(
+                TEXT("Number of Poses"),
+                NumPosesSpinBox,
+                NumPosesValue,
+                NumPoses,
+                1,
+                1)
+        ]
+        
+        // Radius
+        +SVerticalBox::Slot()
+        .AutoHeight()
+        [
+            CreateNumericPropertyRowFloat(
+                TEXT("Radius"),
+                RadiusSpinBox,
+                RadiusValue,
+                Radius,
+                10.0f,
+                10.0f)
+        ]
+        
+        // Height offset
+        +SVerticalBox::Slot()
+        .AutoHeight()
+        [
+            CreateNumericPropertyRowFloat(
+                TEXT("Height Offset"),
+                HeightOffsetSpinBox,
+                HeightOffsetValue,
+                HeightOffset,
+                0.0f,
+                10.0f)
+        ];
+}
+
+// NEW CODE (using enhanced configuration widget):
+TSharedRef<SWidget> SVCCSimPanel::CreatePoseConfigPanel()
+{
+    // Create configuration widget
+    TSharedRef<SPoseConfigWidget> ConfigWidget = SNew(SPoseConfigWidget);
+    
+    // Initialize with current values
+    FPoseConfiguration CurrentConfig;
+    CurrentConfig.NumPoses = NumPoses;
+    CurrentConfig.Radius = Radius;
+    CurrentConfig.HeightOffset = HeightOffset;
+    CurrentConfig.VerticalGap = VerticalGap;
+    CurrentConfig.SafeDistance = SafeDistance;
+    CurrentConfig.SafeHeight = SafeHeight;
+    
+    ConfigWidget->SetPoseConfiguration(CurrentConfig);
+    
+    // Store reference for later access
+    PoseConfigWidget = ConfigWidget;
+    
+    return ConfigWidget;
+}
+*/
+
+/**
+ * Benefits of the New Configuration Approach:
+ * 
+ * 1. **Automatic UI Generation**: UPROPERTY meta tags generate UI automatically
+ * 2. **Built-in Validation**: ClampMin/ClampMax enforced at UI level
+ * 3. **Rich Meta Information**: Units, tooltips, edit conditions
+ * 4. **Consistent Styling**: Uses UE's standard Details View appearance
+ * 5. **Preset System**: Save/load common configurations
+ * 6. **Real-time Validation**: Visual feedback for invalid configurations
+ * 7. **Reduced Code**: Significantly less boilerplate UI code
+ * 8. **Future-proof**: Easy to add new parameters
+ */
+
+/**
+ * Example 2: Replace Triangle Splatting Parameters
+ */
+
+/*
+// OLD CODE (multiple SpinBox widgets):
+TSharedRef<SWidget> SVCCSimPanel::CreateGSTrainingParamsSection()
+{
+    return SNew(SVerticalBox)
+        
+        // FOV parameter
+        +SVerticalBox::Slot()
+        .AutoHeight()
+        .Padding(0, 2)
+        [
+            CreateGSNumericPropertyRow<float>(
+                TEXT("FOV (degrees)"),
+                GSFOVSpinBox,
+                GSFOVValue,
+                10.0f,
+                180.0f,
+                1.0f,
+                [this](float NewValue) { OnGSFOVChanged(NewValue); })
+        ]
+        
+        // Image dimensions
+        +SVerticalBox::Slot()
+        .AutoHeight()
+        .Padding(0, 2)
+        [
+            CreateGSNumericPropertyRow<int32>(
+                TEXT("Image Width"),
+                GSImageWidthSpinBox,
+                GSImageWidthValue,
+                1,
+                8192,
+                1,
+                [this](int32 NewValue) { OnGSImageWidthChanged(NewValue); })
+        ];
+}
+
+// NEW CODE (using enhanced configuration widget):
+TSharedRef<SWidget> SVCCSimPanel::CreateGSTrainingParamsSection()
+{
+    TSharedRef<STriangleSplattingConfigWidget> ConfigWidget = SNew(STriangleSplattingConfigWidget);
+    
+    // Initialize with current configuration
+    ConfigWidget->SetTriangleSplattingConfiguration(GSConfig);
+    
+    // Bind to changes
+    ConfigWidget->OnConfigurationChanged.BindLambda([this]()
+    {
+        GSConfig = TriangleSplattingConfigWidget->GetTriangleSplattingConfiguration();
+        ValidateGSConfiguration();
+    });
+    
+    TriangleSplattingConfigWidget = ConfigWidget;
+    return ConfigWidget;
+}
+*/
+
+/**
+ * Example 3: Point Cloud Visualization Settings
+ */
+
+/*
+// NEW CODE (enhanced point cloud configuration):
+TSharedRef<SWidget> SVCCSimPanel::CreatePointCloudVisualizationPanel()
+{
+    // Create configuration widget focused on point cloud settings
+    TSharedRef<SConfigurationDetailsWidget> ConfigWidget = SNew(SConfigurationDetailsWidget)
+        .ConfigurationName(TEXT("Point Cloud Visualization"))
+        .ShowResetButton(true)
+        .ShowPresets(false);  // Disable presets for this simple case
+    
+    // Create configuration object with only point cloud properties
+    UVCCSimConfigurationObject* ConfigObject = NewObject<UVCCSimConfigurationObject>();
+    ConfigObject->PointSize = PointSize;
+    ConfigObject->NormalLength = NormalLength;
+    ConfigObject->bShowNormals = bShowNormals;
+    ConfigObject->DefaultPointColor = DefaultPointColor;
+    
+    ConfigWidget->Initialize(ConfigObject);
+    
+    return SNew(SVerticalBox)
+        
+        // Point cloud file selector
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        .Padding(0, 0, 0, 8)
+        [
+            FAssetSelectorFactory::CreateFilePathSelector(
+                TEXT("Select Point Cloud File"),
+                TEXT("Point Cloud Files (*.ply;*.pcd;*.pts)|*.ply;*.pcd;*.pts"),
+                [this]() { return LoadedPointCloudPath; },
+                [this](const FString& NewPath) { 
+                    LoadedPointCloudPath = NewPath;
+                    OnLoadPointCloud(NewPath);
+                },
+                TEXT("Point Cloud File")
+            )
+        ]
+        
+        // Configuration details
+        + SVerticalBox::Slot()
+        .FillHeight(1.0f)
+        [
+            ConfigWidget
+        ];
+}
+*/
+
+// ============================================================================
+// MIGRATION STEPS
+// ============================================================================
+
+/**
+ * Step 1: Update VCCSimPanel.h
+ * 
+ * Add configuration widget references:
+ */
+
+/*
+// Add to private members in VCCSimPanel.h:
+TSharedPtr<SPoseConfigWidget> PoseConfigWidget;
+TSharedPtr<STriangleSplattingConfigWidget> TriangleSplattingConfigWidget;
+TSharedPtr<SConfigurationDetailsWidget> PointCloudConfigWidget;
+*/
+
+/**
+ * Step 2: Update VCCSimPanel_UI.cpp
+ * 
+ * Replace individual panel creation methods:
+ */
+
+/*
+// Replace CreatePoseConfigPanel():
+TSharedRef<SWidget> SVCCSimPanel::CreatePoseConfigPanel()
+{
+    PoseConfigWidget = SNew(SPoseConfigWidget);
+    
+    // Initialize with current values
+    FPoseConfiguration CurrentConfig;
+    CurrentConfig.NumPoses = NumPoses;
+    CurrentConfig.Radius = Radius;
+    CurrentConfig.HeightOffset = HeightOffset;
+    CurrentConfig.VerticalGap = VerticalGap;
+    CurrentConfig.SafeDistance = SafeDistance;
+    CurrentConfig.SafeHeight = SafeHeight;
+    
+    PoseConfigWidget->SetPoseConfiguration(CurrentConfig);
+    
+    return PoseConfigWidget.ToSharedRef();
+}
+*/
+
+/**
+ * Step 3: Update Configuration Access
+ * 
+ * Replace direct variable access with widget getters:
+ */
+
+/*
+// OLD CODE:
+void SVCCSimPanel::GeneratePosesAroundTarget()
+{
+    int32 PoseCount = NumPoses;
+    float PoseRadius = Radius;
+    // ... use variables directly
+}
+
+// NEW CODE:
+void SVCCSimPanel::GeneratePosesAroundTarget()
+{
+    if (PoseConfigWidget.IsValid())
+    {
+        FPoseConfiguration Config = PoseConfigWidget->GetPoseConfiguration();
+        int32 PoseCount = Config.NumPoses;
+        float PoseRadius = Config.Radius;
+        // ... use configuration struct
+    }
+}
+*/
+
+/**
+ * Step 4: Handle Configuration Changes
+ * 
+ * Bind to configuration change events:
+ */
+
+/*
+void SVCCSimPanel::OnPoseConfigurationChanged()
+{
+    if (PoseConfigWidget.IsValid())
+    {
+        FPoseConfiguration Config = PoseConfigWidget->GetPoseConfiguration();
+        
+        // Update internal variables if still needed for compatibility
+        NumPoses = Config.NumPoses;
+        Radius = Config.Radius;
+        HeightOffset = Config.HeightOffset;
+        VerticalGap = Config.VerticalGap;
+        SafeDistance = Config.SafeDistance;
+        SafeHeight = Config.SafeHeight;
+        
+        // Update path visualization if needed
+        if (bPathVisualized)
+        {
+            UpdatePathVisualization();
+        }
+        
+        // Validate configuration
+        FString Error;
+        if (!Config.IsValid())
+        {
+            FVCCSimNotificationHelper::ShowWarning(TEXT("Invalid pose configuration"), 3.0f);
+        }
+    }
+}
+*/
+
+// ============================================================================
+// ADVANCED FEATURES
+// ============================================================================
+
+/**
+ * Custom Validation Rules
+ */
+
+/*
+// Add custom validation to configuration object:
+UCLASS()
+class UCustomVCCSimConfigurationObject : public UVCCSimConfigurationObject
+{
+public:
+    // Override validation for custom rules
+    virtual bool ValidateConfiguration(FString& OutError) const
+    {
+        // Call base validation first
+        if (!Super::ValidateConfiguration(OutError))
+        {
+            return false;
+        }
+        
+        // Custom validation rules
+        if (NumPoses > 100 && Radius < 100.0f)
+        {
+            OutError = TEXT("Too many poses for small radius - may cause collisions");
+            return false;
+        }
+        
+        return true;
+    }
+};
+*/
+
+/**
+ * Configuration Categories and Grouping
+ */
+
+/*
+// Use UPROPERTY categories to organize UI:
+UPROPERTY(EditAnywhere, Category = "Basic Settings", meta = (...))
+int32 NumPoses;
+
+UPROPERTY(EditAnywhere, Category = "Advanced Settings", meta = (...))
+float VerticalGap;
+
+UPROPERTY(EditAnywhere, Category = "Safety Settings", meta = (...))
+float SafeDistance;
+*/
+
+/**
+ * Conditional Property Display
+ */
+
+/*
+// Use EditCondition to show/hide properties:
+UPROPERTY(EditAnywhere, Category = "Region", meta = (
+    ToolTip = "Enable bounded region for pose generation"))
+bool bUseLimitedRegion = false;
+
+UPROPERTY(EditAnywhere, Category = "Region", meta = (
+    EditCondition = "bUseLimitedRegion",
+    ToolTip = "Minimum X coordinate"))
+float LimitedMinX = 0.0f;
+*/
+
+// ============================================================================
+// PERFORMANCE CONSIDERATIONS
+// ============================================================================
+
+/**
+ * Benefits of Details View Approach:
+ * 
+ * 1. **Reduced Memory**: Fewer individual widget instances
+ * 2. **Better Performance**: UE's optimized property system
+ * 3. **Consistent Behavior**: Standard UE editor behavior
+ * 4. **Automatic Features**: Undo/redo, copy/paste work automatically
+ * 5. **Extensibility**: Easy to add new properties without UI changes
+ * 6. **Localization**: Automatic support for text localization
+ * 7. **Accessibility**: Built-in screen reader and keyboard support
+ */
+
+/**
+ * Migration Checklist:
+ * 
+ * □ Create UVCCSimConfigurationObject with UPROPERTY meta tags
+ * □ Replace manual SpinBox creation with SConfigurationDetailsWidget
+ * □ Update configuration access to use widget getters
+ * □ Bind to configuration change events
+ * □ Add validation and error handling
+ * □ Test preset save/load functionality
+ * □ Verify units and tooltips are correct
+ * □ Test with different screen sizes and DPI settings
+ * □ Ensure all existing functionality still works
+ * □ Update documentation and user guides
+ */
+
+/**
+ * Future Enhancements:
+ * 
+ * 1. **Custom Property Editors**: Specialized UI for complex types
+ * 2. **Live Preview**: Real-time visualization of configuration changes
+ * 3. **Configuration Profiles**: Environment-specific settings
+ * 4. **Import/Export**: Configuration exchange between projects
+ * 5. **Validation Layers**: Multiple validation passes
+ * 6. **Configuration Wizards**: Guided setup for complex scenarios
+ * 7. **Performance Profiling**: Track configuration impact on performance
+ * 8. **A/B Testing**: Compare different configuration sets
+ */
