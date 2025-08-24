@@ -78,7 +78,7 @@ Logs/*
 test/*
 Demo/*
 .vscode/*
-Source/VCCSim/.claude/*
+Source/.claude/*
 
 Client/PyClient/GRPC/VCCSim_pb2_grpc.py
 Client/PyClient/GRPC/VCCSim_pb2.py
