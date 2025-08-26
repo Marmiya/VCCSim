@@ -372,6 +372,9 @@ private:
     
     // Test and validation helpers
     void ExportCamerasToPLY(const TArray<FCameraInfo>& CameraInfos, const FString& OutputPath);
+    
+    // Window management helper
+    void* GetParentWindowHandle();
 
     // ============================================================================
     // UI CONSTRUCTION HELPERS

@@ -40,6 +40,7 @@
 #include "Engine/Engine.h"
 #include "ThumbnailRendering/ThumbnailManager.h"
 #include "Widgets/Images/SImage.h"
+#include "Framework/Application/SlateApplication.h"
 
 BEGIN_SLATE_FUNCTION_BUILD_OPTIMIZATION
 
@@ -518,6 +519,29 @@ TSharedRef<SWidget> SVCCSimPanel::CreateGSNumericPropertyRow(
 // TRIANGLE SPLATTING EVENT HANDLERS
 // ============================================================================
 
+void* SVCCSimPanel::GetParentWindowHandle()
+{
+    void* ParentWindowHandle = nullptr;
+    
+    // Try to find the widget's parent window first
+    TSharedPtr<SWindow> ParentWindow = FSlateApplication::Get().FindWidgetWindow(AsShared());
+    if (ParentWindow.IsValid())
+    {
+        ParentWindowHandle = ParentWindow->GetNativeWindow()->GetOSWindowHandle();
+    }
+    else
+    {
+        // Fallback to the active top level window
+        TSharedPtr<SWindow> ActiveTopLevelWindow = FSlateApplication::Get().GetActiveTopLevelWindow();
+        if (ActiveTopLevelWindow.IsValid())
+        {
+            ParentWindowHandle = ActiveTopLevelWindow->GetNativeWindow()->GetOSWindowHandle();
+        }
+    }
+    
+    return ParentWindowHandle;
+}
+
 FReply SVCCSimPanel::OnGSBrowseImageDirectoryClicked()
 {
     IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
@@ -525,7 +549,7 @@ FReply SVCCSimPanel::OnGSBrowseImageDirectoryClicked()
     {
         FString SelectedDirectory;
         const bool bFolderSelected = DesktopPlatform->OpenDirectoryDialog(
-            nullptr,
+            GetParentWindowHandle(),
             TEXT("Select Image Directory"),
             GSConfig.ImageDirectory.IsEmpty() ? FPaths::ProjectContentDir() : GSConfig.ImageDirectory,
             SelectedDirectory
@@ -548,7 +572,7 @@ FReply SVCCSimPanel::OnGSBrowsePoseFileClicked()
     {
         TArray<FString> SelectedFiles;
         const bool bFileSelected = DesktopPlatform->OpenFileDialog(
-            nullptr,
+            GetParentWindowHandle(),
             TEXT("Select Pose File"),
             GSConfig.PoseFilePath.IsEmpty() ? FPaths::ProjectSavedDir() : FPaths::GetPath(GSConfig.PoseFilePath),
             TEXT("poses.txt"),
@@ -574,7 +598,7 @@ FReply SVCCSimPanel::OnGSBrowseOutputDirectoryClicked()
     {
         FString SelectedDirectory;
         const bool bFolderSelected = DesktopPlatform->OpenDirectoryDialog(
-            nullptr,
+            GetParentWindowHandle(),
             TEXT("Select Output Directory"),
             GSConfig.OutputDirectory.IsEmpty() ? FPaths::ProjectSavedDir() : GSConfig.OutputDirectory,
             SelectedDirectory
