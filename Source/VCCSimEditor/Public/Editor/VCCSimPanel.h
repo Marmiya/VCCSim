@@ -157,10 +157,10 @@ private:
     TSharedPtr<SNumericEntryBox<int32>> GSImageHeightSpinBox;
     TSharedPtr<SNumericEntryBox<int32>> GSMaxIterationsSpinBox;
     TSharedPtr<SNumericEntryBox<float>> GSLearningRateSpinBox;
-    TSharedPtr<SButton> GSStartTrainingButton;
-    TSharedPtr<SButton> GSStopTrainingButton;
+    TSharedPtr<SButton> GSTrainingToggleButton;
     TSharedPtr<SButton> GSColmapTrainingButton;
     TSharedPtr<STextBlock> GSTrainingStatusText;
+    TSharedPtr<SEditableTextBox> GSPythonOutputText;
 
     // ============================================================================
     // STATE VARIABLES
@@ -262,6 +262,10 @@ private:
     FString GSTrainingStatusMessage = TEXT("Ready");
     TSharedPtr<FTriangleSplattingManager> GSTrainingManager;
     FTimerHandle GSStatusUpdateTimerHandle;
+    
+    // Python output monitoring
+    FString GSPythonOutputLog;
+    FString GSCurrentLoss;
     
     // COLMAP pipeline state
     bool bColmapPipelineInProgress = false;
@@ -384,6 +388,9 @@ private:
     FReply OnGSExportColmapClicked();
     bool ValidateGSConfiguration();
     void ShowGSNotification(const FString& Message, bool bIsError = false);
+    
+    // Python output monitoring
+    void UpdatePythonOutputDisplay();
     
     // Test and validation helpers
     void ExportCamerasToPLY(const TArray<FCameraInfo>& CameraInfos, const FString& OutputPath);

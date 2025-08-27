@@ -128,6 +128,24 @@ public:
      * Force refresh of training status
      */
     void RefreshStatus();
+    
+    /**
+     * Get path to Triangle Splatting training script
+     * @return Path to training script
+     */
+    FString GetTrainingScriptPath();
+    
+    /**
+     * Get the latest training output from log file
+     * @return Recent training output
+     */
+    FString GetTrainingOutput();
+    
+    /**
+     * Get the current loss value
+     * @return Current loss as string
+     */
+    FString GetCurrentLoss();
 
 private:
     // ============================================================================
@@ -140,6 +158,11 @@ private:
     // Process management
     FProcHandle TrainingProcessHandle;
     TSharedPtr<class FMonitoredProcess> ProcessMonitor;
+    
+    // Python output capture
+    void* ReadPipe;
+    void* WritePipe;
+    FString PythonOutputBuffer;
     
     // Status tracking
     ETrainingStatus CurrentStatus;
@@ -203,12 +226,6 @@ private:
     FString GetPythonExecutablePath();
     
     /**
-     * Get path to Triangle Splatting training script
-     * @return Path to training script
-     */
-    FString GetTrainingScriptPath();
-    
-    /**
      * Parse training log file to extract progress information
      * @return Parsed progress (0.0 to 1.0)
      */
@@ -219,6 +236,13 @@ private:
      * @return Current loss value as string
      */
     FString ParseCurrentLoss();
+    
+    /**
+     * Filter training output to reduce repetitive content
+     * @param RawOutput Raw output from Python process
+     * @return Filtered output with reduced repetition
+     */
+    FString FilterTrainingOutput(const FString& RawOutput);
     
     /**
      * Read latest entries from training log file

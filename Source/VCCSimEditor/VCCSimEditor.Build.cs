@@ -69,5 +69,9 @@ public class VCCSimEditor : ModuleRules
                 // ... add any modules that your module loads dynamically here ...
             }
         );
+        
+        // Exclude Triangle Splatting Python implementation from compilation
+        // These are external Python extension modules that should not be compiled by UE
+        PublicDefinitions.Add("TRIANGLE_SPLATTING_EXTERNAL_SCRIPTS=1");
     }
 }

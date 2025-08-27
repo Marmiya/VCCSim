@@ -38,6 +38,8 @@ FTriangleSplattingManager::FTriangleSplattingManager()
     , OutputDirectory(TEXT(""))
     , TrainingStartTime(FDateTime::MinValue())
     , LastUpdateTime(FDateTime::MinValue())
+    , ReadPipe(nullptr)
+    , WritePipe(nullptr)
 {
 }
 
@@ -124,7 +126,13 @@ bool FTriangleSplattingManager::StartColmapTraining(const FString& PythonCommand
     
     UE_LOG(LogTemp, Log, TEXT("Starting COLMAP training: %s %s"), *PythonCommand, *Arguments);
     
-    // Create the training process
+    // Clear previous output buffer
+    PythonOutputBuffer.Empty();
+    
+    // Create pipes for capturing Python output
+    FPlatformProcess::CreatePipe(ReadPipe, WritePipe);
+    
+    // Create the training process with output redirection
     TrainingProcessHandle = FPlatformProcess::CreateProc(
         *PythonCommand,
         *Arguments,
@@ -134,7 +142,7 @@ bool FTriangleSplattingManager::StartColmapTraining(const FString& PythonCommand
         nullptr, // OutProcessID
         0,     // PriorityModifier
         nullptr, // OptionalWorkingDirectory
-        nullptr  // PipeWriteChild
+        WritePipe  // PipeWriteChild - redirect stdout to our pipe
     );
     
     if (!TrainingProcessHandle.IsValid())
@@ -298,7 +306,16 @@ bool FTriangleSplattingManager::ValidateConfiguration(const FTriangleSplattingCo
 
 bool FTriangleSplattingManager::PrepareTrainingData(const FTriangleSplattingConfig& Config)
 {
-    OutputDirectory = Config.OutputDirectory;
+    // Create timestamped subdirectory for this training session
+    FString TSOutputParentDir = FPaths::Combine(Config.OutputDirectory, TEXT("triangle_splatting_output"));
+    
+    // Generate timestamp for this training session
+    FDateTime Now = FDateTime::Now();
+    FString Timestamp = Now.ToString(TEXT("%Y%m%d_%H%M%S"));
+    FString SessionDirName = FString::Printf(TEXT("training_%s"), *Timestamp);
+    OutputDirectory = FPaths::Combine(TSOutputParentDir, SessionDirName);
+    
+    UE_LOG(LogTemp, Log, TEXT("Creating Triangle Splatting session directory: %s"), *OutputDirectory);
     
     // Ensure output directory exists
     if (!EnsureDirectoryExists(OutputDirectory))
@@ -504,28 +521,28 @@ FString FTriangleSplattingManager::GetTrainingScriptPath()
     // Path to the VCCSim-specific Triangle Splatting training script
     FString PluginDir = FPaths::ProjectPluginsDir() / TEXT("VCCSim");
     
-    // Try improved script first
-    FString ImprovedScriptPath = PluginDir / TEXT("Source/VCCSim/triangle-splatting/train_vccsim_improved.py");
-    if (FPaths::FileExists(ImprovedScriptPath))
-    {
-        return ImprovedScriptPath;
-    }
-    
-    // Try original VCCSim script
-    FString ScriptPath = PluginDir / TEXT("Source/VCCSim/triangle-splatting/train_vccsim.py");
+    // Try VCCSim custom script first (for new algorithm development)
+    FString ScriptPath = PluginDir / TEXT("Source/triangle-splatting/train_vccsim.py");
     if (FPaths::FileExists(ScriptPath))
     {
         return ScriptPath;
     }
     
-    // Try game engine script
-    FString AlternativeScriptPath = PluginDir / TEXT("Source/VCCSim/triangle-splatting/train_game_engine.py");
+    // Try game engine script as fallback
+    FString AlternativeScriptPath = PluginDir / TEXT("Source/triangle-splatting/train_game_engine.py");
     if (FPaths::FileExists(AlternativeScriptPath))
     {
         return AlternativeScriptPath;
     }
     
-    LogMessage(TEXT("Training script not found. Please ensure Triangle Splatting scripts are available."), true);
+    // Try original script as last resort
+    FString OriginalScriptPath = PluginDir / TEXT("Source/triangle-splatting/train.py");
+    if (FPaths::FileExists(OriginalScriptPath))
+    {
+        return OriginalScriptPath;
+    }
+    
+    LogMessage(TEXT("No Triangle Splatting training scripts found. Please ensure scripts are available."), true);
     return FString();
 }
 
@@ -709,6 +726,14 @@ void FTriangleSplattingManager::CleanupTraining()
         TrainingProcessHandle = FProcHandle();
     }
     
+    // Clean up pipes
+    if (ReadPipe != nullptr)
+    {
+        FPlatformProcess::ClosePipe(ReadPipe, WritePipe);
+        ReadPipe = nullptr;
+        WritePipe = nullptr;
+    }
+    
     ProcessMonitor.Reset();
 }
 
@@ -817,4 +842,88 @@ void FTriangleSplattingManager::LogMessage(const FString& Message, bool bIsError
         FFileHelper::SaveStringToFile(TimestampedMessage, *LogFilePath, 
             FFileHelper::EEncodingOptions::AutoDetect, &IFileManager::Get(), FILEWRITE_Append);
     }
+}
+
+FString FTriangleSplattingManager::GetTrainingOutput()
+{
+    // Read from Python process pipe if available
+    if (ReadPipe != nullptr)
+    {
+        FString NewOutput = FPlatformProcess::ReadPipe(ReadPipe);
+        if (!NewOutput.IsEmpty())
+        {
+            PythonOutputBuffer += NewOutput;
+            
+            // Filter and process output to reduce repetitive content
+            PythonOutputBuffer = FilterTrainingOutput(PythonOutputBuffer);
+        }
+    }
+    
+    return PythonOutputBuffer;
+}
+
+FString FTriangleSplattingManager::FilterTrainingOutput(const FString& RawOutput)
+{
+    TArray<FString> Lines;
+    RawOutput.ParseIntoArrayLines(Lines);
+    
+    TArray<FString> FilteredLines;
+    FString LastImportantLine;
+    int32 RepeatCount = 0;
+    
+    for (const FString& Line : Lines)
+    {
+        // Skip empty lines
+        if (Line.TrimStartAndEnd().IsEmpty())
+        {
+            continue;
+        }
+        
+        // Keep important lines (containing loss, iteration, error, or completion info)
+        bool bIsImportant = Line.Contains(TEXT("Loss:")) || 
+                           Line.Contains(TEXT("Iteration:")) ||
+                           Line.Contains(TEXT("iter:")) ||
+                           Line.Contains(TEXT("loss=")) ||
+                           Line.Contains(TEXT("Error")) ||
+                           Line.Contains(TEXT("Complete")) ||
+                           Line.Contains(TEXT("Training")) ||
+                           Line.Contains(TEXT("Saving")) ||
+                           Line.Contains(TEXT("PSNR"));
+        
+        if (bIsImportant)
+        {
+            // If this is the same as the last important line, just count repeats
+            if (Line.Equals(LastImportantLine))
+            {
+                RepeatCount++;
+                if (RepeatCount <= 2) // Show up to 2 repeats
+                {
+                    FilteredLines.Add(Line);
+                }
+                else if (RepeatCount == 3) // Add ellipsis after 2 repeats
+                {
+                    FilteredLines.Add(TEXT("... (repeated)"));
+                }
+            }
+            else
+            {
+                FilteredLines.Add(Line);
+                LastImportantLine = Line;
+                RepeatCount = 0;
+            }
+        }
+    }
+    
+    // Keep only last 20 lines to prevent UI overflow
+    if (FilteredLines.Num() > 20)
+    {
+        FilteredLines.RemoveAt(0, FilteredLines.Num() - 20);
+    }
+    
+    return FString::Join(FilteredLines, TEXT("\n"));
+}
+
+FString FTriangleSplattingManager::GetCurrentLoss()
+{
+    return ParseCurrentLoss(); // Use existing method
 }

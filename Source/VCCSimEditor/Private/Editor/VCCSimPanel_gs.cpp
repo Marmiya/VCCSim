@@ -475,37 +475,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreateGSTrainingControlSection()
             CreateSectionHeader(TEXT("Training Control"))
         ]
         
-        // Control buttons
-        + SVerticalBox::Slot()
-        .AutoHeight()
-        .Padding(0, 2)
-        [
-            SNew(SHorizontalBox)
-            
-            + SHorizontalBox::Slot()
-            .MaxWidth(150)
-            .Padding(0, 0, 5, 0)
-            [
-                SAssignNew(GSStartTrainingButton, SButton)
-                .Text(FText::FromString(TEXT("Start Training")))
-                .VAlign(VAlign_Center)
-                .HAlign(HAlign_Center)
-                .IsEnabled_Lambda([this]() { return !bGSTrainingInProgress; })
-                .OnClicked(this, &SVCCSimPanel::OnGSStartTrainingClicked)
-            ]
-            
-            + SHorizontalBox::Slot()
-            .MaxWidth(150)
-            [
-                SAssignNew(GSStopTrainingButton, SButton)
-                .Text(FText::FromString(TEXT("Stop Training")))
-                .VAlign(VAlign_Center)
-                .HAlign(HAlign_Center)
-                .IsEnabled_Lambda([this]() { return bGSTrainingInProgress; })
-                .OnClicked(this, &SVCCSimPanel::OnGSStopTrainingClicked)
-            ]
-        ]
-
+        // Control buttons - first row
         + SVerticalBox::Slot()
         .AutoHeight()
         .Padding(0, 2)
@@ -570,7 +540,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreateGSTrainingControlSection()
             ]
         ]
         
-        // COLMAP Training Button - separate row for Triangle Splatting with COLMAP
+        // Training buttons - second row
         + SVerticalBox::Slot()
         .AutoHeight()
         .Padding(0, 2)
@@ -578,17 +548,42 @@ TSharedRef<SWidget> SVCCSimPanel::CreateGSTrainingControlSection()
             SNew(SHorizontalBox)
             
             + SHorizontalBox::Slot()
-            .MaxWidth(310)
-            .HAlign(HAlign_Center)
+            .MaxWidth(150)
+            .Padding(0, 0, 5, 0)
+            [
+                SAssignNew(GSTrainingToggleButton, SButton)
+                .Text_Lambda([this]()
+                {
+                    return bGSTrainingInProgress ? 
+                        FText::FromString(TEXT("Stop")) : 
+                        FText::FromString(TEXT("Train VCCSim"));
+                })
+                .VAlign(VAlign_Center)
+                .HAlign(HAlign_Center)
+                .OnClicked_Lambda([this]()
+                {
+                    if (bGSTrainingInProgress)
+                    {
+                        return OnGSStopTrainingClicked();
+                    }
+                    else
+                    {
+                        return OnGSStartTrainingClicked();
+                    }
+                })
+                .ToolTipText(FText::FromString(TEXT("Train with VCCSim custom algorithm (train_vccsim.py)")))
+            ]
+            
+            + SHorizontalBox::Slot()
+            .MaxWidth(150)
             [
                 SAssignNew(GSColmapTrainingButton, SButton)
-                .Text(FText::FromString(TEXT("Train with COLMAP Dataset")))
+                .Text(FText::FromString(TEXT("Train Original")))
                 .VAlign(VAlign_Center)
                 .HAlign(HAlign_Center)
                 .IsEnabled_Lambda([this]() { return !bGSTrainingInProgress && !bColmapPipelineInProgress; })
                 .OnClicked(this, &SVCCSimPanel::OnGSColmapTrainingClicked)
-                .ToolTipText(FText::FromString(TEXT("Train Triangle Splatting using existing COLMAP dataset. "
-                                                    "Requires COLMAP dataset path with sparse/ and images/ folders")))
+                .ToolTipText(FText::FromString(TEXT("Train with original Triangle Splatting (train.py) for comparison")))
             ]
         ]
         
@@ -638,6 +633,56 @@ TSharedRef<SWidget> SVCCSimPanel::CreateGSTrainingControlSection()
                         return FLinearColor::Blue;
                     }
                     return FLinearColor::White;
+                })
+            )
+        ]
+        
+        // Python Output Log
+        + SVerticalBox::Slot()
+        .MaxHeight(200.0f)
+        .Padding(5, 10, 5, 0)
+        [
+            CreatePropertyRow(TEXT("Training Output"),
+                SNew(SBorder)
+                .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
+                .BorderBackgroundColor(FColor(10, 10, 10, 255))
+                .Padding(4)
+                [
+                    SNew(SScrollBox)
+                    .Orientation(Orient_Vertical)
+                    + SScrollBox::Slot()
+                    [
+                        SAssignNew(GSPythonOutputText, SEditableTextBox)
+                        .Text_Lambda([this]()
+                        {
+                            return FText::FromString(GSPythonOutputLog);
+                        })
+                        .IsReadOnly(true)
+                        .AllowContextMenu(true)
+                        .Style(&FAppStyle::Get().GetWidgetStyle<FEditableTextBoxStyle>("NormalEditableTextBox"))
+                    ]
+                ]
+            )
+        ]
+        
+        // Current Loss Display
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        .Padding(5, 2)
+        [
+            CreatePropertyRow(TEXT("Current Loss"),
+                SNew(STextBlock)
+                .Text_Lambda([this]()
+                {
+                    if (bGSTrainingInProgress && !GSCurrentLoss.IsEmpty())
+                    {
+                        return FText::FromString(GSCurrentLoss);
+                    }
+                    return FText::FromString(TEXT("N/A"));
+                })
+                .ColorAndOpacity_Lambda([this]()
+                {
+                    return bGSTrainingInProgress ? FLinearColor::Green : FLinearColor::White;
                 })
             )
         ];
@@ -857,6 +902,10 @@ FReply SVCCSimPanel::OnGSStartTrainingClicked()
             bGSTrainingInProgress = true;
             GSTrainingStatusMessage = TEXT("Training started...");
             
+            // Clear Python output log for new session
+            GSPythonOutputLog.Empty();
+            GSCurrentLoss = TEXT("N/A");
+            
             // Start status update timer
             if (GEditor)
             {
@@ -984,26 +1033,52 @@ FReply SVCCSimPanel::OnGSColmapTrainingClicked()
 
 void SVCCSimPanel::StartTriangleSplattingWithColmapData(const FString& ColmapDatasetPath)
 {
-    // Validate Triangle Splatting Python script exists
-    FString TriangleSplattingRoot = FPaths::Combine(FPaths::ProjectPluginsDir(), TEXT("VCCSim/Source/VCCSimEditor/triangle-splatting"));
+    // Use original train.py for comparison experiments
+    FString TriangleSplattingRoot = FPaths::Combine(FPaths::ProjectPluginsDir(), TEXT("VCCSim/Source/triangle-splatting"));
     FString TrainingScript = FPaths::Combine(TriangleSplattingRoot, TEXT("train.py"));
     
     if (!FPaths::FileExists(TrainingScript))
     {
-        ShowGSNotification(TEXT("Triangle Splatting train.py script not found"), true);
+        ShowGSNotification(TEXT("Original Triangle Splatting train.py script not found"), true);
         return;
     }
     
-    // Create Triangle Splatting output directory
-    FString TSOutputDir = FPaths::Combine(GSConfig.OutputDirectory, TEXT("triangle_splatting_output"));
+    UE_LOG(LogTemp, Log, TEXT("Using original Triangle Splatting script for comparison: %s"), *TrainingScript);
+    
+    // Create Triangle Splatting output directory with timestamp
+    FString TSOutputParentDir = FPaths::Combine(GSConfig.OutputDirectory, TEXT("triangle_splatting_output"));
+    
+    // Generate timestamp for this training session
+    FDateTime Now = FDateTime::Now();
+    FString Timestamp = Now.ToString(TEXT("%Y%m%d_%H%M%S"));
+    FString SessionDirName = FString::Printf(TEXT("training_%s"), *Timestamp);
+    FString TSOutputDir = FPaths::Combine(TSOutputParentDir, SessionDirName);
+    
     IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
     if (!PlatformFile.DirectoryExists(*TSOutputDir))
     {
         PlatformFile.CreateDirectoryTree(*TSOutputDir);
     }
     
-    // Build Triangle Splatting command based on README parameters
-    FString PythonCommand = TEXT("python");
+    UE_LOG(LogTemp, Log, TEXT("Triangle Splatting output directory: %s"), *TSOutputDir);
+    
+    // Build Triangle Splatting command with micromamba environment Python
+    // Try to find micromamba triangle_splatting environment Python executable
+    FString PythonCommand;
+    FString MicromambaPython = TEXT("C:/micromamba/envs/triangle_splatting/python.exe");
+    
+    if (FPaths::FileExists(MicromambaPython))
+    {
+        PythonCommand = MicromambaPython;
+        UE_LOG(LogTemp, Log, TEXT("Using micromamba triangle_splatting Python: %s"), *PythonCommand);
+    }
+    else
+    {
+        // Fallback to system python
+        PythonCommand = TEXT("python");
+        UE_LOG(LogTemp, Warning, TEXT("Micromamba triangle_splatting environment not found, using system python"));
+    }
+    
     FString Arguments = FString::Printf(TEXT("\"%s\" -s \"%s\" -m \"%s\" --eval"), 
         *TrainingScript, *ColmapDatasetPath, *TSOutputDir);
     
@@ -1019,6 +1094,10 @@ void SVCCSimPanel::StartTriangleSplattingWithColmapData(const FString& ColmapDat
         bGSTrainingInProgress = true;
         GSTrainingStatusMessage = TEXT("Triangle Splatting training with COLMAP data started...");
         
+        // Clear Python output log for new session
+        GSPythonOutputLog.Empty();
+        GSCurrentLoss = TEXT("N/A");
+        
         // Start status update timer
         if (GEditor)
         {
@@ -1029,6 +1108,9 @@ void SVCCSimPanel::StartTriangleSplattingWithColmapData(const FString& ColmapDat
                     if (GSTrainingManager.IsValid())
                     {
                         GSTrainingManager->UpdateTrainingStatus();
+                        
+                        // Update Python output log and current loss
+                        UpdatePythonOutputDisplay();
                     }
                 }),
                 1.0f, // Update every second
@@ -1239,7 +1321,10 @@ FReply SVCCSimPanel::OnGSExportColmapClicked()
         // Start COLMAP pipeline asynchronously
         FString ColmapExecutablePath = TEXT("D:\\colmap-x64-windows-cuda\\bin");
         
-        if (ColmapManager->StartColmapPipeline(ColmapCameraInfos, GSConfig.OutputDirectory, ColmapExecutablePath))
+        // Create COLMAP-specific output directory
+        FString ColmapOutputDir = FPaths::Combine(GSConfig.OutputDirectory, TEXT("colmap_output"));
+        
+        if (ColmapManager->StartColmapPipeline(ColmapCameraInfos, ColmapOutputDir, ColmapExecutablePath))
         {
             bColmapPipelineInProgress = true;
             ShowGSNotification(TEXT("✅ COLMAP pipeline started in background\n\n")
@@ -1356,6 +1441,28 @@ void SVCCSimPanel::ExportCamerasToPLY(
     if (!bSuccess)
     {
         UE_LOG(LogTemp, Error, TEXT("Failed to export cameras to PLY file: %s"), *OutputPath);
+    }
+}
+
+void SVCCSimPanel::UpdatePythonOutputDisplay()
+{
+    if (!GSTrainingManager.IsValid())
+    {
+        return;
+    }
+    
+    // Get the current Python output (not appended, just current session)
+    GSPythonOutputLog = GSTrainingManager->GetTrainingOutput();
+    
+    // Update current loss display
+    FString CurrentLoss = GSTrainingManager->GetCurrentLoss();
+    if (!CurrentLoss.IsEmpty())
+    {
+        GSCurrentLoss = CurrentLoss;
+    }
+    else
+    {
+        GSCurrentLoss = TEXT("N/A");
     }
 }
 
