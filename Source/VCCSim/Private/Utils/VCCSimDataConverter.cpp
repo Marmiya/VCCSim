@@ -25,6 +25,8 @@
 #include "DataStruct_IO/IOUtils.h"
 #include "Math/UnrealMathUtility.h"
 #include "Math/RandomStream.h"
+#include "HAL/PlatformProcess.h"
+#include "Misc/DateTime.h"
 
 // ============================================================================
 // POSE FILE CONVERSION
@@ -616,143 +618,328 @@ TArray<FVector> FVCCSimDataConverter::CalculatePointNormals(const TArray<FVector
 }
 
 // ============================================================================
-// COLMAP FORMAT OUTPUT
+// COLMAP INTEGRATION
 // ============================================================================
 
-bool FVCCSimDataConverter::SaveColmapFormat(
-    const TArray<FCameraInfo>& CameraInfos, 
-    const FString& OutputPath)
+FString FVCCSimDataConverter::CreateTimestampedColmapDirectory(const FString& BaseOutputPath)
 {
-    // Create COLMAP directory structure
-    if (!CreateColmapDirectoryStructure(OutputPath))
-    {
-        return false;
-    }
+    // Generate timestamp string
+    FDateTime Now = FDateTime::Now();
+    FString Timestamp = Now.ToString(TEXT("%Y%m%d_%H%M%S"));
+    FString TimestampedDirName = FString::Printf(TEXT("colmap_dataset_%s"), *Timestamp);
     
-    // Save cameras.txt
-    if (!SaveColmapCameras(CameraInfos, OutputPath))
-    {
-        return false;
-    }
+    FString TimestampedPath = FPaths::Combine(BaseOutputPath, TimestampedDirName);
     
-    // Save images.txt  
-    if (!SaveColmapImages(CameraInfos, OutputPath))
-    {
-        return false;
-    }
-    
-    // Save empty points3D.txt
-    if (!SaveColmapPoints3D(OutputPath))
-    {
-        return false;
-    }
-    
-    UE_LOG(LogTemp, Log, TEXT("Successfully saved COLMAP format to: %s"), *OutputPath);
-    return true;
-}
-
-bool FVCCSimDataConverter::CreateColmapDirectoryStructure(const FString& OutputPath)
-{
+    // Create the directory
     IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
-    
-    // Create main output directory
-    if (!PlatformFile.CreateDirectoryTree(*OutputPath))
+    if (!PlatformFile.CreateDirectoryTree(*TimestampedPath))
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to create output directory: %s"), *OutputPath);
-        return false;
+        UE_LOG(LogTemp, Error, TEXT("Failed to create timestamped COLMAP directory: %s"), *TimestampedPath);
+        return FString();
     }
     
-    // Create COLMAP sparse reconstruction directory
-    FString SparseDir = FPaths::Combine(OutputPath, TEXT("sparse"), TEXT("0"));
-    if (!PlatformFile.CreateDirectoryTree(*SparseDir))
-    {
-        UE_LOG(LogTemp, Error, TEXT("Failed to create sparse directory: %s"), *SparseDir);
-        return false;
-    }
-    
-    return true;
+    UE_LOG(LogTemp, Log, TEXT("Created timestamped COLMAP directory: %s"), *TimestampedPath);
+    return TimestampedPath;
 }
 
-bool FVCCSimDataConverter::SaveColmapCameras(
-    const TArray<FCameraInfo>& CameraInfos, const FString& OutputPath)
+bool FVCCSimDataConverter::PrepareColmapDataset(
+    const TArray<FCameraInfo>& CameraInfos,
+    const FString& ColmapDatasetPath)
 {
     if (CameraInfos.Num() == 0)
     {
+        UE_LOG(LogTemp, Error, TEXT("No camera information provided for COLMAP dataset"));
         return false;
     }
     
-    FString CamerasPath = FPaths::Combine(OutputPath, TEXT("sparse"), TEXT("0"), TEXT("cameras.txt"));
-    FString Content;
+    IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
     
-    // Header
-    Content += TEXT("# Camera list with one line of data per camera:\n");
-    Content += TEXT("# CAMERA_ID, MODEL, WIDTH, HEIGHT, PARAMS[]\n");
-    Content += TEXT("# Number of cameras: 1\n");
-    
-    // Assume all cameras have same parameters (use first camera)
-    const FCameraInfo& FirstCamera = CameraInfos[0];
-    Content += FString::Printf(TEXT("1 PINHOLE %d %d %.6f %.6f %.6f %.6f\n"),
-        FirstCamera.Width,
-        FirstCamera.Height,
-        FirstCamera.FocalX,
-        FirstCamera.FocalY,
-        FirstCamera.CenterX,
-        FirstCamera.CenterY
-    );
-    
-    return FFileHelper::SaveStringToFile(Content, *CamerasPath);
-}
-
-bool FVCCSimDataConverter::SaveColmapImages(
-    const TArray<FCameraInfo>& CameraInfos, const FString& OutputPath)
-{
-    FString ImagesPath = FPaths::Combine(OutputPath, TEXT("sparse"), TEXT("0"), TEXT("images.txt"));
-    FString Content;
-    
-    // Header
-    Content += TEXT("# Image list with two lines of data per image:\n");
-    Content += TEXT("# IMAGE_ID, QW, QX, QY, QZ, TX, TY, TZ, CAMERA_ID, NAME\n");
-    Content += TEXT("# POINTS2D[] as (X, Y, POINT3D_ID)\n");
-    Content += FString::Printf(TEXT("# Number of images: %d, mean observations per image: 0\n"),
-        CameraInfos.Num());
-    
-    // Convert each camera pose
-    for (int32 i = 0; i < CameraInfos.Num(); ++i)
+    // Create images directory
+    FString ImagesDir = FPaths::Combine(ColmapDatasetPath, TEXT("images"));
+    if (!PlatformFile.CreateDirectoryTree(*ImagesDir))
     {
-        const FCameraInfo& CameraInfo = CameraInfos[i];
-        
-        // Convert rotation matrix to quaternion
-        FQuat Quaternion = FQuat(CameraInfo.RotationMatrix);
-        
-        // COLMAP uses camera-to-world transformation, but we have world-to-camera
-        // So we need to invert the transformation
-        FQuat InvQuaternion = Quaternion.Inverse();
-        FVector InvTranslation = -(InvQuaternion * CameraInfo.Translation);
-        
-        // Write image line
-        Content += FString::Printf(TEXT("%d %.6f %.6f %.6f %.6f %.6f %.6f %.6f 1 %s\n"),
-            i + 1,  // IMAGE_ID (1-based)
-            InvQuaternion.W, InvQuaternion.X, InvQuaternion.Y, InvQuaternion.Z,  // Quaternion
-            InvTranslation.X, InvTranslation.Y, InvTranslation.Z,  // Translation
-            *CameraInfo.ImageName  // Image name
-        );
-        
-        // Empty points2D line
-        Content += TEXT("\n");
+        UE_LOG(LogTemp, Error, TEXT("Failed to create images directory: %s"), *ImagesDir);
+        return false;
     }
     
-    return FFileHelper::SaveStringToFile(Content, *ImagesPath);
+    // Copy/prepare images and create camera file
+    int32 CopiedImages = 0;
+    
+    for (const FCameraInfo& CameraInfo : CameraInfos)
+    {
+        // Find source image path
+        FString SourceImagePath;
+        
+        // Try to find the actual image file from the camera info
+        if (!CameraInfo.ImageName.IsEmpty())
+        {
+            // Check if ImageName contains a full path or just filename
+            if (FPaths::IsRelative(CameraInfo.ImageName))
+            {
+                // Assume images are in the directory where pose file was located
+                // This might need adjustment based on actual usage
+                UE_LOG(LogTemp, Warning, TEXT("Image path is relative,"
+                                              " may need source directory: %s"), 
+                    *CameraInfo.ImageName);
+                continue;
+            }
+            else
+            {
+                SourceImagePath = CameraInfo.ImageName;
+            }
+        }
+        
+        // Skip if source image doesn't exist
+        if (SourceImagePath.IsEmpty() || !PlatformFile.FileExists(*SourceImagePath))
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Source image not found: %s"), *SourceImagePath);
+            continue;
+        }
+        
+        // Copy image to COLMAP images directory
+        FString DestImagePath = FPaths::Combine(ImagesDir, FPaths::GetCleanFilename(SourceImagePath));
+        if (PlatformFile.CopyFile(*DestImagePath, *SourceImagePath))
+        {
+            CopiedImages++;
+            UE_LOG(LogTemp, Verbose, TEXT("Copied image: %s -> %s"), *SourceImagePath, *DestImagePath);
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Failed to copy image: %s"), *SourceImagePath);
+        }
+    }
+    
+    if (CopiedImages == 0)
+    {
+        UE_LOG(LogTemp, Error, TEXT("No images were successfully prepared for COLMAP"));
+        return false;
+    }
+    
+    UE_LOG(LogTemp, Log, TEXT("Successfully prepared %d images for COLMAP processing"), CopiedImages);
+    return true;
 }
 
-bool FVCCSimDataConverter::SaveColmapPoints3D(const FString& OutputPath)
+bool FVCCSimDataConverter::RunColmapFeatureExtraction(
+    const FString& ColmapExecutablePath,
+    const FString& DatasetPath,
+    const FString& DatabasePath,
+    TFunction<bool(const FString&, const FString&, const FString&)> CommandExecutor)
 {
-    FString Points3DPath = FPaths::Combine(OutputPath, TEXT("sparse"), TEXT("0"), TEXT("points3D.txt"));
-    FString Content;
+    // Construct COLMAP executable path
+    FString ColmapExePath = FPaths::Combine(ColmapExecutablePath, TEXT("COLMAP.exe"));
     
-    // Header for empty points3D file
-    Content += TEXT("# 3D point list with one line of data per point:\n");
-    Content += TEXT("# POINT3D_ID, X, Y, Z, R, G, B, ERROR, TRACK[] as (IMAGE_ID, POINT2D_IDX)\n");
-    Content += TEXT("# Number of points: 0, mean track length: 0\n");
+    // Verify executable exists
+    IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
+    if (!PlatformFile.FileExists(*ColmapExePath))
+    {
+        UE_LOG(LogTemp, Error, TEXT("COLMAP executable not found at: %s"), *ColmapExePath);
+        return false;
+    }
     
-    return FFileHelper::SaveStringToFile(Content, *Points3DPath);
+    // Prepare command arguments
+    FString ImagePath = FPaths::Combine(DatasetPath, TEXT("images"));
+    FString Arguments = FString::Printf(
+        TEXT("feature_extractor --database_path \"%s\" --image_path \"%s\" --ImageReader.single_camera 1"),
+        *DatabasePath, *ImagePath);
+    
+    // Use custom command executor if provided (for proper process management)
+    if (CommandExecutor)
+    {
+        return CommandExecutor(ColmapExePath, Arguments, TEXT("Feature Extraction"));
+    }
+    
+    // Fallback to basic execution (legacy mode)
+    UE_LOG(LogTemp, Log, TEXT("Running COLMAP feature extraction: %s %s"), *ColmapExePath, *Arguments);
+    
+    int32 ReturnCode = -1;
+    FString StdOut, StdErr;
+    
+    bool bSuccess = FPlatformProcess::ExecProcess(
+        *ColmapExePath, 
+        *Arguments, 
+        &ReturnCode, 
+        &StdOut, 
+        &StdErr
+    );
+    
+    if (!bSuccess || ReturnCode != 0)
+    {
+        UE_LOG(LogTemp, Error, TEXT("COLMAP feature extraction failed. Return code: %d"), ReturnCode);
+        if (!StdErr.IsEmpty())
+        {
+            UE_LOG(LogTemp, Error, TEXT("COLMAP error output: %s"), *StdErr);
+        }
+        return false;
+    }
+    
+    UE_LOG(LogTemp, Log, TEXT("COLMAP feature extraction completed successfully"));
+    return true;
+}
+
+bool FVCCSimDataConverter::RunColmapFeatureMatching(
+    const FString& ColmapExecutablePath,
+    const FString& DatabasePath,
+    TFunction<bool(const FString&, const FString&, const FString&)> CommandExecutor)
+{
+    // Construct COLMAP executable path
+    FString ColmapExePath = FPaths::Combine(ColmapExecutablePath, TEXT("COLMAP.exe"));
+    
+    // Prepare command arguments
+    FString Arguments = FString::Printf(
+        TEXT("exhaustive_matcher --database_path \"%s\""),
+        *DatabasePath);
+    
+    // Use custom command executor if provided (for proper process management)
+    if (CommandExecutor)
+    {
+        return CommandExecutor(ColmapExePath, Arguments, TEXT("Feature Matching"));
+    }
+    
+    // Fallback to basic execution (legacy mode)
+    UE_LOG(LogTemp, Log, TEXT("Running COLMAP feature matching: %s %s"), *ColmapExePath, *Arguments);
+    
+    int32 ReturnCode = -1;
+    FString StdOut, StdErr;
+    
+    bool bSuccess = FPlatformProcess::ExecProcess(
+        *ColmapExePath, 
+        *Arguments, 
+        &ReturnCode, 
+        &StdOut, 
+        &StdErr
+    );
+    
+    if (!bSuccess || ReturnCode != 0)
+    {
+        UE_LOG(LogTemp, Error, TEXT("COLMAP feature matching failed. Return code: %d"), ReturnCode);
+        if (!StdErr.IsEmpty())
+        {
+            UE_LOG(LogTemp, Error, TEXT("COLMAP error output: %s"), *StdErr);
+        }
+        return false;
+    }
+    
+    UE_LOG(LogTemp, Log, TEXT("COLMAP feature matching completed successfully"));
+    return true;
+}
+
+bool FVCCSimDataConverter::RunColmapSparseReconstruction(
+    const FString& ColmapExecutablePath,
+    const FString& DatabasePath,
+    const FString& ImagePath,
+    const FString& OutputPath,
+    TFunction<bool(const FString&, const FString&, const FString&)> CommandExecutor)
+{
+    // Construct COLMAP executable path
+    FString ColmapExePath = FPaths::Combine(ColmapExecutablePath, TEXT("COLMAP.exe"));
+    
+    // Create sparse output directory
+    IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
+    FString SparseOutputPath = FPaths::Combine(OutputPath, TEXT("sparse"));
+    if (!PlatformFile.CreateDirectoryTree(*SparseOutputPath))
+    {
+        UE_LOG(LogTemp, Error, TEXT("Failed to create sparse output directory: %s"), *SparseOutputPath);
+        return false;
+    }
+    
+    // Prepare command arguments
+    FString Arguments = FString::Printf(
+        TEXT("mapper --database_path \"%s\" --image_path \"%s\" --output_path \"%s\""),
+        *DatabasePath, *ImagePath, *SparseOutputPath);
+    
+    // Use custom command executor if provided (for proper process management)
+    if (CommandExecutor)
+    {
+        return CommandExecutor(ColmapExePath, Arguments, TEXT("Sparse Reconstruction"));
+    }
+    
+    // Fallback to basic execution (legacy mode)
+    UE_LOG(LogTemp, Log, TEXT("Running COLMAP sparse reconstruction: %s %s"), *ColmapExePath, *Arguments);
+    
+    int32 ReturnCode = -1;
+    FString StdOut, StdErr;
+    
+    bool bSuccess = FPlatformProcess::ExecProcess(
+        *ColmapExePath, 
+        *Arguments, 
+        &ReturnCode, 
+        &StdOut, 
+        &StdErr
+    );
+    
+    if (!bSuccess || ReturnCode != 0)
+    {
+        UE_LOG(LogTemp, Error, TEXT("COLMAP sparse reconstruction failed. Return code: %d"), ReturnCode);
+        if (!StdErr.IsEmpty())
+        {
+            UE_LOG(LogTemp, Error, TEXT("COLMAP error output: %s"), *StdErr);
+        }
+        return false;
+    }
+    
+    UE_LOG(LogTemp, Log, TEXT("COLMAP sparse reconstruction completed successfully"));
+    return true;
+}
+
+bool FVCCSimDataConverter::RunColmapPipeline(
+    const TArray<FCameraInfo>& CameraInfos,
+    const FString& OutputPath,
+    const FString& ColmapExecutablePath)
+{
+    if (CameraInfos.Num() == 0)
+    {
+        UE_LOG(LogTemp, Error, TEXT("No camera information provided for COLMAP pipeline"));
+        return false;
+    }
+    
+    // Create timestamped directory
+    FString TimestampedDir = CreateTimestampedColmapDirectory(OutputPath);
+    if (TimestampedDir.IsEmpty())
+    {
+        return false;
+    }
+    
+    // Prepare dataset (images directory)
+    if (!PrepareColmapDataset(CameraInfos, TimestampedDir))
+    {
+        UE_LOG(LogTemp, Error, TEXT("Failed to prepare COLMAP dataset"));
+        return false;
+    }
+    
+    // Define paths
+    FString DatabasePath = FPaths::Combine(TimestampedDir, TEXT("database.db"));
+    FString ImagePath = FPaths::Combine(TimestampedDir, TEXT("images"));
+    
+    UE_LOG(LogTemp, Log, TEXT("Starting COLMAP pipeline for %d cameras"), CameraInfos.Num());
+    UE_LOG(LogTemp, Log, TEXT("Dataset path: %s"), *TimestampedDir);
+    UE_LOG(LogTemp, Log, TEXT("COLMAP executable: %s"), *ColmapExecutablePath);
+    
+    // Step 1: Feature extraction
+    UE_LOG(LogTemp, Log, TEXT("Step 1/3: Running feature extraction..."));
+    if (!RunColmapFeatureExtraction(ColmapExecutablePath, TimestampedDir, DatabasePath))
+    {
+        UE_LOG(LogTemp, Error, TEXT("COLMAP feature extraction failed"));
+        return false;
+    }
+    
+    // Step 2: Feature matching
+    UE_LOG(LogTemp, Log, TEXT("Step 2/3: Running feature matching..."));
+    if (!RunColmapFeatureMatching(ColmapExecutablePath, DatabasePath))
+    {
+        UE_LOG(LogTemp, Error, TEXT("COLMAP feature matching failed"));
+        return false;
+    }
+    
+    // Step 3: Sparse reconstruction
+    UE_LOG(LogTemp, Log, TEXT("Step 3/3: Running sparse reconstruction..."));
+    if (!RunColmapSparseReconstruction(ColmapExecutablePath, DatabasePath, ImagePath, TimestampedDir))
+    {
+        UE_LOG(LogTemp, Error, TEXT("COLMAP sparse reconstruction failed"));
+        return false;
+    }
+    
+    UE_LOG(LogTemp, Log, TEXT("COLMAP pipeline completed successfully!"));
+    UE_LOG(LogTemp, Log, TEXT("Results available at: %s"), *TimestampedDir);
+    
+    return true;
 }

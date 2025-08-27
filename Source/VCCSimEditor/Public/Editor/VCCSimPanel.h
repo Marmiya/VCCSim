@@ -34,6 +34,7 @@ class USplineMeshComponent;
 class ASceneAnalysisManager;
 class UStaticMeshComponent;
 class FTriangleSplattingManager;
+class FColmapManager;
 struct FCameraInfo;
 
 /**
@@ -48,6 +49,7 @@ struct VCCSIMEDITOR_API FTriangleSplattingConfig
     FString ImageDirectory;
     FString PoseFilePath;
     FString OutputDirectory;
+    FString ColmapDatasetPath;
     
     // Mesh configuration
     TWeakObjectPtr<UStaticMesh> SelectedMesh;
@@ -68,6 +70,7 @@ struct VCCSIMEDITOR_API FTriangleSplattingConfig
         ImageDirectory = TEXT("");
         PoseFilePath = TEXT("");
         OutputDirectory = FPaths::ProjectSavedDir() / TEXT("TriangleSplatting");
+        ColmapDatasetPath = TEXT("");
     }
 };
 
@@ -148,6 +151,7 @@ private:
     TSharedPtr<SEditableTextBox> GSImageDirectoryTextBox;
     TSharedPtr<SEditableTextBox> GSPoseFileTextBox;
     TSharedPtr<SEditableTextBox> GSOutputDirectoryTextBox;
+    TSharedPtr<SEditableTextBox> GSColmapDatasetTextBox;
     TSharedPtr<SNumericEntryBox<float>> GSFOVSpinBox;
     TSharedPtr<SNumericEntryBox<int32>> GSImageWidthSpinBox;
     TSharedPtr<SNumericEntryBox<int32>> GSImageHeightSpinBox;
@@ -155,6 +159,7 @@ private:
     TSharedPtr<SNumericEntryBox<float>> GSLearningRateSpinBox;
     TSharedPtr<SButton> GSStartTrainingButton;
     TSharedPtr<SButton> GSStopTrainingButton;
+    TSharedPtr<SButton> GSColmapTrainingButton;
     TSharedPtr<STextBlock> GSTrainingStatusText;
 
     // ============================================================================
@@ -258,6 +263,12 @@ private:
     TSharedPtr<FTriangleSplattingManager> GSTrainingManager;
     FTimerHandle GSStatusUpdateTimerHandle;
     
+    // COLMAP pipeline state
+    bool bColmapPipelineInProgress = false;
+    float ColmapProgress = 0.0f;
+    FString ColmapStatusMessage = TEXT("Ready");
+    TSharedPtr<FColmapManager> ColmapManager;
+    
     // TOptional attributes for Triangle Splatting SpinBox values
     TOptional<float> GSFOVValue;
     TOptional<int32> GSImageWidthValue;
@@ -351,11 +362,13 @@ private:
     
     // Initialization (simplified)
     void InitializeGSManager();
+    void InitializeColmapManager();
     
     // UI event handlers (simplified - removed mesh management functions)
     FReply OnGSBrowseImageDirectoryClicked();
     FReply OnGSBrowsePoseFileClicked();
     FReply OnGSBrowseOutputDirectoryClicked();
+    FReply OnGSBrowseColmapDatasetClicked();
     void OnGSFOVChanged(float NewValue);
     void OnGSImageWidthChanged(int32 NewValue);
     void OnGSImageHeightChanged(int32 NewValue);
@@ -365,6 +378,8 @@ private:
     // Training control
     FReply OnGSStartTrainingClicked();
     FReply OnGSStopTrainingClicked();
+    FReply OnGSColmapTrainingClicked();
+    void StartTriangleSplattingWithColmapData(const FString& ColmapDatasetPath);
     FReply OnGSTestTransformationClicked();
     FReply OnGSExportColmapClicked();
     bool ValidateGSConfiguration();

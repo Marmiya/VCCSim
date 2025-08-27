@@ -105,6 +105,53 @@ bool FTriangleSplattingManager::StartTraining(const FTriangleSplattingConfig& Co
     return true;
 }
 
+bool FTriangleSplattingManager::StartColmapTraining(const FString& PythonCommand, const FString& Arguments, const FString& OutputDir)
+{
+    if (IsTrainingInProgress())
+    {
+        LogMessage(TEXT("Training is already in progress"), true);
+        return false;
+    }
+    
+    CurrentStatus = ETrainingStatus::Preparing;
+    TrainingProgress = 0.0f;
+    StatusMessage = TEXT("Starting Triangle Splatting training with COLMAP data...");
+    TrainingStartTime = FDateTime::Now();
+    OutputDirectory = OutputDir;
+    
+    // Set up log file path
+    LogFilePath = FPaths::Combine(OutputDirectory, TEXT("training_log.txt"));
+    
+    UE_LOG(LogTemp, Log, TEXT("Starting COLMAP training: %s %s"), *PythonCommand, *Arguments);
+    
+    // Create the training process
+    TrainingProcessHandle = FPlatformProcess::CreateProc(
+        *PythonCommand,
+        *Arguments,
+        false, // bLaunchDetached
+        true,  // bLaunchHidden
+        true,  // bLaunchReallyHidden
+        nullptr, // OutProcessID
+        0,     // PriorityModifier
+        nullptr, // OptionalWorkingDirectory
+        nullptr  // PipeWriteChild
+    );
+    
+    if (!TrainingProcessHandle.IsValid())
+    {
+        CurrentStatus = ETrainingStatus::Failed;
+        StatusMessage = TEXT("Failed to launch Triangle Splatting training process");
+        LogMessage(StatusMessage, true);
+        return false;
+    }
+    
+    CurrentStatus = ETrainingStatus::Running;
+    StatusMessage = TEXT("Triangle Splatting training with COLMAP data started successfully");
+    LogMessage(StatusMessage);
+    
+    return true;
+}
+
 void FTriangleSplattingManager::StopTraining()
 {
     if (IsTrainingInProgress())

@@ -180,9 +180,80 @@ public:
      */
     static FBox CalculateSceneBounds(const TArray<FCameraInfo>& CameraInfos);
 
-    static bool SaveColmapFormat(
-        const TArray<FCameraInfo>& CameraInfos, 
-        const FString& OutputPath);
+    // ============================================================================
+    // COLMAP INTEGRATION
+    // ============================================================================
+    
+    /**
+     * Run complete COLMAP pipeline using system executable
+     * @param CameraInfos Camera information array
+     * @param OutputPath Base output directory (timestamped folder will be created)
+     * @param ColmapExecutablePath Path to COLMAP executable
+     * @return True if successful
+     */
+    static bool RunColmapPipeline(
+        const TArray<FCameraInfo>& CameraInfos,
+        const FString& OutputPath,
+        const FString& ColmapExecutablePath = TEXT("D:\\colmap-x64-windows-cuda"));
+    
+    /**
+     * Create timestamped COLMAP dataset directory
+     * @param BaseOutputPath Base output directory
+     * @return Full path to created timestamped directory
+     */
+    static FString CreateTimestampedColmapDirectory(const FString& BaseOutputPath);
+    
+    /**
+     * Export images and cameras for COLMAP processing
+     * @param CameraInfos Camera information array
+     * @param ColmapDatasetPath Path to COLMAP dataset directory
+     * @return True if successful
+     */
+    static bool PrepareColmapDataset(
+        const TArray<FCameraInfo>& CameraInfos,
+        const FString& ColmapDatasetPath);
+    
+    /**
+     * Run COLMAP feature extraction using external command executor
+     * @param ColmapExecutablePath Path to COLMAP executable
+     * @param DatasetPath Path to dataset directory
+     * @param DatabasePath Path to database file
+     * @param CommandExecutor Function to execute COLMAP commands (for process management)
+     * @return True if successful
+     */
+    static bool RunColmapFeatureExtraction(
+        const FString& ColmapExecutablePath,
+        const FString& DatasetPath,
+        const FString& DatabasePath,
+        TFunction<bool(const FString&, const FString&, const FString&)> CommandExecutor = nullptr);
+    
+    /**
+     * Run COLMAP feature matching using external command executor
+     * @param ColmapExecutablePath Path to COLMAP executable
+     * @param DatabasePath Path to database file
+     * @param CommandExecutor Function to execute COLMAP commands (for process management)
+     * @return True if successful
+     */
+    static bool RunColmapFeatureMatching(
+        const FString& ColmapExecutablePath,
+        const FString& DatabasePath,
+        TFunction<bool(const FString&, const FString&, const FString&)> CommandExecutor = nullptr);
+    
+    /**
+     * Run COLMAP sparse reconstruction using external command executor
+     * @param ColmapExecutablePath Path to COLMAP executable
+     * @param DatabasePath Path to database file
+     * @param ImagePath Path to image directory
+     * @param OutputPath Path to output sparse reconstruction
+     * @param CommandExecutor Function to execute COLMAP commands (for process management)
+     * @return True if successful
+     */
+    static bool RunColmapSparseReconstruction(
+        const FString& ColmapExecutablePath,
+        const FString& DatabasePath,
+        const FString& ImagePath,
+        const FString& OutputPath,
+        TFunction<bool(const FString&, const FString&, const FString&)> CommandExecutor = nullptr);
 
     static FVector GetCameraForwardDirection(const FMatrix& ConvertedRotationMatrix);
     static FVector GetCameraRightDirection(const FMatrix& ConvertedRotationMatrix);
@@ -213,12 +284,4 @@ private:
      * @return Array of normals corresponding to points
      */
     static TArray<FVector> CalculatePointNormals(const TArray<FVector>& Points);
-    
-    // TODO: Remove them and use true colmap
-    static bool CreateColmapDirectoryStructure(const FString& OutputPath);
-    static bool SaveColmapCameras(
-        const TArray<FCameraInfo>& CameraInfos, const FString& OutputPath);
-    static bool SaveColmapImages(
-        const TArray<FCameraInfo>& CameraInfos, const FString& OutputPath);
-    static bool SaveColmapPoints3D(const FString& OutputPath);
 };

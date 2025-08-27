@@ -67,6 +67,15 @@ public:
     bool StartTraining(const FTriangleSplattingConfig& Config);
     
     /**
+     * Start training process with pre-built COLMAP data using direct command
+     * @param PythonCommand Python executable path
+     * @param Arguments Command line arguments for Triangle Splatting training
+     * @param OutputDir Output directory for training results
+     * @return True if training started successfully
+     */
+    bool StartColmapTraining(const FString& PythonCommand, const FString& Arguments, const FString& OutputDir);
+    
+    /**
      * Stop currently running training process
      */
     void StopTraining();

@@ -79,6 +79,9 @@ void SVCCSimPanel::Construct(const FArguments& InArgs)
     // Initialize Triangle Splatting manager
     InitializeGSManager();
     
+    // Initialize COLMAP manager
+    InitializeColmapManager();
+    
     // Create the main widget layout
     CreateMainLayout();
 }

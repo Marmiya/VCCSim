@@ -17,6 +17,7 @@
 
 #include "Editor/VCCSimPanel.h"
 #include "Utils/TriangleSplattingManager.h"
+#include "Utils/ColmapManager.h"
 #include "Utils/VCCSimDataConverter.h"
 #include "DataStruct_IO/IOUtils.h"
 #include "HAL/PlatformFilemanager.h"
@@ -81,6 +82,51 @@ void SVCCSimPanel::InitializeGSManager()
         }
         
         ShowGSNotification(ResultMessage, !bSuccessful);
+    });
+}
+
+void SVCCSimPanel::InitializeColmapManager()
+{
+    // Create COLMAP manager
+    ColmapManager = MakeShared<FColmapManager>();
+    
+    // Bind delegates for COLMAP progress updates
+    ColmapManager->OnProgressUpdated.BindLambda([this](float Progress, FString StatusMessage)
+    {
+        ColmapProgress = Progress;
+        ColmapStatusMessage = StatusMessage;
+    });
+    
+    ColmapManager->OnCompleted.BindLambda([this](bool bSuccessful, FString ResultMessage)
+    {
+        bColmapPipelineInProgress = false;
+        ColmapProgress = bSuccessful ? 1.0f : 0.0f;
+        ColmapStatusMessage = bSuccessful ? TEXT("Completed") : TEXT("Failed");
+        
+        if (bSuccessful)
+        {
+            // Auto-fill the COLMAP dataset path with the generated timestamped directory
+            FString GeneratedDatasetPath = ColmapManager->GetTimestampedDirectory();
+            if (!GeneratedDatasetPath.IsEmpty() && FPaths::DirectoryExists(GeneratedDatasetPath))
+            {
+                GSConfig.ColmapDatasetPath = GeneratedDatasetPath;
+                if (GSColmapDatasetTextBox.IsValid())
+                {
+                    GSColmapDatasetTextBox->SetText(FText::FromString(GeneratedDatasetPath));
+                }
+                UE_LOG(LogTemp, Log, TEXT("Auto-filled COLMAP dataset path: %s"), *GeneratedDatasetPath);
+                ShowGSNotification(FString::Printf(TEXT("COLMAP completed! Dataset path auto-filled: %s"), 
+                    *FPaths::GetCleanFilename(GeneratedDatasetPath)));
+            }
+            else
+            {
+                ShowGSNotification(ResultMessage, false);
+            }
+        }
+        else
+        {
+            ShowGSNotification(ResultMessage, true);
+        }
     });
 }
 
@@ -238,6 +284,38 @@ TSharedRef<SWidget> SVCCSimPanel::CreateGSDataInputSection()
                     SNew(SButton)
                     .Text(FText::FromString(TEXT("Browse...")))
                     .OnClicked(this, &SVCCSimPanel::OnGSBrowseOutputDirectoryClicked)
+                ]
+            )
+        ]
+        
+        // COLMAP Dataset Path
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        .Padding(0, 2)
+        [
+            CreatePropertyRow(TEXT("COLMAP Dataset"),
+                SNew(SHorizontalBox)
+                + SHorizontalBox::Slot()
+                .FillWidth(1.0f)
+                [
+                    SAssignNew(GSColmapDatasetTextBox, SEditableTextBox)
+                    .Text_Lambda([this]()
+                    {
+                        return FText::FromString(GSConfig.ColmapDatasetPath);
+                    })
+                    .OnTextChanged_Lambda([this](const FText& Text)
+                    {
+                        GSConfig.ColmapDatasetPath = Text.ToString();
+                    })
+                    .HintText(FText::FromString(TEXT("Select COLMAP dataset folder (containing sparse/ images/ folders)")))
+                ]
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .Padding(5, 0, 0, 0)
+                [
+                    SNew(SButton)
+                    .Text(FText::FromString(TEXT("Browse...")))
+                    .OnClicked(this, &SVCCSimPanel::OnGSBrowseColmapDatasetClicked)
                 ]
             )
         ]
@@ -452,26 +530,114 @@ TSharedRef<SWidget> SVCCSimPanel::CreateGSTrainingControlSection()
             .MaxWidth(150)
             [
                 SNew(SButton)
-                .Text(FText::FromString(TEXT("COLMAP")))
+                .Text_Lambda([this]()
+                {
+                    return bColmapPipelineInProgress ? 
+                        FText::FromString(TEXT("Stop COLMAP")) : 
+                        FText::FromString(TEXT("COLMAP"));
+                })
                 .VAlign(VAlign_Center)
                 .HAlign(HAlign_Center)
                 .IsEnabled_Lambda([this]() { return !bGSTrainingInProgress; })
-                .OnClicked(this, &SVCCSimPanel::OnGSExportColmapClicked)
-                .ToolTipText(FText::FromString(TEXT("Export COLMAP dataset format"
-                                                    " for validation and external use")))
+                .OnClicked_Lambda([this]()
+                {
+                    if (bColmapPipelineInProgress)
+                    {
+                        // Stop COLMAP pipeline
+                        if (ColmapManager.IsValid())
+                        {
+                            ColmapManager->StopColmapPipeline();
+                            bColmapPipelineInProgress = false;
+                            ColmapStatusMessage = TEXT("Stopped by user");
+                            ShowGSNotification(TEXT("COLMAP pipeline stopped"));
+                        }
+                    }
+                    else
+                    {
+                        // Start COLMAP pipeline
+                        return OnGSExportColmapClicked();
+                    }
+                    return FReply::Handled();
+                })
+                .ToolTipText_Lambda([this]()
+                {
+                    return bColmapPipelineInProgress ?
+                        FText::FromString(TEXT("Stop the running COLMAP pipeline")) :
+                        FText::FromString(TEXT("Run complete COLMAP pipeline: "
+                                               "Feature extraction → Matching → Sparse reconstruction. "
+                                               "Creates timestamped dataset with full COLMAP reconstruction."));
+                })
             ]
         ]
         
-        // Status text
+        // COLMAP Training Button - separate row for Triangle Splatting with COLMAP
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        .Padding(0, 2)
+        [
+            SNew(SHorizontalBox)
+            
+            + SHorizontalBox::Slot()
+            .MaxWidth(310)
+            .HAlign(HAlign_Center)
+            [
+                SAssignNew(GSColmapTrainingButton, SButton)
+                .Text(FText::FromString(TEXT("Train with COLMAP Dataset")))
+                .VAlign(VAlign_Center)
+                .HAlign(HAlign_Center)
+                .IsEnabled_Lambda([this]() { return !bGSTrainingInProgress && !bColmapPipelineInProgress; })
+                .OnClicked(this, &SVCCSimPanel::OnGSColmapTrainingClicked)
+                .ToolTipText(FText::FromString(TEXT("Train Triangle Splatting using existing COLMAP dataset. "
+                                                    "Requires COLMAP dataset path with sparse/ and images/ folders")))
+            ]
+        ]
+        
+        // Training Status text
         + SVerticalBox::Slot()
         .AutoHeight()
         .Padding(5, 2)
         [
-            CreatePropertyRow(TEXT("Status"),
+            CreatePropertyRow(TEXT("Training Status"),
                 SAssignNew(GSTrainingStatusText, STextBlock)
                 .Text_Lambda([this]()
                 {
-                    return FText::FromString(GSTrainingStatusMessage);
+                    FString StatusText = FString::Printf(TEXT("Training: %s"), *GSTrainingStatusMessage);
+                    if (bGSTrainingInProgress)
+                    {
+                        StatusText += FString::Printf(TEXT(" (%.1f%%)"), GSTrainingProgress * 100.0f);
+                    }
+                    return FText::FromString(StatusText);
+                })
+            )
+        ]
+        
+        // COLMAP Status text
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        .Padding(5, 2)
+        [
+            CreatePropertyRow(TEXT("COLMAP Status"),
+                SNew(STextBlock)
+                .Text_Lambda([this]()
+                {
+                    FString StatusText = FString::Printf(TEXT("COLMAP: %s"), *ColmapStatusMessage);
+                    if (bColmapPipelineInProgress)
+                    {
+                        StatusText += FString::Printf(TEXT(" (%.1f%%)"), ColmapProgress * 100.0f);
+                    }
+                    return FText::FromString(StatusText);
+                })
+                .ColorAndOpacity_Lambda([this]()
+                {
+                    if (bColmapPipelineInProgress)
+                    {
+                        return FLinearColor::Green;
+                    }
+                    else if (ColmapProgress >= 1.0f)
+                    {
+                        return FLinearColor::Blue;
+                    }
+                    return FLinearColor::White;
                 })
             )
         ];
@@ -614,6 +780,45 @@ FReply SVCCSimPanel::OnGSBrowseOutputDirectoryClicked()
     return FReply::Handled();
 }
 
+FReply SVCCSimPanel::OnGSBrowseColmapDatasetClicked()
+{
+    IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
+    if (DesktopPlatform)
+    {
+        FString SelectedDirectory;
+        const bool bFolderSelected = DesktopPlatform->OpenDirectoryDialog(
+            GetParentWindowHandle(),
+            TEXT("Select COLMAP Dataset Directory"),
+            GSConfig.ColmapDatasetPath.IsEmpty() ? GSConfig.OutputDirectory : GSConfig.ColmapDatasetPath,
+            SelectedDirectory
+        );
+
+        if (bFolderSelected && !SelectedDirectory.IsEmpty())
+        {
+            // Update path regardless - validation will happen when training starts
+            GSConfig.ColmapDatasetPath = SelectedDirectory;
+            
+            // Optionally validate and show feedback
+            FString SparseDir = FPaths::Combine(SelectedDirectory, TEXT("sparse"));
+            FString ImagesDir = FPaths::Combine(SelectedDirectory, TEXT("images"));
+            
+            if (FPaths::DirectoryExists(SparseDir) && FPaths::DirectoryExists(ImagesDir))
+            {
+                ShowGSNotification(TEXT("COLMAP dataset path selected"), false);
+            }
+            else
+            {
+                ShowGSNotification(TEXT("Warning: Directory doesn't look like "
+                                        "a COLMAP dataset (missing sparse/ or images/)"), false);
+            }
+            
+            UE_LOG(LogTemp, Log, TEXT("Selected COLMAP dataset path: %s"), *SelectedDirectory);
+        }
+    }
+    
+    return FReply::Handled();
+}
+
 void SVCCSimPanel::OnGSFOVChanged(float NewValue)
 {
     GSConfig.FOVDegrees = NewValue;
@@ -701,6 +906,142 @@ FReply SVCCSimPanel::OnGSStopTrainingClicked()
     ShowGSNotification(TEXT("Training stopped"));
     
     return FReply::Handled();
+}
+
+FReply SVCCSimPanel::OnGSColmapTrainingClicked()
+{
+    // Validate COLMAP dataset path
+    if (GSConfig.ColmapDatasetPath.IsEmpty() || !FPaths::DirectoryExists(GSConfig.ColmapDatasetPath))
+    {
+        ShowGSNotification(TEXT("Please specify a valid COLMAP dataset path"), true);
+        return FReply::Handled();
+    }
+    
+    // Validate COLMAP dataset structure
+    FString SparseDir = FPaths::Combine(GSConfig.ColmapDatasetPath, TEXT("sparse"));
+    FString ImagesDir = FPaths::Combine(GSConfig.ColmapDatasetPath, TEXT("images"));
+    
+    if (!FPaths::DirectoryExists(SparseDir))
+    {
+        ShowGSNotification(TEXT("Invalid COLMAP dataset - missing sparse/ folder"), true);
+        return FReply::Handled();
+    }
+    
+    if (!FPaths::DirectoryExists(ImagesDir))
+    {
+        ShowGSNotification(TEXT("Invalid COLMAP dataset - missing images/ folder"), true);
+        return FReply::Handled();
+    }
+    
+    // Check for essential COLMAP files in sparse directory (support both txt and bin formats)
+    FString SparseSubDir = FPaths::Combine(SparseDir, TEXT("0"));
+    
+    // Check cameras file (txt or bin)
+    FString CamerasTxtFile = FPaths::Combine(SparseSubDir, TEXT("cameras.txt"));
+    FString CamerasBinFile = FPaths::Combine(SparseSubDir, TEXT("cameras.bin"));
+    bool bHasCameras = FPaths::FileExists(CamerasTxtFile) || FPaths::FileExists(CamerasBinFile);
+    
+    // Check images file (txt or bin)
+    FString ImagesTxtFile = FPaths::Combine(SparseSubDir, TEXT("images.txt"));
+    FString ImagesBinFile = FPaths::Combine(SparseSubDir, TEXT("images.bin"));
+    bool bHasImages = FPaths::FileExists(ImagesTxtFile) || FPaths::FileExists(ImagesBinFile);
+    
+    // Check points3D file (txt or bin)
+    FString Points3DTxtFile = FPaths::Combine(SparseSubDir, TEXT("points3D.txt"));
+    FString Points3DBinFile = FPaths::Combine(SparseSubDir, TEXT("points3D.bin"));
+    bool bHasPoints3D = FPaths::FileExists(Points3DTxtFile) || FPaths::FileExists(Points3DBinFile);
+    
+    if (!bHasCameras || !bHasImages || !bHasPoints3D)
+    {
+        ShowGSNotification(TEXT("Invalid COLMAP dataset - missing cameras, images or points3D files (txt or bin format) in sparse/0/ folder"), true);
+        return FReply::Handled();
+    }
+    
+    if (GSConfig.OutputDirectory.IsEmpty())
+    {
+        ShowGSNotification(TEXT("Please specify an output directory"), true);
+        return FReply::Handled();
+    }
+    
+    // Create output directory if it doesn't exist
+    IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
+    if (!PlatformFile.DirectoryExists(*GSConfig.OutputDirectory))
+    {
+        if (!PlatformFile.CreateDirectoryTree(*GSConfig.OutputDirectory))
+        {
+            ShowGSNotification(TEXT("Failed to create output directory"), true);
+            return FReply::Handled();
+        }
+    }
+    
+    UE_LOG(LogTemp, Log, TEXT("Starting Triangle Splatting training with COLMAP dataset: %s"), *GSConfig.ColmapDatasetPath);
+    
+    // Start Triangle Splatting training directly with COLMAP dataset
+    StartTriangleSplattingWithColmapData(GSConfig.ColmapDatasetPath);
+    
+    return FReply::Handled();
+}
+
+void SVCCSimPanel::StartTriangleSplattingWithColmapData(const FString& ColmapDatasetPath)
+{
+    // Validate Triangle Splatting Python script exists
+    FString TriangleSplattingRoot = FPaths::Combine(FPaths::ProjectPluginsDir(), TEXT("VCCSim/Source/VCCSimEditor/triangle-splatting"));
+    FString TrainingScript = FPaths::Combine(TriangleSplattingRoot, TEXT("train.py"));
+    
+    if (!FPaths::FileExists(TrainingScript))
+    {
+        ShowGSNotification(TEXT("Triangle Splatting train.py script not found"), true);
+        return;
+    }
+    
+    // Create Triangle Splatting output directory
+    FString TSOutputDir = FPaths::Combine(GSConfig.OutputDirectory, TEXT("triangle_splatting_output"));
+    IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
+    if (!PlatformFile.DirectoryExists(*TSOutputDir))
+    {
+        PlatformFile.CreateDirectoryTree(*TSOutputDir);
+    }
+    
+    // Build Triangle Splatting command based on README parameters
+    FString PythonCommand = TEXT("python");
+    FString Arguments = FString::Printf(TEXT("\"%s\" -s \"%s\" -m \"%s\" --eval"), 
+        *TrainingScript, *ColmapDatasetPath, *TSOutputDir);
+    
+    // Add outdoor flag if scene seems outdoor (based on camera coverage)
+    // This could be enhanced with better outdoor detection logic
+    Arguments += TEXT(" --outdoor");
+    
+    UE_LOG(LogTemp, Log, TEXT("Starting Triangle Splatting training: %s %s"), *PythonCommand, *Arguments);
+    
+    // Start Triangle Splatting training process
+    if (GSTrainingManager->StartColmapTraining(PythonCommand, Arguments, TSOutputDir))
+    {
+        bGSTrainingInProgress = true;
+        GSTrainingStatusMessage = TEXT("Triangle Splatting training with COLMAP data started...");
+        
+        // Start status update timer
+        if (GEditor)
+        {
+            GEditor->GetTimerManager()->SetTimer(
+                GSStatusUpdateTimerHandle,
+                FTimerDelegate::CreateLambda([this]()
+                {
+                    if (GSTrainingManager.IsValid())
+                    {
+                        GSTrainingManager->UpdateTrainingStatus();
+                    }
+                }),
+                1.0f, // Update every second
+                true  // Loop
+            );
+        }
+        
+        ShowGSNotification(TEXT("Triangle Splatting training with COLMAP data started"));
+    }
+    else
+    {
+        ShowGSNotification(TEXT("Failed to start Triangle Splatting training process"), true);
+    }
 }
 
 FReply SVCCSimPanel::OnGSTestTransformationClicked()
@@ -869,59 +1210,52 @@ FReply SVCCSimPanel::OnGSExportColmapClicked()
         FCameraIntrinsics Intrinsics = FVCCSimDataConverter::ConvertCameraParams(
             GSConfig.FOVDegrees, GSConfig.ImageWidth, GSConfig.ImageHeight);
         
-        // Convert UE poses to COLMAP format
+        // Convert UE poses to COLMAP format with proper image paths
         TArray<FCameraInfo> ColmapCameraInfos = FVCCSimDataConverter::ConvertPoseFile(
             GSConfig.PoseFilePath, GSConfig.ImageDirectory, Intrinsics);
         
         if (ColmapCameraInfos.Num() == 0)
         {
-            ShowGSNotification(TEXT("No valid camera poses found for COLMAP conversion"), true);
+            ShowGSNotification(TEXT("No valid camera poses found for "
+                                    "COLMAP processing"), true);
             return FReply::Handled();
         }
         
-        // Create COLMAP output directory
-        FString ColmapOutputDir = FPaths::Combine(GSConfig.OutputDirectory, TEXT("colmap_dataset"));
-        
-        // Use enhanced COLMAP export with mesh support
-        bool bSuccess = FVCCSimDataConverter::SaveColmapFormat(ColmapCameraInfos, ColmapOutputDir);
-        
-        if (bSuccess)
+        // Update camera infos with proper image paths for the new COLMAP pipeline
+        for (FCameraInfo& CameraInfo : ColmapCameraInfos)
         {
-            FString SuccessMessage;
-            
-            if (GSConfig.SelectedMesh.IsValid())
+            if (!CameraInfo.ImageName.IsEmpty())
             {
-                SuccessMessage = FString::Printf(
-                    TEXT("Enhanced COLMAP dataset exported!\n")
-                    TEXT("Output: %s\n")
-                    TEXT("Cameras: %d\n")
-                    TEXT("Ready for COLMAP GUI visualization\n")
-                    TEXT("Camera trajectory and mesh geometry now visible"),
-                    *ColmapOutputDir, ColmapCameraInfos.Num()
-                );
+                // Ensure we have full paths to the source images
+                FString FullImagePath = FPaths::Combine(GSConfig.ImageDirectory,
+                    CameraInfo.ImageName);
+                if (FPaths::FileExists(FullImagePath))
+                {
+                    CameraInfo.ImageName = FullImagePath; // Store full path for copying
+                }
             }
-            else
-            {
-                SuccessMessage = FString::Printf(
-                    TEXT("COLMAP dataset exported with trajectory points!\n")
-                    TEXT("Output: %s\n")
-                    TEXT("Cameras: %d\n")
-                    TEXT("Camera path and reference points now visible\n")
-                    TEXT("Tip: Select a mesh for more detailed 3D points"),
-                    *ColmapOutputDir, ColmapCameraInfos.Num()
-                );
-            }
-            
-            ShowGSNotification(SuccessMessage);
+        }
+        
+        // Start COLMAP pipeline asynchronously
+        FString ColmapExecutablePath = TEXT("D:\\colmap-x64-windows-cuda\\bin");
+        
+        if (ColmapManager->StartColmapPipeline(ColmapCameraInfos, GSConfig.OutputDirectory, ColmapExecutablePath))
+        {
+            bColmapPipelineInProgress = true;
+            ShowGSNotification(TEXT("✅ COLMAP pipeline started in background\n\n")
+                              TEXT("🚀 The editor will remain responsive\n")
+                              TEXT("📊 Monitor progress in the COLMAP status below"));
         }
         else
         {
-            ShowGSNotification(TEXT("Failed to export COLMAP dataset"), true);
+            ShowGSNotification(TEXT("❌ Failed to start COLMAP pipeline\n\n")
+                              TEXT("Pipeline may already be running"), true);
         }
     }
     catch (...)
     {
-        ShowGSNotification(TEXT("Error occurred during COLMAP export"), true);
+        ShowGSNotification(TEXT("❌ Unexpected error during COLMAP pipeline execution\n\n")
+                          TEXT("Check UE log for detailed error information"), true);
     }
     
     return FReply::Handled();
