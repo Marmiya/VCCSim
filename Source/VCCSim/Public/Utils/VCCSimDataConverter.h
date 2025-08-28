@@ -70,6 +70,13 @@ public:
     static FVector ConvertLocation(const FVector& UELocation);
     
     /**
+     * Convert normal vector from UE coordinate system to Triangle Splatting coordinate system
+     * @param UENormal Normal vector in UE coordinate system
+     * @return Normal vector in Triangle Splatting coordinate system
+     */
+    static FVector ConvertNormal(const FVector& UENormal);
+    
+    /**
      * Convert UE rotation to right-handed rotation
      * @param UERotation Rotation in UE coordinates
      * @return Rotation matrix for the right-handed coordinate system
@@ -88,6 +95,19 @@ public:
      * @return Camera intrinsics structure
      */
     static FCameraIntrinsics ConvertCameraParams(float FOVDegrees, int32 Width, int32 Height);
+    
+    /**
+     * Convert camera parameters with optional direct focal length specification
+     * If FocalX and FocalY are > 0, they are used directly; otherwise FOV is used to calculate them
+     * @param FOVDegrees Field of view in degrees (fallback if fx/fy not provided)
+     * @param Width Image width in pixels
+     * @param Height Image height in pixels
+     * @param FocalX Focal length X in pixels (fx) - if > 0, used directly
+     * @param FocalY Focal length Y in pixels (fy) - if > 0, used directly
+     * @return Camera intrinsics structure
+     */
+    static FCameraIntrinsics ConvertCameraParamsWithFocalLength(
+        float FOVDegrees, int32 Width, int32 Height, float FocalX = 0.0f, float FocalY = 0.0f);
     
     /**
      * Calculate focal length from FOV and image dimensions
@@ -270,6 +290,18 @@ private:
     static TArray<FVector> SampleMeshVertices(UStaticMesh* Mesh,
         int32 SampleCount, bool bRandomSampling);
     
+    /**
+     * Sample mesh vertices with colors for point cloud generation
+     * @param Mesh Static mesh to sample from
+     * @param SampleCount Number of vertices to sample
+     * @param bRandomSampling If true, use random sampling; if false, use uniform sampling
+     * @param OutPositions Array of sampled vertex positions
+     * @param OutColors Array of sampled vertex colors
+     * @return True if sampling was successful
+     */
+    static bool SampleMeshVerticesWithColors(UStaticMesh* Mesh,
+        int32 SampleCount, bool bRandomSampling,
+        TArray<FVector>& OutPositions, TArray<FLinearColor>& OutColors);
     
     /**
      * Generate colors for point cloud based on position

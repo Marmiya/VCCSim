@@ -62,7 +62,8 @@ bool FColmapManager::StartColmapPipeline(
     CurrentStatusMessage = TEXT("Initializing COLMAP pipeline...");
     
     // Start background thread
-    ColmapThread = FRunnableThread::Create(this, TEXT("ColmapPipeline"), 0, TPri_Normal);
+    ColmapThread = FRunnableThread::Create(this,
+        TEXT("ColmapPipeline"), 0, TPri_Normal);
     if (ColmapThread)
     {
         bIsRunning = true;
@@ -234,7 +235,8 @@ bool FColmapManager::RunColmapPipelineInternal()
         return false;
     }
     
-    UpdateProgress(1.0f, FString::Printf(TEXT("COLMAP pipeline completed! Results: %s"), *TimestampedDirectory));
+    UpdateProgress(1.0f, FString::Printf(
+        TEXT("COLMAP pipeline completed! Results: %s"), *TimestampedDirectory));
     return true;
 }
 

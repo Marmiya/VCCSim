@@ -29,7 +29,9 @@
 // ============================================================================
 
 FTriangleSplattingManager::FTriangleSplattingManager()
-    : CurrentStatus(ETrainingStatus::Idle)
+    : ReadPipe(nullptr)
+    , WritePipe(nullptr)
+    , CurrentStatus(ETrainingStatus::Idle)
     , TrainingProgress(0.0f)
     , StatusMessage(TEXT("Ready"))
     , LastError(TEXT(""))
@@ -38,8 +40,6 @@ FTriangleSplattingManager::FTriangleSplattingManager()
     , OutputDirectory(TEXT(""))
     , TrainingStartTime(FDateTime::MinValue())
     , LastUpdateTime(FDateTime::MinValue())
-    , ReadPipe(nullptr)
-    , WritePipe(nullptr)
 {
 }
 
@@ -204,6 +204,35 @@ void FTriangleSplattingManager::UpdateTrainingStatus()
     
     LastUpdateTime = CurrentTime;
     
+    // Read Python process output from pipe
+    if (ReadPipe)
+    {
+        FString PipeOutput = FPlatformProcess::ReadPipe(ReadPipe);
+        if (!PipeOutput.IsEmpty())
+        {
+            // Append to Python output buffer
+            PythonOutputBuffer += PipeOutput;
+            
+            // Also write to log file
+            if (!LogFilePath.IsEmpty())
+            {
+                FFileHelper::SaveStringToFile(PipeOutput, *LogFilePath, 
+                    FFileHelper::EEncodingOptions::AutoDetect, &IFileManager::Get(), FILEWRITE_Append);
+            }
+            
+            // Log to UE console as well for debugging
+            TArray<FString> Lines;
+            PipeOutput.ParseIntoArrayLines(Lines);
+            for (const FString& Line : Lines)
+            {
+                if (!Line.IsEmpty())
+                {
+                    UE_LOG(LogTemp, Log, TEXT("Python: %s"), *Line);
+                }
+            }
+        }
+    }
+    
     // Check if process is still running
     if (!IsProcessRunning())
     {
@@ -289,10 +318,6 @@ bool FTriangleSplattingManager::ValidateConfiguration(const FTriangleSplattingCo
         ErrorMessages.Add(TEXT("Max iterations must be positive"));
     }
     
-    if (Config.LearningRate <= 0)
-    {
-        ErrorMessages.Add(TEXT("Learning rate must be positive"));
-    }
     
     if (ErrorMessages.Num() > 0)
     {
@@ -346,9 +371,10 @@ bool FTriangleSplattingManager::PrepareTrainingData(const FTriangleSplattingConf
     LogFilePath = FPaths::Combine(OutputDirectory, TEXT("logs"), 
         GenerateTimestampedFilename(TEXT("training"), TEXT("log")));
     
-    // Convert pose data and camera information
-    FCameraIntrinsics Intrinsics = FVCCSimDataConverter::ConvertCameraParams(
-        Config.FOVDegrees, Config.ImageWidth, Config.ImageHeight);
+    // Convert pose data and camera information with fx/fy priority over FOV
+    FCameraIntrinsics Intrinsics = FVCCSimDataConverter::ConvertCameraParamsWithFocalLength(
+        Config.FOVDegrees, Config.ImageWidth, Config.ImageHeight, 
+        Config.FocalLengthX, Config.FocalLengthY);
     
     TArray<FCameraInfo> CameraInfos = FVCCSimDataConverter::ConvertPoseFile(
         Config.PoseFilePath, Config.ImageDirectory, Intrinsics);
@@ -371,7 +397,7 @@ bool FTriangleSplattingManager::PrepareTrainingData(const FTriangleSplattingConf
     if (Config.SelectedMesh.IsValid())
     {
         FPointCloudData PointCloud = FVCCSimDataConverter::ConvertMeshToPointCloud(
-            Config.SelectedMesh.Get(), 10000, true);
+            Config.SelectedMesh.Get(), Config.InitPointCount, true);
         
         if (PointCloud.GetPointCount() > 0)
         {
@@ -419,7 +445,20 @@ bool FTriangleSplattingManager::LaunchTrainingProcess()
     
     LogMessage(FString::Printf(TEXT("Launching Python process: %s %s"), *PythonPath, *Arguments));
     
-    // Launch process
+    // Create pipes for stdout and stderr capture
+    void* PipeReadChild = nullptr;
+    void* PipeWriteChild = nullptr;
+    if (!FPlatformProcess::CreatePipe(PipeReadChild, PipeWriteChild))
+    {
+        LogMessage(TEXT("Failed to create pipe for process output"), true);
+        return false;
+    }
+    
+    // Store pipe handles for later cleanup
+    ReadPipe = PipeReadChild;
+    WritePipe = PipeWriteChild;
+    
+    // Launch process with stdout/stderr redirection
     TrainingProcessHandle = FPlatformProcess::CreateProc(
         *PythonPath,
         *Arguments,
@@ -429,7 +468,8 @@ bool FTriangleSplattingManager::LaunchTrainingProcess()
         nullptr, // OutProcessID
         0,     // PriorityModifier
         nullptr, // OptionalWorkingDirectory
-        nullptr  // PipeWriteChild
+        PipeWriteChild,  // PipeWriteChild - redirect stdout/stderr to pipe
+        PipeReadChild    // PipeReadChild
     );
     
     if (!TrainingProcessHandle.IsValid())
@@ -480,6 +520,7 @@ FString FTriangleSplattingManager::GetPythonExecutablePath()
 {
     // Try common Python executable names and locations
     TArray<FString> PossiblePaths = {
+        TEXT("C:/micromamba/envs/triangle_splatting/python.exe"), // Micromamba triangle_splatting environment (priority)
         TEXT("python"),
         TEXT("python3"),
         TEXT("C:/Python39/python.exe"),
@@ -795,11 +836,12 @@ FString FTriangleSplattingManager::ConfigToJsonString(const FTriangleSplattingCo
         "  \"camera\": {\n"
         "    \"fov_degrees\": %.2f,\n"
         "    \"width\": %d,\n"
-        "    \"height\": %d\n"
+        "    \"height\": %d,\n"
+        "    \"focal_length_x\": %.2f,\n"
+        "    \"focal_length_y\": %.2f\n"
         "  },\n"
         "  \"training\": {\n"
-        "    \"max_iterations\": %d,\n"
-        "    \"learning_rate\": %.6f\n"
+        "    \"max_iterations\": %d\n"
         "  },\n"
         "  \"mesh\": {\n"
         "    \"use_mesh_initialization\": %s,\n"
@@ -809,12 +851,13 @@ FString FTriangleSplattingManager::ConfigToJsonString(const FTriangleSplattingCo
     ),
         *Config.ImageDirectory.Replace(TEXT("\\"), TEXT("/")),
         *Config.PoseFilePath.Replace(TEXT("\\"), TEXT("/")),
-        *Config.OutputDirectory.Replace(TEXT("\\"), TEXT("/")),
+        *OutputDirectory.Replace(TEXT("\\"), TEXT("/")),
         Config.FOVDegrees,
         Config.ImageWidth,
         Config.ImageHeight,
+        Config.FocalLengthX,
+        Config.FocalLengthY,
         Config.MaxIterations,
-        Config.LearningRate,
         Config.bUseMeshInitialization ? TEXT("true") : TEXT("false"),
         Config.SelectedMesh.IsValid() ? *Config.SelectedMesh->GetPathName() : TEXT("")
     );

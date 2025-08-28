@@ -57,12 +57,16 @@ struct VCCSIMEDITOR_API FTriangleSplattingConfig
     
     // Camera parameters (user inputs)
     float FOVDegrees = 90.0f;
-    int32 ImageWidth = 1920;
-    int32 ImageHeight = 1080;
+    int32 ImageWidth = 1297;
+    int32 ImageHeight = 840;
+    
+    // Camera intrinsics (optional - if provided, fx/fy are used directly instead of FOV calculation)
+    float FocalLengthX = 961.22f;  // fx - horizontal focal length in pixels
+    float FocalLengthY = 963.089f;  // fy - vertical focal length in pixels
     
     // Training parameters
     int32 MaxIterations = 30000;
-    float LearningRate = 0.01f;
+    int32 InitPointCount = 10000;
     
     // Constructor
     FTriangleSplattingConfig()
@@ -155,8 +159,10 @@ private:
     TSharedPtr<SNumericEntryBox<float>> GSFOVSpinBox;
     TSharedPtr<SNumericEntryBox<int32>> GSImageWidthSpinBox;
     TSharedPtr<SNumericEntryBox<int32>> GSImageHeightSpinBox;
+    TSharedPtr<SNumericEntryBox<float>> GSFocalLengthXSpinBox;
+    TSharedPtr<SNumericEntryBox<float>> GSFocalLengthYSpinBox;
     TSharedPtr<SNumericEntryBox<int32>> GSMaxIterationsSpinBox;
-    TSharedPtr<SNumericEntryBox<float>> GSLearningRateSpinBox;
+    TSharedPtr<SNumericEntryBox<int32>> GSInitPointCountSpinBox;
     TSharedPtr<SButton> GSTrainingToggleButton;
     TSharedPtr<SButton> GSColmapTrainingButton;
     TSharedPtr<STextBlock> GSTrainingStatusText;
@@ -277,8 +283,10 @@ private:
     TOptional<float> GSFOVValue;
     TOptional<int32> GSImageWidthValue;
     TOptional<int32> GSImageHeightValue;
+    TOptional<float> GSFocalLengthXValue;
+    TOptional<float> GSFocalLengthYValue;
     TOptional<int32> GSMaxIterationsValue;
-    TOptional<float> GSLearningRateValue;
+    TOptional<int32> GSInitPointCountValue;
 
     // ============================================================================
     // INITIALIZATION AND CLEANUP
@@ -376,8 +384,10 @@ private:
     void OnGSFOVChanged(float NewValue);
     void OnGSImageWidthChanged(int32 NewValue);
     void OnGSImageHeightChanged(int32 NewValue);
+    void OnGSFocalLengthXChanged(float NewValue);
+    void OnGSFocalLengthYChanged(float NewValue);
     void OnGSMaxIterationsChanged(int32 NewValue);
-    void OnGSLearningRateChanged(float NewValue);
+    void OnGSInitPointCountChanged(int32 NewValue);
     
     // Training control
     FReply OnGSStartTrainingClicked();

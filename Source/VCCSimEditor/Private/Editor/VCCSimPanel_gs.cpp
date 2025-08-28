@@ -55,20 +55,24 @@ void SVCCSimPanel::InitializeGSManager()
     GSFOVValue = GSConfig.FOVDegrees;
     GSImageWidthValue = GSConfig.ImageWidth;
     GSImageHeightValue = GSConfig.ImageHeight;
+    GSFocalLengthXValue = GSConfig.FocalLengthX;
+    GSFocalLengthYValue = GSConfig.FocalLengthY;
     GSMaxIterationsValue = GSConfig.MaxIterations;
-    GSLearningRateValue = GSConfig.LearningRate;
+    GSInitPointCountValue = GSConfig.InitPointCount;
     
     // Create training manager
     GSTrainingManager = MakeShared<FTriangleSplattingManager>();
     
     // Bind delegates
-    GSTrainingManager->OnTrainingProgressUpdated.BindLambda([this](float Progress, FString StatusMessage)
+    GSTrainingManager->OnTrainingProgressUpdated.BindLambda(
+        [this](float Progress, FString StatusMessage)
     {
         GSTrainingProgress = Progress;
         GSTrainingStatusMessage = StatusMessage;
     });
     
-    GSTrainingManager->OnTrainingCompleted.BindLambda([this](bool bSuccessful, FString ResultMessage)
+    GSTrainingManager->OnTrainingCompleted.BindLambda(
+        [this](bool bSuccessful, FString ResultMessage)
     {
         bGSTrainingInProgress = false;
         GSTrainingProgress = bSuccessful ? 1.0f : 0.0f;
@@ -114,8 +118,10 @@ void SVCCSimPanel::InitializeColmapManager()
                 {
                     GSColmapDatasetTextBox->SetText(FText::FromString(GeneratedDatasetPath));
                 }
-                UE_LOG(LogTemp, Log, TEXT("Auto-filled COLMAP dataset path: %s"), *GeneratedDatasetPath);
-                ShowGSNotification(FString::Printf(TEXT("COLMAP completed! Dataset path auto-filled: %s"), 
+                UE_LOG(LogTemp, Log, TEXT("Auto-filled COLMAP dataset "
+                                          "path: %s"), *GeneratedDatasetPath);
+                ShowGSNotification(FString::Printf(
+                    TEXT("COLMAP completed! Dataset path auto-filled: %s"), 
                     *FPaths::GetCleanFilename(GeneratedDatasetPath)));
             }
             else
@@ -403,17 +409,65 @@ TSharedRef<SWidget> SVCCSimPanel::CreateGSCameraParamsSection()
             ]
         ]
 
+        // Focal Length Parameters (fx/fy)
         + SVerticalBox::Slot()
         .AutoHeight()
         .Padding(2, 2)
         [
-            CreateGSNumericPropertyRow<float>(
-                TEXT("FOV (°)"),
-                GSFOVSpinBox,
-                GSFOVValue,
-                1.0f, 179.0f, 1.0f,
-                [this](float NewValue) { OnGSFOVChanged(NewValue); }
-            )
+            SNew(SHorizontalBox)
+            
+            + SHorizontalBox::Slot()
+            .FillWidth(1.0f)
+            .Padding(2, 0)
+            [
+                CreateGSNumericPropertyRow<float>(
+                    TEXT("Focal Length X"),
+                    GSFocalLengthXSpinBox,
+                    GSFocalLengthXValue,
+                    0.0f, 10000.0f, 10.0f,
+                    [this](float NewValue) { OnGSFocalLengthXChanged(NewValue); }
+                )
+            ]
+
+            + SHorizontalBox::Slot()
+            .FillWidth(1.0f)
+            .Padding(2, 0)
+            [
+                CreateGSNumericPropertyRow<float>(
+                    TEXT("Focal Length Y"),
+                    GSFocalLengthYSpinBox,
+                    GSFocalLengthYValue,
+                    0.0f, 10000.0f, 10.0f,
+                    [this](float NewValue) { OnGSFocalLengthYChanged(NewValue); }
+                )
+            ]
+        ]
+
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        .Padding(2, 2)
+        [
+            SNew(SHorizontalBox)
+            
+            + SHorizontalBox::Slot()
+            .FillWidth(0.5f)
+            .Padding(2, 0)
+            [
+                CreateGSNumericPropertyRow<float>(
+                    TEXT("FOV (°)"),
+                    GSFOVSpinBox,
+                    GSFOVValue,
+                    1.0f, 179.0f, 1.0f,
+                    [this](float NewValue) { OnGSFOVChanged(NewValue); }
+                )
+            ]
+            
+            + SHorizontalBox::Slot()
+            .FillWidth(0.5f)
+            .Padding(2, 0)
+            [
+                SNew(SSpacer)
+            ]
         ];
 }
 
@@ -429,37 +483,32 @@ TSharedRef<SWidget> SVCCSimPanel::CreateGSTrainingParamsSection()
             CreateSectionHeader(TEXT("Training Parameters"))
         ]
         
-        // Max Iterations and Learning Rate in one row
+        // Max Iterations
         + SVerticalBox::Slot()
         .AutoHeight()
-        .Padding(0, 2)
+        .Padding(2, 2)
         [
-            SNew(SHorizontalBox)
-            
-            + SHorizontalBox::Slot()
-            .FillWidth(1.0f)
-            .Padding(0, 0, 5, 0)
-            [
-                CreateGSNumericPropertyRow<int32>(
-                    TEXT("Max Iterations"),
-                    GSMaxIterationsSpinBox,
-                    GSMaxIterationsValue,
-                    100, 50000, 100,
-                    [this](int32 NewValue) { OnGSMaxIterationsChanged(NewValue); }
-                )
-            ]
-            
-            + SHorizontalBox::Slot()
-            .FillWidth(1.0f)
-            [
-                CreateGSNumericPropertyRow<float>(
-                    TEXT("Learning Rate"),
-                    GSLearningRateSpinBox,
-                    GSLearningRateValue,
-                    0.0001f, 1.0f, 0.001f,
-                    [this](float NewValue) { OnGSLearningRateChanged(NewValue); }
-                )
-            ]
+            CreateGSNumericPropertyRow<int32>(
+                TEXT("Max Iterations"),
+                GSMaxIterationsSpinBox,
+                GSMaxIterationsValue,
+                100, 50000, 100,
+                [this](int32 NewValue) { OnGSMaxIterationsChanged(NewValue); }
+            )
+        ]
+        
+        // Init Point Count
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        .Padding(2, 2)
+        [
+            CreateGSNumericPropertyRow<int32>(
+                TEXT("Init Point Count"),
+                GSInitPointCountSpinBox,
+                GSInitPointCountValue,
+                1000, 100000, 1000,
+                [this](int32 NewValue) { OnGSInitPointCountChanged(NewValue); }
+            )
         ];
 }
 
@@ -879,14 +928,24 @@ void SVCCSimPanel::OnGSImageHeightChanged(int32 NewValue)
     GSConfig.ImageHeight = NewValue;
 }
 
+void SVCCSimPanel::OnGSFocalLengthXChanged(float NewValue)
+{
+    GSConfig.FocalLengthX = NewValue;
+}
+
+void SVCCSimPanel::OnGSFocalLengthYChanged(float NewValue)
+{
+    GSConfig.FocalLengthY = NewValue;
+}
+
 void SVCCSimPanel::OnGSMaxIterationsChanged(int32 NewValue)
 {
     GSConfig.MaxIterations = NewValue;
 }
 
-void SVCCSimPanel::OnGSLearningRateChanged(float NewValue)
+void SVCCSimPanel::OnGSInitPointCountChanged(int32 NewValue)
 {
-    GSConfig.LearningRate = NewValue;
+    GSConfig.InitPointCount = NewValue;
 }
 
 // ============================================================================
@@ -1220,8 +1279,9 @@ FReply SVCCSimPanel::OnGSTestTransformationClicked()
     {
         try
         {
-            FCameraIntrinsics Intrinsics = FVCCSimDataConverter::ConvertCameraParams(
-                GSConfig.FOVDegrees, GSConfig.ImageWidth, GSConfig.ImageHeight);
+            FCameraIntrinsics Intrinsics = FVCCSimDataConverter::ConvertCameraParamsWithFocalLength(
+                GSConfig.FOVDegrees, GSConfig.ImageWidth, GSConfig.ImageHeight,
+                GSConfig.FocalLengthX, GSConfig.FocalLengthY);
             
             TArray<FCameraInfo> CameraInfos = FVCCSimDataConverter::ConvertPoseFile(
                 GSConfig.PoseFilePath, GSConfig.ImageDirectory, Intrinsics);
@@ -1393,10 +1453,6 @@ bool SVCCSimPanel::ValidateGSConfiguration()
         ErrorMessages.Add(TEXT("Max iterations must be positive"));
     }
     
-    if (GSConfig.LearningRate <= 0)
-    {
-        ErrorMessages.Add(TEXT("Learning rate must be positive"));
-    }
     
     if (ErrorMessages.Num() > 0)
     {
@@ -1421,7 +1477,7 @@ void SVCCSimPanel::ShowGSNotification(const FString& Message, bool bIsError)
     }
     else
     {
-        NotificationInfo.Image = FCoreStyle::Get().GetBrush(TEXT("MessageLog.Info"));
+        NotificationInfo.Image = FAppStyle::GetBrush(TEXT("Icons.Info"));
     }
     
     FSlateNotificationManager::Get().AddNotification(NotificationInfo);

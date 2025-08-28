@@ -198,6 +198,17 @@ FVector FVCCSimDataConverter::ConvertLocation(const FVector& UELocation)
     );
 }
 
+FVector FVCCSimDataConverter::ConvertNormal(const FVector& UENormal)
+{
+    // Convert normal from UE left-handed system to right-handed system
+    // Normal vectors don't need unit conversion, only coordinate system flip
+    return FVector(
+        UENormal.X,   // X: forward direction unchanged  
+        -UENormal.Y,  // Y: right to left (flipped for right-handed)
+        UENormal.Z    // Z: up direction unchanged
+    );
+}
+
 FMatrix FVCCSimDataConverter::ConvertRotation(const FRotator& UERotation)
 {    
     // Get UE rotation matrix
@@ -249,6 +260,37 @@ FCameraIntrinsics FVCCSimDataConverter::ConvertCameraParams(
     return FCameraIntrinsics(Width, Height, FocalX, FocalY, CenterX, CenterY);
 }
 
+FCameraIntrinsics FVCCSimDataConverter::ConvertCameraParamsWithFocalLength(
+    float FOVDegrees, int32 Width, int32 Height, float FocalX, float FocalY)
+{
+    // Use provided focal lengths if they are valid (> 0), otherwise calculate from FOV
+    float EffectiveFocalX, EffectiveFocalY;
+    
+    if (FocalX > 0.0f)
+    {
+        EffectiveFocalX = FocalX;
+    }
+    else
+    {
+        EffectiveFocalX = CalculateFocalLength(FOVDegrees, Width);
+    }
+    
+    if (FocalY > 0.0f)
+    {
+        EffectiveFocalY = FocalY;
+    }
+    else
+    {
+        EffectiveFocalY = CalculateFocalLength(FOVDegrees, Height);
+    }
+    
+    // Principal point at image center
+    float CenterX = Width * 0.5f;
+    float CenterY = Height * 0.5f;
+    
+    return FCameraIntrinsics(Width, Height, EffectiveFocalX, EffectiveFocalY, CenterX, CenterY);
+}
+
 float FVCCSimDataConverter::CalculateFocalLength(float FOVDegrees, int32 ImageDimension)
 {
     float FOVRadians = FMath::DegreesToRadians(FOVDegrees);
@@ -272,10 +314,20 @@ FPointCloudData FVCCSimDataConverter::ConvertMeshToPointCloud(
         return PointCloudData;
     }
     
-    // Sample points from mesh (in UE coordinates)
-    TArray<FVector> SampledPoints = SampleMeshVertices(Mesh, SampleCount, true);
+    // Sample points and colors from mesh (in UE coordinates)
+    TArray<FVector> SampledPoints;
+    TArray<FLinearColor> Colors;
     
-    // Apply coordinate transformation if requested
+    if (!SampleMeshVerticesWithColors(Mesh, SampleCount, true, SampledPoints, Colors))
+    {
+        UE_LOG(LogTemp, Error, TEXT("Failed to sample mesh vertices with colors"));
+        return PointCloudData;
+    }
+    
+    // Generate normals from original UE coordinates (before transformation)
+    TArray<FVector> Normals = CalculatePointNormals(SampledPoints);
+    
+    // Apply coordinate transformation if requested (after color/normal generation)
     if (bApplyCoordinateTransformation)
     {
         UE_LOG(LogTemp, Log, TEXT("Applying coordinate transformation to mesh points"));
@@ -288,13 +340,17 @@ FPointCloudData FVCCSimDataConverter::ConvertMeshToPointCloud(
             SampledPoints[i] = TSPoint;
         }
         
+        // Also transform normals
+        for (int32 i = 0; i < Normals.Num(); ++i)
+        {
+            FVector UENormal = Normals[i];
+            FVector TSNormal = ConvertNormal(UENormal);
+            Normals[i] = TSNormal;
+        }
+        
         UE_LOG(LogTemp, Log, TEXT("Transformed %d mesh points from UE to "
                                   "right-handed coordinates"), SampledPoints.Num());
     }
-    
-    // Generate colors and normals
-    TArray<FLinearColor> Colors = GeneratePointColors(SampledPoints);
-    TArray<FVector> Normals = CalculatePointNormals(SampledPoints);
     
     // Fill point cloud data using FRatPoint
     PointCloudData.Reserve(SampledPoints.Num());
@@ -571,6 +627,89 @@ TArray<FVector> FVCCSimDataConverter::SampleMeshVertices(
     }
     
     return SampledPoints;
+}
+
+bool FVCCSimDataConverter::SampleMeshVerticesWithColors(UStaticMesh* Mesh,
+    int32 SampleCount, bool bRandomSampling,
+    TArray<FVector>& OutPositions, TArray<FLinearColor>& OutColors)
+{
+    OutPositions.Empty();
+    OutColors.Empty();
+    
+    if (!Mesh || !Mesh->GetRenderData() || Mesh->GetRenderData()->LODResources.Num() == 0)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Invalid mesh for vertex sampling with colors"));
+        return false;
+    }
+    
+    const FStaticMeshLODResources& LODResource = Mesh->GetRenderData()->LODResources[0];
+    const FPositionVertexBuffer& PositionBuffer = LODResource.VertexBuffers.PositionVertexBuffer;
+    const FColorVertexBuffer& ColorBuffer = LODResource.VertexBuffers.ColorVertexBuffer;
+    
+    int32 VertexCount = PositionBuffer.GetNumVertices();
+    bool bHasVertexColors = ColorBuffer.GetNumVertices() > 0;
+    
+    if (VertexCount == 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Mesh has no vertices"));
+        return false;
+    }
+    
+    SampleCount = FMath::Min(SampleCount, VertexCount);
+    OutPositions.Reserve(SampleCount);
+    OutColors.Reserve(SampleCount);
+    
+    if (bRandomSampling)
+    {
+        // Random sampling
+        FRandomStream RandomStream(FDateTime::Now().GetTicks());
+        TSet<int32> UsedIndices;
+        
+        while (OutPositions.Num() < SampleCount)
+        {
+            int32 RandomIndex = RandomStream.RandRange(0, VertexCount - 1);
+            if (!UsedIndices.Contains(RandomIndex))
+            {
+                UsedIndices.Add(RandomIndex);
+                
+                FVector Vertex = (FVector)PositionBuffer.VertexPosition(RandomIndex);
+                OutPositions.Add(Vertex);
+                
+                // Get vertex color if available, otherwise use white
+                FLinearColor VertexColor = FLinearColor::White;
+                if (bHasVertexColors && (uint32)RandomIndex < ColorBuffer.GetNumVertices())
+                {
+                    FColor Color = ColorBuffer.VertexColor(RandomIndex);
+                    VertexColor = FLinearColor(Color);
+                }
+                OutColors.Add(VertexColor);
+            }
+        }
+    }
+    else
+    {
+        // Uniform sampling
+        int32 Step = FMath::Max(1, VertexCount / SampleCount);
+        for (int32 i = 0; i < VertexCount && OutPositions.Num() < SampleCount; i += Step)
+        {
+            FVector Vertex = (FVector)PositionBuffer.VertexPosition(i);
+            OutPositions.Add(Vertex);
+            
+            // Get vertex color if available, otherwise use white
+            FLinearColor VertexColor = FLinearColor::White;
+            if (bHasVertexColors && (uint32)i < ColorBuffer.GetNumVertices())
+            {
+                FColor Color = ColorBuffer.VertexColor(i);
+                VertexColor = FLinearColor(Color);
+            }
+            OutColors.Add(VertexColor);
+        }
+    }
+    
+    UE_LOG(LogTemp, Log, TEXT("Sampled %d vertices with %s colors"), 
+        OutPositions.Num(), bHasVertexColors ? TEXT("actual vertex") : TEXT("default white"));
+    
+    return true;
 }
 
 TArray<FLinearColor> FVCCSimDataConverter::GeneratePointColors(const TArray<FVector>& Points)
