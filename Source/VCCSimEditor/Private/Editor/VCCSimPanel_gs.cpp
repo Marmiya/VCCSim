@@ -483,32 +483,40 @@ TSharedRef<SWidget> SVCCSimPanel::CreateGSTrainingParamsSection()
             CreateSectionHeader(TEXT("Training Parameters"))
         ]
         
-        // Max Iterations
+        // Max Iterations and Init Point Count (same row)
         + SVerticalBox::Slot()
         .AutoHeight()
         .Padding(2, 2)
         [
-            CreateGSNumericPropertyRow<int32>(
-                TEXT("Max Iterations"),
-                GSMaxIterationsSpinBox,
-                GSMaxIterationsValue,
-                100, 50000, 100,
-                [this](int32 NewValue) { OnGSMaxIterationsChanged(NewValue); }
-            )
-        ]
-        
-        // Init Point Count
-        + SVerticalBox::Slot()
-        .AutoHeight()
-        .Padding(2, 2)
-        [
-            CreateGSNumericPropertyRow<int32>(
-                TEXT("Init Point Count"),
-                GSInitPointCountSpinBox,
-                GSInitPointCountValue,
-                1000, 100000, 1000,
-                [this](int32 NewValue) { OnGSInitPointCountChanged(NewValue); }
-            )
+            SNew(SHorizontalBox)
+            
+            // Max Iterations (left half)
+            + SHorizontalBox::Slot()
+            .FillWidth(0.5f)
+            .Padding(0, 0, 5, 0)
+            [
+                CreateGSNumericPropertyRow<int32>(
+                    TEXT("Max Iterations"),
+                    GSMaxIterationsSpinBox,
+                    GSMaxIterationsValue,
+                    1, TNumericLimits<int32>::Max(), 100,  // No upper limit
+                    [this](int32 NewValue) { OnGSMaxIterationsChanged(NewValue); }
+                )
+            ]
+            
+            // Init Point Count (right half)
+            + SHorizontalBox::Slot()
+            .FillWidth(0.5f)
+            .Padding(5, 0, 0, 0)
+            [
+                CreateGSNumericPropertyRow<int32>(
+                    TEXT("Init Point Count"),
+                    GSInitPointCountSpinBox,
+                    GSInitPointCountValue,
+                    1, TNumericLimits<int32>::Max(), 1000,  // No upper limit
+                    [this](int32 NewValue) { OnGSInitPointCountChanged(NewValue); }
+                )
+            ]
         ];
 }
 
@@ -639,38 +647,40 @@ TSharedRef<SWidget> SVCCSimPanel::CreateGSTrainingControlSection()
         // Training Status text
         + SVerticalBox::Slot()
         .AutoHeight()
-        .Padding(5, 2)
+        .Padding(5, 4)
         [
             CreatePropertyRow(TEXT("Training Status"),
                 SAssignNew(GSTrainingStatusText, STextBlock)
                 .Text_Lambda([this]()
                 {
-                    FString StatusText = FString::Printf(TEXT("Training: %s"), *GSTrainingStatusMessage);
+                    FString StatusText = FString::Printf(TEXT("%s"), *GSTrainingStatusMessage);
                     if (bGSTrainingInProgress)
                     {
                         StatusText += FString::Printf(TEXT(" (%.1f%%)"), GSTrainingProgress * 100.0f);
                     }
                     return FText::FromString(StatusText);
                 })
+                .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
             )
         ]
         
         // COLMAP Status text
         + SVerticalBox::Slot()
         .AutoHeight()
-        .Padding(5, 2)
+        .Padding(5, 4)
         [
             CreatePropertyRow(TEXT("COLMAP Status"),
                 SNew(STextBlock)
                 .Text_Lambda([this]()
                 {
-                    FString StatusText = FString::Printf(TEXT("COLMAP: %s"), *ColmapStatusMessage);
+                    FString StatusText = FString::Printf(TEXT("%s"), *ColmapStatusMessage);
                     if (bColmapPipelineInProgress)
                     {
                         StatusText += FString::Printf(TEXT(" (%.1f%%)"), ColmapProgress * 100.0f);
                     }
                     return FText::FromString(StatusText);
                 })
+                .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
                 .ColorAndOpacity_Lambda([this]()
                 {
                     if (bColmapPipelineInProgress)
@@ -686,10 +696,33 @@ TSharedRef<SWidget> SVCCSimPanel::CreateGSTrainingControlSection()
             )
         ]
         
+        // Current Loss Display
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        .Padding(5, 4)
+        [
+            CreatePropertyRow(TEXT("Current Loss"),
+                SNew(STextBlock)
+                .Text_Lambda([this]()
+                {
+                    if (bGSTrainingInProgress && !GSCurrentLoss.IsEmpty())
+                    {
+                        return FText::FromString(GSCurrentLoss);
+                    }
+                    return FText::FromString(TEXT("N/A"));
+                })
+                .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
+                .ColorAndOpacity_Lambda([this]()
+                {
+                    return bGSTrainingInProgress ? FLinearColor::Green : FLinearColor::White;
+                })
+            )
+        ]
+        
         // Python Output Log
         + SVerticalBox::Slot()
         .MaxHeight(200.0f)
-        .Padding(5, 10, 5, 0)
+        .Padding(5, 4)
         [
             CreatePropertyRow(TEXT("Training Output"),
                 SNew(SBorder)
@@ -708,31 +741,10 @@ TSharedRef<SWidget> SVCCSimPanel::CreateGSTrainingControlSection()
                         })
                         .IsReadOnly(true)
                         .AllowContextMenu(true)
+                        .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
                         .Style(&FAppStyle::Get().GetWidgetStyle<FEditableTextBoxStyle>("NormalEditableTextBox"))
                     ]
                 ]
-            )
-        ]
-        
-        // Current Loss Display
-        + SVerticalBox::Slot()
-        .AutoHeight()
-        .Padding(5, 2)
-        [
-            CreatePropertyRow(TEXT("Current Loss"),
-                SNew(STextBlock)
-                .Text_Lambda([this]()
-                {
-                    if (bGSTrainingInProgress && !GSCurrentLoss.IsEmpty())
-                    {
-                        return FText::FromString(GSCurrentLoss);
-                    }
-                    return FText::FromString(TEXT("N/A"));
-                })
-                .ColorAndOpacity_Lambda([this]()
-                {
-                    return bGSTrainingInProgress ? FLinearColor::Green : FLinearColor::White;
-                })
             )
         ];
 }
@@ -1451,6 +1463,11 @@ bool SVCCSimPanel::ValidateGSConfiguration()
     if (GSConfig.MaxIterations <= 0)
     {
         ErrorMessages.Add(TEXT("Max iterations must be positive"));
+    }
+    
+    if (GSConfig.InitPointCount <= 0)
+    {
+        ErrorMessages.Add(TEXT("Init point count must be positive"));
     }
     
     
