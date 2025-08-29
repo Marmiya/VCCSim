@@ -206,13 +206,13 @@ public:
     
     /**
      * Run complete COLMAP pipeline using system executable
-     * @param CameraInfos Camera information array
+     * @param ImageDirectory Source directory containing images
      * @param OutputPath Base output directory (timestamped folder will be created)
      * @param ColmapExecutablePath Path to COLMAP executable
      * @return True if successful
      */
     static bool RunColmapPipeline(
-        const TArray<FCameraInfo>& CameraInfos,
+        const FString& ImageDirectory,
         const FString& OutputPath,
         const FString& ColmapExecutablePath = TEXT("D:\\colmap-x64-windows-cuda"));
     
@@ -224,13 +224,13 @@ public:
     static FString CreateTimestampedColmapDirectory(const FString& BaseOutputPath);
     
     /**
-     * Export images and cameras for COLMAP processing
-     * @param CameraInfos Camera information array
+     * Copy images to COLMAP dataset structure for processing
+     * @param ImageDirectory Source directory containing images
      * @param ColmapDatasetPath Path to COLMAP dataset directory
      * @return True if successful
      */
     static bool PrepareColmapDataset(
-        const TArray<FCameraInfo>& CameraInfos,
+        const FString& ImageDirectory,
         const FString& ColmapDatasetPath);
     
     /**
@@ -273,6 +273,20 @@ public:
         const FString& DatabasePath,
         const FString& ImagePath,
         const FString& OutputPath,
+        TFunction<bool(const FString&, const FString&, const FString&)> CommandExecutor = nullptr);
+    
+    /**
+     * Convert COLMAP binary model to text format for debugging
+     * @param ColmapExecutablePath Path to COLMAP executable directory
+     * @param BinaryModelPath Path to binary model directory (sparse/0)
+     * @param TextModelPath Path to output text model directory
+     * @param CommandExecutor Optional command executor for process management
+     * @return True if conversion succeeded
+     */
+    static bool RunColmapModelConverter(
+        const FString& ColmapExecutablePath,
+        const FString& BinaryModelPath,
+        const FString& TextModelPath,
         TFunction<bool(const FString&, const FString&, const FString&)> CommandExecutor = nullptr);
 
     static FVector GetCameraForwardDirection(const FMatrix& ConvertedRotationMatrix);

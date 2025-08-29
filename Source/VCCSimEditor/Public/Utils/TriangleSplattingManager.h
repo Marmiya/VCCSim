@@ -245,6 +245,13 @@ private:
     FString FilterTrainingOutput(const FString& RawOutput);
     
     /**
+     * Check if a log line contains important information worth displaying in UE log
+     * @param Line Output line from Python process
+     * @return True if line should be logged
+     */
+    bool IsImportantLogLine(const FString& Line);
+    
+    /**
      * Read latest entries from training log file
      * @param MaxLines Maximum number of lines to read from end of file
      * @return Array of log lines

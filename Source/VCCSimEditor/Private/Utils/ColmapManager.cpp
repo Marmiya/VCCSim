@@ -41,7 +41,7 @@ FColmapManager::~FColmapManager()
 }
 
 bool FColmapManager::StartColmapPipeline(
-    const TArray<FCameraInfo>& InCameraInfos,
+    const FString& InImageDirectory,
     const FString& InOutputPath,
     const FString& InColmapExecutablePath)
 {
@@ -52,7 +52,7 @@ bool FColmapManager::StartColmapPipeline(
     }
     
     // Store parameters
-    CameraInfos = InCameraInfos;
+    ImageDirectory = InImageDirectory;
     OutputPath = InOutputPath;
     ColmapExecutablePath = InColmapExecutablePath;
     
@@ -235,6 +235,18 @@ bool FColmapManager::RunColmapPipelineInternal()
         return false;
     }
     
+    if (StopTaskCounter.GetValue() != 0)
+        return false;
+    
+    UpdateProgress(0.9f, TEXT("Converting model to text format..."));
+    
+    // Step 5: Convert binary model to text format for debugging
+    if (!RunModelConverter())
+    {
+        UpdateProgress(0.0f, TEXT("Model converter failed"));
+        return false;
+    }
+    
     UpdateProgress(1.0f, FString::Printf(
         TEXT("COLMAP pipeline completed! Results: %s"), *TimestampedDirectory));
     return true;
@@ -242,7 +254,7 @@ bool FColmapManager::RunColmapPipelineInternal()
 
 bool FColmapManager::PrepareDataset()
 {
-    return FVCCSimDataConverter::PrepareColmapDataset(CameraInfos, TimestampedDirectory);
+    return FVCCSimDataConverter::PrepareColmapDataset(ImageDirectory, TimestampedDirectory);
 }
 
 bool FColmapManager::RunFeatureExtraction()
@@ -283,6 +295,20 @@ bool FColmapManager::RunSparseReconstruction()
     };
     
     return FVCCSimDataConverter::RunColmapSparseReconstruction(ColmapExecutablePath, DatabasePath, ImagePath, TimestampedDirectory, CommandExecutor);
+}
+
+bool FColmapManager::RunModelConverter()
+{
+    FString BinaryModelPath = FPaths::Combine(TimestampedDirectory, TEXT("sparse"), TEXT("0"));
+    FString TextModelPath = FPaths::Combine(TimestampedDirectory, TEXT("sparse_txt"));
+    
+    // Create command executor lambda that uses our process management
+    auto CommandExecutor = [this](const FString& Command, const FString& Arguments, const FString& StepName) -> bool
+    {
+        return ExecuteColmapCommand(Command, Arguments, StepName);
+    };
+    
+    return FVCCSimDataConverter::RunColmapModelConverter(ColmapExecutablePath, BinaryModelPath, TextModelPath, CommandExecutor);
 }
 
 void FColmapManager::TerminateCurrentProcess()

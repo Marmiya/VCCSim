@@ -166,7 +166,6 @@ private:
     TSharedPtr<SButton> GSTrainingToggleButton;
     TSharedPtr<SButton> GSColmapTrainingButton;
     TSharedPtr<STextBlock> GSTrainingStatusText;
-    TSharedPtr<SEditableTextBox> GSPythonOutputText;
 
     // ============================================================================
     // STATE VARIABLES
@@ -264,19 +263,14 @@ private:
     // Triangle Splatting state (simplified)
     FTriangleSplattingConfig GSConfig;
     bool bGSTrainingInProgress = false;
-    float GSTrainingProgress = 0.0f;
-    FString GSTrainingStatusMessage = TEXT("Ready");
     TSharedPtr<FTriangleSplattingManager> GSTrainingManager;
     FTimerHandle GSStatusUpdateTimerHandle;
     
-    // Python output monitoring
-    FString GSPythonOutputLog;
+    // Training monitoring
     FString GSCurrentLoss;
     
     // COLMAP pipeline state
     bool bColmapPipelineInProgress = false;
-    float ColmapProgress = 0.0f;
-    FString ColmapStatusMessage = TEXT("Ready");
     TSharedPtr<FColmapManager> ColmapManager;
     
     // TOptional attributes for Triangle Splatting SpinBox values
@@ -399,8 +393,6 @@ private:
     bool ValidateGSConfiguration();
     void ShowGSNotification(const FString& Message, bool bIsError = false);
     
-    // Python output monitoring
-    void UpdatePythonOutputDisplay();
     
     // Test and validation helpers
     void ExportCamerasToPLY(const TArray<FCameraInfo>& CameraInfos, const FString& OutputPath);

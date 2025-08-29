@@ -67,16 +67,13 @@ void SVCCSimPanel::InitializeGSManager()
     GSTrainingManager->OnTrainingProgressUpdated.BindLambda(
         [this](float Progress, FString StatusMessage)
     {
-        GSTrainingProgress = Progress;
-        GSTrainingStatusMessage = StatusMessage;
+        // Progress is automatically tracked by GSTrainingManager
     });
     
     GSTrainingManager->OnTrainingCompleted.BindLambda(
         [this](bool bSuccessful, FString ResultMessage)
     {
         bGSTrainingInProgress = false;
-        GSTrainingProgress = bSuccessful ? 1.0f : 0.0f;
-        GSTrainingStatusMessage = ResultMessage;
         
         // Stop status update timer
         if (GEditor && GSStatusUpdateTimerHandle.IsValid())
@@ -97,15 +94,12 @@ void SVCCSimPanel::InitializeColmapManager()
     // Bind delegates for COLMAP progress updates
     ColmapManager->OnProgressUpdated.BindLambda([this](float Progress, FString StatusMessage)
     {
-        ColmapProgress = Progress;
-        ColmapStatusMessage = StatusMessage;
+        // Progress is automatically tracked by ColmapManager
     });
     
     ColmapManager->OnCompleted.BindLambda([this](bool bSuccessful, FString ResultMessage)
     {
         bColmapPipelineInProgress = false;
-        ColmapProgress = bSuccessful ? 1.0f : 0.0f;
-        ColmapStatusMessage = bSuccessful ? TEXT("Completed") : TEXT("Failed");
         
         if (bSuccessful)
         {
@@ -575,7 +569,6 @@ TSharedRef<SWidget> SVCCSimPanel::CreateGSTrainingControlSection()
                         {
                             ColmapManager->StopColmapPipeline();
                             bColmapPipelineInProgress = false;
-                            ColmapStatusMessage = TEXT("Stopped by user");
                             ShowGSNotification(TEXT("COLMAP pipeline stopped"));
                         }
                     }
@@ -653,12 +646,17 @@ TSharedRef<SWidget> SVCCSimPanel::CreateGSTrainingControlSection()
                 SAssignNew(GSTrainingStatusText, STextBlock)
                 .Text_Lambda([this]()
                 {
-                    FString StatusText = FString::Printf(TEXT("%s"), *GSTrainingStatusMessage);
-                    if (bGSTrainingInProgress)
+                    if (GSTrainingManager.IsValid())
                     {
-                        StatusText += FString::Printf(TEXT(" (%.1f%%)"), GSTrainingProgress * 100.0f);
+                        FString StatusText = GSTrainingManager->GetStatusMessage();
+                        if (bGSTrainingInProgress)
+                        {
+                            float Progress = GSTrainingManager->GetTrainingProgress();
+                            StatusText += FString::Printf(TEXT(" (%.1f%%)"), Progress * 100.0f);
+                        }
+                        return FText::FromString(StatusText);
                     }
-                    return FText::FromString(StatusText);
+                    return FText::FromString(TEXT("Ready"));
                 })
                 .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
             )
@@ -673,12 +671,17 @@ TSharedRef<SWidget> SVCCSimPanel::CreateGSTrainingControlSection()
                 SNew(STextBlock)
                 .Text_Lambda([this]()
                 {
-                    FString StatusText = FString::Printf(TEXT("%s"), *ColmapStatusMessage);
-                    if (bColmapPipelineInProgress)
+                    if (ColmapManager.IsValid())
                     {
-                        StatusText += FString::Printf(TEXT(" (%.1f%%)"), ColmapProgress * 100.0f);
+                        FString StatusText = ColmapManager->GetStatusMessage();
+                        if (bColmapPipelineInProgress)
+                        {
+                            float Progress = ColmapManager->GetProgress();
+                            StatusText += FString::Printf(TEXT(" (%.1f%%)"), Progress * 100.0f);
+                        }
+                        return FText::FromString(StatusText);
                     }
-                    return FText::FromString(StatusText);
+                    return FText::FromString(TEXT("Ready"));
                 })
                 .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
                 .ColorAndOpacity_Lambda([this]()
@@ -687,7 +690,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreateGSTrainingControlSection()
                     {
                         return FLinearColor::Green;
                     }
-                    else if (ColmapProgress >= 1.0f)
+                    else if (ColmapManager.IsValid() && ColmapManager->GetProgress() >= 1.0f)
                     {
                         return FLinearColor::Blue;
                     }
@@ -716,35 +719,6 @@ TSharedRef<SWidget> SVCCSimPanel::CreateGSTrainingControlSection()
                 {
                     return bGSTrainingInProgress ? FLinearColor::Green : FLinearColor::White;
                 })
-            )
-        ]
-        
-        // Python Output Log
-        + SVerticalBox::Slot()
-        .MaxHeight(200.0f)
-        .Padding(5, 4)
-        [
-            CreatePropertyRow(TEXT("Training Output"),
-                SNew(SBorder)
-                .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
-                .BorderBackgroundColor(FColor(10, 10, 10, 255))
-                .Padding(4)
-                [
-                    SNew(SScrollBox)
-                    .Orientation(Orient_Vertical)
-                    + SScrollBox::Slot()
-                    [
-                        SAssignNew(GSPythonOutputText, SEditableTextBox)
-                        .Text_Lambda([this]()
-                        {
-                            return FText::FromString(GSPythonOutputLog);
-                        })
-                        .IsReadOnly(true)
-                        .AllowContextMenu(true)
-                        .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
-                        .Style(&FAppStyle::Get().GetWidgetStyle<FEditableTextBoxStyle>("NormalEditableTextBox"))
-                    ]
-                ]
             )
         ];
 }
@@ -971,10 +945,8 @@ FReply SVCCSimPanel::OnGSStartTrainingClicked()
         if (GSTrainingManager->StartTraining(GSConfig))
         {
             bGSTrainingInProgress = true;
-            GSTrainingStatusMessage = TEXT("Training started...");
             
-            // Clear Python output log for new session
-            GSPythonOutputLog.Empty();
+            // Training started
             GSCurrentLoss = TEXT("N/A");
             
             // Start status update timer
@@ -1013,8 +985,6 @@ FReply SVCCSimPanel::OnGSStopTrainingClicked()
     }
     
     bGSTrainingInProgress = false;
-    GSTrainingProgress = 0.0f;
-    GSTrainingStatusMessage = TEXT("Training stopped by user");
     
     // Stop status update timer
     if (GEditor && GSStatusUpdateTimerHandle.IsValid())
@@ -1094,7 +1064,8 @@ FReply SVCCSimPanel::OnGSColmapTrainingClicked()
         }
     }
     
-    UE_LOG(LogTemp, Log, TEXT("Starting Triangle Splatting training with COLMAP dataset: %s"), *GSConfig.ColmapDatasetPath);
+    UE_LOG(LogTemp, Log, TEXT("Starting Triangle Splatting training with "
+                              "COLMAP dataset: %s"), *GSConfig.ColmapDatasetPath);
     
     // Start Triangle Splatting training directly with COLMAP dataset
     StartTriangleSplattingWithColmapData(GSConfig.ColmapDatasetPath);
@@ -1163,10 +1134,8 @@ void SVCCSimPanel::StartTriangleSplattingWithColmapData(const FString& ColmapDat
     if (GSTrainingManager->StartColmapTraining(PythonCommand, Arguments, TSOutputDir))
     {
         bGSTrainingInProgress = true;
-        GSTrainingStatusMessage = TEXT("Triangle Splatting training with COLMAP data started...");
         
-        // Clear Python output log for new session
-        GSPythonOutputLog.Empty();
+        // Training with COLMAP data started
         GSCurrentLoss = TEXT("N/A");
         
         // Start status update timer
@@ -1180,8 +1149,7 @@ void SVCCSimPanel::StartTriangleSplattingWithColmapData(const FString& ColmapDat
                     {
                         GSTrainingManager->UpdateTrainingStatus();
                         
-                        // Update Python output log and current loss
-                        UpdatePythonOutputDisplay();
+                        // Update training status
                     }
                 }),
                 1.0f, // Update every second
@@ -1359,59 +1327,28 @@ FReply SVCCSimPanel::OnGSExportColmapClicked()
     }
     
     try
-    {
-        // Convert camera intrinsics
-        FCameraIntrinsics Intrinsics = FVCCSimDataConverter::ConvertCameraParams(
-            GSConfig.FOVDegrees, GSConfig.ImageWidth, GSConfig.ImageHeight);
-        
-        // Convert UE poses to COLMAP format with proper image paths
-        TArray<FCameraInfo> ColmapCameraInfos = FVCCSimDataConverter::ConvertPoseFile(
-            GSConfig.PoseFilePath, GSConfig.ImageDirectory, Intrinsics);
-        
-        if (ColmapCameraInfos.Num() == 0)
-        {
-            ShowGSNotification(TEXT("No valid camera poses found for "
-                                    "COLMAP processing"), true);
-            return FReply::Handled();
-        }
-        
-        // Update camera infos with proper image paths for the new COLMAP pipeline
-        for (FCameraInfo& CameraInfo : ColmapCameraInfos)
-        {
-            if (!CameraInfo.ImageName.IsEmpty())
-            {
-                // Ensure we have full paths to the source images
-                FString FullImagePath = FPaths::Combine(GSConfig.ImageDirectory,
-                    CameraInfo.ImageName);
-                if (FPaths::FileExists(FullImagePath))
-                {
-                    CameraInfo.ImageName = FullImagePath; // Store full path for copying
-                }
-            }
-        }
-        
+    {        
         // Start COLMAP pipeline asynchronously
         FString ColmapExecutablePath = TEXT("D:\\colmap-x64-windows-cuda\\bin");
         
         // Create COLMAP-specific output directory
         FString ColmapOutputDir = FPaths::Combine(GSConfig.OutputDirectory, TEXT("colmap_output"));
         
-        if (ColmapManager->StartColmapPipeline(ColmapCameraInfos, ColmapOutputDir, ColmapExecutablePath))
+        if (ColmapManager->StartColmapPipeline(GSConfig.ImageDirectory,
+            ColmapOutputDir, ColmapExecutablePath))
         {
             bColmapPipelineInProgress = true;
-            ShowGSNotification(TEXT("✅ COLMAP pipeline started in background\n\n")
-                              TEXT("🚀 The editor will remain responsive\n")
-                              TEXT("📊 Monitor progress in the COLMAP status below"));
+            ShowGSNotification(TEXT("COLMAP pipeline started in background\n\n"));
         }
         else
         {
-            ShowGSNotification(TEXT("❌ Failed to start COLMAP pipeline\n\n")
+            ShowGSNotification(TEXT("Failed to start COLMAP pipeline\n\n")
                               TEXT("Pipeline may already be running"), true);
         }
     }
     catch (...)
     {
-        ShowGSNotification(TEXT("❌ Unexpected error during COLMAP pipeline execution\n\n")
+        ShowGSNotification(TEXT("Unexpected error during COLMAP pipeline execution\n\n")
                           TEXT("Check UE log for detailed error information"), true);
     }
     
@@ -1517,27 +1454,6 @@ void SVCCSimPanel::ExportCamerasToPLY(
     }
 }
 
-void SVCCSimPanel::UpdatePythonOutputDisplay()
-{
-    if (!GSTrainingManager.IsValid())
-    {
-        return;
-    }
-    
-    // Get the current Python output (not appended, just current session)
-    GSPythonOutputLog = GSTrainingManager->GetTrainingOutput();
-    
-    // Update current loss display
-    FString CurrentLoss = GSTrainingManager->GetCurrentLoss();
-    if (!CurrentLoss.IsEmpty())
-    {
-        GSCurrentLoss = CurrentLoss;
-    }
-    else
-    {
-        GSCurrentLoss = TEXT("N/A");
-    }
-}
 
 END_SLATE_FUNCTION_BUILD_OPTIMIZATION
 

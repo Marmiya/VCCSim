@@ -220,14 +220,14 @@ void FTriangleSplattingManager::UpdateTrainingStatus()
                     FFileHelper::EEncodingOptions::AutoDetect, &IFileManager::Get(), FILEWRITE_Append);
             }
             
-            // Log to UE console as well for debugging
+            // Log only important messages to UE console
             TArray<FString> Lines;
             PipeOutput.ParseIntoArrayLines(Lines);
             for (const FString& Line : Lines)
             {
-                if (!Line.IsEmpty())
+                if (!Line.IsEmpty() && IsImportantLogLine(Line))
                 {
-                    UE_LOG(LogTemp, Log, TEXT("Python: %s"), *Line);
+                    UE_LOG(LogTemp, Log, TEXT("Training: %s"), *Line.TrimStartAndEnd());
                 }
             }
         }
@@ -964,6 +964,42 @@ FString FTriangleSplattingManager::FilterTrainingOutput(const FString& RawOutput
     }
     
     return FString::Join(FilteredLines, TEXT("\n"));
+}
+
+bool FTriangleSplattingManager::IsImportantLogLine(const FString& Line)
+{
+    FString TrimmedLine = Line.TrimStartAndEnd();
+    
+    // Skip empty lines
+    if (TrimmedLine.IsEmpty())
+    {
+        return false;
+    }
+    
+    // Skip common verbose/repetitive lines
+    if (TrimmedLine.Contains(TEXT("UserWarning")) || 
+        TrimmedLine.Contains(TEXT("warnings.warn")) ||
+        TrimmedLine.StartsWith(TEXT("C:\\")) || // Skip path warnings
+        TrimmedLine.Contains(TEXT("pretrained")) ||
+        TrimmedLine.Contains(TEXT("deprecated")))
+    {
+        return false;
+    }
+    
+    // Include important training information
+    return TrimmedLine.Contains(TEXT("Optimizing")) ||
+           TrimmedLine.Contains(TEXT("Output folder")) ||
+           TrimmedLine.Contains(TEXT("Reading camera")) ||
+           TrimmedLine.Contains(TEXT("Saving")) ||
+           TrimmedLine.Contains(TEXT("Complete")) ||
+           TrimmedLine.Contains(TEXT("Training")) ||
+           TrimmedLine.Contains(TEXT("Error")) ||
+           TrimmedLine.Contains(TEXT("Traceback")) ||
+           TrimmedLine.Contains(TEXT("AssertionError")) ||
+           (TrimmedLine.Contains(TEXT("Loss")) && !TrimmedLine.Contains(TEXT("Setting up"))) ||
+           TrimmedLine.Contains(TEXT("PSNR")) ||
+           TrimmedLine.Contains(TEXT("iter:")) ||
+           TrimmedLine.Contains(TEXT("Iteration"));
 }
 
 FString FTriangleSplattingManager::GetCurrentLoss()

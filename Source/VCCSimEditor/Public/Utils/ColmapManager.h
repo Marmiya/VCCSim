@@ -37,13 +37,13 @@ public:
     
     /**
      * Start COLMAP pipeline asynchronously
-     * @param CameraInfos Camera information array
+     * @param ImageDirectory Source directory containing images
      * @param OutputPath Base output directory
      * @param ColmapExecutablePath Path to COLMAP executable
      * @return True if successfully started
      */
     bool StartColmapPipeline(
-        const TArray<FCameraInfo>& CameraInfos,
+        const FString& ImageDirectory,
         const FString& OutputPath,
         const FString& ColmapExecutablePath = TEXT("D:\\colmap-x64-windows-cuda"));
     
@@ -103,7 +103,7 @@ private:
     FString CurrentStatusMessage;
     
     /** Pipeline parameters */
-    TArray<FCameraInfo> CameraInfos;
+    FString ImageDirectory;
     FString OutputPath;
     FString ColmapExecutablePath;
     FString TimestampedDirectory;
@@ -128,6 +128,7 @@ private:
     bool RunFeatureExtraction();
     bool RunFeatureMatching();
     bool RunSparseReconstruction();
+    bool RunModelConverter();
     
     /**
      * Execute COLMAP command with progress monitoring and process management

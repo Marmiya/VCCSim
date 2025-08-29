@@ -680,7 +680,13 @@ bool FVCCSimDataConverter::SampleMeshVerticesWithColors(UStaticMesh* Mesh,
                 if (bHasVertexColors && (uint32)RandomIndex < ColorBuffer.GetNumVertices())
                 {
                     FColor Color = ColorBuffer.VertexColor(RandomIndex);
-                    VertexColor = FLinearColor(Color);
+                    // Convert without gamma correction to preserve original brightness
+                    VertexColor = FLinearColor(
+                        Color.R / 255.0f,
+                        Color.G / 255.0f, 
+                        Color.B / 255.0f,
+                        Color.A / 255.0f
+                    );
                 }
                 OutColors.Add(VertexColor);
             }
@@ -700,14 +706,34 @@ bool FVCCSimDataConverter::SampleMeshVerticesWithColors(UStaticMesh* Mesh,
             if (bHasVertexColors && (uint32)i < ColorBuffer.GetNumVertices())
             {
                 FColor Color = ColorBuffer.VertexColor(i);
-                VertexColor = FLinearColor(Color);
+                // Convert without gamma correction to preserve original brightness
+                VertexColor = FLinearColor(
+                    Color.R / 255.0f,
+                    Color.G / 255.0f,
+                    Color.B / 255.0f,
+                    Color.A / 255.0f
+                );
             }
             OutColors.Add(VertexColor);
         }
     }
     
-    UE_LOG(LogTemp, Log, TEXT("Sampled %d vertices with %s colors"), 
-        OutPositions.Num(), bHasVertexColors ? TEXT("actual vertex") : TEXT("default white"));
+    // Log color sampling statistics
+    if (bHasVertexColors && OutColors.Num() > 0)
+    {
+        // Sample a few colors for debugging
+        FLinearColor FirstColor = OutColors[0];
+        FLinearColor LastColor = OutColors.Last();
+        UE_LOG(LogTemp, Log, TEXT("Sampled %d vertices with actual vertex colors"), OutPositions.Num());
+        UE_LOG(LogTemp, Log, TEXT("First color: R=%.3f G=%.3f B=%.3f A=%.3f"), 
+            FirstColor.R, FirstColor.G, FirstColor.B, FirstColor.A);
+        UE_LOG(LogTemp, Log, TEXT("Last color: R=%.3f G=%.3f B=%.3f A=%.3f"), 
+            LastColor.R, LastColor.G, LastColor.B, LastColor.A);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Log, TEXT("Sampled %d vertices with default white colors"), OutPositions.Num());
+    }
     
     return true;
 }
@@ -782,18 +808,19 @@ FString FVCCSimDataConverter::CreateTimestampedColmapDirectory(const FString& Ba
 }
 
 bool FVCCSimDataConverter::PrepareColmapDataset(
-    const TArray<FCameraInfo>& CameraInfos,
+    const FString& ImageDirectory,
     const FString& ColmapDatasetPath)
 {
-    if (CameraInfos.Num() == 0)
+    IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
+    
+    // Validate source image directory
+    if (!PlatformFile.DirectoryExists(*ImageDirectory))
     {
-        UE_LOG(LogTemp, Error, TEXT("No camera information provided for COLMAP dataset"));
+        UE_LOG(LogTemp, Error, TEXT("Source image directory does not exist: %s"), *ImageDirectory);
         return false;
     }
     
-    IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
-    
-    // Create images directory
+    // Create COLMAP images directory
     FString ImagesDir = FPaths::Combine(ColmapDatasetPath, TEXT("images"));
     if (!PlatformFile.CreateDirectoryTree(*ImagesDir))
     {
@@ -801,42 +828,22 @@ bool FVCCSimDataConverter::PrepareColmapDataset(
         return false;
     }
     
-    // Copy/prepare images and create camera file
+    // Get all valid image files from source directory
+    TArray<FString> ValidImageFiles = ValidateImageDirectory(ImageDirectory);
+    
+    if (ValidImageFiles.Num() == 0)
+    {
+        UE_LOG(LogTemp, Error, TEXT("No valid images found in directory: %s"), *ImageDirectory);
+        return false;
+    }
+    
+    // Copy all images to COLMAP images directory
     int32 CopiedImages = 0;
     
-    for (const FCameraInfo& CameraInfo : CameraInfos)
+    for (const FString& SourceImagePath : ValidImageFiles)
     {
-        // Find source image path
-        FString SourceImagePath;
-        
-        // Try to find the actual image file from the camera info
-        if (!CameraInfo.ImageName.IsEmpty())
-        {
-            // Check if ImageName contains a full path or just filename
-            if (FPaths::IsRelative(CameraInfo.ImageName))
-            {
-                // Assume images are in the directory where pose file was located
-                // This might need adjustment based on actual usage
-                UE_LOG(LogTemp, Warning, TEXT("Image path is relative,"
-                                              " may need source directory: %s"), 
-                    *CameraInfo.ImageName);
-                continue;
-            }
-            else
-            {
-                SourceImagePath = CameraInfo.ImageName;
-            }
-        }
-        
-        // Skip if source image doesn't exist
-        if (SourceImagePath.IsEmpty() || !PlatformFile.FileExists(*SourceImagePath))
-        {
-            UE_LOG(LogTemp, Warning, TEXT("Source image not found: %s"), *SourceImagePath);
-            continue;
-        }
-        
-        // Copy image to COLMAP images directory
         FString DestImagePath = FPaths::Combine(ImagesDir, FPaths::GetCleanFilename(SourceImagePath));
+        
         if (PlatformFile.CopyFile(*DestImagePath, *SourceImagePath))
         {
             CopiedImages++;
@@ -848,14 +855,8 @@ bool FVCCSimDataConverter::PrepareColmapDataset(
         }
     }
     
-    if (CopiedImages == 0)
-    {
-        UE_LOG(LogTemp, Error, TEXT("No images were successfully prepared for COLMAP"));
-        return false;
-    }
-    
     UE_LOG(LogTemp, Log, TEXT("Successfully prepared %d images for COLMAP processing"), CopiedImages);
-    return true;
+    return CopiedImages > 0;
 }
 
 bool FVCCSimDataConverter::RunColmapFeatureExtraction(
@@ -878,7 +879,7 @@ bool FVCCSimDataConverter::RunColmapFeatureExtraction(
     // Prepare command arguments
     FString ImagePath = FPaths::Combine(DatasetPath, TEXT("images"));
     FString Arguments = FString::Printf(
-        TEXT("feature_extractor --database_path \"%s\" --image_path \"%s\" --ImageReader.single_camera 1"),
+        TEXT("feature_extractor --database_path \"%s\" --image_path \"%s\" --ImageReader.single_camera 1 --ImageReader.camera_model PINHOLE"),
         *DatabasePath, *ImagePath);
     
     // Use custom command executor if provided (for proper process management)
@@ -1020,14 +1021,70 @@ bool FVCCSimDataConverter::RunColmapSparseReconstruction(
     return true;
 }
 
+bool FVCCSimDataConverter::RunColmapModelConverter(
+    const FString& ColmapExecutablePath,
+    const FString& BinaryModelPath,
+    const FString& TextModelPath,
+    TFunction<bool(const FString&, const FString&, const FString&)> CommandExecutor)
+{
+    // Construct COLMAP executable path
+    FString ColmapExePath = FPaths::Combine(ColmapExecutablePath, TEXT("COLMAP.exe"));
+    
+    // Create text model output directory
+    IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
+    if (!PlatformFile.CreateDirectoryTree(*TextModelPath))
+    {
+        UE_LOG(LogTemp, Error, TEXT("Failed to create text model output directory: %s"), *TextModelPath);
+        return false;
+    }
+    
+    // Prepare command arguments for binary to text conversion
+    FString Arguments = FString::Printf(
+        TEXT("model_converter --input_path \"%s\" --output_path \"%s\" --output_type TXT"),
+        *BinaryModelPath, *TextModelPath);
+    
+    // Use custom command executor if provided (for proper process management)
+    if (CommandExecutor)
+    {
+        return CommandExecutor(ColmapExePath, Arguments, TEXT("Model Converter (Binary to Text)"));
+    }
+    
+    // Fallback to basic execution (legacy mode)
+    UE_LOG(LogTemp, Log, TEXT("Running COLMAP model converter: %s %s"), *ColmapExePath, *Arguments);
+    
+    int32 ReturnCode = -1;
+    FString StdOut, StdErr;
+    
+    bool bSuccess = FPlatformProcess::ExecProcess(
+        *ColmapExePath, 
+        *Arguments, 
+        &ReturnCode, 
+        &StdOut, 
+        &StdErr
+    );
+    
+    if (!bSuccess || ReturnCode != 0)
+    {
+        UE_LOG(LogTemp, Error, TEXT("COLMAP model converter failed. Return code: %d"), ReturnCode);
+        if (!StdErr.IsEmpty())
+        {
+            UE_LOG(LogTemp, Error, TEXT("COLMAP model converter error output: %s"), *StdErr);
+        }
+        return false;
+    }
+    
+    UE_LOG(LogTemp, Log, TEXT("COLMAP model converter completed successfully"));
+    return true;
+}
+
 bool FVCCSimDataConverter::RunColmapPipeline(
-    const TArray<FCameraInfo>& CameraInfos,
+    const FString& ImageDirectory,
     const FString& OutputPath,
     const FString& ColmapExecutablePath)
 {
-    if (CameraInfos.Num() == 0)
+    if (ImageDirectory.IsEmpty() || !FPlatformFileManager::Get().GetPlatformFile().DirectoryExists(*ImageDirectory))
     {
-        UE_LOG(LogTemp, Error, TEXT("No camera information provided for COLMAP pipeline"));
+        UE_LOG(LogTemp, Error, TEXT("Invalid image directory provided for COLMAP pipeline: %s"), *ImageDirectory);
         return false;
     }
     
@@ -1039,7 +1096,7 @@ bool FVCCSimDataConverter::RunColmapPipeline(
     }
     
     // Prepare dataset (images directory)
-    if (!PrepareColmapDataset(CameraInfos, TimestampedDir))
+    if (!PrepareColmapDataset(ImageDirectory, TimestampedDir))
     {
         UE_LOG(LogTemp, Error, TEXT("Failed to prepare COLMAP dataset"));
         return false;
@@ -1049,7 +1106,7 @@ bool FVCCSimDataConverter::RunColmapPipeline(
     FString DatabasePath = FPaths::Combine(TimestampedDir, TEXT("database.db"));
     FString ImagePath = FPaths::Combine(TimestampedDir, TEXT("images"));
     
-    UE_LOG(LogTemp, Log, TEXT("Starting COLMAP pipeline for %d cameras"), CameraInfos.Num());
+    UE_LOG(LogTemp, Log, TEXT("Starting COLMAP pipeline for images from: %s"), *ImageDirectory);
     UE_LOG(LogTemp, Log, TEXT("Dataset path: %s"), *TimestampedDir);
     UE_LOG(LogTemp, Log, TEXT("COLMAP executable: %s"), *ColmapExecutablePath);
     
