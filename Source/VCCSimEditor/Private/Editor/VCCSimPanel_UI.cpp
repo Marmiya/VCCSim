@@ -84,6 +84,9 @@ void SVCCSimPanel::Construct(const FArguments& InArgs)
     
     // Create the main widget layout
     CreateMainLayout();
+    
+    // Auto-select FlashPawn if available in the scene (after UI is created)
+    AutoSelectFlashPawn();
 }
 
 void SVCCSimPanel::LoadLogoImages()
@@ -1497,13 +1500,26 @@ TSharedRef<SWidget> SVCCSimPanel::CreateCaptureButtons()
     .Padding(FMargin(4, 0, 4, 0))
     .HAlign(HAlign_Fill)
     [
-        SNew(SButton)
+        SAssignNew(AutoCaptureButton, SButton)
         .ButtonStyle(FAppStyle::Get(), "FlatButton.Primary")
         .ContentPadding(FMargin(5, 2))
-        .Text(FText::FromString("Auto-Capture All Poses"))
+        .Text_Lambda([this]() {
+            return bAutoCaptureInProgress ? 
+                FText::FromString("Stop Capture") : 
+                FText::FromString("Auto-Capture All Poses");
+        })
         .HAlign(HAlign_Center)
         .OnClicked_Lambda([this]() {
-            StartAutoCapture();
+            if (bAutoCaptureInProgress)
+            {
+                StopAutoCapture();
+                AutoCaptureButton->SetButtonStyle(&FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Primary"));
+            }
+            else
+            {
+                StartAutoCapture();
+                AutoCaptureButton->SetButtonStyle(&FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Danger"));
+            }
             return FReply::Handled();
         })
         .IsEnabled_Lambda([this]() {
@@ -2330,6 +2346,67 @@ void SVCCSimPanel::CreateSimplePointCloudMaterial(UInstancedStaticMeshComponent*
             DynamicMaterial->SetScalarParameterValue(FName("Metallic"), 0.0f);
             MeshComponent->SetMaterial(0, DynamicMaterial);
         }
+    }
+}
+
+// ============================================================================
+// AUTO SELECTION FUNCTIONALITY
+// ============================================================================
+
+void SVCCSimPanel::AutoSelectFlashPawn()
+{
+    // Clear any existing selection
+    SelectedFlashPawn = nullptr;
+    
+    // Get the current editor world
+    if (!GEditor)
+    {
+        return;
+    }
+    
+    UWorld* World = GEditor->GetEditorWorldContext().World();
+    if (!World)
+    {
+        return;
+    }
+    
+    // Search for FlashPawn actors in the world
+    AFlashPawn* FirstFoundFlashPawn = nullptr;
+    for (TActorIterator<AFlashPawn> ActorIterator(World); ActorIterator; ++ActorIterator)
+    {
+        AFlashPawn* FlashPawn = *ActorIterator;
+        if (FlashPawn && IsValid(FlashPawn))
+        {
+            FirstFoundFlashPawn = FlashPawn;
+            break; // Select the first valid FlashPawn found
+        }
+    }
+    
+    // If we found a FlashPawn, select it
+    if (FirstFoundFlashPawn)
+    {
+        SelectedFlashPawn = FirstFoundFlashPawn;
+        
+        // Update the UI text to show the selected FlashPawn
+        if (SelectedFlashPawnText.IsValid())
+        {
+            SelectedFlashPawnText->SetText(FText::FromString(FirstFoundFlashPawn->GetActorLabel()));
+        }
+        
+        // Check what camera components are available on this FlashPawn
+        CheckCameraComponents();
+        
+        UE_LOG(LogTemp, Log, TEXT("Auto-selected FlashPawn: %s"), *FirstFoundFlashPawn->GetActorLabel());
+    }
+    else
+    {
+        // No FlashPawn found, ensure UI shows "None selected"
+        if (SelectedFlashPawnText.IsValid())
+        {
+            SelectedFlashPawnText->SetText(FText::FromString("None selected"));
+        }
+        
+        UE_LOG(LogTemp, Log, TEXT("No FlashPawn found in the scene for auto-selection"));
     }
 }
 

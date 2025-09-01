@@ -143,6 +143,9 @@ private:
     TSharedPtr<class SButton> VisualizeCoverageButton;
     TSharedPtr<class SButton> VisualizeComplexityButton;
     
+    // Capture buttons
+    TSharedPtr<class SButton> AutoCaptureButton;
+    
     // Point cloud UI elements
     TSharedPtr<SButton> LoadPointCloudButton;
     TSharedPtr<SButton> VisualizePointCloudButton;
@@ -289,6 +292,7 @@ private:
     void LoadLogoImages();
     void InitializeSceneAnalysisManager();
     void CreateMainLayout();
+    void AutoSelectFlashPawn();
 
     // ============================================================================
     // SELECTION MANAGEMENT
@@ -340,6 +344,7 @@ private:
     void SaveSeg(int32 PoseIndex, bool& bAnyCaptured);
     void SaveNormal(int32 PoseIndex, bool& bAnyCaptured);
     void StartAutoCapture();
+    void StopAutoCapture();
 
     // ============================================================================
     // SCENE ANALYSIS OPERATIONS
