@@ -113,7 +113,7 @@ TArray<FCameraInfo> FVCCSimDataConverter::ConvertPoseFile(
         ValidPoseIndex++;
     }
     
-    UE_LOG(LogTemp, Log, TEXT("Converted %d poses to camera info"), CameraInfos.Num());
+    UE_LOG(LogTemp, Log, TEXT("Processed %d poses"), CameraInfos.Num());
     
     return CameraInfos;
 }
@@ -324,43 +324,26 @@ FPointCloudData FVCCSimDataConverter::ConvertMeshToPointCloud(
         return PointCloudData;
     }
     
-    // Generate normals from original UE coordinates (before transformation)
-    TArray<FVector> Normals = CalculatePointNormals(SampledPoints);
-    
-    // Apply coordinate transformation if requested (after color/normal generation)
+    // Apply coordinate transformation if requested
     if (bApplyCoordinateTransformation)
     {
-        UE_LOG(LogTemp, Log, TEXT("Applying coordinate transformation to mesh points"));
-        
         // Transform each point from UE to right-handed coordinates
         for (int32 i = 0; i < SampledPoints.Num(); ++i)
         {
-            FVector UEPoint = SampledPoints[i];
-            FVector TSPoint = ConvertLocation(UEPoint);
-            SampledPoints[i] = TSPoint;
+            SampledPoints[i] = ConvertLocation(SampledPoints[i]);
         }
         
-        // Also transform normals
-        for (int32 i = 0; i < Normals.Num(); ++i)
-        {
-            FVector UENormal = Normals[i];
-            FVector TSNormal = ConvertNormal(UENormal);
-            Normals[i] = TSNormal;
-        }
-        
-        UE_LOG(LogTemp, Log, TEXT("Transformed %d mesh points from UE to "
-                                  "right-handed coordinates"), SampledPoints.Num());
+        UE_LOG(LogTemp, Log, TEXT("Transformed %d points to right-handed coordinates"), SampledPoints.Num());
     }
     
-    // Fill point cloud data using FRatPoint
+    // Fill point cloud data without normals (normals not meaningful for randomly sampled mesh vertices)
     PointCloudData.Reserve(SampledPoints.Num());
     for (int32 i = 0; i < SampledPoints.Num(); ++i)
     {
-        PointCloudData.AddPoint(SampledPoints[i], Colors[i], Normals[i], true);
+        PointCloudData.AddPoint(SampledPoints[i], Colors[i], FVector::ZeroVector, false);
     }
     
-    UE_LOG(LogTemp, Log, TEXT("Converted mesh to point cloud with %d points"),
-        PointCloudData.GetPointCount());
+    UE_LOG(LogTemp, Log, TEXT("Created point cloud with %d points"), PointCloudData.GetPointCount());
     
     return PointCloudData;
 }
@@ -402,18 +385,10 @@ FPointCloudData FVCCSimDataConverter::GenerateRandomPointCloud(
             1.0f
         );
         
-        // Generate a random normal (normalized)
-        FVector RandomNormal = FVector(
-            RandomStream.FRandRange(-1.0f, 1.0f),
-            RandomStream.FRandRange(-1.0f, 1.0f),
-            RandomStream.FRandRange(-1.0f, 1.0f)
-        ).GetSafeNormal();
-        
-        PointCloudData.AddPoint(RandomPoint, RandomColor, RandomNormal, true);
+        PointCloudData.AddPoint(RandomPoint, RandomColor, FVector::ZeroVector, false);
     }
     
-    UE_LOG(LogTemp, Log, TEXT("Generated random point cloud with %d points"),
-        PointCloudData.GetPointCount());
+    UE_LOG(LogTemp, Log, TEXT("Generated %d random points"), PointCloudData.GetPointCount());
     
     return PointCloudData;
 }
@@ -483,7 +458,7 @@ bool FVCCSimDataConverter::SavePointCloudToPLY(const FPointCloudData& PointCloud
     // Use the new unified FPLYWriter class
     FPLYWriter::FPLYWriteConfig Config;
     Config.bIncludeColors = true;
-    Config.bIncludeNormals = true;
+    Config.bIncludeNormals = false;  // Don't include normals for sampled mesh vertices
     Config.bBinaryFormat = false;
     
     return FPLYWriter::WritePointCloudToPLY(PointCloudData, OutputFilePath, Config);
@@ -550,8 +525,7 @@ TArray<FString> FVCCSimDataConverter::ValidateImageDirectory(
     
     ValidImages.Sort();
     
-    UE_LOG(LogTemp, Log, TEXT("Found %d valid images in directory: %s"),
-        ValidImages.Num(), *ImageDirectory);
+    UE_LOG(LogTemp, Log, TEXT("Found %d images in %s"), ValidImages.Num(), *ImageDirectory);
     
     return ValidImages;
 }
@@ -718,22 +692,8 @@ bool FVCCSimDataConverter::SampleMeshVerticesWithColors(UStaticMesh* Mesh,
         }
     }
     
-    // Log color sampling statistics
-    if (bHasVertexColors && OutColors.Num() > 0)
-    {
-        // Sample a few colors for debugging
-        FLinearColor FirstColor = OutColors[0];
-        FLinearColor LastColor = OutColors.Last();
-        UE_LOG(LogTemp, Log, TEXT("Sampled %d vertices with actual vertex colors"), OutPositions.Num());
-        UE_LOG(LogTemp, Log, TEXT("First color: R=%.3f G=%.3f B=%.3f A=%.3f"), 
-            FirstColor.R, FirstColor.G, FirstColor.B, FirstColor.A);
-        UE_LOG(LogTemp, Log, TEXT("Last color: R=%.3f G=%.3f B=%.3f A=%.3f"), 
-            LastColor.R, LastColor.G, LastColor.B, LastColor.A);
-    }
-    else
-    {
-        UE_LOG(LogTemp, Log, TEXT("Sampled %d vertices with default white colors"), OutPositions.Num());
-    }
+    UE_LOG(LogTemp, Log, TEXT("Sampled %d vertices %s"), OutPositions.Num(), 
+        bHasVertexColors ? TEXT("with vertex colors") : TEXT("with default colors"));
     
     return true;
 }
@@ -803,7 +763,7 @@ FString FVCCSimDataConverter::CreateTimestampedColmapDirectory(const FString& Ba
         return FString();
     }
     
-    UE_LOG(LogTemp, Log, TEXT("Created timestamped COLMAP directory: %s"), *TimestampedPath);
+    UE_LOG(LogTemp, Log, TEXT("Created COLMAP dataset: %s"), *FPaths::GetCleanFilename(TimestampedPath));
     return TimestampedPath;
 }
 
@@ -847,15 +807,14 @@ bool FVCCSimDataConverter::PrepareColmapDataset(
         if (PlatformFile.CopyFile(*DestImagePath, *SourceImagePath))
         {
             CopiedImages++;
-            UE_LOG(LogTemp, Verbose, TEXT("Copied image: %s -> %s"), *SourceImagePath, *DestImagePath);
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("Failed to copy image: %s"), *SourceImagePath);
+            UE_LOG(LogTemp, Warning, TEXT("Failed to copy: %s"), *FPaths::GetCleanFilename(SourceImagePath));
         }
     }
     
-    UE_LOG(LogTemp, Log, TEXT("Successfully prepared %d images for COLMAP processing"), CopiedImages);
+    UE_LOG(LogTemp, Log, TEXT("Prepared %d images for COLMAP"), CopiedImages);
     return CopiedImages > 0;
 }
 
@@ -912,7 +871,7 @@ bool FVCCSimDataConverter::RunColmapFeatureExtraction(
         return false;
     }
     
-    UE_LOG(LogTemp, Log, TEXT("COLMAP feature extraction completed successfully"));
+    UE_LOG(LogTemp, Log, TEXT("Feature extraction complete"));
     return true;
 }
 
@@ -959,7 +918,7 @@ bool FVCCSimDataConverter::RunColmapFeatureMatching(
         return false;
     }
     
-    UE_LOG(LogTemp, Log, TEXT("COLMAP feature matching completed successfully"));
+    UE_LOG(LogTemp, Log, TEXT("Feature matching complete"));
     return true;
 }
 
@@ -1017,7 +976,7 @@ bool FVCCSimDataConverter::RunColmapSparseReconstruction(
         return false;
     }
     
-    UE_LOG(LogTemp, Log, TEXT("COLMAP sparse reconstruction completed successfully"));
+    UE_LOG(LogTemp, Log, TEXT("Sparse reconstruction complete"));
     return true;
 }
 
@@ -1073,7 +1032,7 @@ bool FVCCSimDataConverter::RunColmapModelConverter(
         return false;
     }
     
-    UE_LOG(LogTemp, Log, TEXT("COLMAP model converter completed successfully"));
+    UE_LOG(LogTemp, Log, TEXT("Model conversion complete"));
     return true;
 }
 
@@ -1106,36 +1065,30 @@ bool FVCCSimDataConverter::RunColmapPipeline(
     FString DatabasePath = FPaths::Combine(TimestampedDir, TEXT("database.db"));
     FString ImagePath = FPaths::Combine(TimestampedDir, TEXT("images"));
     
-    UE_LOG(LogTemp, Log, TEXT("Starting COLMAP pipeline for images from: %s"), *ImageDirectory);
-    UE_LOG(LogTemp, Log, TEXT("Dataset path: %s"), *TimestampedDir);
-    UE_LOG(LogTemp, Log, TEXT("COLMAP executable: %s"), *ColmapExecutablePath);
+    UE_LOG(LogTemp, Log, TEXT("Starting COLMAP pipeline from %s"), *FPaths::GetCleanFilename(ImageDirectory));
     
-    // Step 1: Feature extraction
-    UE_LOG(LogTemp, Log, TEXT("Step 1/3: Running feature extraction..."));
+    UE_LOG(LogTemp, Log, TEXT("Step 1/3: Feature extraction"));
     if (!RunColmapFeatureExtraction(ColmapExecutablePath, TimestampedDir, DatabasePath))
     {
         UE_LOG(LogTemp, Error, TEXT("COLMAP feature extraction failed"));
         return false;
     }
     
-    // Step 2: Feature matching
-    UE_LOG(LogTemp, Log, TEXT("Step 2/3: Running feature matching..."));
+    UE_LOG(LogTemp, Log, TEXT("Step 2/3: Feature matching"));
     if (!RunColmapFeatureMatching(ColmapExecutablePath, DatabasePath))
     {
         UE_LOG(LogTemp, Error, TEXT("COLMAP feature matching failed"));
         return false;
     }
     
-    // Step 3: Sparse reconstruction
-    UE_LOG(LogTemp, Log, TEXT("Step 3/3: Running sparse reconstruction..."));
+    UE_LOG(LogTemp, Log, TEXT("Step 3/3: Sparse reconstruction"));
     if (!RunColmapSparseReconstruction(ColmapExecutablePath, DatabasePath, ImagePath, TimestampedDir))
     {
         UE_LOG(LogTemp, Error, TEXT("COLMAP sparse reconstruction failed"));
         return false;
     }
     
-    UE_LOG(LogTemp, Log, TEXT("COLMAP pipeline completed successfully!"));
-    UE_LOG(LogTemp, Log, TEXT("Results available at: %s"), *TimestampedDir);
+    UE_LOG(LogTemp, Log, TEXT("COLMAP pipeline completed: %s"), *FPaths::GetCleanFilename(TimestampedDir));
     
     return true;
 }

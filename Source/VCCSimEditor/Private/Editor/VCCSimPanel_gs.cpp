@@ -1194,8 +1194,9 @@ FReply SVCCSimPanel::OnGSTestTransformationClicked()
         try 
         {
             // Export original UE coordinates
+            int32 PointCount = GSInitPointCountValue.Get(10000);
             FPointCloudData OriginalMesh = FVCCSimDataConverter::ConvertMeshToPointCloud(
-                GSConfig.SelectedMesh.Get(), 10000, false); 
+                GSConfig.SelectedMesh.Get(), PointCount, false); 
             
             FString MeshUEPath = FPaths::Combine(GSConfig.OutputDirectory,
                 TEXT("test_mesh_ue_coordinates.ply"));
@@ -1207,7 +1208,7 @@ FReply SVCCSimPanel::OnGSTestTransformationClicked()
             
             // Export transformed Triangle Splatting coordinates
             FPointCloudData TransformedMesh = FVCCSimDataConverter::ConvertMeshToPointCloud(
-                GSConfig.SelectedMesh.Get(), 10000, true);
+                GSConfig.SelectedMesh.Get(), PointCount, true);
             
             FString MeshTSPath = FPaths::Combine(GSConfig.OutputDirectory,
                 TEXT("test_mesh_ts_coordinates.ply"));
