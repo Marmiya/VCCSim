@@ -21,9 +21,7 @@ import sys
 import argparse
 import math
 import shutil
-import subprocess
 import struct
-import tempfile
 from typing import Tuple
 import numpy as np
 
@@ -290,23 +288,6 @@ def txt_exists(colmap_dir: str) -> bool:
     return (os.path.isfile(os.path.join(colmap_dir, "images.txt")) and
             os.path.isfile(os.path.join(colmap_dir, "points3D.txt")))
 
-def have_colmap_cli() -> bool:
-    return (shutil.which("colmap") or shutil.which("COLMAP") or shutil.which("COLMAP.exe")) is not None
-
-def convert_bin_to_txt(colmap_dir: str) -> str:
-    exe = shutil.which("colmap") or shutil.which("COLMAP") or shutil.which("COLMAP.exe")
-    if exe is None:
-        raise RuntimeError("COLMAP executable not found on PATH; cannot convert BIN to TXT.")
-    tmpdir = tempfile.mkdtemp(prefix="colmap_txt_")
-    cmd = [exe, "model_converter",
-           "--input_path", colmap_dir,
-           "--output_path", tmpdir,
-           "--input_type", "BIN",
-           "--output_type", "TXT"]
-    print(f"[info] Converting BIN -> TXT via COLMAP: {' '.join(cmd)}")
-    subprocess.check_call(cmd)
-    return tmpdir
-
 
 # ============================ Main ============================
 
@@ -348,7 +329,6 @@ def main():
     rgb_pts = np.zeros((0,3), dtype=np.uint8)
 
     parsed_ok = False
-    converted_tmp = None
 
     try:
         if (prefer == 'txt' and use_txt) or (prefer == 'auto' and use_txt):
@@ -369,20 +349,12 @@ def main():
     except Exception as e:
         print(f"[warn] Direct parse failed: {e}")
 
-    # Fallback BIN->TXT
-    if not parsed_ok and use_bin and have_colmap_cli():
-        try:
-            converted_tmp = convert_bin_to_txt(src_dir)
-            print(f"[info] Parsing converted TEXT at {converted_tmp}")
-            cameras = parse_images_txt(os.path.join(converted_tmp, 'images.txt'))
-            xyz_pts, rgb_pts, n_bad = parse_points3D_txt(os.path.join(converted_tmp, 'points3D.txt'))
-            print(f"[info] Converted text: cameras={len(cameras)}, points={xyz_pts.shape[0]} (skipped={n_bad})")
-            parsed_ok = True
-        except Exception as e:
-            print(f"[error] BIN->TXT conversion failed: {e}")
-
+    # 检查是否有可用的数据文件
     if not parsed_ok:
-        raise RuntimeError("Failed to parse COLMAP model (TXT/BIN).")
+        if not use_txt and not use_bin:
+            raise RuntimeError(f"No COLMAP model found at {src_dir}. Need either TXT files (images.txt, points3D.txt) or BIN files (images.bin, points3D.bin).")
+        else:
+            raise RuntimeError("Failed to parse COLMAP model (TXT/BIN).")
 
     # Prepare arrays
     if len(cameras) > 0:
@@ -417,13 +389,6 @@ def main():
     print("[done] All files written successfully.")
     print(f"  - Cameras PLY: {cams_out}")
     print(f"  - Points  PLY: {pts_out}")
-
-    # cleanup
-    if converted_tmp and os.path.isdir(converted_tmp):
-        try:
-            shutil.rmtree(converted_tmp)
-        except Exception:
-            pass
 
 
 if __name__ == "__main__":
