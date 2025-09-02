@@ -17,6 +17,8 @@
 
 #include "Utils/TrajectoryViewer.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "DrawDebugHelpers.h"
+#include "Engine/World.h"
 
 UTrajectoryViewer::UTrajectoryViewer()
 {
@@ -82,86 +84,48 @@ AActor* UTrajectoryViewer::GenerateVisibleElements(
         return nullptr;
     }
     
-    // Create a container actor for all visualization elements
+    // Create a container actor for tracking
     FActorSpawnParameters SpawnParams;
-    SpawnParams.ObjectFlags = RF_Transient;  // Make it not saved
+    SpawnParams.ObjectFlags = RF_Transient;
+    SpawnParams.bNoFail = true;
     AActor* VisualizationActor = World->SpawnActor<AActor>(AActor::StaticClass(),
         FTransform::Identity, SpawnParams);
     #if WITH_EDITOR
-        VisualizationActor->SetActorLabel(TEXT("PathVisualization_Temp"));
+        VisualizationActor->SetActorLabel(TEXT("PathVisualization"));
+        // Make sure it's marked as deletable and transient
+        VisualizationActor->SetFlags(RF_Transient);
+        VisualizationActor->Tags.Add(FName("VCCSimPathViz"));
     #endif
-    // Load meshes
-    UStaticMesh* CylinderMesh = LoadObject<UStaticMesh>(nullptr,
-        TEXT("/Engine/BasicShapes/Cylinder"));
-    UStaticMesh* ConeMesh = LoadObject<UStaticMesh>(nullptr,
-        TEXT("/Engine/BasicShapes/Cone"));
     
-    if (!CylinderMesh || !ConeMesh)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Failed to load basic shapes for "
-                                      "path visualization"));
-        World->DestroyActor(VisualizationActor);
-        return nullptr;
-    }
-    
-    // Create path lines
+    // Draw path lines
     for (int32 i = 0; i < InPositions.Num() - 1; ++i)
     {
         FVector Start = InPositions[i];
         FVector End = InPositions[i + 1];
-        FVector Direction = End - Start;
-        float Distance = Direction.Size();
         
-        // Skip if points are too close
-        if (Distance < 1.0f)
+        if (FVector::Dist(Start, End) > 1.0f)
         {
-            continue;
+            DrawDebugLine(World, Start, End, FColor::Cyan, true, -1.0f, 0, PathWidth);
         }
-        
-        UStaticMeshComponent* CylinderComponent =
-            NewObject<UStaticMeshComponent>(VisualizationActor);
-        CylinderComponent->SetStaticMesh(CylinderMesh);
-        CylinderComponent->SetMaterial(0, PathMaterial);
-        CylinderComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-        
-        // Scale cylinder to connect points
-        // Cylinder default is 100x50x50 units (height x radius x radius)
-        float ScaleX = Distance / 100.0f;  // Scale along length
-        float ScaleYZ = PathWidth / 100.0f;  // Scale for thickness
-        CylinderComponent->SetWorldScale3D(FVector(ScaleX, ScaleYZ, ScaleYZ));
-        
-        // Align cylinder with direction
-        FRotator Rotation = FRotationMatrix::MakeFromX(Direction).Rotator();
-        CylinderComponent->SetWorldRotation(Rotation);
-        
-        // Position cylinder between points
-        CylinderComponent->SetWorldLocation(Start + Direction * 0.5f);
-        
-        CylinderComponent->RegisterComponent();
     }
     
-    // Create camera representations (cones)
+    // Draw position markers and direction arrows
     for (int32 i = 0; i < InPositions.Num(); ++i)
     {
-        FVector Location = InPositions[i];
+        FVector Position = InPositions[i];
         FRotator Rotation = InRotations[i];
         
-        UStaticMeshComponent* ConeComponent =
-            NewObject<UStaticMeshComponent>(VisualizationActor);
-        ConeComponent->SetStaticMesh(ConeMesh);
-        ConeComponent->SetMaterial(0, CameraMaterial);
-        ConeComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        // Choose color based on position
+        FColor SphereColor = FColor::Yellow;
+        if (i == 0) SphereColor = FColor::Green;
+        else if (i == InPositions.Num() - 1) SphereColor = FColor::Blue;
         
-        // Scale cone (default cone is 100x50x50 units)
-        float BaseScale = ConeSize / 100.0f;
-        float LengthScale = ConeLength / 100.0f;
-        ConeComponent->SetWorldScale3D(FVector(LengthScale, BaseScale, BaseScale));
+        DrawDebugSphere(World, Position, ConeSize, 12, SphereColor, true, -1.0f, 0, 3.0f);
         
-        FRotator ConeRotation = Rotation;
-        ConeRotation.Pitch += 90.0f;
-        ConeComponent->SetWorldRotation(ConeRotation);
-        ConeComponent->SetWorldLocation(Location);
-        ConeComponent->RegisterComponent();
+        // Draw direction arrow
+        FVector ForwardVector = Rotation.Vector();
+        FVector ArrowEnd = Position + ForwardVector * ConeLength;
+        DrawDebugDirectionalArrow(World, Position, ArrowEnd, ConeSize * 0.6f, FColor::Red, true, -1.0f, 0, 4.0f);
     }
     
     return VisualizationActor;

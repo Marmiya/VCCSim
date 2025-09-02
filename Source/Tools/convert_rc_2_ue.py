@@ -208,8 +208,8 @@ def convert_csv_to_pose_txt(input_csv_path, output_txt_path):
 
 def main():
     # Configuration
-    input_file = "D:/Data/L7/0528_filtered.csv" 
-    output_file = "C:/UEProjects/VCCSimDev/Saved/pose.txt"
+    input_file = "D:/Data/360_v2/garden/mesh/poses.csv"
+    output_file = "C:/UEProjects/VCCSimDev/Saved/pose_garden.txt"
     
     print("Reality Capture to Unreal Engine Camera Pose Converter")
     print("=" * 55)

@@ -46,7 +46,7 @@ public:
     /**
      * Parse individual pose line from VCCSim format
      * @param Line Text line from pose file
-     * @param bIsRecorderFormat True if using Recorder format (7 values), false for Panel format (6 values)
+     * @param bIsRecorderFormat True if using Recorder format (8 values), false for Panel format (7 values)
      * @return Parsed pose data, or invalid data if parsing failed
      */
     static FVCCSimPoseData ParsePoseLine(const FString& Line, bool& bIsRecorderFormat);
@@ -54,7 +54,7 @@ public:
     /**
      * Determine pose file format by analyzing content
      * @param PoseFilePath Path to pose file
-     * @return True if Recorder format (7 values), false if Panel format (6 values)
+     * @return True if Recorder format (8 values), false if Panel format (7 values)
      */
     static bool DeterminePoseFileFormat(const FString& PoseFilePath);
 
@@ -70,11 +70,25 @@ public:
     static FVector ConvertLocation(const FVector& UELocation);
     
     /**
+     * Convert normal vector from UE coordinate system to Triangle Splatting coordinate system
+     * @param UENormal Normal vector in UE coordinate system
+     * @return Normal vector in Triangle Splatting coordinate system
+     */
+    static FVector ConvertNormal(const FVector& UENormal);
+    
+    /**
      * Convert UE rotation to right-handed rotation
      * @param UERotation Rotation in UE coordinates
      * @return Rotation matrix for the right-handed coordinate system
      */
     static FMatrix ConvertRotation(const FRotator& UERotation);
+    
+    /**
+     * Convert UE quaternion to right-handed rotation matrix
+     * @param UEQuaternion Quaternion in UE coordinates
+     * @return Rotation matrix for the right-handed coordinate system
+     */
+    static FMatrix ConvertRotation(const FQuat& UEQuaternion);
 
     // ============================================================================
     // CAMERA PARAMETER CONVERSION
@@ -88,6 +102,19 @@ public:
      * @return Camera intrinsics structure
      */
     static FCameraIntrinsics ConvertCameraParams(float FOVDegrees, int32 Width, int32 Height);
+    
+    /**
+     * Convert camera parameters with optional direct focal length specification
+     * If FocalX and FocalY are > 0, they are used directly; otherwise FOV is used to calculate them
+     * @param FOVDegrees Field of view in degrees (fallback if fx/fy not provided)
+     * @param Width Image width in pixels
+     * @param Height Image height in pixels
+     * @param FocalX Focal length X in pixels (fx) - if > 0, used directly
+     * @param FocalY Focal length Y in pixels (fy) - if > 0, used directly
+     * @return Camera intrinsics structure
+     */
+    static FCameraIntrinsics ConvertCameraParamsWithFocalLength(
+        float FOVDegrees, int32 Width, int32 Height, float FocalX = 0.0f, float FocalY = 0.0f);
     
     /**
      * Calculate focal length from FOV and image dimensions
@@ -180,9 +207,94 @@ public:
      */
     static FBox CalculateSceneBounds(const TArray<FCameraInfo>& CameraInfos);
 
-    static bool SaveColmapFormat(
-        const TArray<FCameraInfo>& CameraInfos, 
-        const FString& OutputPath);
+    // ============================================================================
+    // COLMAP INTEGRATION
+    // ============================================================================
+    
+    /**
+     * Run complete COLMAP pipeline using system executable
+     * @param ImageDirectory Source directory containing images
+     * @param OutputPath Base output directory (timestamped folder will be created)
+     * @param ColmapExecutablePath Path to COLMAP executable
+     * @return True if successful
+     */
+    static bool RunColmapPipeline(
+        const FString& ImageDirectory,
+        const FString& OutputPath,
+        const FString& ColmapExecutablePath = TEXT("D:\\colmap-x64-windows-cuda"));
+    
+    /**
+     * Create timestamped COLMAP dataset directory
+     * @param BaseOutputPath Base output directory
+     * @return Full path to created timestamped directory
+     */
+    static FString CreateTimestampedColmapDirectory(const FString& BaseOutputPath);
+    
+    /**
+     * Copy images to COLMAP dataset structure for processing
+     * @param ImageDirectory Source directory containing images
+     * @param ColmapDatasetPath Path to COLMAP dataset directory
+     * @return True if successful
+     */
+    static bool PrepareColmapDataset(
+        const FString& ImageDirectory,
+        const FString& ColmapDatasetPath);
+    
+    /**
+     * Run COLMAP feature extraction using external command executor
+     * @param ColmapExecutablePath Path to COLMAP executable
+     * @param DatasetPath Path to dataset directory
+     * @param DatabasePath Path to database file
+     * @param CommandExecutor Function to execute COLMAP commands (for process management)
+     * @return True if successful
+     */
+    static bool RunColmapFeatureExtraction(
+        const FString& ColmapExecutablePath,
+        const FString& DatasetPath,
+        const FString& DatabasePath,
+        TFunction<bool(const FString&, const FString&, const FString&)> CommandExecutor = nullptr);
+    
+    /**
+     * Run COLMAP feature matching using external command executor
+     * @param ColmapExecutablePath Path to COLMAP executable
+     * @param DatabasePath Path to database file
+     * @param CommandExecutor Function to execute COLMAP commands (for process management)
+     * @return True if successful
+     */
+    static bool RunColmapFeatureMatching(
+        const FString& ColmapExecutablePath,
+        const FString& DatabasePath,
+        TFunction<bool(const FString&, const FString&, const FString&)> CommandExecutor = nullptr);
+    
+    /**
+     * Run COLMAP sparse reconstruction using external command executor
+     * @param ColmapExecutablePath Path to COLMAP executable
+     * @param DatabasePath Path to database file
+     * @param ImagePath Path to image directory
+     * @param OutputPath Path to output sparse reconstruction
+     * @param CommandExecutor Function to execute COLMAP commands (for process management)
+     * @return True if successful
+     */
+    static bool RunColmapSparseReconstruction(
+        const FString& ColmapExecutablePath,
+        const FString& DatabasePath,
+        const FString& ImagePath,
+        const FString& OutputPath,
+        TFunction<bool(const FString&, const FString&, const FString&)> CommandExecutor = nullptr);
+    
+    /**
+     * Convert COLMAP binary model to text format for debugging
+     * @param ColmapExecutablePath Path to COLMAP executable directory
+     * @param BinaryModelPath Path to binary model directory (sparse/0)
+     * @param TextModelPath Path to output text model directory
+     * @param CommandExecutor Optional command executor for process management
+     * @return True if conversion succeeded
+     */
+    static bool RunColmapModelConverter(
+        const FString& ColmapExecutablePath,
+        const FString& BinaryModelPath,
+        const FString& TextModelPath,
+        TFunction<bool(const FString&, const FString&, const FString&)> CommandExecutor = nullptr);
 
     static FVector GetCameraForwardDirection(const FMatrix& ConvertedRotationMatrix);
     static FVector GetCameraRightDirection(const FMatrix& ConvertedRotationMatrix);
@@ -199,6 +311,18 @@ private:
     static TArray<FVector> SampleMeshVertices(UStaticMesh* Mesh,
         int32 SampleCount, bool bRandomSampling);
     
+    /**
+     * Sample mesh vertices with colors for point cloud generation
+     * @param Mesh Static mesh to sample from
+     * @param SampleCount Number of vertices to sample
+     * @param bRandomSampling If true, use random sampling; if false, use uniform sampling
+     * @param OutPositions Array of sampled vertex positions
+     * @param OutColors Array of sampled vertex colors
+     * @return True if sampling was successful
+     */
+    static bool SampleMeshVerticesWithColors(UStaticMesh* Mesh,
+        int32 SampleCount, bool bRandomSampling,
+        TArray<FVector>& OutPositions, TArray<FLinearColor>& OutColors);
     
     /**
      * Generate colors for point cloud based on position
@@ -213,12 +337,4 @@ private:
      * @return Array of normals corresponding to points
      */
     static TArray<FVector> CalculatePointNormals(const TArray<FVector>& Points);
-    
-    // TODO: Remove them and use true colmap
-    static bool CreateColmapDirectoryStructure(const FString& OutputPath);
-    static bool SaveColmapCameras(
-        const TArray<FCameraInfo>& CameraInfos, const FString& OutputPath);
-    static bool SaveColmapImages(
-        const TArray<FCameraInfo>& CameraInfos, const FString& OutputPath);
-    static bool SaveColmapPoints3D(const FString& OutputPath);
 };

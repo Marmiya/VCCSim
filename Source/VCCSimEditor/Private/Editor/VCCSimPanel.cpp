@@ -39,6 +39,8 @@
 #include "HighResScreenshot.h"
 #include "LevelEditorViewport.h"
 #include "Utils/TriangleSplattingManager.h"
+#include "DrawDebugHelpers.h"
+#include "EngineUtils.h"
 
 // ============================================================================
 // CONSTRUCTOR & DESTRUCTOR
@@ -60,6 +62,22 @@ SVCCSimPanel::~SVCCSimPanel()
     }
 
     // Clean up path visualization
+    if (GEditor && GEditor->GetEditorWorldContext().World())
+    {
+        UWorld* World = GEditor->GetEditorWorldContext().World();
+        
+        // Clean up any PathVisualization actors
+        for (TActorIterator<AActor> ActorIterator(World); ActorIterator; ++ActorIterator)
+        {
+            AActor* Actor = *ActorIterator;
+            if (Actor && (Actor->GetActorLabel().Contains(TEXT("PathVisualization")) || 
+                         Actor->Tags.Contains(FName("VCCSimPathViz"))))
+            {
+                World->DestroyActor(Actor);
+            }
+        }
+    }
+    
     if (PathVisualizationActor.IsValid() && GEditor)
     {
         if (UWorld* World = GEditor->GetEditorWorldContext().World())
@@ -389,19 +407,14 @@ void SVCCSimPanel::UpdateActiveCameras()
 FReply SVCCSimPanel::OnGeneratePosesClicked()
 {
     GeneratePosesAroundTarget();
-    bPathVisualized = false;
-    bPathNeedsUpdate = true;
-
-    if (PathVisualizationActor.IsValid() && GEditor)
-    {
-        if (UWorld* World = GEditor->GetEditorWorldContext().World())
-        {
-            World->DestroyActor(PathVisualizationActor.Get());
-        }
-        PathVisualizationActor.Reset();
-    }
     
-    UpdatePathVisualization();
+    // Clean up any existing visualization
+    HidePathVisualization();
+    
+    // Allow path visualization after generating poses
+    bPathVisualized = false;
+    bPathNeedsUpdate = false;
+    
     return FReply::Handled();
 }
 
@@ -485,23 +498,30 @@ void SVCCSimPanel::LoadPredefinedPose()
                 
                 for (const FString& Line : FileLines)
                 {
-                    // Parse line - Expected format: X Y Z Pitch Yaw Roll
+                    if (Line.IsEmpty() || Line.StartsWith(TEXT("#")))
+                    {
+                        continue; // Skip comments and empty lines
+                    }
+                    
+                    // Parse line - Expected format: X Y Z Qx Qy Qz Qw
                     TArray<FString> Values;
                     Line.ParseIntoArray(Values, TEXT(" "), true);
                     
-                    if (Values.Num() >= 6)
+                    if (Values.Num() >= 7)
                     {
                         float X = FCString::Atof(*Values[0]);
                         float Y = FCString::Atof(*Values[1]);
                         float Z = FCString::Atof(*Values[2]);
-                        float Pitch = FCString::Atof(*Values[3]);
-                        float Yaw = FCString::Atof(*Values[4]);
-                        float Roll = FCString::Atof(*Values[5]);
+                        float Qx = FCString::Atof(*Values[3]);
+                        float Qy = FCString::Atof(*Values[4]);
+                        float Qz = FCString::Atof(*Values[5]);
+                        float Qw = FCString::Atof(*Values[6]);
                         
                         Positions.Add(FVector(X, Y, Z));
     
-                        FRotator Rotation(Pitch, Yaw, Roll);
-                        Rotation.Normalize();
+                        FQuat Quaternion(Qx, Qy, Qz, Qw);
+                        Quaternion.Normalize();
+                        FRotator Rotation = Quaternion.Rotator();
                         Rotations.Add(Rotation);
                     }
                 }
@@ -515,19 +535,14 @@ void SVCCSimPanel::LoadPredefinedPose()
                     NumPoses = Positions.Num();
                     NumPosesValue = NumPoses;
                     
+                    // Clean up any existing visualization
+                    HidePathVisualization();
+                    
+                    // Allow path visualization after loading
                     bPathVisualized = false;
-                    bPathNeedsUpdate = true;
+                    bPathNeedsUpdate = false;
                     
-                    if (PathVisualizationActor.IsValid() && GEditor)
-                    {
-                        if (UWorld* World = GEditor->GetEditorWorldContext().World())
-                        {
-                            World->DestroyActor(PathVisualizationActor.Get());
-                        }
-                        PathVisualizationActor.Reset();
-                    }
-                    
-                    UpdatePathVisualization();
+                    UE_LOG(LogTemp, Log, TEXT("Successfully loaded %d poses from file"), Positions.Num());
                 }
                 else
                 {
@@ -591,18 +606,26 @@ void SVCCSimPanel::SaveGeneratedPose()
             TArray<FRotator> Rotations;
             SelectedFlashPawn->GetCurrentPath(Positions, Rotations);
             
-            // Build file content
+            // Build file content with header comments
             FString FileContent;
+            FileContent += TEXT("# UE coordinate system poses (left-handed, cm)\n");
+            FileContent += TEXT("# Coordinate axes: +X forward, +Y right, +Z up\n");
+            FileContent += TEXT("# Format: X Y Z Qx Qy Qz Qw\n");
+            FileContent += TEXT("# Quaternion order: [x, y, z, w] (UE format, scalar last)\n");
+            
             for (int32 i = 0; i < Positions.Num(); ++i)
             {
                 const FVector& Pos = Positions[i];
                 const FRotator& Rot = Rotations[i];
                 
-                // Format: X Y Z Pitch Yaw Roll
+                // Convert rotator to quaternion
+                FQuat Quat = Rot.Quaternion();
+                
+                // Format: X Y Z Qx Qy Qz Qw
                 FileContent += FString::Printf(
-                    TEXT("%.6f %.6f %.6f %.6f %.6f %.6f\n"),
+                    TEXT("%.6f %.6f %.6f %.6f %.6f %.6f %.6f\n"),
                     Pos.X, Pos.Y, Pos.Z,
-                    Rot.Pitch, Rot.Yaw, Rot.Roll
+                    Quat.X, Quat.Y, Quat.Z, Quat.W
                 );
             }
             
@@ -643,10 +666,12 @@ FReply SVCCSimPanel::OnTogglePathVisualizationClicked()
 
     if (bPathVisualized)
     {
+        UE_LOG(LogTemp, Warning, TEXT("Showing path visualization..."));
         ShowPathVisualization();
     }
     else
     {
+        UE_LOG(LogTemp, Warning, TEXT("Hiding path visualization..."));
         HidePathVisualization();
     }
 
@@ -664,98 +689,65 @@ void SVCCSimPanel::UpdatePathVisualization()
 
     if (Positions.Num() == 0 || Positions.Num() != Rotations.Num())
     {
-        UE_LOG(LogTemp, Warning, TEXT("No valid path available for visualization"));
         bPathVisualized = false;
         return;
     }
 
-    UMaterialInterface* PathMaterial = LoadObject<UMaterialInterface>(nullptr, 
-       TEXT("/VCCSim/Materials/M_Rat_Path_ice.M_Rat_Path_ice"));
-    UMaterialInterface* CameraMaterial = LoadObject<UMaterialInterface>(nullptr, 
-        TEXT("/VCCSim/Materials/M_Rat_Path_Blue.M_Rat_Path_Blue"));
-        
-    if (!PathMaterial || !CameraMaterial)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Failed to load path visualization materials"));
-        bPathVisualized = false;
-        return;
-    }
-
-    // TODO: Why there is a wired bias?
-    // Generate new visualization actor
     PathVisualizationActor = UTrajectoryViewer::GenerateVisibleElements(
         GEditor->GetEditorWorldContext().World(),
         Positions,
         Rotations,
-        PathMaterial,
-        CameraMaterial,
+        nullptr, // PathMaterial
+        nullptr, // CameraMaterial  
         5.f,     // Path width
-        50.0f,    // Cone size
-        75.0f     // Cone length
+        15.0f,   // Cone size
+        75.0f    // Cone length
     );
         
     if (!PathVisualizationActor.IsValid())
     {
-        UE_LOG(LogTemp, Warning, TEXT("Failed to create path visualization"));
         bPathVisualized = false;
         return;
     }
 
-    if (PathVisualizationActor.IsValid())
-    { 
-        PathVisualizationActor->Tags.Add(FName("NotSMActor"));
-    }
-
-    HidePathVisualization();
+    PathVisualizationActor->Tags.Add(FName("NotSMActor"));
     bPathNeedsUpdate = false;
-    VisualizePathButton->SetButtonStyle(bPathVisualized ? 
-    &FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Danger") : 
-    &FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Primary"));
 }
 
 void SVCCSimPanel::ShowPathVisualization()
 {
-    if (PathVisualizationActor.IsValid())
+    if (SelectedFlashPawn.IsValid())
     {
-        // Show the actor
-        PathVisualizationActor->SetActorHiddenInGame(false);
-        PathVisualizationActor->SetIsTemporarilyHiddenInEditor(false);
-        
-        // Show all components
-        TArray<UActorComponent*> Components;
-        PathVisualizationActor->GetComponents(UStaticMeshComponent::StaticClass(), Components);
-        for (UActorComponent* Component : Components)
-        {
-            UStaticMeshComponent* MeshComp = Cast<UStaticMeshComponent>(Component);
-            if (MeshComp)
-            {
-                MeshComp->SetVisibility(true);
-                MeshComp->SetHiddenInGame(false);
-            }
-        }
+        UpdatePathVisualization();
     }
 }
 
 void SVCCSimPanel::HidePathVisualization()
 {
-    if (PathVisualizationActor.IsValid())
+    if (GEditor && GEditor->GetEditorWorldContext().World())
     {
-        // Hide the actor
-        PathVisualizationActor->SetActorHiddenInGame(true);
-        PathVisualizationActor->SetIsTemporarilyHiddenInEditor(true);
+        UWorld* World = GEditor->GetEditorWorldContext().World();
+        FlushPersistentDebugLines(World);
         
-        // Hide all components
-        TArray<UActorComponent*> Components;
-        PathVisualizationActor->GetComponents(UStaticMeshComponent::StaticClass(), Components);
-        for (UActorComponent* Component : Components)
+        // Clean up any PathVisualization actors in the world
+        for (TActorIterator<AActor> ActorIterator(World); ActorIterator; ++ActorIterator)
         {
-            UStaticMeshComponent* MeshComp = Cast<UStaticMeshComponent>(Component);
-            if (MeshComp)
+            AActor* Actor = *ActorIterator;
+            if (Actor && (Actor->GetActorLabel().Contains(TEXT("PathVisualization")) || 
+                         Actor->Tags.Contains(FName("VCCSimPathViz"))))
             {
-                MeshComp->SetVisibility(false);
-                MeshComp->SetHiddenInGame(true);
+                World->DestroyActor(Actor);
             }
         }
+    }
+    
+    if (PathVisualizationActor.IsValid() && GEditor)
+    {
+        if (UWorld* World = GEditor->GetEditorWorldContext().World())
+        {
+            World->DestroyActor(PathVisualizationActor.Get());
+        }
+        PathVisualizationActor.Reset();
     }
 }
 
@@ -1166,6 +1158,22 @@ void SVCCSimPanel::StartAutoCapture()
         0.2f,
         true
     );
+}
+
+void SVCCSimPanel::StopAutoCapture()
+{
+    if (bAutoCaptureInProgress)
+    {
+        bAutoCaptureInProgress = false;
+        
+        if (GEditor)
+        {
+            GEditor->GetTimerManager()->ClearTimer(AutoCaptureTimerHandle);
+        }
+        
+        SaveDirectory.Empty(); // Reset for next capture session
+        UE_LOG(LogTemp, Log, TEXT("Auto-capture stopped by user"));
+    }
 }
 
 // ============================================================================

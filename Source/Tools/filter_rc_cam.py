@@ -236,8 +236,8 @@ def main():
     print("=" * 40)
     
     # Configuration
-    input_file = "D:/Data/L7/0528.csv"
-    output_file = "D:/Data/L7/0528_filtered.csv"
+    input_file = "D:/Data/360_v2/garden/mesh/poses.csv"
+    output_file = "D:/Data/360_v2/garden/mesh/poses_filtered.csv"
     roll_threshold = 2.0  # Cameras with |roll| > this will be removed
     
     # Option to also filter extreme pitch angles

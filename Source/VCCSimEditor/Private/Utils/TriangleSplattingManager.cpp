@@ -29,7 +29,9 @@
 // ============================================================================
 
 FTriangleSplattingManager::FTriangleSplattingManager()
-    : CurrentStatus(ETrainingStatus::Idle)
+    : ReadPipe(nullptr)
+    , WritePipe(nullptr)
+    , CurrentStatus(ETrainingStatus::Idle)
     , TrainingProgress(0.0f)
     , StatusMessage(TEXT("Ready"))
     , LastError(TEXT(""))
@@ -105,6 +107,59 @@ bool FTriangleSplattingManager::StartTraining(const FTriangleSplattingConfig& Co
     return true;
 }
 
+bool FTriangleSplattingManager::StartColmapTraining(const FString& PythonCommand, const FString& Arguments, const FString& OutputDir)
+{
+    if (IsTrainingInProgress())
+    {
+        LogMessage(TEXT("Training is already in progress"), true);
+        return false;
+    }
+    
+    CurrentStatus = ETrainingStatus::Preparing;
+    TrainingProgress = 0.0f;
+    StatusMessage = TEXT("Starting Triangle Splatting training with COLMAP data...");
+    TrainingStartTime = FDateTime::Now();
+    OutputDirectory = OutputDir;
+    
+    // Set up log file path
+    LogFilePath = FPaths::Combine(OutputDirectory, TEXT("training_log.txt"));
+    
+    UE_LOG(LogTemp, Log, TEXT("Starting COLMAP training: %s %s"), *PythonCommand, *Arguments);
+    
+    // Clear previous output buffer
+    PythonOutputBuffer.Empty();
+    
+    // Create pipes for capturing Python output
+    FPlatformProcess::CreatePipe(ReadPipe, WritePipe);
+    
+    // Create the training process with output redirection
+    TrainingProcessHandle = FPlatformProcess::CreateProc(
+        *PythonCommand,
+        *Arguments,
+        false, // bLaunchDetached
+        true,  // bLaunchHidden
+        true,  // bLaunchReallyHidden
+        nullptr, // OutProcessID
+        0,     // PriorityModifier
+        nullptr, // OptionalWorkingDirectory
+        WritePipe  // PipeWriteChild - redirect stdout to our pipe
+    );
+    
+    if (!TrainingProcessHandle.IsValid())
+    {
+        CurrentStatus = ETrainingStatus::Failed;
+        StatusMessage = TEXT("Failed to launch Triangle Splatting training process");
+        LogMessage(StatusMessage, true);
+        return false;
+    }
+    
+    CurrentStatus = ETrainingStatus::Running;
+    StatusMessage = TEXT("Triangle Splatting training with COLMAP data started successfully");
+    LogMessage(StatusMessage);
+    
+    return true;
+}
+
 void FTriangleSplattingManager::StopTraining()
 {
     if (IsTrainingInProgress())
@@ -148,6 +203,35 @@ void FTriangleSplattingManager::UpdateTrainingStatus()
     }
     
     LastUpdateTime = CurrentTime;
+    
+    // Read Python process output from pipe
+    if (ReadPipe)
+    {
+        FString PipeOutput = FPlatformProcess::ReadPipe(ReadPipe);
+        if (!PipeOutput.IsEmpty())
+        {
+            // Append to Python output buffer
+            PythonOutputBuffer += PipeOutput;
+            
+            // Also write to log file
+            if (!LogFilePath.IsEmpty())
+            {
+                FFileHelper::SaveStringToFile(PipeOutput, *LogFilePath, 
+                    FFileHelper::EEncodingOptions::AutoDetect, &IFileManager::Get(), FILEWRITE_Append);
+            }
+            
+            // Log only important messages to UE console
+            TArray<FString> Lines;
+            PipeOutput.ParseIntoArrayLines(Lines);
+            for (const FString& Line : Lines)
+            {
+                if (!Line.IsEmpty() && IsImportantLogLine(Line))
+                {
+                    UE_LOG(LogTemp, Log, TEXT("Training: %s"), *Line.TrimStartAndEnd());
+                }
+            }
+        }
+    }
     
     // Check if process is still running
     if (!IsProcessRunning())
@@ -234,10 +318,6 @@ bool FTriangleSplattingManager::ValidateConfiguration(const FTriangleSplattingCo
         ErrorMessages.Add(TEXT("Max iterations must be positive"));
     }
     
-    if (Config.LearningRate <= 0)
-    {
-        ErrorMessages.Add(TEXT("Learning rate must be positive"));
-    }
     
     if (ErrorMessages.Num() > 0)
     {
@@ -251,7 +331,16 @@ bool FTriangleSplattingManager::ValidateConfiguration(const FTriangleSplattingCo
 
 bool FTriangleSplattingManager::PrepareTrainingData(const FTriangleSplattingConfig& Config)
 {
-    OutputDirectory = Config.OutputDirectory;
+    // Create timestamped subdirectory for this training session
+    FString TSOutputParentDir = FPaths::Combine(Config.OutputDirectory, TEXT("triangle_splatting_output"));
+    
+    // Generate timestamp for this training session
+    FDateTime Now = FDateTime::Now();
+    FString Timestamp = Now.ToString(TEXT("%Y%m%d_%H%M%S"));
+    FString SessionDirName = FString::Printf(TEXT("training_%s"), *Timestamp);
+    OutputDirectory = FPaths::Combine(TSOutputParentDir, SessionDirName);
+    
+    UE_LOG(LogTemp, Log, TEXT("Creating Triangle Splatting session directory: %s"), *OutputDirectory);
     
     // Ensure output directory exists
     if (!EnsureDirectoryExists(OutputDirectory))
@@ -282,9 +371,10 @@ bool FTriangleSplattingManager::PrepareTrainingData(const FTriangleSplattingConf
     LogFilePath = FPaths::Combine(OutputDirectory, TEXT("logs"), 
         GenerateTimestampedFilename(TEXT("training"), TEXT("log")));
     
-    // Convert pose data and camera information
-    FCameraIntrinsics Intrinsics = FVCCSimDataConverter::ConvertCameraParams(
-        Config.FOVDegrees, Config.ImageWidth, Config.ImageHeight);
+    // Convert pose data and camera information with fx/fy priority over FOV
+    FCameraIntrinsics Intrinsics = FVCCSimDataConverter::ConvertCameraParamsWithFocalLength(
+        Config.FOVDegrees, Config.ImageWidth, Config.ImageHeight, 
+        Config.FocalLengthX, Config.FocalLengthY);
     
     TArray<FCameraInfo> CameraInfos = FVCCSimDataConverter::ConvertPoseFile(
         Config.PoseFilePath, Config.ImageDirectory, Intrinsics);
@@ -307,7 +397,7 @@ bool FTriangleSplattingManager::PrepareTrainingData(const FTriangleSplattingConf
     if (Config.SelectedMesh.IsValid())
     {
         FPointCloudData PointCloud = FVCCSimDataConverter::ConvertMeshToPointCloud(
-            Config.SelectedMesh.Get(), 10000, true);
+            Config.SelectedMesh.Get(), Config.InitPointCount, true);
         
         if (PointCloud.GetPointCount() > 0)
         {
@@ -355,7 +445,20 @@ bool FTriangleSplattingManager::LaunchTrainingProcess()
     
     LogMessage(FString::Printf(TEXT("Launching Python process: %s %s"), *PythonPath, *Arguments));
     
-    // Launch process
+    // Create pipes for stdout and stderr capture
+    void* PipeReadChild = nullptr;
+    void* PipeWriteChild = nullptr;
+    if (!FPlatformProcess::CreatePipe(PipeReadChild, PipeWriteChild))
+    {
+        LogMessage(TEXT("Failed to create pipe for process output"), true);
+        return false;
+    }
+    
+    // Store pipe handles for later cleanup
+    ReadPipe = PipeReadChild;
+    WritePipe = PipeWriteChild;
+    
+    // Launch process with stdout/stderr redirection
     TrainingProcessHandle = FPlatformProcess::CreateProc(
         *PythonPath,
         *Arguments,
@@ -365,7 +468,8 @@ bool FTriangleSplattingManager::LaunchTrainingProcess()
         nullptr, // OutProcessID
         0,     // PriorityModifier
         nullptr, // OptionalWorkingDirectory
-        nullptr  // PipeWriteChild
+        PipeWriteChild,  // PipeWriteChild - redirect stdout/stderr to pipe
+        PipeReadChild    // PipeReadChild
     );
     
     if (!TrainingProcessHandle.IsValid())
@@ -416,6 +520,7 @@ FString FTriangleSplattingManager::GetPythonExecutablePath()
 {
     // Try common Python executable names and locations
     TArray<FString> PossiblePaths = {
+        TEXT("C:/micromamba/envs/triangle_splatting/python.exe"), // Micromamba triangle_splatting environment (priority)
         TEXT("python"),
         TEXT("python3"),
         TEXT("C:/Python39/python.exe"),
@@ -457,28 +562,28 @@ FString FTriangleSplattingManager::GetTrainingScriptPath()
     // Path to the VCCSim-specific Triangle Splatting training script
     FString PluginDir = FPaths::ProjectPluginsDir() / TEXT("VCCSim");
     
-    // Try improved script first
-    FString ImprovedScriptPath = PluginDir / TEXT("Source/VCCSim/triangle-splatting/train_vccsim_improved.py");
-    if (FPaths::FileExists(ImprovedScriptPath))
-    {
-        return ImprovedScriptPath;
-    }
-    
-    // Try original VCCSim script
-    FString ScriptPath = PluginDir / TEXT("Source/VCCSim/triangle-splatting/train_vccsim.py");
+    // Try VCCSim custom script first (for new algorithm development)
+    FString ScriptPath = PluginDir / TEXT("Source/triangle-splatting/train_vccsim.py");
     if (FPaths::FileExists(ScriptPath))
     {
         return ScriptPath;
     }
     
-    // Try game engine script
-    FString AlternativeScriptPath = PluginDir / TEXT("Source/VCCSim/triangle-splatting/train_game_engine.py");
+    // Try game engine script as fallback
+    FString AlternativeScriptPath = PluginDir / TEXT("Source/triangle-splatting/train_game_engine.py");
     if (FPaths::FileExists(AlternativeScriptPath))
     {
         return AlternativeScriptPath;
     }
     
-    LogMessage(TEXT("Training script not found. Please ensure Triangle Splatting scripts are available."), true);
+    // Try original script as last resort
+    FString OriginalScriptPath = PluginDir / TEXT("Source/triangle-splatting/train.py");
+    if (FPaths::FileExists(OriginalScriptPath))
+    {
+        return OriginalScriptPath;
+    }
+    
+    LogMessage(TEXT("No Triangle Splatting training scripts found. Please ensure scripts are available."), true);
     return FString();
 }
 
@@ -662,6 +767,14 @@ void FTriangleSplattingManager::CleanupTraining()
         TrainingProcessHandle = FProcHandle();
     }
     
+    // Clean up pipes
+    if (ReadPipe != nullptr)
+    {
+        FPlatformProcess::ClosePipe(ReadPipe, WritePipe);
+        ReadPipe = nullptr;
+        WritePipe = nullptr;
+    }
+    
     ProcessMonitor.Reset();
 }
 
@@ -723,11 +836,12 @@ FString FTriangleSplattingManager::ConfigToJsonString(const FTriangleSplattingCo
         "  \"camera\": {\n"
         "    \"fov_degrees\": %.2f,\n"
         "    \"width\": %d,\n"
-        "    \"height\": %d\n"
+        "    \"height\": %d,\n"
+        "    \"focal_length_x\": %.2f,\n"
+        "    \"focal_length_y\": %.2f\n"
         "  },\n"
         "  \"training\": {\n"
-        "    \"max_iterations\": %d,\n"
-        "    \"learning_rate\": %.6f\n"
+        "    \"max_iterations\": %d\n"
         "  },\n"
         "  \"mesh\": {\n"
         "    \"use_mesh_initialization\": %s,\n"
@@ -737,12 +851,13 @@ FString FTriangleSplattingManager::ConfigToJsonString(const FTriangleSplattingCo
     ),
         *Config.ImageDirectory.Replace(TEXT("\\"), TEXT("/")),
         *Config.PoseFilePath.Replace(TEXT("\\"), TEXT("/")),
-        *Config.OutputDirectory.Replace(TEXT("\\"), TEXT("/")),
+        *OutputDirectory.Replace(TEXT("\\"), TEXT("/")),
         Config.FOVDegrees,
         Config.ImageWidth,
         Config.ImageHeight,
+        Config.FocalLengthX,
+        Config.FocalLengthY,
         Config.MaxIterations,
-        Config.LearningRate,
         Config.bUseMeshInitialization ? TEXT("true") : TEXT("false"),
         Config.SelectedMesh.IsValid() ? *Config.SelectedMesh->GetPathName() : TEXT("")
     );
@@ -770,4 +885,124 @@ void FTriangleSplattingManager::LogMessage(const FString& Message, bool bIsError
         FFileHelper::SaveStringToFile(TimestampedMessage, *LogFilePath, 
             FFileHelper::EEncodingOptions::AutoDetect, &IFileManager::Get(), FILEWRITE_Append);
     }
+}
+
+FString FTriangleSplattingManager::GetTrainingOutput()
+{
+    // Read from Python process pipe if available
+    if (ReadPipe != nullptr)
+    {
+        FString NewOutput = FPlatformProcess::ReadPipe(ReadPipe);
+        if (!NewOutput.IsEmpty())
+        {
+            PythonOutputBuffer += NewOutput;
+            
+            // Filter and process output to reduce repetitive content
+            PythonOutputBuffer = FilterTrainingOutput(PythonOutputBuffer);
+        }
+    }
+    
+    return PythonOutputBuffer;
+}
+
+FString FTriangleSplattingManager::FilterTrainingOutput(const FString& RawOutput)
+{
+    TArray<FString> Lines;
+    RawOutput.ParseIntoArrayLines(Lines);
+    
+    TArray<FString> FilteredLines;
+    FString LastImportantLine;
+    int32 RepeatCount = 0;
+    
+    for (const FString& Line : Lines)
+    {
+        // Skip empty lines
+        if (Line.TrimStartAndEnd().IsEmpty())
+        {
+            continue;
+        }
+        
+        // Keep important lines (containing loss, iteration, error, or completion info)
+        bool bIsImportant = Line.Contains(TEXT("Loss:")) || 
+                           Line.Contains(TEXT("Iteration:")) ||
+                           Line.Contains(TEXT("iter:")) ||
+                           Line.Contains(TEXT("loss=")) ||
+                           Line.Contains(TEXT("Error")) ||
+                           Line.Contains(TEXT("Complete")) ||
+                           Line.Contains(TEXT("Training")) ||
+                           Line.Contains(TEXT("Saving")) ||
+                           Line.Contains(TEXT("PSNR"));
+        
+        if (bIsImportant)
+        {
+            // If this is the same as the last important line, just count repeats
+            if (Line.Equals(LastImportantLine))
+            {
+                RepeatCount++;
+                if (RepeatCount <= 2) // Show up to 2 repeats
+                {
+                    FilteredLines.Add(Line);
+                }
+                else if (RepeatCount == 3) // Add ellipsis after 2 repeats
+                {
+                    FilteredLines.Add(TEXT("... (repeated)"));
+                }
+            }
+            else
+            {
+                FilteredLines.Add(Line);
+                LastImportantLine = Line;
+                RepeatCount = 0;
+            }
+        }
+    }
+    
+    // Keep only last 20 lines to prevent UI overflow
+    if (FilteredLines.Num() > 20)
+    {
+        FilteredLines.RemoveAt(0, FilteredLines.Num() - 20);
+    }
+    
+    return FString::Join(FilteredLines, TEXT("\n"));
+}
+
+bool FTriangleSplattingManager::IsImportantLogLine(const FString& Line)
+{
+    FString TrimmedLine = Line.TrimStartAndEnd();
+    
+    // Skip empty lines
+    if (TrimmedLine.IsEmpty())
+    {
+        return false;
+    }
+    
+    // Skip common verbose/repetitive lines
+    if (TrimmedLine.Contains(TEXT("UserWarning")) || 
+        TrimmedLine.Contains(TEXT("warnings.warn")) ||
+        TrimmedLine.StartsWith(TEXT("C:\\")) || // Skip path warnings
+        TrimmedLine.Contains(TEXT("pretrained")) ||
+        TrimmedLine.Contains(TEXT("deprecated")))
+    {
+        return false;
+    }
+    
+    // Include important training information
+    return TrimmedLine.Contains(TEXT("Optimizing")) ||
+           TrimmedLine.Contains(TEXT("Output folder")) ||
+           TrimmedLine.Contains(TEXT("Reading camera")) ||
+           TrimmedLine.Contains(TEXT("Saving")) ||
+           TrimmedLine.Contains(TEXT("Complete")) ||
+           TrimmedLine.Contains(TEXT("Training")) ||
+           TrimmedLine.Contains(TEXT("Error")) ||
+           TrimmedLine.Contains(TEXT("Traceback")) ||
+           TrimmedLine.Contains(TEXT("AssertionError")) ||
+           (TrimmedLine.Contains(TEXT("Loss")) && !TrimmedLine.Contains(TEXT("Setting up"))) ||
+           TrimmedLine.Contains(TEXT("PSNR")) ||
+           TrimmedLine.Contains(TEXT("iter:")) ||
+           TrimmedLine.Contains(TEXT("Iteration"));
+}
+
+FString FTriangleSplattingManager::GetCurrentLoss()
+{
+    return ParseCurrentLoss(); // Use existing method
 }
