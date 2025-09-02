@@ -77,7 +77,7 @@ struct FSensorData
 struct FPoseData final : public FSensorData
 {
     FVector Location;
-    FRotator Rotation;
+    FQuat Quaternion;
 };
 
 struct FLidarData final : public FSensorData

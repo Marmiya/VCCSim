@@ -74,7 +74,7 @@ TArray<FCameraInfo> FVCCSimDataConverter::ConvertPoseFile(
         bool bIsRecorderFormatLocal = bIsRecorderFormat;
         FVCCSimPoseData PoseData = ParsePoseLine(Line, bIsRecorderFormatLocal);
         
-        if (PoseData.Location.IsZero() && PoseData.Rotation.IsZero())
+        if (PoseData.Location.IsZero() && PoseData.Quaternion.IsIdentity())
         {
             // Invalid pose data, skip
             continue;
@@ -85,7 +85,7 @@ TArray<FCameraInfo> FVCCSimDataConverter::ConvertPoseFile(
         CameraInfo.UID = ValidPoseIndex;
         
         // Convert coordinate system
-        CameraInfo.RotationMatrix = ConvertRotation(PoseData.Rotation);
+        CameraInfo.RotationMatrix = ConvertRotation(PoseData.Quaternion);
         CameraInfo.Translation = ConvertLocation(PoseData.Location);
         
         // Set camera parameters
@@ -125,29 +125,31 @@ FVCCSimPoseData FVCCSimDataConverter::ParsePoseLine(const FString& Line, bool& b
     TArray<FString> Values;
     Line.ParseIntoArray(Values, TEXT(" "), true);
     
-    if (Values.Num() == 7)
+    if (Values.Num() == 8)
     {
-        // Recorder format: Timestamp X Y Z Roll Pitch Yaw
+        // Recorder format: Timestamp X Y Z Qx Qy Qz Qw
         bIsRecorderFormat = true;
         PoseData.Timestamp = FCString::Atod(*Values[0]);
         PoseData.Location.X = FCString::Atof(*Values[1]);
         PoseData.Location.Y = FCString::Atof(*Values[2]);
         PoseData.Location.Z = FCString::Atof(*Values[3]);
-        PoseData.Rotation.Roll = FCString::Atof(*Values[4]);
-        PoseData.Rotation.Pitch = FCString::Atof(*Values[5]);
-        PoseData.Rotation.Yaw = FCString::Atof(*Values[6]);
+        PoseData.Quaternion.X = FCString::Atof(*Values[4]);
+        PoseData.Quaternion.Y = FCString::Atof(*Values[5]);
+        PoseData.Quaternion.Z = FCString::Atof(*Values[6]);
+        PoseData.Quaternion.W = FCString::Atof(*Values[7]);
     }
-    else if (Values.Num() == 6)
+    else if (Values.Num() == 7)
     {
-        // Panel format: X Y Z Pitch Yaw Roll
+        // Panel format: X Y Z Qx Qy Qz Qw
         bIsRecorderFormat = false;
         PoseData.Timestamp = 0.0; // No timestamp in panel format
         PoseData.Location.X = FCString::Atof(*Values[0]);
         PoseData.Location.Y = FCString::Atof(*Values[1]);
         PoseData.Location.Z = FCString::Atof(*Values[2]);
-        PoseData.Rotation.Pitch = FCString::Atof(*Values[3]);
-        PoseData.Rotation.Yaw = FCString::Atof(*Values[4]);
-        PoseData.Rotation.Roll = FCString::Atof(*Values[5]);
+        PoseData.Quaternion.X = FCString::Atof(*Values[3]);
+        PoseData.Quaternion.Y = FCString::Atof(*Values[4]);
+        PoseData.Quaternion.Z = FCString::Atof(*Values[5]);
+        PoseData.Quaternion.W = FCString::Atof(*Values[6]);
     }
     else
     {
@@ -175,7 +177,7 @@ bool FVCCSimDataConverter::DeterminePoseFileFormat(const FString& PoseFilePath)
         {
             TArray<FString> Values;
             Line.ParseIntoArray(Values, TEXT(" "), true);
-            return Values.Num() == 7; // True for Recorder format, false for Panel format
+            return Values.Num() == 8; // True for Recorder format (8 values), false for Panel format (7 values)
         }
     }
     
@@ -213,6 +215,21 @@ FMatrix FVCCSimDataConverter::ConvertRotation(const FRotator& UERotation)
 {    
     // Get UE rotation matrix
     FMatrix UEMatrix = FRotationMatrix::Make(UERotation);
+    
+    FMatrix CoordTransform = FMatrix::Identity;
+    CoordTransform.M[0][0] = 1.0f;   // X -> X
+    CoordTransform.M[1][1] = -1.0f;  // Y -> -Y  
+    CoordTransform.M[2][2] = 1.0f;   // Z -> Z
+    
+    // Apply transformation: ConvertedMatrix = CoordTransform * UEMatrix * CoordTransform^T
+    // Since CoordTransform is diagonal, CoordTransform^T = CoordTransform
+    return CoordTransform * UEMatrix * CoordTransform;
+}
+
+FMatrix FVCCSimDataConverter::ConvertRotation(const FQuat& UEQuaternion)
+{    
+    // Convert quaternion to rotation matrix
+    FMatrix UEMatrix = FQuatRotationMatrix::Make(UEQuaternion);
     
     FMatrix CoordTransform = FMatrix::Identity;
     CoordTransform.M[0][0] = 1.0f;   // X -> X

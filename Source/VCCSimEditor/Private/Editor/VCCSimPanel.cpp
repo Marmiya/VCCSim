@@ -498,23 +498,30 @@ void SVCCSimPanel::LoadPredefinedPose()
                 
                 for (const FString& Line : FileLines)
                 {
-                    // Parse line - Expected format: X Y Z Pitch Yaw Roll
+                    if (Line.IsEmpty() || Line.StartsWith(TEXT("#")))
+                    {
+                        continue; // Skip comments and empty lines
+                    }
+                    
+                    // Parse line - Expected format: X Y Z Qx Qy Qz Qw
                     TArray<FString> Values;
                     Line.ParseIntoArray(Values, TEXT(" "), true);
                     
-                    if (Values.Num() >= 6)
+                    if (Values.Num() >= 7)
                     {
                         float X = FCString::Atof(*Values[0]);
                         float Y = FCString::Atof(*Values[1]);
                         float Z = FCString::Atof(*Values[2]);
-                        float Pitch = FCString::Atof(*Values[3]);
-                        float Yaw = FCString::Atof(*Values[4]);
-                        float Roll = FCString::Atof(*Values[5]);
+                        float Qx = FCString::Atof(*Values[3]);
+                        float Qy = FCString::Atof(*Values[4]);
+                        float Qz = FCString::Atof(*Values[5]);
+                        float Qw = FCString::Atof(*Values[6]);
                         
                         Positions.Add(FVector(X, Y, Z));
     
-                        FRotator Rotation(Pitch, Yaw, Roll);
-                        Rotation.Normalize();
+                        FQuat Quaternion(Qx, Qy, Qz, Qw);
+                        Quaternion.Normalize();
+                        FRotator Rotation = Quaternion.Rotator();
                         Rotations.Add(Rotation);
                     }
                 }
@@ -599,18 +606,26 @@ void SVCCSimPanel::SaveGeneratedPose()
             TArray<FRotator> Rotations;
             SelectedFlashPawn->GetCurrentPath(Positions, Rotations);
             
-            // Build file content
+            // Build file content with header comments
             FString FileContent;
+            FileContent += TEXT("# UE coordinate system poses (left-handed, cm)\n");
+            FileContent += TEXT("# Coordinate axes: +X forward, +Y right, +Z up\n");
+            FileContent += TEXT("# Format: X Y Z Qx Qy Qz Qw\n");
+            FileContent += TEXT("# Quaternion order: [x, y, z, w] (UE format, scalar last)\n");
+            
             for (int32 i = 0; i < Positions.Num(); ++i)
             {
                 const FVector& Pos = Positions[i];
                 const FRotator& Rot = Rotations[i];
                 
-                // Format: X Y Z Pitch Yaw Roll
+                // Convert rotator to quaternion
+                FQuat Quat = Rot.Quaternion();
+                
+                // Format: X Y Z Qx Qy Qz Qw
                 FileContent += FString::Printf(
-                    TEXT("%.6f %.6f %.6f %.6f %.6f %.6f\n"),
+                    TEXT("%.6f %.6f %.6f %.6f %.6f %.6f %.6f\n"),
                     Pos.X, Pos.Y, Pos.Z,
-                    Rot.Pitch, Rot.Yaw, Rot.Roll
+                    Quat.X, Quat.Y, Quat.Z, Quat.W
                 );
             }
             

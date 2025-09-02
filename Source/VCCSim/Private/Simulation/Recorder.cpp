@@ -199,10 +199,10 @@ void FRecorderWorker::ProcessBuffer(FPawnBuffers& Buffer)
         while (Buffer.Pose.Dequeue(PoseData))
         {
             const FString PoseContent = FString::Printf(
-                TEXT("%.9f %.6f %.6f %.6f %.6f %.6f %.6f\n"),
+                TEXT("%.9f %.6f %.6f %.6f %.6f %.6f %.6f %.6f\n"),
                 PoseData.Timestamp,
                 PoseData.Location.X, PoseData.Location.Y, PoseData.Location.Z,
-                PoseData.Rotation.Roll, PoseData.Rotation.Pitch, PoseData.Rotation.Yaw
+                PoseData.Quaternion.X, PoseData.Quaternion.Y, PoseData.Quaternion.Z, PoseData.Quaternion.W
             );
         
             FFileHelper::SaveStringToFile(

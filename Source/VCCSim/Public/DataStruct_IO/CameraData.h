@@ -136,7 +136,8 @@ public:
 
 /**
  * Pose data structure matching VCCSim format
- * Supports both Panel format (6 values) and Recorder format (7 values)
+ * New Panel format: 7 values (X Y Z Qx Qy Qz Qw)
+ * Recorder format: 8 values (Timestamp X Y Z Qx Qy Qz Qw)
  */
 USTRUCT(BlueprintType)
 struct VCCSIM_API FVCCSimPoseData
@@ -151,19 +152,19 @@ public:
     FVector Location;
     
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pose")
-    FRotator Rotation;
+    FQuat Quaternion;
 
     FVCCSimPoseData()
         : Timestamp(0.0)
         , Location(FVector::ZeroVector)
-        , Rotation(FRotator::ZeroRotator)
+        , Quaternion(FQuat::Identity)
     {
     }
     
-    FVCCSimPoseData(double InTimestamp, const FVector& InLocation, const FRotator& InRotation)
+    FVCCSimPoseData(double InTimestamp, const FVector& InLocation, const FQuat& InQuaternion)
         : Timestamp(InTimestamp)
         , Location(InLocation)
-        , Rotation(InRotation)
+        , Quaternion(InQuaternion)
     {
     }
 };

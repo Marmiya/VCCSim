@@ -86,7 +86,7 @@ void APreciseDrone::Tick(float DeltaTime)
             TimeSinceLastCapture = 0.0f;
             FPoseData PoseData;
             PoseData.Location = GetActorLocation();
-            PoseData.Rotation = GetActorRotation();
+            PoseData.Quaternion = GetActorQuat();
             PoseData.Timestamp = FPlatformTime::Seconds();
             Recorder->SubmitPoseData(this, MoveTemp(PoseData));
         }

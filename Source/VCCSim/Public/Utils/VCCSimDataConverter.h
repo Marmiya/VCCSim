@@ -46,7 +46,7 @@ public:
     /**
      * Parse individual pose line from VCCSim format
      * @param Line Text line from pose file
-     * @param bIsRecorderFormat True if using Recorder format (7 values), false for Panel format (6 values)
+     * @param bIsRecorderFormat True if using Recorder format (8 values), false for Panel format (7 values)
      * @return Parsed pose data, or invalid data if parsing failed
      */
     static FVCCSimPoseData ParsePoseLine(const FString& Line, bool& bIsRecorderFormat);
@@ -54,7 +54,7 @@ public:
     /**
      * Determine pose file format by analyzing content
      * @param PoseFilePath Path to pose file
-     * @return True if Recorder format (7 values), false if Panel format (6 values)
+     * @return True if Recorder format (8 values), false if Panel format (7 values)
      */
     static bool DeterminePoseFileFormat(const FString& PoseFilePath);
 
@@ -82,6 +82,13 @@ public:
      * @return Rotation matrix for the right-handed coordinate system
      */
     static FMatrix ConvertRotation(const FRotator& UERotation);
+    
+    /**
+     * Convert UE quaternion to right-handed rotation matrix
+     * @param UEQuaternion Quaternion in UE coordinates
+     * @return Rotation matrix for the right-handed coordinate system
+     */
+    static FMatrix ConvertRotation(const FQuat& UEQuaternion);
 
     // ============================================================================
     // CAMERA PARAMETER CONVERSION
