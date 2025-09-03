@@ -143,10 +143,7 @@ FPLYLoader::FPLYLoadResult FPLYLoader::LoadPLYFile(const FString& FilePath,
     
     if (Result.bSuccess)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Successfully loaded %d points from PLY file (Colors: %s, Normals: %s)"), 
-               Result.PointCount,
-               Result.bHasColors ? TEXT("Yes") : TEXT("No"),
-               Result.bHasNormals ? TEXT("Yes") : TEXT("No"));
+        // Log moved to higher-level caller to avoid redundancy
     }
     else
     {

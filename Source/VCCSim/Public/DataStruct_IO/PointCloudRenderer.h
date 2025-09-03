@@ -41,6 +41,7 @@ public:
 protected:
     virtual void BeginPlay() override;
     virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+    virtual void OnRegister() override;
 
 public:
     /**
@@ -119,6 +120,15 @@ protected:
      */
     void RenderPointCloudFallback(const FPointCloudData& PointCloudData);
 
+    /** Color-aware fallback rendering (groups instances per color) */
+    void RenderPointCloudFallbackWithColors(const FPointCloudData& PointCloudData);
+
+    /** Destroy and clear any per-color instanced components */
+    void ClearColorInstancedComponents();
+
+    /** Get or create instanced component for a specific color */
+    UInstancedStaticMeshComponent* GetOrCreateColorISM(const FLinearColor& Color);
+
 protected:
     /** Optional Niagara system asset to drive rendering (set in editor). */
     UPROPERTY(EditAnywhere, Category = "Rendering")
@@ -135,6 +145,10 @@ protected:
     // Fallback instanced static mesh component
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
     TObjectPtr<UInstancedStaticMeshComponent> InstancedMeshComponent;
+
+    // Additional ISMs for color-grouped fallback rendering
+    UPROPERTY(Transient)
+    TMap<uint32, TObjectPtr<UInstancedStaticMeshComponent>> ColorInstancedComponents;
 
     // Point cloud rendering settings
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rendering")
@@ -159,4 +173,14 @@ protected:
     // Cached point cloud data for updates
     TArray<FVector> CachedPositions;
     TArray<FLinearColor> CachedColors;
+
+private:
+    /** Pack linear color (0..1) to 0xRRGGBB key */
+    static uint32 PackColorKey(const FLinearColor& Color)
+    {
+        const uint8 R = (uint8)FMath::Clamp(FMath::RoundToInt(Color.R * 255.0f), 0, 255);
+        const uint8 G = (uint8)FMath::Clamp(FMath::RoundToInt(Color.G * 255.0f), 0, 255);
+        const uint8 B = (uint8)FMath::Clamp(FMath::RoundToInt(Color.B * 255.0f), 0, 255);
+        return ((uint32)R << 16) | ((uint32)G << 8) | (uint32)B;
+    }
 };

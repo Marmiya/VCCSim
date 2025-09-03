@@ -377,7 +377,7 @@ def txt_exists(colmap_dir: str) -> bool:
 def main():
     ap = argparse.ArgumentParser(description="Convert COLMAP (TXT or BIN) model to PLY point clouds and UE poses.")
     ap.add_argument('--colmap_dir', type=str,
-                    default=r'D:\Data\360_v2\garden\RS',
+                    default=r'D:\Data\360_v2\garden\mesh\Ganden\Colmap',
                     help='Directory containing COLMAP sparse reconstruction files')
     ap.add_argument('--out_dir', type=str,
                     default=r'C:\UEProjects\VCCSimDev\Saved',

@@ -25,12 +25,12 @@ void UPointCloudRenderComponent::SetupComponents()
     if (!VisiblePointsComponent || !InvisiblePointsComponent)
         return;
         
-    // Load a simple sphere mesh for point representation
-    static ConstructorHelpers::FObjectFinder<UStaticMesh> SphereMesh(TEXT("/Engine/BasicShapes/Sphere"));
-    if (SphereMesh.Succeeded())
+    // Load a simple sphere mesh for point representation - use runtime loading
+    UStaticMesh* SphereMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere"));
+    if (SphereMesh)
     {
-        VisiblePointsComponent->SetStaticMesh(SphereMesh.Object);
-        InvisiblePointsComponent->SetStaticMesh(SphereMesh.Object);
+        VisiblePointsComponent->SetStaticMesh(SphereMesh);
+        InvisiblePointsComponent->SetStaticMesh(SphereMesh);
     }
     
     // Load materials for visible and invisible points
@@ -56,6 +56,17 @@ void UPointCloudRenderComponent::SetupComponents()
     // Disable collision for better performance
     VisiblePointsComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     InvisiblePointsComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    
+    // Disable shadows for point cloud visualization
+    VisiblePointsComponent->SetCastShadow(false);
+    VisiblePointsComponent->SetReceivesDecals(false);
+    VisiblePointsComponent->bCastDynamicShadow = false;
+    VisiblePointsComponent->bCastStaticShadow = false;
+    
+    InvisiblePointsComponent->SetCastShadow(false);
+    InvisiblePointsComponent->SetReceivesDecals(false);
+    InvisiblePointsComponent->bCastDynamicShadow = false;
+    InvisiblePointsComponent->bCastStaticShadow = false;
     
     // Set initial visibility
     VisiblePointsComponent->SetVisibility(true);

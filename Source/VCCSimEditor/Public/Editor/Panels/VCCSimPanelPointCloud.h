@@ -77,6 +77,9 @@ private:
     /** Create point cloud normal/color controls */
     TSharedRef<SWidget> CreatePointCloudNormalControls();
     
+    /** Create a visual separator for UI sections */
+    TSharedRef<SWidget> CreateSeparator();
+    
     // ============================================================================
     // EVENT HANDLERS
     // ============================================================================
@@ -86,6 +89,9 @@ private:
     
     /** Handle toggle point cloud visualization button click */
     FReply OnTogglePointCloudVisualizationClicked();
+    
+    /** Handle clear point cloud button click */
+    FReply OnClearPointCloudClicked();
     
     /** Handle show normals checkbox change */
     void OnShowNormalsChanged(ECheckBoxState NewState);
@@ -105,6 +111,9 @@ private:
     
     /** Create colored point cloud visualization using particle system */
     void CreateColoredPointCloudVisualization(UWorld* World);
+    
+    /** Create normals visualization using instanced cylinders */
+    void CreateNormalVisualization(AActor* Owner);
     
     /** Clear all point cloud visualizations */
     void ClearPointCloudVisualization();
@@ -162,8 +171,8 @@ private:
     bool bPointCloudLoaded = false;
     bool bPointCloudHasColors = false;
     bool bPointCloudHasNormals = false;
-    bool bShowNormals = true;
-    bool bShowColors = true;
+    bool bShowNormals = false;
+    bool bShowColors = false;
     
     /** Point cloud file information */
     FString LoadedPointCloudPath;

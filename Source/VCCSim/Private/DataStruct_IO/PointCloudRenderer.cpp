@@ -29,31 +29,42 @@
 UPointCloudRenderer::UPointCloudRenderer()
 {
     PrimaryComponentTick.bCanEverTick = false;
-    
-    // Create Niagara component
+
+    // Create Niagara component (child of this component)
     NiagaraComponent = CreateDefaultSubobject<UNiagaraComponent>(TEXT("NiagaraComponent"));
-    
-    // Create fallback instanced mesh component
+    if (NiagaraComponent)
+    {
+        NiagaraComponent->SetupAttachment(this);
+        NiagaraComponent->bAutoActivate = false;
+        NiagaraComponent->SetVisibility(false);
+    }
+
+    // Create fallback instanced mesh component (child of this component)
     InstancedMeshComponent = CreateDefaultSubobject<UInstancedStaticMeshComponent>(TEXT("InstancedMeshComponent"));
     if (InstancedMeshComponent)
     {
-        // Load a simple sphere mesh for point representation
-        static ConstructorHelpers::FObjectFinder<UStaticMesh> SphereMesh(TEXT("/Engine/BasicShapes/Sphere"));
-        if (SphereMesh.Succeeded())
-        {
-            InstancedMeshComponent->SetStaticMesh(SphereMesh.Object);
-        }
-        
+        InstancedMeshComponent->SetupAttachment(this);
+
+        // Note: Mesh will be loaded at runtime in CreateOptimizedFallbackSystem to avoid FObjectFinder issues
+
         // Disable collision for better performance
         InstancedMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
         InstancedMeshComponent->SetVisibility(false); // Start invisible until needed
+        InstancedMeshComponent->SetMobility(EComponentMobility::Movable);
+        
+        // Disable shadows for point cloud visualization
+        InstancedMeshComponent->SetCastShadow(false);
+        InstancedMeshComponent->SetReceivesDecals(false);
+        InstancedMeshComponent->bCastDynamicShadow = false;
+        InstancedMeshComponent->bCastStaticShadow = false;
     }
 }
 
 void UPointCloudRenderer::BeginPlay()
 {
     Super::BeginPlay();
-    InitializeNiagaraSystem();
+    // Don't initialize Niagara system automatically - only when needed for colors
+    CreateOptimizedFallbackSystem();
 }
 
 void UPointCloudRenderer::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -81,70 +92,18 @@ void UPointCloudRenderer::InitializeNiagaraSystem()
         }
     }
 
-    // 2) Try to find any available Niagara system using Asset Registry
+    // 2) Skip automatic Niagara system search - use user-defined system only
     if (!PointCloudSystem)
     {
-        FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
-        IAssetRegistry& AssetRegistry = AssetRegistryModule.Get();
-
-        // Find Niagara systems
-        TArray<FAssetData> NiagaraAssets;
-        FARFilter Filter;
-        Filter.ClassPaths.Add(UNiagaraSystem::StaticClass()->GetClassPathName());
-        Filter.bRecursivePaths = true;
-
-        AssetRegistry.GetAssets(Filter, NiagaraAssets);
-
-        UE_LOG(LogTemp, Log, TEXT("Found %d Niagara systems in project"), NiagaraAssets.Num());
-        
-        // First priority: Look for systems specifically designed for point clouds/particles
-        for (const FAssetData& AssetData : NiagaraAssets)
-        {
-            FString AssetPath = AssetData.GetObjectPathString();
-            FString AssetName = AssetData.AssetName.ToString();
-            
-            if (AssetName.Contains(TEXT("Point")) || AssetName.Contains(TEXT("Cloud")) ||
-                AssetName.Contains(TEXT("Sprite")) || AssetName.Contains(TEXT("GPU")) ||
-                AssetPath.Contains(TEXT("Sprite")) || AssetPath.Contains(TEXT("GPU")))
-            {
-                PointCloudSystem = Cast<UNiagaraSystem>(AssetData.GetAsset());
-                if (PointCloudSystem)
-                {
-                    UE_LOG(LogTemp, Log, TEXT("Found suitable Niagara system for point clouds: %s"), *AssetPath);
-                    break;
-                }
-            }
-        }
-        
-        // Second priority: Engine systems (but not specific effects like insects)
-        if (!PointCloudSystem)
-        {
-            for (const FAssetData& AssetData : NiagaraAssets)
-            {
-                FString AssetPath = AssetData.GetObjectPathString();
-                FString AssetName = AssetData.AssetName.ToString();
-                
-                if (AssetPath.Contains(TEXT("Engine")) && 
-                    !AssetName.Contains(TEXT("Insect")) && 
-                    !AssetName.Contains(TEXT("Fire")) &&
-                    !AssetName.Contains(TEXT("Smoke")) &&
-                    !AssetName.Contains(TEXT("Water")))
-                {
-                    PointCloudSystem = Cast<UNiagaraSystem>(AssetData.GetAsset());
-                    if (PointCloudSystem)
-                    {
-                        UE_LOG(LogTemp, Log, TEXT("Found generic engine Niagara system: %s"), *AssetPath);
-                        break;
-                    }
-                }
-            }
-        }
-        
-        // If still no suitable system found, log that we'll use fallback
-        if (!PointCloudSystem && NiagaraAssets.Num() > 0)
-        {
-            UE_LOG(LogTemp, Warning, TEXT("No suitable Niagara systems found among %d available systems. Available systems are specialized effects (insects, fire, etc.) not compatible with point cloud rendering."), NiagaraAssets.Num());
-        }
+        UE_LOG(LogTemp, Log, TEXT("No Niagara system assigned in NiagaraSystemAsset property."));
+        UE_LOG(LogTemp, Log, TEXT("To use Niagara for point cloud rendering:"));
+        UE_LOG(LogTemp, Log, TEXT("1. Create a new Niagara System with GPU Emitter"));
+        UE_LOG(LogTemp, Log, TEXT("2. Add Array Data Interface with 'Points' (Vector) and 'Colors' (Vector) arrays"));
+        UE_LOG(LogTemp, Log, TEXT("3. Set Spawn Count = Points.GetNum()"));
+        UE_LOG(LogTemp, Log, TEXT("4. Set Particles.Position = Points.GetValue(Particles.ID)"));
+        UE_LOG(LogTemp, Log, TEXT("5. Set Particles.Color = Colors.GetValue(Particles.ID)"));
+        UE_LOG(LogTemp, Log, TEXT("6. Assign the system to NiagaraSystemAsset property"));
+        UE_LOG(LogTemp, Log, TEXT("Using optimized instanced mesh fallback instead."));
     }
 
     if (PointCloudSystem)
@@ -162,6 +121,49 @@ void UPointCloudRenderer::InitializeNiagaraSystem()
     }
 }
 
+void UPointCloudRenderer::OnRegister()
+{
+    Super::OnRegister();
+
+    // Ensure child components are attached and registered in editor/runtime
+    if (NiagaraComponent)
+    {
+        if (!NiagaraComponent->GetAttachParent())
+        {
+            NiagaraComponent->SetupAttachment(this);
+        }
+        if (!NiagaraComponent->IsRegistered())
+        {
+            NiagaraComponent->RegisterComponent();
+        }
+        NiagaraComponent->SetVisibility(false);
+    }
+
+    if (InstancedMeshComponent)
+    {
+        if (!InstancedMeshComponent->GetAttachParent())
+        {
+            InstancedMeshComponent->SetupAttachment(this);
+        }
+        if (!InstancedMeshComponent->IsRegistered())
+        {
+            InstancedMeshComponent->RegisterComponent();
+        }
+        InstancedMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        InstancedMeshComponent->SetVisibility(false);
+        InstancedMeshComponent->SetMobility(EComponentMobility::Movable);
+        
+        // Disable shadows for point cloud visualization
+        InstancedMeshComponent->SetCastShadow(false);
+        InstancedMeshComponent->SetReceivesDecals(false);
+        InstancedMeshComponent->bCastDynamicShadow = false;
+        InstancedMeshComponent->bCastStaticShadow = false;
+    }
+
+    // Only initialize Niagara system in editor if needed for colors
+    // InitializeNiagaraSystem(); // Removed - will be called on-demand in RenderPointCloud
+}
+
 void UPointCloudRenderer::CreateOptimizedFallbackSystem()
 {
     if (!InstancedMeshComponent)
@@ -170,34 +172,76 @@ void UPointCloudRenderer::CreateOptimizedFallbackSystem()
         return;
     }
 
-    // Setup material for point cloud visualization
+    // Load sphere mesh if not already set (use same path as color ISM)
+    if (!InstancedMeshComponent->GetStaticMesh())
+    {
+        UStaticMesh* SphereMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
+        if (SphereMesh)
+        {
+            InstancedMeshComponent->SetStaticMesh(SphereMesh);
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("Failed to load sphere mesh for main ISM"));
+        }
+    }
+
+    // Setup material for point cloud visualization (use same material system as color ISM)
     if (InstancedMeshComponent->GetStaticMesh())
     {
+        UMaterialInterface* PointMaterial = nullptr;
+        
         // Try to load the existing point cloud material
-        UMaterialInterface* PointMaterial = LoadObject<UMaterialInterface>(
+        PointMaterial = LoadObject<UMaterialInterface>(
             nullptr, 
             TEXT("/VCCSim/Materials/M_PointCloud")
         );
         
         if (!PointMaterial)
         {
-            // Use default material if custom one isn't available
-            PointMaterial = LoadObject<UMaterialInterface>(
+            // Use default material with correct full path
+            UMaterialInterface* BaseMaterial = LoadObject<UMaterialInterface>(
                 nullptr, 
-                TEXT("/Engine/BasicShapes/BasicShapeMaterial")
+                TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial")
             );
+            
+            if (BaseMaterial)
+            {
+                // Create dynamic material instance for consistent white color (visible fallback)
+                UMaterialInstanceDynamic* MID = UMaterialInstanceDynamic::Create(BaseMaterial, this);
+                if (MID)
+                {
+                    // Set visible white color for non-color mode
+                    MID->SetVectorParameterValue(TEXT("Color"), FLinearColor(1.0f, 1.0f, 1.0f, 1.0f)); // White color
+                    PointMaterial = MID;
+                }
+                else
+                {
+                    PointMaterial = BaseMaterial;
+                }
+            }
+            else
+            {
+                UE_LOG(LogTemp, Error, TEXT("Failed to load base material from /Engine/BasicShapes/BasicShapeMaterial"));
+            }
         }
         
         if (PointMaterial)
         {
             InstancedMeshComponent->SetMaterial(0, PointMaterial);
-            UE_LOG(LogTemp, Log, TEXT("Instanced mesh fallback material set successfully"));
         }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("Failed to set any material for main ISM - points may not be visible"));
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("No static mesh set for InstancedMeshComponent - cannot set material"));
     }
 
     // Mark as initialized for fallback rendering
     bIsInitialized = true;
-    UE_LOG(LogTemp, Log, TEXT("Optimized instanced mesh fallback system created successfully"));
 }
 
 void UPointCloudRenderer::CreateFallbackSystem()
@@ -207,21 +251,9 @@ void UPointCloudRenderer::CreateFallbackSystem()
 
 void UPointCloudRenderer::RenderPointCloud(const FPointCloudData& PointCloudData, bool bInShowColors, float InPointSize)
 {
-    if (!bIsInitialized)
-    {
-        InitializeNiagaraSystem();
-    }
-
-    if (!NiagaraComponent)
-    {
-        UE_LOG(LogTemp, Error, TEXT("Niagara component not available for point cloud rendering"));
-        return;
-    }
-
     // Update settings
     bShowColors = bInShowColors;
     PointSize = InPointSize;
-    RenderedPointCount = PointCloudData.GetPointCount();
     bHasColors = PointCloudData.HasColors();
 
     // Clear existing visualization
@@ -232,27 +264,57 @@ void UPointCloudRenderer::RenderPointCloud(const FPointCloudData& PointCloudData
         return;
     }
 
-    // Update particle data
-    UpdateParticleData(PointCloudData);
+    RenderedPointCount = PointCloudData.GetPointCount();
 
-    // Check if Niagara system is available and active after UpdateParticleData
-    if (NiagaraComponent->GetAsset() && NiagaraComponent->IsVisible())
+    if (PointCloudData.GetPointCount() == 0)
     {
-        NiagaraComponent->Activate(true);
-        
-        // Hide fallback component
-        if (InstancedMeshComponent)
+        return;
+    }
+
+    // Only try Niagara system if we actually need colors
+    bool bShouldUseNiagara = bShowColors && bHasColors;
+    
+    if (bShouldUseNiagara)
+    {
+        // Initialize Niagara system only when needed
+        if (!bIsInitialized)
         {
-            InstancedMeshComponent->SetVisibility(false);
+            InitializeNiagaraSystem();
         }
-        
-        UE_LOG(LogTemp, Log, TEXT("Rendered %d points using Niagara system: %s"), 
-               RenderedPointCount, 
-               *NiagaraComponent->GetAsset()->GetName());
+
+        if (NiagaraComponent)
+        {
+            // Update particle data
+            UpdateParticleData(PointCloudData);
+
+            // Check if Niagara system is available and active after UpdateParticleData
+            if (NiagaraComponent->GetAsset() && NiagaraComponent->IsVisible())
+            {
+                NiagaraComponent->Activate(true);
+                
+                // Hide fallback component
+                if (InstancedMeshComponent)
+                {
+                    InstancedMeshComponent->SetVisibility(false);
+                }
+                // Hide any color ISMs created for fallback
+                ClearColorInstancedComponents();
+                
+                UE_LOG(LogTemp, Log, TEXT("Rendered %d points using Niagara system: %s"), 
+                       RenderedPointCount, 
+                       *NiagaraComponent->GetAsset()->GetName());
+                return; // Successfully used Niagara, exit early
+            }
+        }
+    }
+
+    // Use fallback rendering (InstancedMesh) - no Niagara needed
+    if (bShowColors && bHasColors)
+    {
+        RenderPointCloudFallbackWithColors(PointCloudData);
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("Niagara system not compatible or available, using fallback rendering"));
         RenderPointCloudFallback(PointCloudData);
     }
 }
@@ -264,8 +326,15 @@ void UPointCloudRenderer::RenderPointCloudFallback(const FPointCloudData& PointC
         return;
     }
 
+    // Ensure fallback system is properly initialized
+    if (!InstancedMeshComponent->GetStaticMesh() || !InstancedMeshComponent->GetMaterial(0))
+    {
+        CreateOptimizedFallbackSystem();
+    }
+
     // Clear existing instances
     InstancedMeshComponent->ClearInstances();
+    ClearColorInstancedComponents();
     
     const TArray<FRatPoint>& Points = PointCloudData.Points;
     
@@ -294,6 +363,84 @@ void UPointCloudRenderer::RenderPointCloudFallback(const FPointCloudData& PointC
     }
     
     UE_LOG(LogTemp, Log, TEXT("Fallback rendered %d points using instanced meshes"), Points.Num());
+}
+
+void UPointCloudRenderer::RenderPointCloudFallbackWithColors(const FPointCloudData& PointCloudData)
+{
+    if (PointCloudData.GetPointCount() == 0)
+    {
+        return;
+    }
+
+    // Hide single-color ISM and clear its instances
+    if (InstancedMeshComponent)
+    {
+        InstancedMeshComponent->ClearInstances();
+        InstancedMeshComponent->SetVisibility(false);
+    }
+
+    // For small clouds, group by color and create one ISM per color with a dynamic material
+    // This avoids needing a special per-instance color material.
+    ClearColorInstancedComponents();
+
+    const TArray<FRatPoint>& Points = PointCloudData.Points;
+    
+    // Cap number of unique colors to avoid too many components
+    const int32 MaxUniqueColors = 256;
+    TMap<uint32, TArray<int32>> ColorToIndices;
+    ColorToIndices.Reserve(FMath::Min(MaxUniqueColors, Points.Num()));
+
+    for (int32 i = 0; i < Points.Num(); ++i)
+    {
+        const uint32 Key = PackColorKey(Points[i].Color);
+        auto& Indices = ColorToIndices.FindOrAdd(Key);
+        Indices.Add(i);
+        if (ColorToIndices.Num() >= MaxUniqueColors && Indices.Num() == 1)
+        {
+            // If we reached cap, merge the rest into the first color to avoid explosion
+            // Simple guard: do nothing; additional colors will reuse existing keys implicitly
+        }
+    }
+
+    int32 TotalInstances = 0;
+    for (const TPair<uint32, TArray<int32>>& Pair : ColorToIndices)
+    {
+        const uint32 Key = Pair.Key;
+        const TArray<int32>& Indices = Pair.Value;
+        const FLinearColor Color(
+            ((Key >> 16) & 0xFF) / 255.0f,
+            ((Key >> 8) & 0xFF) / 255.0f,
+            (Key & 0xFF) / 255.0f,
+            1.0f
+        );
+
+        UInstancedStaticMeshComponent* ISM = GetOrCreateColorISM(Color);
+        if (!ISM)
+        {
+            continue;
+        }
+
+        for (int32 Index : Indices)
+        {
+            const FRatPoint& Point = Points[Index];
+            FTransform Xform;
+            Xform.SetLocation(Point.Position);
+            float ScaleValue = FMath::Max(0.01f, PointSize * 0.1f);
+            Xform.SetScale3D(FVector(ScaleValue));
+            ISM->AddInstance(Xform);
+            ++TotalInstances;
+        }
+
+        ISM->SetVisibility(true);
+    }
+
+    // Hide Niagara if any
+    if (NiagaraComponent)
+    {
+        NiagaraComponent->SetVisibility(false);
+    }
+
+    UE_LOG(LogTemp, Log, TEXT("Fallback rendered %d points using color-grouped instanced meshes (%d unique colors)"), Points.Num(), ColorToIndices.Num());
 }
 
 void UPointCloudRenderer::UpdateParticleData(const FPointCloudData& PointCloudData)
@@ -367,19 +514,17 @@ void UPointCloudRenderer::UpdateParticleData(const FPointCloudData& PointCloudDa
     // Only try to set data if the system appears compatible
     if (bHasValidDataInterface && CachedPositions.Num() > 0)
     {
-        // Try multiple common data interface names
-        bool bPositionSet = false;
-        TArray<FString> PositionArrayNames = { TEXT("PositionArray"), TEXT("Positions"), TEXT("PointPositions"), TEXT("ParticlePositions") };
-        
-        for (const FString& ArrayName : PositionArrayNames)
+        // Use the standard Array Data Interface names as shown in test.txt
+        try 
         {
-            UNiagaraDataInterfaceArrayFunctionLibrary::SetNiagaraArrayVector(NiagaraComponent, *ArrayName, CachedPositions);
-            bPositionSet = true;
-            UE_LOG(LogTemp, Log, TEXT("Set position data using array name: %s"), *ArrayName);
-            break;
+            UNiagaraDataInterfaceArrayFunctionLibrary::SetNiagaraArrayVector(
+                NiagaraComponent, 
+                FName(TEXT("Points")), 
+                CachedPositions
+            );
+            UE_LOG(LogTemp, Log, TEXT("Set position data using 'Points' array: %d positions"), CachedPositions.Num());
         }
-        
-        if (!bPositionSet)
+        catch (...)
         {
             UE_LOG(LogTemp, Warning, TEXT("Could not set position data - using fallback rendering"));
             NiagaraComponent->Deactivate();
@@ -391,30 +536,54 @@ void UPointCloudRenderer::UpdateParticleData(const FPointCloudData& PointCloudDa
     // Try to set color data if available and system supports it
     if (bHasValidDataInterface && CachedColors.Num() > 0 && (bShowColors && bHasColors))
     {
-        // Convert to FVector for Niagara (RGB as XYZ)
-        TArray<FVector> ColorVectors;
-        ColorVectors.Reserve(CachedColors.Num());
-        
-        for (const FLinearColor& Color : CachedColors)
+        try
         {
-            ColorVectors.Add(FVector(Color.R, Color.G, Color.B));
+            // Convert LinearColor to Vector for Niagara (RGB as XYZ)
+            TArray<FVector> ColorVectors;
+            ColorVectors.Reserve(CachedColors.Num());
+            for (const FLinearColor& Color : CachedColors)
+            {
+                ColorVectors.Add(FVector(Color.R, Color.G, Color.B));
+            }
+            
+            UNiagaraDataInterfaceArrayFunctionLibrary::SetNiagaraArrayVector(
+                NiagaraComponent, 
+                FName(TEXT("Colors")), 
+                ColorVectors
+            );
+            UE_LOG(LogTemp, Log, TEXT("Set color data using 'Colors' array: %d colors"), CachedColors.Num());
         }
-        
-        // Try multiple common color array names
-        TArray<FString> ColorArrayNames = { TEXT("ColorArray"), TEXT("Colors"), TEXT("ParticleColors"), TEXT("PointColors") };
-        
-        bool bColorSet = false;
-        for (const FString& ArrayName : ColorArrayNames)
-        {
-            UNiagaraDataInterfaceArrayFunctionLibrary::SetNiagaraArrayVector(NiagaraComponent, *ArrayName, ColorVectors);
-            bColorSet = true;
-            UE_LOG(LogTemp, Log, TEXT("Set color data using array name: %s"), *ArrayName);
-            break;
-        }
-        
-        if (!bColorSet)
+        catch (...)
         {
             UE_LOG(LogTemp, Log, TEXT("Could not set color data - using default colors"));
+        }
+    }
+    
+    // Set additional Niagara parameters following test.txt pattern
+    if (bHasValidDataInterface)
+    {
+        try 
+        {
+            NiagaraComponent->SetFloatParameter(TEXT("PointSize"), PointSize);
+            
+            // Calculate bounds for debugging (SetFixedBounds doesn't exist on UNiagaraComponent)
+            if (CachedPositions.Num() > 0)
+            {
+                FBox BoundingBox(ForceInit);
+                for (const FVector& Position : CachedPositions)
+                {
+                    BoundingBox += Position;
+                }
+                
+                if (BoundingBox.IsValid)
+                {
+                    UE_LOG(LogTemp, Log, TEXT("Point cloud bounds: %s"), *BoundingBox.ToString());
+                }
+            }
+        }
+        catch (...)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Could not set additional Niagara parameters"));
         }
     }
     
@@ -436,11 +605,87 @@ void UPointCloudRenderer::ClearPointCloud()
         InstancedMeshComponent->ClearInstances();
         InstancedMeshComponent->SetVisibility(false);
     }
+    ClearColorInstancedComponents();
     
     // Clear cached data
     RenderedPointCount = 0;
     CachedPositions.Empty();
     CachedColors.Empty();
+}
+
+void UPointCloudRenderer::ClearColorInstancedComponents()
+{
+    if (ColorInstancedComponents.Num() == 0)
+    {
+        return;
+    }
+    for (TPair<uint32, TObjectPtr<UInstancedStaticMeshComponent>>& Pair : ColorInstancedComponents)
+    {
+        if (Pair.Value)
+        {
+            Pair.Value->ClearInstances();
+            Pair.Value->SetVisibility(false);
+            if (Pair.Value->IsRegistered())
+            {
+                Pair.Value->UnregisterComponent();
+            }
+            Pair.Value->DestroyComponent();
+        }
+    }
+    ColorInstancedComponents.Empty();
+}
+
+UInstancedStaticMeshComponent* UPointCloudRenderer::GetOrCreateColorISM(const FLinearColor& Color)
+{
+    const uint32 Key = PackColorKey(Color);
+    if (TObjectPtr<UInstancedStaticMeshComponent>* Found = ColorInstancedComponents.Find(Key))
+    {
+        return Found->Get();
+    }
+
+    AActor* Owner = GetOwner();
+    if (!Owner)
+    {
+        return nullptr;
+    }
+
+    UInstancedStaticMeshComponent* NewISM = NewObject<UInstancedStaticMeshComponent>(Owner);
+    if (!NewISM)
+    {
+        return nullptr;
+    }
+    NewISM->SetupAttachment(this);
+    NewISM->SetMobility(EComponentMobility::Movable);
+    NewISM->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    
+    // Disable shadows for point cloud visualization
+    NewISM->SetCastShadow(false);
+    NewISM->SetReceivesDecals(false);
+    NewISM->bCastDynamicShadow = false;
+    NewISM->bCastStaticShadow = false;
+
+    // Use Engine basic sphere - load at runtime
+    UStaticMesh* SphereMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
+    if (SphereMesh)
+    {
+        NewISM->SetStaticMesh(SphereMesh);
+    }
+
+    // Create a dynamic material with the specified color
+    UMaterialInterface* BaseMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
+    if (BaseMaterial)
+    {
+        UMaterialInstanceDynamic* MID = UMaterialInstanceDynamic::Create(BaseMaterial, NewISM);
+        if (MID)
+        {
+            MID->SetVectorParameterValue(TEXT("Color"), Color);
+            NewISM->SetMaterial(0, MID);
+        }
+    }
+
+    NewISM->RegisterComponent();
+    ColorInstancedComponents.Add(Key, NewISM);
+    return NewISM;
 }
 
 void UPointCloudRenderer::SetPointSize(float NewPointSize)

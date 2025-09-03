@@ -38,6 +38,7 @@
 
 // Engine Components
 #include "Components/InstancedStaticMeshComponent.h"
+#include "Components/SceneComponent.h"
 #include "ProceduralMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Materials/MaterialInterface.h"
@@ -50,12 +51,7 @@
 // CONSTRUCTOR / DESTRUCTOR
 // ============================================================================
 
-FVCCSimPanelPointCloud::FVCCSimPanelPointCloud()
-{
-    // Initialize default values
-    bShowNormals = true;
-    bShowColors = true;
-}
+FVCCSimPanelPointCloud::FVCCSimPanelPointCloud(){}
 
 FVCCSimPanelPointCloud::~FVCCSimPanelPointCloud()
 {
@@ -166,12 +162,26 @@ TSharedRef<SWidget> FVCCSimPanelPointCloud::CreatePointCloudPanel()
                 ]
             ]
 
+            // Separator after status section
+            + SVerticalBox::Slot()
+            .MaxHeight(1)
+            [
+                CreateSeparator()
+            ]
+
             // Control buttons
             + SVerticalBox::Slot()
             .AutoHeight()
             .Padding(5)
             [
                 CreatePointCloudButtons()
+            ]
+
+            // Separator after control buttons
+            + SVerticalBox::Slot()
+            .MaxHeight(1)
+            [
+                CreateSeparator()
             ]
 
             // Normal and color controls
@@ -207,20 +217,24 @@ TSharedRef<SWidget> FVCCSimPanelPointCloud::CreatePointCloudButtons()
 
         // Load Point Cloud button
         + SHorizontalBox::Slot()
-        .FillWidth(0.5f)
+        .FillWidth(0.33f)
         .Padding(2)
         [
             SAssignNew(LoadPointCloudButton, SButton)
+            .ButtonStyle(FAppStyle::Get(), "FlatButton.Default")
+            .ContentPadding(FMargin(4, 2))
             .Text(FText::FromString("Load Point Cloud"))
             .OnClicked_Lambda([this]() { return OnLoadPointCloudClicked(); })
         ]
 
         // Visualize Point Cloud button
         + SHorizontalBox::Slot()
-        .FillWidth(0.5f)
+        .FillWidth(0.33f)
         .Padding(2)
         [
             SAssignNew(VisualizePointCloudButton, SButton)
+            .ButtonStyle(FAppStyle::Get(), "FlatButton.Primary")
+            .ContentPadding(FMargin(4, 2))
             .Text_Lambda([this]()
             {
                 return FText::FromString(bPointCloudVisualized ? "Hide Point Cloud" : "Show Point Cloud");
@@ -230,6 +244,22 @@ TSharedRef<SWidget> FVCCSimPanelPointCloud::CreatePointCloudButtons()
                 return bPointCloudLoaded;
             })
             .OnClicked_Lambda([this]() { return OnTogglePointCloudVisualizationClicked(); })
+        ]
+
+        // Clear Point Cloud button
+        + SHorizontalBox::Slot()
+        .FillWidth(0.33f)
+        .Padding(2)
+        [
+            SNew(SButton)
+            .ButtonStyle(FAppStyle::Get(), "FlatButton.Default")
+            .ContentPadding(FMargin(4, 2))
+            .Text(FText::FromString("Clear Point Cloud"))
+            .IsEnabled_Lambda([this]()
+            {
+                return bPointCloudLoaded;
+            })
+            .OnClicked_Lambda([this]() { return OnClearPointCloudClicked(); })
         ];
 }
 
@@ -280,6 +310,19 @@ TSharedRef<SWidget> FVCCSimPanelPointCloud::CreatePointCloudNormalControls()
         ];
 }
 
+TSharedRef<SWidget> FVCCSimPanelPointCloud::CreateSeparator()
+{
+    return SNew(SBorder)
+        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
+        .BorderBackgroundColor(FColor(2, 2, 2))
+        .Padding(0)
+        .Content()
+        [
+            SNew(SBox)
+            .HeightOverride(1.0f)
+        ];
+}
+
 // ============================================================================
 // EVENT HANDLERS
 // ============================================================================
@@ -309,7 +352,7 @@ FReply FVCCSimPanelPointCloud::OnLoadPointCloudClicked()
         if (LoadPointCloudFromFile(FilePath))
         {
             LoadedPointCloudPath = FilePath;
-            UE_LOG(LogTemp, Log, TEXT("Successfully loaded point cloud from: %s"), *FilePath);
+            // Log already printed in LoadPointCloudFromFile
         }
     }
 
@@ -342,12 +385,52 @@ FReply FVCCSimPanelPointCloud::OnTogglePointCloudVisualizationClicked()
     return FReply::Handled();
 }
 
+FReply FVCCSimPanelPointCloud::OnClearPointCloudClicked()
+{
+    if (!bPointCloudLoaded)
+    {
+        return FReply::Handled();
+    }
+
+    // Clear visualization
+    ClearPointCloudVisualization();
+    bPointCloudVisualized = false;
+    
+    // Clear data
+    PointCloudData.Empty();
+    bPointCloudLoaded = false;
+    bPointCloudHasColors = false;
+    bPointCloudHasNormals = false;
+    LoadedPointCloudPath.Empty();
+    PointCloudCount = 0;
+    
+    // Reset checkboxes
+    bShowNormals = false;
+    bShowColors = false;
+
+    return FReply::Handled();
+}
+
 void FVCCSimPanelPointCloud::OnShowNormalsChanged(ECheckBoxState NewState)
 {
     bShowNormals = (NewState == ECheckBoxState::Checked);
     if (bPointCloudVisualized)
     {
-        UpdateVisualization();
+        // Only update normal visualization, don't recreate the entire point cloud
+        if (AActor* Actor = PointCloudActor.Get())
+        {
+            // Clear existing normal lines if any
+            if (UInstancedStaticMeshComponent* NormalComponent = NormalLinesInstancedComponent.Get())
+            {
+                NormalComponent->ClearInstances();
+            }
+            
+            // Add normal visualization if requested and available
+            if (bShowNormals && bPointCloudHasNormals)
+            {
+                CreateNormalVisualization(Actor);
+            }
+        }
     }
 }
 
@@ -383,9 +466,36 @@ bool FVCCSimPanelPointCloud::LoadPointCloudFromFile(const FString& FilePath)
         PointCloudCount = LoadResult.PointCount;
         bPointCloudHasColors = LoadResult.bHasColors;
         bPointCloudHasNormals = LoadResult.bHasNormals;
+        
+        // Check point count and downsample if necessary
+        const int32 MaxPointsLimit = 100000;
+        if (PointCloudCount > MaxPointsLimit)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Point cloud has %d points, exceeding limit of %d. Downsampling..."), 
+                   PointCloudCount, MaxPointsLimit);
+            
+            // Perform uniform downsampling
+            TArray<FRatPoint> DownsampledPoints;
+            const int32 Step = FMath::Max(1, PointCloudCount / MaxPointsLimit);
+            
+            DownsampledPoints.Reserve(MaxPointsLimit);
+            for (int32 i = 0; i < PointCloudData.Num() && DownsampledPoints.Num() < MaxPointsLimit; i += Step)
+            {
+                DownsampledPoints.Add(PointCloudData[i]);
+            }
+            
+            // Replace original data with downsampled data
+            PointCloudData = MoveTemp(DownsampledPoints);
+            PointCloudCount = PointCloudData.Num();
+            
+            UE_LOG(LogTemp, Log, TEXT("Downsampled point cloud to %d points (%.1f%% reduction)"), 
+                   PointCloudCount,
+                   (1.0f - (float)PointCloudCount / (float)LoadResult.PointCount) * 100.0f);
+        }
+        
         bPointCloudLoaded = true;
 
-        UE_LOG(LogTemp, Warning, TEXT("Loaded point cloud: %d points, Colors: %s, Normals: %s"), 
+        UE_LOG(LogTemp, Log, TEXT("Final point cloud: %d points (Colors: %s, Normals: %s)"), 
             PointCloudCount,
             bPointCloudHasColors ? TEXT("Yes") : TEXT("No"),
             bPointCloudHasNormals ? TEXT("Yes") : TEXT("No"));
@@ -412,8 +522,6 @@ void FVCCSimPanelPointCloud::CreateColoredPointCloudVisualization(UWorld* World)
         return;
     }
 
-    UE_LOG(LogTemp, Log, TEXT("Creating colored point cloud visualization with %d points"), PointCloudData.Num());
-
     // Clear existing visualization
     ClearPointCloudVisualization();
 
@@ -428,23 +536,111 @@ void FVCCSimPanelPointCloud::CreateColoredPointCloudVisualization(UWorld* World)
         NewActor->SetActorLabel(TEXT("VCCSim_PointCloud"));
         PointCloudActor = NewActor;
 
-        // Add point cloud renderer component
-        UPointCloudRenderer* PointCloudRenderer = NewObject<UPointCloudRenderer>(NewActor);
+        // Ensure a valid root component exists
+        if (!NewActor->GetRootComponent())
+        {
+            USceneComponent* RootComp = NewObject<USceneComponent>(NewActor, TEXT("PointCloudRoot"));
+            NewActor->SetRootComponent(RootComp);
+            RootComp->RegisterComponent();
+        }
+
+        // Add and attach point cloud renderer component
+        UPointCloudRenderer* PointCloudRenderer = NewObject<UPointCloudRenderer>(NewActor, TEXT("PointCloudRenderer"));
         if (PointCloudRenderer)
         {
-            NewActor->AddInstanceComponent(PointCloudRenderer);
-            PointCloudRenderer->AttachToComponent(NewActor->GetRootComponent(), 
-                FAttachmentTransformRules::KeepWorldTransform);
+            PointCloudRenderer->SetupAttachment(NewActor->GetRootComponent());
             PointCloudRenderer->RegisterComponent();
 
             // Render the point cloud
             PointCloudRenderer->RenderPointCloud(PointCloudDataStruct, bShowColors, 1.0f);
             ParticlePointCloudRenderer = PointCloudRenderer;
 
-            UE_LOG(LogTemp, Warning, TEXT("Created colored point cloud visualization using particle system: %d points"), 
-                PointCloudData.Num());
+            UE_LOG(LogTemp, Log, TEXT("Created point cloud visualization: %d points"), PointCloudData.Num());
+
+            // Optionally render normals if available and requested
+            if (bShowNormals && bPointCloudHasNormals)
+            {
+                CreateNormalVisualization(NewActor);
+            }
         }
     }
+}
+
+
+void FVCCSimPanelPointCloud::CreateNormalVisualization(AActor* Owner)
+{
+    if (!Owner || PointCloudData.Num() == 0)
+    {
+        return;
+    }
+
+    // Create or reuse the normals ISM component
+    UInstancedStaticMeshComponent* NormISM = NormalLinesInstancedComponent.Get();
+    if (!NormISM)
+    {
+        NormISM = NewObject<UInstancedStaticMeshComponent>(Owner, TEXT("PointCloudNormalInstanced"));
+        if (!NormISM)
+        {
+            return;
+        }
+        NormISM->SetupAttachment(Owner->GetRootComponent());
+        NormISM->SetMobility(EComponentMobility::Movable);
+        NormISM->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        
+        // Disable shadows for normal visualization
+        NormISM->SetCastShadow(false);
+        NormISM->SetReceivesDecals(false);
+        NormISM->bCastDynamicShadow = false;
+        NormISM->bCastStaticShadow = false;
+
+        // Load a cylinder mesh aligned on Z axis
+        if (UStaticMesh* Cylinder = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder")))
+        {
+            NormISM->SetStaticMesh(Cylinder);
+        }
+
+        // Make it visible and register
+        NormISM->RegisterComponent();
+        NormalLinesInstancedComponent = NormISM;
+
+        // Set a simple dynamic material (e.g., blue)
+        UMaterialInterface* BaseMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
+        if (BaseMaterial)
+        {
+            UMaterialInstanceDynamic* MID = UMaterialInstanceDynamic::Create(BaseMaterial, NormISM);
+            if (MID)
+            {
+                MID->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.2f, 0.6f, 1.0f, 1.0f));
+                NormISM->SetMaterial(0, MID);
+            }
+        }
+    }
+    else
+    {
+        NormISM->ClearInstances();
+    }
+
+    // Build instances along normals
+    const float NormalLength = 25.0f; // cm
+    const float NormalRadiusScale = 0.01f; // relative to cylinder default
+    for (const FRatPoint& P : PointCloudData)
+    {
+        if (!P.bHasNormal || P.Normal.IsNearlyZero())
+        {
+            continue;
+        }
+        const FVector Dir = P.Normal.GetSafeNormal() * NormalLength;
+        const FVector Mid = P.Position + 0.5f * Dir;
+        const FQuat Rot = FRotationMatrix::MakeFromZ(Dir).ToQuat();
+        FTransform Xform;
+        Xform.SetLocation(Mid);
+        Xform.SetRotation(Rot);
+        // Cylinder height is ~100 units; scale Z accordingly
+        Xform.SetScale3D(FVector(NormalRadiusScale, NormalRadiusScale, FMath::Max(0.01f, NormalLength / 100.0f)));
+        NormISM->AddInstance(Xform);
+    }
+
+    NormISM->SetVisibility(true);
 }
 
 void FVCCSimPanelPointCloud::ClearPointCloudVisualization()
@@ -504,7 +700,15 @@ void FVCCSimPanelPointCloud::SetupPointCloudMaterial(UInstancedStaticMeshCompone
 
 UMaterialInterface* FVCCSimPanelPointCloud::LoadPointCloudMaterial()
 {
-    return LoadObject<UMaterialInterface>(nullptr, TEXT("/VCCSim/Materials/M_Point_Color"));
+    // Try VCCSim custom material first
+    UMaterialInterface* CustomMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/VCCSim/Materials/M_Point_Color"));
+    if (CustomMaterial)
+    {
+        return CustomMaterial;
+    }
+    
+    // Fallback to PointCloud material (same as UPointCloudRenderer)
+    return LoadObject<UMaterialInterface>(nullptr, TEXT("/VCCSim/Materials/M_PointCloud"));
 }
 
 void FVCCSimPanelPointCloud::CreateSimplePointCloudMaterial(UInstancedStaticMeshComponent* MeshComponent)
