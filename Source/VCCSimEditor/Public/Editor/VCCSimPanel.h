@@ -22,7 +22,6 @@
 #include "Widgets/SCompoundWidget.h"
 #include "Widgets/Layout/SExpandableArea.h"
 #include "Editor/PropertyEditor/Public/IDetailsView.h"
-#include "DataStruct_IO/PointCloud.h"
 #include "ProceduralMeshComponent.h"
 #include "Misc/Paths.h"
 #include "AssetRegistry/AssetData.h"
@@ -35,6 +34,7 @@ class ASceneAnalysisManager;
 class UStaticMeshComponent;
 class FTriangleSplattingManager;
 class FColmapManager;
+class FVCCSimPanelPointCloud;
 struct FCameraInfo;
 
 /**
@@ -107,7 +107,6 @@ private:
     bool bPoseConfigSectionExpanded = false;
     bool bCaptureSectionExpanded = false;
     bool bSceneAnalysisSectionExpanded = false;  
-    bool bPointCloudSectionExpanded = false;
     bool bTriangleSplattingSectionExpanded = true;
     
     // Selection UI
@@ -145,15 +144,6 @@ private:
     
     // Capture buttons
     TSharedPtr<class SButton> AutoCaptureButton;
-    
-    // Point cloud UI elements
-    TSharedPtr<SButton> LoadPointCloudButton;
-    TSharedPtr<SButton> VisualizePointCloudButton;
-    TSharedPtr<SCheckBox> ShowNormalsCheckBox;
-    TSharedPtr<SCheckBox> ShowColorsCheckBox;
-    TSharedPtr<STextBlock> PointCloudStatusText;
-    TSharedPtr<STextBlock> PointCloudColorStatusText;
-    TSharedPtr<STextBlock> PointCloudNormalStatusText;
 
     // Triangle Splatting UI elements (simplified with UE official asset picker)
     TSharedPtr<SEditableTextBox> GSImageDirectoryTextBox;
@@ -245,27 +235,6 @@ private:
     bool bCoverageVisualized = false;
     bool bAnalyzeComplexity = true;
     bool bComplexityVisualized = false;
-    
-    // Point cloud state
-    TArray<FRatPoint> PointCloudData;
-    TWeakObjectPtr<AActor> PointCloudActor;
-    TWeakObjectPtr<UInstancedStaticMeshComponent> PointCloudInstancedComponent;
-    TWeakObjectPtr<UInstancedStaticMeshComponent> NormalLinesInstancedComponent;
-    TWeakObjectPtr<class UPointCloudRenderer> ParticlePointCloudRenderer;
-    bool bPointCloudVisualized = false;
-    bool bPointCloudLoaded = false;
-    bool bPointCloudHasColors = false;
-    bool bPointCloudHasNormals = false;
-    bool bShowNormals = false;
-    bool bShowColors = false;
-    FString LoadedPointCloudPath;
-    int32 PointCloudCount = 0;
-    
-    // Point cloud settings
-    FLinearColor DefaultPointColor = FLinearColor(
-        1.0f, 0.5f, 0.0f, 1.0f);
-    float PointSize = .5f;
-    float NormalLength = 50.f;
 
     // Triangle Splatting state (simplified)
     FTriangleSplattingConfig GSConfig;
@@ -279,6 +248,9 @@ private:
     // COLMAP pipeline state
     bool bColmapPipelineInProgress = false;
     TSharedPtr<FColmapManager> ColmapManager;
+    
+    // Point Cloud functionality manager
+    TSharedPtr<FVCCSimPanelPointCloud> PointCloudManager;
     
     // TOptional attributes for Triangle Splatting SpinBox values
     TOptional<float> GSFOVValue;
@@ -359,21 +331,6 @@ private:
     FReply OnToggleComplexityVisualizationClicked();
 
     // ============================================================================
-    // POINT CLOUD OPERATIONS
-    // ============================================================================
-    
-    FReply OnLoadPointCloudClicked();
-    FReply OnTogglePointCloudVisualizationClicked();
-    void OnShowNormalsCheckboxChanged(ECheckBoxState NewState);
-    void OnShowColorsCheckboxChanged(ECheckBoxState NewState);
-    void CreateSpherePointCloudVisualization();
-    void CreateColoredPointCloudVisualization(UWorld* World);
-    void CreateNormalLinesVisualization();
-    void ClearPointCloudVisualization();
-    void UpdateNormalLinesVisibility();
-    void CreateBasicPointCloudMaterial(UProceduralMeshComponent* MeshComponent);
-
-    // ============================================================================
     // TRIANGLE SPLATTING OPERATIONS (implemented in VCCSimPanel_gs.cpp)
     // ============================================================================
     
@@ -446,8 +403,6 @@ private:
     TSharedRef<SWidget> CreatePoseActionButtons();
     TSharedRef<SWidget> CreateMovementButtons();
     TSharedRef<SWidget> CreateCaptureButtons();
-    TSharedRef<SWidget> CreatePointCloudButtons();
-    TSharedRef<SWidget> CreatePointCloudNormalControls();
     
     // Triangle Splatting UI creators (implemented in VCCSimPanel_gs.cpp)
     TSharedRef<SWidget> CreateGSDataInputSection();
@@ -504,11 +459,6 @@ private:
     UStaticMesh* LoadBasicSphereMesh();
     UStaticMesh* LoadBasicCylinderMesh();
     UStaticMesh* CreateFallbackSphereMesh();
-    // Material setup
-    void SetupPointCloudMaterial(UInstancedStaticMeshComponent* MeshComponent);
-    void SetupNormalLinesMaterial(UInstancedStaticMeshComponent* MeshComponent);
-    UMaterialInterface* LoadPointCloudMaterial();
-    void CreateSimplePointCloudMaterial(UInstancedStaticMeshComponent* MeshComponent);
     static FString GetTimestampedFilename();
 };
 

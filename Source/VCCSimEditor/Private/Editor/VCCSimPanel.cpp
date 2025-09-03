@@ -16,6 +16,7 @@
 */
 
 #include "Editor/VCCSimPanel.h"
+#include "Editor/Panels/VCCSimPanelPointCloud.h"
 #include "Engine/Selection.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Layout/SBox.h"
@@ -95,6 +96,13 @@ SVCCSimPanel::~SVCCSimPanel()
         SceneAnalysisManager->InterfaceClearComplexityVisualization();
     }
 
+    // Clean up Point Cloud manager
+    if (PointCloudManager.IsValid())
+    {
+        PointCloudManager->Cleanup();
+        PointCloudManager.Reset();
+    }
+    
     // Clean up Triangle Splatting resources
     if (GSTrainingManager.IsValid() && GSTrainingManager->IsTrainingInProgress())
     {
