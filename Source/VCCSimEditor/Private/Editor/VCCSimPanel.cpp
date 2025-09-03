@@ -1133,6 +1133,12 @@ void SVCCSimPanel::StartAutoCapture()
                 // Stop the timer if auto-capture is cancelled or FlashPawn is invalid
                 GEditor->GetTimerManager()->ClearTimer(AutoCaptureTimerHandle);
                 bAutoCaptureInProgress = false;
+                
+                // Reset button style to original color
+                if (AutoCaptureButton.IsValid())
+                {
+                    AutoCaptureButton->SetButtonStyle(&FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Primary"));
+                }
                 return;
             }
             
@@ -1148,6 +1154,12 @@ void SVCCSimPanel::StartAutoCapture()
                     SaveDirectory.Empty(); // Reset for next capture session
                     bAutoCaptureInProgress = false;
                     GEditor->GetTimerManager()->ClearTimer(AutoCaptureTimerHandle);
+                    
+                    // Reset button style to original color
+                    if (AutoCaptureButton.IsValid())
+                    {
+                        AutoCaptureButton->SetButtonStyle(&FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Primary"));
+                    }
                 }
             }
             else if (*JobNum == 0)

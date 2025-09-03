@@ -150,6 +150,7 @@ private:
     TSharedPtr<SButton> LoadPointCloudButton;
     TSharedPtr<SButton> VisualizePointCloudButton;
     TSharedPtr<SCheckBox> ShowNormalsCheckBox;
+    TSharedPtr<SCheckBox> ShowColorsCheckBox;
     TSharedPtr<STextBlock> PointCloudStatusText;
     TSharedPtr<STextBlock> PointCloudColorStatusText;
     TSharedPtr<STextBlock> PointCloudNormalStatusText;
@@ -250,16 +251,19 @@ private:
     TWeakObjectPtr<AActor> PointCloudActor;
     TWeakObjectPtr<UInstancedStaticMeshComponent> PointCloudInstancedComponent;
     TWeakObjectPtr<UInstancedStaticMeshComponent> NormalLinesInstancedComponent;
+    TWeakObjectPtr<class UPointCloudRenderer> ParticlePointCloudRenderer;
     bool bPointCloudVisualized = false;
     bool bPointCloudLoaded = false;
     bool bPointCloudHasColors = false;
     bool bPointCloudHasNormals = false;
     bool bShowNormals = false;
+    bool bShowColors = false;
     FString LoadedPointCloudPath;
     int32 PointCloudCount = 0;
     
     // Point cloud settings
-    FLinearColor DefaultPointColor = FLinearColor(1.0f, 0.5f, 0.0f, 1.0f);
+    FLinearColor DefaultPointColor = FLinearColor(
+        1.0f, 0.5f, 0.0f, 1.0f);
     float PointSize = .5f;
     float NormalLength = 50.f;
 
@@ -361,7 +365,9 @@ private:
     FReply OnLoadPointCloudClicked();
     FReply OnTogglePointCloudVisualizationClicked();
     void OnShowNormalsCheckboxChanged(ECheckBoxState NewState);
+    void OnShowColorsCheckboxChanged(ECheckBoxState NewState);
     void CreateSpherePointCloudVisualization();
+    void CreateColoredPointCloudVisualization(UWorld* World);
     void CreateNormalLinesVisualization();
     void ClearPointCloudVisualization();
     void UpdateNormalLinesVisibility();

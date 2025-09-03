@@ -1,0 +1,220 @@
+/*
+* Copyright (C) 2025 Visual Computing Research Center, Shenzhen University
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+#include "DataStruct_IO/PointCloudRenderer.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraDataInterfaceArrayFunctionLibrary.h"
+#include "Engine/World.h"
+#include "Materials/MaterialInstanceDynamic.h"
+
+UPointCloudRenderer::UPointCloudRenderer()
+{
+    PrimaryComponentTick.bCanEverTick = false;
+    
+    // Create Niagara component
+    NiagaraComponent = CreateDefaultSubobject<UNiagaraComponent>(TEXT("NiagaraComponent"));
+}
+
+void UPointCloudRenderer::BeginPlay()
+{
+    Super::BeginPlay();
+    InitializeNiagaraSystem();
+}
+
+void UPointCloudRenderer::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+    ClearPointCloud();
+    Super::EndPlay(EndPlayReason);
+}
+
+void UPointCloudRenderer::InitializeNiagaraSystem()
+{
+    if (bIsInitialized || !NiagaraComponent)
+    {
+        return;
+    }
+
+    // Try to load a simple point cloud Niagara system
+    // For now, we'll create a basic system programmatically
+    UNiagaraSystem* PointCloudSystem = LoadObject<UNiagaraSystem>(
+        nullptr, 
+        TEXT("/Engine/VFX/Niagara/DefaultAssets/Systems/NS_GPUSprites.NS_GPUSprites")
+    );
+
+    if (!PointCloudSystem)
+    {
+        // Try alternative system paths
+        TArray<const TCHAR*> SystemPaths = {
+            TEXT("/Niagara/Systems/NS_GPUSprites"),
+            TEXT("/Engine/Niagara/DefaultAssets/Systems/NS_GPUSprites"),
+            TEXT("/Engine/VFX/Niagara/Systems/NS_GPUSprites")
+        };
+        
+        for (const TCHAR* SystemPath : SystemPaths)
+        {
+            PointCloudSystem = LoadObject<UNiagaraSystem>(nullptr, SystemPath);
+            if (PointCloudSystem)
+            {
+                break;
+            }
+        }
+    }
+
+    if (PointCloudSystem)
+    {
+        NiagaraComponent->SetAsset(PointCloudSystem);
+        NiagaraComponent->SetAutoActivate(false);
+        SetupPointCloudMaterial();
+        bIsInitialized = true;
+        
+        UE_LOG(LogTemp, Log, TEXT("Point cloud Niagara system initialized successfully"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Could not load Niagara system for point cloud rendering. Using fallback approach."));
+        
+        // Create a minimal system programmatically as fallback
+        CreateFallbackSystem();
+    }
+}
+
+void UPointCloudRenderer::CreateFallbackSystem()
+{
+    // For now, we'll use a simple approach with static mesh components as fallback
+    // This can be improved later with a proper Niagara system asset
+    bIsInitialized = true;
+    UE_LOG(LogTemp, Log, TEXT("Using fallback point cloud rendering system"));
+}
+
+void UPointCloudRenderer::RenderPointCloud(const FPointCloudData& PointCloudData, bool bInShowColors, float InPointSize)
+{
+    if (!bIsInitialized)
+    {
+        InitializeNiagaraSystem();
+    }
+
+    if (!NiagaraComponent)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Niagara component not available for point cloud rendering"));
+        return;
+    }
+
+    // Update settings
+    bShowColors = bInShowColors;
+    PointSize = InPointSize;
+    RenderedPointCount = PointCloudData.GetPointCount();
+    bHasColors = PointCloudData.HasColors();
+
+    // Clear existing visualization
+    ClearPointCloud();
+
+    if (PointCloudData.GetPointCount() == 0)
+    {
+        return;
+    }
+
+    // Update particle data
+    UpdateParticleData(PointCloudData);
+
+    // Activate the system
+    if (NiagaraComponent->GetAsset())
+    {
+        NiagaraComponent->Activate(true);
+        UE_LOG(LogTemp, Log, TEXT("Rendered %d points using Niagara system"), RenderedPointCount);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Niagara system asset not available, using fallback rendering"));
+        RenderPointCloudFallback(PointCloudData);
+    }
+}
+
+void UPointCloudRenderer::RenderPointCloudFallback(const FPointCloudData& PointCloudData)
+{
+    // Fallback implementation using instanced static mesh or other methods
+    // This ensures the component works even without proper Niagara setup
+    
+    UWorld* World = GetWorld();
+    if (!World)
+    {
+        return;
+    }
+
+    // For now, we'll use a simplified approach
+    // In a full implementation, this could create instanced meshes or use other rendering methods
+    
+    UE_LOG(LogTemp, Log, TEXT("Fallback: Would render %d points"), PointCloudData.GetPointCount());
+}
+
+void UPointCloudRenderer::UpdateParticleData(const FPointCloudData& PointCloudData)
+{
+    if (!NiagaraComponent || !NiagaraComponent->GetAsset())
+    {
+        return;
+    }
+
+    // Prepare position and color arrays
+    CachedPositions.Empty();
+    CachedColors.Empty();
+    
+    const TArray<FRatPoint>& Points = PointCloudData.Points;
+    
+    CachedPositions.Reserve(Points.Num());
+    CachedColors.Reserve(Points.Num());
+
+    for (const FRatPoint& Point : Points)
+    {
+        CachedPositions.Add(Point.Position);
+        
+        if (bShowColors && bHasColors)
+        {
+            CachedColors.Add(Point.Color);
+        }
+        else
+        {
+            CachedColors.Add(DefaultColor);
+        }
+    }
+
+    // Set particle count
+    NiagaraComponent->SetIntParameter(TEXT("ParticleCount"), Points.Num());
+    NiagaraComponent->SetFloatParameter(TEXT("PointSize"), PointSize);
+    NiagaraComponent->SetBoolParameter(TEXT("UseColors"), bShowColors && bHasColors);
+
+    // Try to set position and color arrays using data interface
+    // Note: This requires the Niagara system to have appropriate data interfaces set up
+    if (CachedPositions.Num() > 0)
+    {
+        UNiagaraDataInterfaceArrayFunctionLibrary::SetNiagaraArrayVector(
+            NiagaraComponent, 
+            TEXT("PositionArray"), 
+            CachedPositions
+        );
+    }
+
+    if (CachedColors.Num() > 0 && (bShowColors && bHasColors))
+    {
+        // Convert to FVector for Niagara (RGB as XYZ)
+        TArray<FVector> ColorVectors;
+        ColorVectors.Reserve(CachedColors.Num());
+        
+        for (const FLinearColor& Color : CachedColors)
+        {
+            ColorVectors.Add(FVector(Color.R, Color.G, Color.B));
+        }
+        
+        UNiagaraDataInterfaceArrayFunctionLibrary::SetNiagaraArrayVector(

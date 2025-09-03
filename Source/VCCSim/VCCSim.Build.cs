@@ -39,7 +39,11 @@ public class VCCSim : ModuleRules
                 "MovieScene", 
                 "EnhancedInput", 
                 "ChaosVehicles", 
-                "PhysicsCore"
+                "PhysicsCore",
+                "Niagara",
+                "NiagaraCore",
+                "NiagaraShader",
+                "AssetRegistry"
             }
         );
         

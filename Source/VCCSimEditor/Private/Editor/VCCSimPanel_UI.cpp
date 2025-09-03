@@ -39,6 +39,7 @@
 #include "EngineUtils.h"
 #include "MaterialDomain.h"
 #include "DataStruct_IO/IOUtils.h"
+#include "DataStruct_IO/PointCloudRenderer.h"
 
 // ============================================================================
 // MAIN CONSTRUCTION
@@ -1038,6 +1039,9 @@ FReply SVCCSimPanel::OnLoadPointCloudClicked()
                 PointCloudCount = LoadResult.PointCount;
                 LoadedPointCloudPath = SelectedFile;
                 
+                // Default to not show colors for better performance
+                bShowColors = false;
+                
                 // Clear any existing visualization
                 if (bPointCloudVisualized)
                 {
@@ -1108,6 +1112,22 @@ void SVCCSimPanel::OnShowNormalsCheckboxChanged(ECheckBoxState NewState)
     UpdateNormalLinesVisibility();
 }
 
+void SVCCSimPanel::OnShowColorsCheckboxChanged(ECheckBoxState NewState)
+{
+    bShowColors = (NewState == ECheckBoxState::Checked);
+    
+    // If we're using particle system renderer, just update the color setting
+    if (ParticlePointCloudRenderer.IsValid())
+    {
+        ParticlePointCloudRenderer->SetShowColors(bShowColors);
+    }
+    // Otherwise re-create visualization with new color settings
+    else if (bPointCloudVisualized && bPointCloudLoaded)
+    {
+        CreateSpherePointCloudVisualization();
+    }
+}
+
 void SVCCSimPanel::CreateSpherePointCloudVisualization()
 {
     if (PointCloudData.Num() == 0)
@@ -1124,6 +1144,15 @@ void SVCCSimPanel::CreateSpherePointCloudVisualization()
     // Clear existing visualization
     ClearPointCloudVisualization();
     
+    // For colored point clouds, use debug draw functions only if user enables colors
+    // Otherwise use instanced mesh for better performance
+    if (bPointCloudHasColors && bShowColors)
+    {
+        CreateColoredPointCloudVisualization(World);
+        return;
+    }
+    
+    // For non-colored point clouds, use instanced mesh for better performance
     // Create new actor for point cloud
     AActor* NewActor = World->SpawnActor<AActor>();
     NewActor->SetActorLabel(TEXT("InstancedPointCloud_Visualization"));
@@ -1133,6 +1162,10 @@ void SVCCSimPanel::CreateSpherePointCloudVisualization()
     UInstancedStaticMeshComponent* InstancedMeshComp =
         NewObject<UInstancedStaticMeshComponent>(NewActor);
     NewActor->SetRootComponent(InstancedMeshComp);
+    
+    // Configure custom data for per-instance colors (RGBA = 4 floats)
+    InstancedMeshComp->NumCustomDataFloats = 4;
+    
     PointCloudInstancedComponent = InstancedMeshComp;
     
     // Load the basic sphere mesh from engine content
@@ -1189,6 +1222,52 @@ void SVCCSimPanel::CreateSpherePointCloudVisualization()
     UE_LOG(LogTemp, Warning, TEXT("Created instanced point cloud visualization with %d points"), PointCloudData.Num());
 }
 
+void SVCCSimPanel::CreateColoredPointCloudVisualization(UWorld* World)
+{
+    if (!World || PointCloudData.Num() == 0)
+    {
+        return;
+    }
+    
+    // Create new actor for colored point cloud with particle system
+    AActor* NewActor = World->SpawnActor<AActor>();
+    NewActor->SetActorLabel(TEXT("ParticlePointCloud_Visualization"));
+    PointCloudActor = NewActor;
+    
+    // Create the particle-based point cloud renderer component
+    UPointCloudRenderer* Renderer = NewObject<UPointCloudRenderer>(NewActor);
+    Renderer->AttachToComponent(NewActor->GetRootComponent(), FAttachmentTransformRules::KeepWorldTransform);
+    Renderer->RegisterComponent();
+    ParticlePointCloudRenderer = Renderer;
+    
+    // Convert TArray<FRatPoint> to FPointCloudData
+    FPointCloudData TempPointCloudData;
+    for (const FRatPoint& Point : PointCloudData)
+    {
+        TempPointCloudData.AddPoint(Point);
+    }
+    
+    // Simplify point cloud if needed (particle systems can handle more points but still good to limit)
+    FPointCloudData SimplifiedData = TempPointCloudData.SimplifyPointCloud(100000); // More points allowed with particles
+    
+    // Render using particle system
+    Renderer->RenderPointCloud(SimplifiedData, bShowColors, PointSize);
+    
+    if (Renderer->IsNiagaraAvailable())
+    {
+        UE_LOG(LogTemp, Log, TEXT("Created colored point cloud visualization using particle system: %d points"), SimplifiedData.GetPointCount());
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Niagara system not available; using fallback visualization: %d points"), SimplifiedData.GetPointCount());
+    }
+    
+    // Create normal lines if normals are available
+    if (bPointCloudHasNormals)
+    {
+        CreateNormalLinesVisualization();
+    }
+}
 
 void SVCCSimPanel::CreateNormalLinesVisualization()
 {
@@ -1202,6 +1281,10 @@ void SVCCSimPanel::CreateNormalLinesVisualization()
     NormalLinesInstancedComp->AttachToComponent(
         PointCloudActor->GetRootComponent(), 
         FAttachmentTransformRules::KeepWorldTransform);
+    
+    // Configure custom data for per-instance colors (RGBA = 4 floats)
+    NormalLinesInstancedComp->NumCustomDataFloats = 4;
+    
     NormalLinesInstancedComponent = NormalLinesInstancedComp;
     
     // Load or create a basic cylinder mesh for lines
@@ -1268,6 +1351,14 @@ void SVCCSimPanel::UpdateNormalLinesVisibility()
 
 void SVCCSimPanel::ClearPointCloudVisualization()
 {
+    // Clear particle system renderer
+    if (ParticlePointCloudRenderer.IsValid())
+    {
+        ParticlePointCloudRenderer->ClearPointCloud();
+        ParticlePointCloudRenderer.Reset();
+    }
+    
+    // Clear instanced mesh actor
     if (PointCloudActor.IsValid())
     {
         PointCloudActor->Destroy();
@@ -1275,6 +1366,13 @@ void SVCCSimPanel::ClearPointCloudVisualization()
     }
     PointCloudInstancedComponent.Reset();
     NormalLinesInstancedComponent.Reset();
+    
+    // Clear debug spheres from the world (for backward compatibility)
+    UWorld* World = GEditor->GetEditorWorldContext().World();
+    if (World)
+    {
+        FlushPersistentDebugLines(World);
+    }
 }
 
 void SVCCSimPanel::CreateBasicPointCloudMaterial(UProceduralMeshComponent* MeshComponent)
@@ -1625,6 +1723,28 @@ TSharedRef<SWidget> SVCCSimPanel::CreatePointCloudNormalControls()
                 .OnCheckStateChanged(this, &SVCCSimPanel::OnShowNormalsCheckboxChanged)
                 .IsEnabled_Lambda([this]() { return bPointCloudLoaded
                     && bPointCloudHasNormals && bPointCloudVisualized; })
+            ]
+        )
+    ]
+
+    +SHorizontalBox::Slot()
+    .AutoWidth()
+    .VAlign(VAlign_Center)
+    .Padding(FMargin(0, 0, 8, 0))
+    [
+        CreatePropertyRow(
+            "Show Colors",
+            SNew(SHorizontalBox)
+            +SHorizontalBox::Slot()
+            .AutoWidth()
+            .VAlign(VAlign_Center)
+            [
+                SAssignNew(ShowColorsCheckBox, SCheckBox)
+                .IsChecked_Lambda([this]() { return bShowColors ?
+                    ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+                .OnCheckStateChanged(this, &SVCCSimPanel::OnShowColorsCheckboxChanged)
+                .IsEnabled_Lambda([this]() { return bPointCloudLoaded
+                    && bPointCloudHasColors && bPointCloudVisualized; })
             ]
         )
     ];
@@ -2334,17 +2454,44 @@ UMaterialInterface* SVCCSimPanel::LoadPointCloudMaterial()
 
 void SVCCSimPanel::CreateSimplePointCloudMaterial(UInstancedStaticMeshComponent* MeshComponent)
 {
-    UMaterial* BaseMaterial = UMaterial::GetDefaultMaterial(MD_Surface);
-    if (BaseMaterial)
+    if (bPointCloudHasColors)
     {
-        UMaterialInstanceDynamic* DynamicMaterial = UMaterialInstanceDynamic::Create(BaseMaterial, nullptr);
-        if (DynamicMaterial)
+        // For colored point clouds, we need to use an approach that works with UE's rendering
+        // Since custom data requires special material graph setup, we'll use individual static mesh components
+        // or switch to using debug draw functions for colored points
+        
+        // For now, use a bright base color to indicate that colors should be visible
+        UMaterial* BaseMaterial = UMaterial::GetDefaultMaterial(MD_Surface);
+        if (BaseMaterial)
         {
-            FLinearColor MaterialColor = bPointCloudHasColors ? FLinearColor::White : DefaultPointColor;
-            DynamicMaterial->SetVectorParameterValue(FName("BaseColor"), MaterialColor);
-            DynamicMaterial->SetScalarParameterValue(FName("Roughness"), 0.8f);
-            DynamicMaterial->SetScalarParameterValue(FName("Metallic"), 0.0f);
-            MeshComponent->SetMaterial(0, DynamicMaterial);
+            UMaterialInstanceDynamic* DynamicMaterial = UMaterialInstanceDynamic::Create(BaseMaterial, nullptr);
+            if (DynamicMaterial)
+            {
+                // Use a distinctive color to show that colored points are loaded
+                DynamicMaterial->SetVectorParameterValue(FName("BaseColor"), FLinearColor::Yellow);
+                DynamicMaterial->SetScalarParameterValue(FName("Roughness"), 0.5f);
+                DynamicMaterial->SetScalarParameterValue(FName("Metallic"), 0.0f);
+                MeshComponent->SetMaterial(0, DynamicMaterial);
+                
+                // Log a message to inform user about the limitation
+                UE_LOG(LogTemp, Warning, TEXT("Point cloud has colors but instanced rendering doesn't support per-instance colors with basic materials. Points will be shown in yellow. Consider using individual point rendering for colored visualization."));
+            }
+        }
+    }
+    else
+    {
+        // Fallback to basic material with default color
+        UMaterial* BaseMaterial = UMaterial::GetDefaultMaterial(MD_Surface);
+        if (BaseMaterial)
+        {
+            UMaterialInstanceDynamic* DynamicMaterial = UMaterialInstanceDynamic::Create(BaseMaterial, nullptr);
+            if (DynamicMaterial)
+            {
+                DynamicMaterial->SetVectorParameterValue(FName("BaseColor"), DefaultPointColor);
+                DynamicMaterial->SetScalarParameterValue(FName("Roughness"), 0.8f);
+                DynamicMaterial->SetScalarParameterValue(FName("Metallic"), 0.0f);
+                MeshComponent->SetMaterial(0, DynamicMaterial);
+            }
         }
     }
 }

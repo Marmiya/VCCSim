@@ -150,6 +150,23 @@ public:
     }
     
     /**
+     * Check if the point cloud contains non-default vertex colors
+     * Treats pure white as the default (no color) value.
+     */
+    bool HasColors() const
+    {
+        const FLinearColor DefaultColor = FLinearColor::White;
+        for (const FRatPoint& Point : Points)
+        {
+            if (!Point.Color.Equals(DefaultColor))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    /**
      * Get arrays of positions, colors and normals (for compatibility)
      */
     void GetArrays(TArray<FVector>& OutPositions, TArray<FLinearColor>& OutColors, 
@@ -166,6 +183,38 @@ public:
             OutColors.Add(Point.Color);
             OutNormals.Add(Point.Normal);
         }
+    }
+    
+    /**
+     * Simplify point cloud by uniform sampling to avoid rendering performance issues
+     * @param MaxPoints Maximum number of points to keep
+     * @return New FPointCloudData with simplified points
+     */
+    FPointCloudData SimplifyPointCloud(int32 MaxPoints = 50000) const
+    {
+        if (Points.Num() <= MaxPoints)
+        {
+            // No simplification needed
+            return *this;
+        }
+        
+        FPointCloudData SimplifiedData;
+        SimplifiedData.Reserve(MaxPoints);
+        
+        // Use uniform sampling to select points
+        const int32 Step = FMath::Max(1, Points.Num() / MaxPoints);
+        
+        // Deterministic sampling with fixed step
+        for (int32 i = 0; i < Points.Num() && SimplifiedData.GetPointCount() < MaxPoints; i += Step)
+        {
+            SimplifiedData.AddPoint(Points[i]);
+        }
+        
+        UE_LOG(LogTemp, Warning, TEXT("Simplified point cloud from %d to %d points (%.1f%% reduction)"), 
+               Points.Num(), SimplifiedData.GetPointCount(), 
+               (1.0f - (float)SimplifiedData.GetPointCount() / (float)Points.Num()) * 100.0f);
+        
+        return SimplifiedData;
     }
 };
 
