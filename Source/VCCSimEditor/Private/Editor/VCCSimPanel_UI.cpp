@@ -17,6 +17,7 @@
 
 #include "Editor/VCCSimPanel.h"
 #include "Editor/Panels/VCCSimPanelPointCloud.h"
+#include "Editor/Panels/VCCSimPanelSelection.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
@@ -82,6 +83,10 @@ void SVCCSimPanel::Construct(const FArguments& InArgs)
     PointCloudManager = MakeShared<FVCCSimPanelPointCloud>();
     PointCloudManager->Initialize();
     
+    // Initialize Selection manager
+    SelectionManager = MakeShared<FVCCSimPanelSelection>();
+    SelectionManager->Initialize();
+    
     // Initialize Triangle Splatting manager
     InitializeGSManager();
     
@@ -92,7 +97,10 @@ void SVCCSimPanel::Construct(const FArguments& InArgs)
     CreateMainLayout();
     
     // Auto-select FlashPawn if available in the scene (after UI is created)
-    AutoSelectFlashPawn();
+    if (SelectionManager.IsValid())
+    {
+        SelectionManager->AutoSelectFlashPawn();
+    }
 }
 
 void SVCCSimPanel::LoadLogoImages()
@@ -166,25 +174,12 @@ void SVCCSimPanel::CreateMainLayout()
                     CreateLogoPanel()
                 ]
                 
-                // Flash Pawn section
+                // Selection section (Flash Pawn, Camera, Target Object)
                 +SVerticalBox::Slot()
                 .AutoHeight()
                 [
-                    CreateCollapsibleSection("Flash Pawn", CreatePawnSelectPanel(), bFlashPawnSectionExpanded)
-                ]
-                
-                // Camera section
-                +SVerticalBox::Slot()
-                .AutoHeight()
-                [
-                    CreateCollapsibleSection("Camera Selection", CreateCameraSelectPanel(), bCameraSectionExpanded)
-                ]
-                
-                // Target section
-                +SVerticalBox::Slot()
-                .AutoHeight()
-                [
-                    CreateCollapsibleSection("Target Object", CreateTargetSelectPanel(), bTargetSectionExpanded)
+                    SelectionManager.IsValid() ? SelectionManager->CreateSelectionPanel() : 
+                    SNew(STextBlock).Text(FText::FromString("Selection Manager not initialized"))
                 ]
                 
                 // Pose configuration
@@ -352,270 +347,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreateLogoPanel()
 // UI PANEL CREATION
 // ============================================================================
 
-TSharedRef<SWidget> SVCCSimPanel::CreatePawnSelectPanel()
-{
-    return SNew(SVerticalBox)
-    +SVerticalBox::Slot()
-    .AutoHeight()
-    [
-        CreateSectionHeader("Flash Pawn")
-    ]
-    +SVerticalBox::Slot()
-    .AutoHeight()
-    [
-        CreateSectionContent(
-            SNew(SVerticalBox)
-            +SVerticalBox::Slot()
-            .AutoHeight()
-            .Padding(FMargin(0, 4, 0, 4))
-            [
-                CreatePropertyRow(
-                    "Current",
-                    SNew(SHorizontalBox)
-                    +SHorizontalBox::Slot()
-                    .FillWidth(1.0f)
-                    [
-                        SNew(SBorder)
-                        .Padding(4)
-                        [
-                            SAssignNew(SelectedFlashPawnText, STextBlock)
-                            .Text(FText::FromString("None selected"))
-                        ]
-                    ]
-                    +SHorizontalBox::Slot()
-                    .AutoWidth()
-                    .VAlign(VAlign_Center)
-                    .Padding(FMargin(8, 0, 4, 0))
-                    [
-                        SAssignNew(SelectFlashPawnToggle, SCheckBox)
-                        .IsChecked(bSelectingFlashPawn ? ECheckBoxState::Checked : ECheckBoxState::Unchecked)
-                        .OnCheckStateChanged(this, &SVCCSimPanel::OnSelectFlashPawnToggleChanged)
-                    ]
-                    +SHorizontalBox::Slot()
-                    .AutoWidth()
-                    .VAlign(VAlign_Center)
-                    [
-                        SNew(STextBlock)
-                        .Text(FText::FromString("Click to select"))
-                    ]
-                )
-            ]
-        )
-    ];
-}
 
-TSharedRef<SWidget> SVCCSimPanel::CreateTargetSelectPanel()
-{
-    return SNew(SVerticalBox)
-    +SVerticalBox::Slot()
-    .AutoHeight()
-    [
-        CreateSectionHeader("Select Target Object")
-    ]
-    +SVerticalBox::Slot()
-    .AutoHeight()
-    [
-        CreateSectionContent(
-            SNew(SVerticalBox)
-            +SVerticalBox::Slot()
-            .AutoHeight()
-            .Padding(FMargin(0, 4, 0, 4))
-            [
-                CreatePropertyRow(
-                    "Current",
-                    SNew(SHorizontalBox)
-                    +SHorizontalBox::Slot()
-                    .FillWidth(1.0f)
-                    [
-                        SNew(SBorder)
-                        .Padding(4)
-                        [
-                            SAssignNew(SelectedTargetObjectText, STextBlock)
-                            .Text(FText::FromString("None selected"))
-                        ]
-                    ]
-                    +SHorizontalBox::Slot()
-                    .AutoWidth()
-                    .VAlign(VAlign_Center)
-                    .Padding(FMargin(8, 0, 4, 0))
-                    [
-                        SAssignNew(SelectTargetToggle, SCheckBox)
-                        .IsChecked(bSelectingTarget ? ECheckBoxState::Checked : ECheckBoxState::Unchecked)
-                        .OnCheckStateChanged(this, &SVCCSimPanel::OnSelectTargetToggleChanged)
-                    ]
-                    +SHorizontalBox::Slot()
-                    .AutoWidth()
-                    .VAlign(VAlign_Center)
-                    [
-                        SNew(STextBlock)
-                        .Text(FText::FromString("Click to select"))
-                    ]
-                )
-            ]
-        )
-    ];
-}
-
-TSharedRef<SWidget> SVCCSimPanel::CreateCameraSelectPanel()
-{
-    return SNew(SVerticalBox)
-    +SVerticalBox::Slot()
-    .AutoHeight()
-    [
-        CreateSectionHeader("Camera Selection")
-    ]
-    +SVerticalBox::Slot()
-    .AutoHeight()
-    [
-        CreateSectionContent(
-            SNew(SVerticalBox)
-            // Camera Availability Row
-            +SVerticalBox::Slot()
-            .AutoHeight()
-            .Padding(FMargin(0, 0, 0, 8))
-            [
-                SNew(SVerticalBox)
-                +SVerticalBox::Slot()
-                .AutoHeight()
-                .Padding(FMargin(0, 4, 0, 4))
-                [
-                    SNew(STextBlock)
-                    .Text(FText::FromString("Available & Active Cameras:"))
-                    .Font(FAppStyle::GetFontStyle("PropertyWindow.BoldFont"))
-                ]
-                +SVerticalBox::Slot()
-                .AutoHeight()
-                [
-                    CreateCameraStatusRow()
-                ]
-            ]
-            // Update button
-            +SVerticalBox::Slot()
-            .AutoHeight()
-            .HAlign(HAlign_Right)
-            [
-                SNew(SButton)
-                .ButtonStyle(FAppStyle::Get(), "FlatButton.Default")
-                .Text(FText::FromString("Update Cameras"))
-                .ContentPadding(FMargin(6, 2))
-                .OnClicked_Lambda([this]() {
-                    UpdateActiveCameras();
-                    return FReply::Handled();
-                })
-                .IsEnabled_Lambda([this]() {
-                    return SelectedFlashPawn.IsValid() && (bHasRGBCamera || bHasDepthCamera || bHasSegmentationCamera);
-                })
-            ]
-        )
-    ];
-}
-
-TSharedRef<SWidget> SVCCSimPanel::CreateCameraStatusRow()
-{
-    return SNew(SHorizontalBox)
-    
-    // RGB Camera
-    +SHorizontalBox::Slot()
-    .MaxWidth(100)
-    .HAlign(HAlign_Center)
-    .Padding(FMargin(0, 0, 2, 0))
-    [
-        CreateCameraStatusBox("RGB", 
-            [this]() { return bHasRGBCamera; },
-            [this]() { return bUseRGBCamera ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; },
-            [this](ECheckBoxState NewState) { OnRGBCameraCheckboxChanged(NewState); })
-    ]
-    
-    // Depth Camera
-    +SHorizontalBox::Slot()
-    .MaxWidth(100)
-    .HAlign(HAlign_Center)
-    .Padding(FMargin(0, 0, 2, 0))
-    [
-        CreateCameraStatusBox("Depth",
-            [this]() { return bHasDepthCamera; },
-            [this]() { return bUseDepthCamera ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; },
-            [this](ECheckBoxState NewState) { OnDepthCameraCheckboxChanged(NewState); })
-    ]
-    
-    // Normal Camera
-    +SHorizontalBox::Slot()
-    .MaxWidth(100)
-    .HAlign(HAlign_Center)
-    .Padding(FMargin(0, 0, 2, 0))
-    [
-        CreateCameraStatusBox("Normal",
-            [this]() { return bHasNormalCamera; },
-            [this]() { return bUseNormalCamera ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; },
-            [this](ECheckBoxState NewState) { OnNormalCameraCheckboxChanged(NewState); })
-    ]
-    
-    // Segmentation Camera
-    +SHorizontalBox::Slot()
-    .MaxWidth(120)
-    .HAlign(HAlign_Center)
-    .Padding(FMargin(0, 0, 2, 0))
-    [
-        CreateCameraStatusBox("Segmentation",
-            [this]() { return bHasSegmentationCamera; },
-            [this]() { return bUseSegmentationCamera ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; },
-            [this](ECheckBoxState NewState) { OnSegmentationCameraCheckboxChanged(NewState); })
-    ];
-}
-
-TSharedRef<SWidget> SVCCSimPanel::CreateCameraStatusBox(
-    const FString& CameraName,
-    TFunction<bool()> HasCameraFunc,
-    TFunction<ECheckBoxState()> CheckBoxStateFunc,
-    TFunction<void(ECheckBoxState)> OnCheckBoxChangedFunc)
-{
-    return SNew(SBorder)
-        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
-        .BorderBackgroundColor(FColor(5,5, 5, 255))
-        .Padding(2, 0)
-        .HAlign(HAlign_Center)
-        [
-            SNew(SHorizontalBox)
-            +SHorizontalBox::Slot()
-            .AutoWidth()
-            .HAlign(HAlign_Left)
-            .VAlign(VAlign_Center)
-            .Padding(FMargin(0, 0, 4, 0))
-            [
-                SNew(SImage)
-                .Image_Lambda([HasCameraFunc]() {
-                    return HasCameraFunc() ? 
-                        FAppStyle::GetBrush("Icons.Checkmark") : 
-                        FAppStyle::GetBrush("Icons.X");
-                })
-                .ColorAndOpacity_Lambda([HasCameraFunc]() {
-                    return HasCameraFunc() ? 
-                        FColor(10, 200, 10) : 
-                        FColor(200, 10, 10);
-                })
-            ]
-            +SHorizontalBox::Slot()
-            .AutoWidth()
-            .HAlign(HAlign_Center)
-            .VAlign(VAlign_Center)
-            .Padding(FMargin(0, 0, 2, 0))
-            [
-                SNew(SCheckBox)
-                .IsChecked_Lambda([CheckBoxStateFunc]() { return CheckBoxStateFunc(); })
-                .OnCheckStateChanged_Lambda([OnCheckBoxChangedFunc](ECheckBoxState NewState) { OnCheckBoxChangedFunc(NewState); })
-                .IsEnabled_Lambda([HasCameraFunc]() { return HasCameraFunc(); })
-            ]
-            +SHorizontalBox::Slot()
-            .AutoWidth()
-            .HAlign(HAlign_Right)
-            .VAlign(VAlign_Center)
-            .Padding(0, 0, 4, 0)
-            [
-                SNew(STextBlock)
-                .Text(FText::FromString(CameraName))
-            ]
-        ];
-}
 
 TSharedRef<SWidget> SVCCSimPanel::CreatePoseConfigPanel()
 {
@@ -972,7 +704,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreatePoseFileButtons()
         .HAlign(HAlign_Center)
         .OnClicked(this, &SVCCSimPanel::OnLoadPoseClicked)
         .IsEnabled_Lambda([this]() {
-            return SelectedFlashPawn.IsValid();
+            return SelectionManager.IsValid() && SelectionManager->GetSelectedFlashPawn().IsValid();
         })
     ]
     +SHorizontalBox::Slot()
@@ -987,7 +719,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreatePoseFileButtons()
         .Text(FText::FromString("Save Generated Pose"))
         .OnClicked(this, &SVCCSimPanel::OnSavePoseClicked)
         .IsEnabled_Lambda([this]() {
-            return SelectedFlashPawn.IsValid() && SelectedFlashPawn->GetPoseCount() > 0;
+            return SelectionManager.IsValid() && SelectionManager->GetSelectedFlashPawn().IsValid() && SelectionManager->GetSelectedFlashPawn()->GetPoseCount() > 0;
         })
     ];
 }
@@ -1007,7 +739,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreatePoseActionButtons()
         .HAlign(HAlign_Center)
         .OnClicked(this, &SVCCSimPanel::OnGeneratePosesClicked)
         .IsEnabled_Lambda([this]() {
-            return SelectedFlashPawn.IsValid() && SelectedTargetObject.IsValid();
+            return SelectionManager.IsValid() && SelectionManager->GetSelectedFlashPawn().IsValid() && SelectionManager->GetSelectedTargetObject().IsValid();
         })
     ]
     +SHorizontalBox::Slot()
@@ -1026,7 +758,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreatePoseActionButtons()
         })
         .OnClicked(this, &SVCCSimPanel::OnTogglePathVisualizationClicked)
         .IsEnabled_Lambda([this]() {
-            return SelectedFlashPawn.IsValid() && !bPathNeedsUpdate;
+            return SelectionManager.IsValid() && SelectionManager->GetSelectedFlashPawn().IsValid() && !bPathNeedsUpdate;
         })
     ];
 }
@@ -1045,14 +777,14 @@ TSharedRef<SWidget> SVCCSimPanel::CreateMovementButtons()
         .Text(FText::FromString("Move Back"))
         .HAlign(HAlign_Center)
         .OnClicked_Lambda([this]() {
-            if (SelectedFlashPawn.IsValid())
+            if (SelectionManager.IsValid() && SelectionManager->GetSelectedFlashPawn().IsValid())
             {
-                SelectedFlashPawn->MoveBackward();
+                SelectionManager->GetSelectedFlashPawn()->MoveBackward();
             }
             return FReply::Handled();
         })
         .IsEnabled_Lambda([this]() {
-            return SelectedFlashPawn.IsValid();
+            return SelectionManager.IsValid() && SelectionManager->GetSelectedFlashPawn().IsValid();
         })
     ]
     +SHorizontalBox::Slot()
@@ -1066,14 +798,14 @@ TSharedRef<SWidget> SVCCSimPanel::CreateMovementButtons()
         .Text(FText::FromString("Move Next"))
         .HAlign(HAlign_Center)
         .OnClicked_Lambda([this]() {
-            if (SelectedFlashPawn.IsValid())
+            if (SelectionManager.IsValid() && SelectionManager->GetSelectedFlashPawn().IsValid())
             {
-                SelectedFlashPawn->MoveForward();
+                SelectionManager->GetSelectedFlashPawn()->MoveForward();
             }
             return FReply::Handled();
         })
         .IsEnabled_Lambda([this]() {
-            return SelectedFlashPawn.IsValid();
+            return SelectionManager.IsValid() && SelectionManager->GetSelectedFlashPawn().IsValid();
         })
     ];
 }
@@ -1095,11 +827,12 @@ TSharedRef<SWidget> SVCCSimPanel::CreateCaptureButtons()
         .HAlign(HAlign_Center)
         .OnClicked(this, &SVCCSimPanel::OnCaptureImagesClicked)
         .IsEnabled_Lambda([this]() {
-            return SelectedFlashPawn.IsValid() && 
-                   ((bUseRGBCamera && bHasRGBCamera) || 
-                    (bUseDepthCamera && bHasDepthCamera) || 
-                    (bUseNormalCamera && bHasNormalCamera) ||
-                    (bUseSegmentationCamera && bHasSegmentationCamera));
+            return SelectionManager.IsValid() && SelectionManager->GetSelectedFlashPawn().IsValid() && 
+                   (SelectionManager.IsValid() && (
+                    (SelectionManager->IsUsingRGBCamera() && SelectionManager->HasRGBCamera()) || 
+                    (SelectionManager->IsUsingDepthCamera() && SelectionManager->HasDepthCamera()) || 
+                    (SelectionManager->IsUsingNormalCamera() && SelectionManager->HasNormalCamera()) ||
+                    (SelectionManager->IsUsingSegmentationCamera() && SelectionManager->HasSegmentationCamera())));
         })
     ]
     
@@ -1132,11 +865,12 @@ TSharedRef<SWidget> SVCCSimPanel::CreateCaptureButtons()
             return FReply::Handled();
         })
         .IsEnabled_Lambda([this]() {
-            return SelectedFlashPawn.IsValid() && 
-                   ((bUseRGBCamera && bHasRGBCamera) || 
-                    (bUseDepthCamera && bHasDepthCamera) || 
-                    (bUseSegmentationCamera && bHasSegmentationCamera) ||
-                    (bUseNormalCamera && bHasNormalCamera));
+            return SelectionManager.IsValid() && SelectionManager->GetSelectedFlashPawn().IsValid() && 
+                   (SelectionManager.IsValid() && (
+                    (SelectionManager->IsUsingRGBCamera() && SelectionManager->HasRGBCamera()) || 
+                    (SelectionManager->IsUsingDepthCamera() && SelectionManager->HasDepthCamera()) || 
+                    (SelectionManager->IsUsingSegmentationCamera() && SelectionManager->HasSegmentationCamera()) ||
+                    (SelectionManager->IsUsingNormalCamera() && SelectionManager->HasNormalCamera())));
         })
     ];
 }
@@ -1358,11 +1092,14 @@ TSharedRef<SWidget> SVCCSimPanel::CreateSceneOperationButtons()
         .OnClicked_Lambda([this]() {
             if (SceneAnalysisManager.IsValid())
             {
-                URGBCameraComponent* Camera =
-                    SelectedFlashPawn->GetComponentByClass<URGBCameraComponent>();
-                Camera->CameraName = "CoverageCamera";
+                URGBCameraComponent* Camera = nullptr;
+                if (SelectionManager.IsValid() && SelectionManager->GetSelectedFlashPawn().IsValid())
+                {
+                    Camera = SelectionManager->GetSelectedFlashPawn()->GetComponentByClass<URGBCameraComponent>();
+                }
                 if (Camera)
                 {
+                    Camera->CameraName = "CoverageCamera";
                     Camera->ComputeIntrinsics();
                     SceneAnalysisManager->RegisterCamera(Camera);
                 }
@@ -1371,7 +1108,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreateSceneOperationButtons()
             return FReply::Handled();
         })
         .IsEnabled_Lambda([this]() {
-            return SceneAnalysisManager.IsValid() && SelectedFlashPawn.IsValid();
+            return SceneAnalysisManager.IsValid() && SelectionManager.IsValid() && SelectionManager->GetSelectedFlashPawn().IsValid();
         })
     ]
     +SHorizontalBox::Slot()
@@ -1475,21 +1212,25 @@ TSharedRef<SWidget> SVCCSimPanel::CreateCoverageButtons()
         .Text(FText::FromString("Gen Coverage"))
         .HAlign(HAlign_Center)
         .OnClicked_Lambda([this]() {
-            if (SceneAnalysisManager.IsValid())
+            if (SceneAnalysisManager.IsValid() && SelectionManager.IsValid())
             {
-                TArray<FTransform> CoverageTransforms;
-                const auto Positions = SelectedFlashPawn->PendingPositions;
-                const auto Rotations = SelectedFlashPawn->PendingRotations;
-                for (int32 i = 0; i < Positions.Num(); ++i)
+                TWeakObjectPtr<AFlashPawn> SelectedFlashPawn = SelectionManager->GetSelectedFlashPawn();
+                if (SelectedFlashPawn.IsValid())
                 {
-                    FTransform Transform;
-                    Transform.SetLocation(Positions[i]);
-                    Transform.SetRotation(FQuat(Rotations[i]));
-                    CoverageTransforms.Add(Transform);
+                    TArray<FTransform> CoverageTransforms;
+                    const auto Positions = SelectedFlashPawn->PendingPositions;
+                    const auto Rotations = SelectedFlashPawn->PendingRotations;
+                    for (int32 i = 0; i < Positions.Num(); ++i)
+                    {
+                        FTransform Transform;
+                        Transform.SetLocation(Positions[i]);
+                        Transform.SetRotation(FQuat(Rotations[i]));
+                        CoverageTransforms.Add(Transform);
+                    }
+                    SceneAnalysisManager->InterfaceComputeCoverage(
+                        CoverageTransforms, "CoverageCamera");
+                    bGenCoverage = false;
                 }
-                SceneAnalysisManager->InterfaceComputeCoverage(
-                    CoverageTransforms, "CoverageCamera");
-                bGenCoverage = false;
             }
             return FReply::Handled();
         })
@@ -1717,72 +1458,3 @@ void FVCCSimPanelFactory::RegisterTabSpawner(FTabManager& TabManager)
     .SetIcon(FSlateIcon(VCCSimStyleName, "VCCSimStyle.TabIcon"))
     .SetGroup(WorkspaceMenu::GetMenuStructure().GetLevelEditorCategory());
 }
-
-
-
-
-
-
-
-
-// ============================================================================
-// AUTO SELECTION FUNCTIONALITY
-// ============================================================================
-
-void SVCCSimPanel::AutoSelectFlashPawn()
-{
-    // Clear any existing selection
-    SelectedFlashPawn = nullptr;
-    
-    // Get the current editor world
-    if (!GEditor)
-    {
-        return;
-    }
-    
-    UWorld* World = GEditor->GetEditorWorldContext().World();
-    if (!World)
-    {
-        return;
-    }
-    
-    // Search for FlashPawn actors in the world
-    AFlashPawn* FirstFoundFlashPawn = nullptr;
-    for (TActorIterator<AFlashPawn> ActorIterator(World); ActorIterator; ++ActorIterator)
-    {
-        AFlashPawn* FlashPawn = *ActorIterator;
-        if (FlashPawn && IsValid(FlashPawn))
-        {
-            FirstFoundFlashPawn = FlashPawn;
-            break; // Select the first valid FlashPawn found
-        }
-    }
-    
-    // If we found a FlashPawn, select it
-    if (FirstFoundFlashPawn)
-    {
-        SelectedFlashPawn = FirstFoundFlashPawn;
-        
-        // Update the UI text to show the selected FlashPawn
-        if (SelectedFlashPawnText.IsValid())
-        {
-            SelectedFlashPawnText->SetText(FText::FromString(FirstFoundFlashPawn->GetActorLabel()));
-        }
-        
-        // Check what camera components are available on this FlashPawn
-        CheckCameraComponents();
-        
-        UE_LOG(LogTemp, Log, TEXT("Auto-selected FlashPawn: %s"), *FirstFoundFlashPawn->GetActorLabel());
-    }
-    else
-    {
-        // No FlashPawn found, ensure UI shows "None selected"
-        if (SelectedFlashPawnText.IsValid())
-        {
-            SelectedFlashPawnText->SetText(FText::FromString("None selected"));
-        }
-        
-        UE_LOG(LogTemp, Log, TEXT("No FlashPawn found in the scene for auto-selection"));
-    }
-}
-

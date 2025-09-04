@@ -35,6 +35,7 @@ class UStaticMeshComponent;
 class FTriangleSplattingManager;
 class FColmapManager;
 class FVCCSimPanelPointCloud;
+class FVCCSimPanelSelection;
 struct FCameraInfo;
 
 /**
@@ -101,19 +102,11 @@ private:
     TSharedPtr<FSlateDynamicImageBrush> SZULogoBrush;
     
     // Expandable area states
-    bool bFlashPawnSectionExpanded = false;
-    bool bCameraSectionExpanded = false;
-    bool bTargetSectionExpanded = false;
     bool bPoseConfigSectionExpanded = false;
     bool bCaptureSectionExpanded = false;
     bool bSceneAnalysisSectionExpanded = false;  
     bool bTriangleSplattingSectionExpanded = true;
     
-    // Selection UI
-    TSharedPtr<class STextBlock> SelectedFlashPawnText;
-    TSharedPtr<class STextBlock> SelectedTargetObjectText;
-    TSharedPtr<class SCheckBox> SelectFlashPawnToggle;
-    TSharedPtr<class SCheckBox> SelectTargetToggle;
     TSharedPtr<class SCheckBox> SelectUseLimitedToggle;
     
     // Configuration spinboxes
@@ -130,11 +123,6 @@ private:
     TSharedPtr<class SNumericEntryBox<float>> LimitedMinZSpinBox;
     TSharedPtr<class SNumericEntryBox<float>> LimitedMaxZSpinBox;
     
-    // Camera UI elements
-    TSharedPtr<class SCheckBox> RGBCameraCheckBox;
-    TSharedPtr<class SCheckBox> DepthCameraCheckBox;
-    TSharedPtr<class SCheckBox> SegmentationCameraCheckBox;
-    TSharedPtr<class SCheckBox> NormalCameraCheckBox;
     
     // Visualization buttons
     TSharedPtr<class SButton> VisualizePathButton;
@@ -165,14 +153,8 @@ private:
     // STATE VARIABLES
     // ============================================================================
     
-    // Selection state
-    bool bSelectingFlashPawn = false;
-    bool bSelectingTarget = false;
+    // Path configuration state
     bool bUseLimited = false;
-    
-    // Selected objects
-    TWeakObjectPtr<AFlashPawn> SelectedFlashPawn;
-    TWeakObjectPtr<AActor> SelectedTargetObject;
     
     // Path configuration
     int32 NumPoses = 50;
@@ -203,17 +185,6 @@ private:
     TOptional<float> LimitedMinZValue;
     TOptional<float> LimitedMaxZValue;
     
-    // Camera settings
-    bool bUseRGBCamera = true;
-    bool bUseDepthCamera = false;
-    bool bUseSegmentationCamera = false;
-    bool bUseNormalCamera = false;
-    
-    // Available cameras on current FlashPawn
-    bool bHasRGBCamera = false;
-    bool bHasDepthCamera = false;
-    bool bHasSegmentationCamera = false;
-    bool bHasNormalCamera = false;
     
     // Auto-capture state
     bool bAutoCaptureInProgress = false;
@@ -249,8 +220,9 @@ private:
     bool bColmapPipelineInProgress = false;
     TSharedPtr<FColmapManager> ColmapManager;
     
-    // Point Cloud functionality manager
+    // Panel managers
     TSharedPtr<FVCCSimPanelPointCloud> PointCloudManager;
+    TSharedPtr<FVCCSimPanelSelection> SelectionManager;
     
     // TOptional attributes for Triangle Splatting SpinBox values
     TOptional<float> GSFOVValue;
@@ -268,26 +240,9 @@ private:
     void LoadLogoImages();
     void InitializeSceneAnalysisManager();
     void CreateMainLayout();
-    void AutoSelectFlashPawn();
-
-    // ============================================================================
-    // SELECTION MANAGEMENT
-    // ============================================================================
-    
-    void OnSelectFlashPawnToggleChanged(ECheckBoxState NewState);
-    void OnSelectTargetToggleChanged(ECheckBoxState NewState);
     void OnUseLimitedToggleChanged(ECheckBoxState NewState);
-
-    // ============================================================================
-    // CAMERA MANAGEMENT
-    // ============================================================================
     
-    void OnRGBCameraCheckboxChanged(ECheckBoxState NewState);
-    void OnDepthCameraCheckboxChanged(ECheckBoxState NewState);
-    void OnSegmentationCameraCheckboxChanged(ECheckBoxState NewState);
-    void OnNormalCameraCheckboxChanged(ECheckBoxState NewState);
-    void CheckCameraComponents();
-    void UpdateActiveCameras();
+
 
     // ============================================================================
     // POSE GENERATION AND MANAGEMENT
@@ -374,22 +329,12 @@ private:
     
     // Main panel creators
     TSharedRef<SWidget> CreateLogoPanel();
-    TSharedRef<SWidget> CreatePawnSelectPanel();
-    TSharedRef<SWidget> CreateCameraSelectPanel();
-    TSharedRef<SWidget> CreateTargetSelectPanel();
     TSharedRef<SWidget> CreatePoseConfigPanel();
     TSharedRef<SWidget> CreateCapturePanel();
     TSharedRef<SWidget> CreateSceneAnalysisPanel();
     TSharedRef<SWidget> CreatePointCloudPanel();
     TSharedRef<SWidget> CreateTriangleSplattingPanel();
     
-    // Camera UI helpers
-    TSharedRef<SWidget> CreateCameraStatusRow();
-    TSharedRef<SWidget> CreateCameraStatusBox(
-        const FString& CameraName,
-        TFunction<bool()> HasCameraFunc,
-        TFunction<ECheckBoxState()> CheckBoxStateFunc,
-        TFunction<void(ECheckBoxState)> OnCheckBoxChangedFunc);
     
     // Scene analysis UI helpers
     TSharedRef<SWidget> CreateLimitedRegionControls();
