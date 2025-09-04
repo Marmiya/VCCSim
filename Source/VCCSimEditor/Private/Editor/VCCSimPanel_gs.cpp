@@ -1455,6 +1455,4 @@ void SVCCSimPanel::ExportCamerasToPLY(
     }
 }
 
-
 END_SLATE_FUNCTION_BUILD_OPTIMIZATION
-

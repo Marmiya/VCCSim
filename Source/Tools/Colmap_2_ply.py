@@ -12,8 +12,8 @@ Key assumptions:
 
 Conversion:
 - COLMAP (+X right, +Y down, +Z forward) -> UE (+X forward, +Y right, +Z up)
-- Position: (X, Y, Z) -> (Z*100, -X*100, -Y*100)  [Z->X, -X->Y, -Y->Z, scale to cm]
-- Direction: (X, Y, Z) -> (Z, -X, -Y)  [same transformation, no scaling]
+- Position: (X, Y, Z) -> (Y*100, X*100, Z*100)  [Y->X, X->Y, Z->Z, scale to cm]
+- Direction: (X, Y, Z) -> (Y, X, Z)  [same transformation, no scaling]
 
 Outputs:
 - cameras_colmap.ply: Original COLMAP camera positions
@@ -50,6 +50,50 @@ def qvec2rotmat(qvec: np.ndarray) -> np.ndarray:
     return R
 
 
+def filter_outlier_points(xyz: np.ndarray, rgb: np.ndarray, filter_ratio: float = 0.1) -> Tuple[np.ndarray, np.ndarray, int]:
+    """Remove the farthest points from the point cloud center as noise.
+    
+    Args:
+        xyz: Point coordinates (N, 3)
+        rgb: Point colors (N, 3)
+        filter_ratio: Fraction of farthest points to remove (default 0.1 = 10%)
+    
+    Returns:
+        Filtered xyz, rgb arrays and number of removed points
+    """
+    if xyz.size == 0 or filter_ratio <= 0:
+        return xyz, rgb, 0
+    
+    # Calculate point cloud center (centroid)
+    cloud_center = np.mean(xyz, axis=0)
+    
+    # Calculate distances from cloud center
+    distances = np.linalg.norm(xyz - cloud_center, axis=1)
+    
+    # Find the threshold for the farthest points to remove
+    n_total = len(xyz)
+    n_to_remove = max(1, int(n_total * filter_ratio))
+    distance_threshold = np.partition(distances, -n_to_remove)[-n_to_remove]
+    
+    # Keep points that are closer than the threshold
+    keep_mask = distances < distance_threshold
+    
+    # If we have exactly the threshold distance points, keep some of them
+    if keep_mask.sum() < n_total - n_to_remove:
+        threshold_mask = distances == distance_threshold
+        threshold_indices = np.where(threshold_mask)[0]
+        n_threshold_to_keep = n_total - n_to_remove - keep_mask.sum()
+        if n_threshold_to_keep > 0:
+            keep_threshold_indices = threshold_indices[:n_threshold_to_keep]
+            keep_mask[keep_threshold_indices] = True
+    
+    xyz_filtered = xyz[keep_mask]
+    rgb_filtered = rgb[keep_mask]
+    n_removed = n_total - len(xyz_filtered)
+    
+    return xyz_filtered, rgb_filtered, n_removed
+
+
 def colmap_to_ue_transform(xyz: np.ndarray, dirs: np.ndarray = None) -> Tuple[np.ndarray, np.ndarray]:
     """Convert COLMAP coordinates directly to UE coordinates.
 
@@ -58,16 +102,16 @@ def colmap_to_ue_transform(xyz: np.ndarray, dirs: np.ndarray = None) -> Tuple[np
     UE uses: +X forward, +Y right, +Z up (left-handed)
     
     Conversion: COLMAP (X=right, Y=down, Z=forward) -> UE (X=forward, Y=right, Z=up)
-    Mapping: (Xc, Yc, Zc) -> (Zc, -Xc, -Yc) and scale from meters to centimeters
+    Mapping: (Xc, Yc, Zc) -> (Yc, Xc, Zc) and scale from meters to centimeters
     """
     if xyz.size == 0:
         ue_xyz = xyz.reshape(0, 3)
     else:
         # Convert COLMAP -> UE coordinate transformation
-        # X_ue = Z_colmap (forward)
-        # Y_ue = -X_colmap (right, flip from COLMAP's right)
-        # Z_ue = -Y_colmap (up, flip from COLMAP's down)
-        ue_xyz = np.column_stack([xyz[:, 2], -xyz[:, 0], -xyz[:, 1]])
+        # X_ue = Y_colmap (forward, was down in COLMAP)
+        # Y_ue = X_colmap (right, same as COLMAP)
+        # Z_ue = Z_colmap (up, was forward in COLMAP)
+        ue_xyz = np.column_stack([xyz[:, 1], xyz[:, 0], xyz[:, 2]])
         ue_xyz *= 100.0  # Scale: meters -> centimeters
 
     ue_dirs = None
@@ -76,7 +120,7 @@ def colmap_to_ue_transform(xyz: np.ndarray, dirs: np.ndarray = None) -> Tuple[np
             ue_dirs = dirs.reshape(0, 3)
         else:
             # Same coordinate transformation for directions (no scaling)
-            ue_dirs = np.column_stack([dirs[:, 2], -dirs[:, 0], -dirs[:, 1]])
+            ue_dirs = np.column_stack([dirs[:, 1], dirs[:, 0], dirs[:, 2]])
 
     return ue_xyz, ue_dirs
 
@@ -377,7 +421,7 @@ def txt_exists(colmap_dir: str) -> bool:
 def main():
     ap = argparse.ArgumentParser(description="Convert COLMAP (TXT or BIN) model to PLY point clouds and UE poses.")
     ap.add_argument('--colmap_dir', type=str,
-                    default=r'D:\Data\360_v2\garden\mesh\Ganden\Colmap',
+                    default=r'D:\Data\360_v2\garden\mesh\Colmap',
                     help='Directory containing COLMAP sparse reconstruction files')
     ap.add_argument('--out_dir', type=str,
                     default=r'C:\UEProjects\VCCSimDev\Saved',
@@ -388,6 +432,10 @@ def main():
                     help='RGB color for UE camera points (default: green)')
     ap.add_argument('--sanitize', action='store_true',
                     help='Remove NaN/Inf vertices before writing PLY files')
+    ap.add_argument('--no_filter_outliers', action='store_true',
+                    help='Disable outlier filtering (by default, farthest 5%% of points are removed as noise)')
+    ap.add_argument('--filter_ratio', type=float, default=0.05,
+                    help='Fraction of farthest points to remove (default: 0.05 = 5%%)')
     ap.add_argument('--verbose', action='store_true',
                     help='Enable verbose output with conversion details')
     args = ap.parse_args()
@@ -456,6 +504,19 @@ def main():
     pts_ue_xyz, _ = colmap_to_ue_transform(xyz_pts, None)
     pts_ue_rgb = rgb_pts
 
+    # Optional outlier filtering - remove farthest points as noise (enabled by default)
+    if not args.no_filter_outliers and len(xyz_pts) > 0:
+        if args.verbose:
+            print(f"[info] Filtering outliers: removing {args.filter_ratio*100:.1f}% farthest points from point cloud center")
+        xyz_pts, rgb_pts, n_removed = filter_outlier_points(xyz_pts, rgb_pts, args.filter_ratio)
+        # Recompute UE coordinates after filtering
+        pts_ue_xyz, _ = colmap_to_ue_transform(xyz_pts, None)
+        pts_ue_rgb = rgb_pts
+        if args.verbose:
+            print(f"[info] Outlier filtering: removed {n_removed} points, kept {len(xyz_pts)} points")
+    elif args.verbose and len(xyz_pts) > 0:
+        print(f"[info] Outlier filtering disabled, keeping all {len(xyz_pts)} points")
+
     # Optional sanitization to avoid NaN warnings in Meshlab
     if args.sanitize:
         cam_mask = (np.isfinite(cam_xyz).all(axis=1) &
@@ -512,11 +573,11 @@ def main():
             R_c2w_colmap = R_w2c_colmap.T  # camera-to-world = transpose of world-to-camera
             
             # Coordinate system transformation: COLMAP -> UE
-            # X_ue = Z_colmap, Y_ue = -X_colmap, Z_ue = -Y_colmap
+            # X_ue = Y_colmap, Y_ue = X_colmap, Z_ue = Z_colmap
             T_colmap_to_ue = np.array([
-                [0, 0, 1],   # X_ue = Z_colmap
-                [-1, 0, 0],  # Y_ue = -X_colmap
-                [0, -1, 0]   # Z_ue = -Y_colmap
+                [0, 1, 0],   # X_ue = Y_colmap
+                [1, 0, 0],   # Y_ue = X_colmap
+                [0, 0, 1]    # Z_ue = Z_colmap
             ])
             R_c2w_ue = T_colmap_to_ue @ R_c2w_colmap @ T_colmap_to_ue.T
             
@@ -529,7 +590,7 @@ def main():
         print("[done] Outputs:")
         print(f"  COLMAP cameras: {cams_out}\n  COLMAP points:  {pts_out}\n  UE cameras:     {cams_ue_out}\n  UE points:      {pts_ue_out}\n  UE poses:       {pose_ue_out}")
         print("[note] COLMAP->UE: Assumes COLMAP world follows OpenCV convention (+X right, +Y down, +Z forward).")
-        print("      UE conversion: (X,Y,Z) -> (Z,-X,-Y) to get left-handed (+X forward, +Y right, +Z up).")
+        print("      UE conversion: (X,Y,Z) -> (Y,X,Z) to get left-handed (+X forward, +Y right, +Z up).")
     else:
         print("[done] Conversion complete. Use --verbose for details.")
 

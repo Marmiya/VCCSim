@@ -18,6 +18,7 @@
 #include "Editor/VCCSimPanel.h"
 #include "Editor/Panels/VCCSimPanelPointCloud.h"
 #include "Editor/Panels/VCCSimPanelSelection.h"
+#include "Editor/Panels/VCCSimPanelPathImageCapture.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
@@ -50,10 +51,6 @@
 void SVCCSimPanel::Construct(const FArguments& InArgs)
 {
     // Initialize default values
-    NumPosesValue = NumPoses;
-    RadiusValue = Radius;
-    HeightOffsetValue = HeightOffset;
-    VerticalGapValue = VerticalGap;
     SafeDistanceValue = SafeDistance;
     SafeHeightValue = SafeHeight;
     LimitedMinXValue = LimitedMinX;
@@ -62,7 +59,6 @@ void SVCCSimPanel::Construct(const FArguments& InArgs)
     LimitedMaxYValue = LimitedMaxY;
     LimitedMinZValue = LimitedMinZ;
     LimitedMaxZValue = LimitedMaxZ;
-    JobNum = MakeShared<std::atomic<int32>>(0);
     
     // Register for selection change events
     if (USelection* Selection = GEditor->GetSelectedActors())
@@ -86,6 +82,11 @@ void SVCCSimPanel::Construct(const FArguments& InArgs)
     // Initialize Selection manager
     SelectionManager = MakeShared<FVCCSimPanelSelection>();
     SelectionManager->Initialize();
+    
+    // Initialize PathImageCapture manager
+    PathImageCaptureManager = MakeShared<FVCCSimPanelPathImageCapture>();
+    PathImageCaptureManager->Initialize();
+    PathImageCaptureManager->SetSelectionManager(SelectionManager);
     
     // Initialize Triangle Splatting manager
     InitializeGSManager();
@@ -182,18 +183,12 @@ void SVCCSimPanel::CreateMainLayout()
                     SNew(STextBlock).Text(FText::FromString("Selection Manager not initialized"))
                 ]
                 
-                // Pose configuration
+                // Path Configuration & Image Capture panel
                 +SVerticalBox::Slot()
                 .AutoHeight()
                 [
-                    CreateCollapsibleSection("Path Configuration", CreatePoseConfigPanel(), bPoseConfigSectionExpanded)
-                ]
-                
-                // Capture panel
-                +SVerticalBox::Slot()
-                .AutoHeight()
-                [
-                    CreateCollapsibleSection("Image Capture", CreateCapturePanel(), bCaptureSectionExpanded)
+                    PathImageCaptureManager.IsValid() ? PathImageCaptureManager->CreatePathImageCapturePanel() : 
+                    SNew(STextBlock).Text(FText::FromString("PathImageCapture Manager not initialized"))
                 ]
 
                 // Scene analysis panel
@@ -349,132 +344,6 @@ TSharedRef<SWidget> SVCCSimPanel::CreateLogoPanel()
 
 
 
-TSharedRef<SWidget> SVCCSimPanel::CreatePoseConfigPanel()
-{
-    return SNew(SVerticalBox)
-    +SVerticalBox::Slot()
-    .AutoHeight()
-    [
-        CreateSectionHeader("Path Configuration")
-    ]
-    +SVerticalBox::Slot()
-    .AutoHeight()
-    [
-        CreateSectionContent(
-            SNew(SVerticalBox)
-            
-            // Number of poses and Vertical Gap row
-            +SVerticalBox::Slot()
-            .AutoHeight()
-            .Padding(FMargin(0, 0, 0, 4))
-            [
-                SNew(SHorizontalBox)
-                +SHorizontalBox::Slot()
-                .FillWidth(1.0f)
-                .Padding(FMargin(0, 0, 8, 0))
-                [
-                    CreateNumericPropertyRowInt32("Pose Count", NumPosesSpinBox, NumPosesValue, NumPoses, 1, 1)
-                ]
-                +SHorizontalBox::Slot()
-                .FillWidth(1.0f)
-                [
-                    CreateNumericPropertyRowFloat("Vertical Gap", VerticalGapSpinBox, VerticalGapValue, VerticalGap, 0.0f, 5.0f)
-                ]
-            ]
-            
-            +SVerticalBox::Slot()
-            .MaxHeight(1)
-            .Padding(FMargin(0, 0, 0, 0))
-            [
-                CreateSeparator()
-            ]
-            
-            // Radius and Height Offset row
-            +SVerticalBox::Slot()
-            .AutoHeight()
-            .Padding(FMargin(0, 4, 0, 4))
-            [
-                SNew(SHorizontalBox)
-                +SHorizontalBox::Slot()
-                .FillWidth(1.0f)
-                .Padding(FMargin(0, 0, 8, 0))
-                [
-                    CreateNumericPropertyRowFloat("Radius", RadiusSpinBox, RadiusValue, Radius, 100.0f, 10.0f)
-                ]
-                +SHorizontalBox::Slot()
-                .FillWidth(1.0f)
-                [
-                    CreateNumericPropertyRowFloat("Height Offset", HeightOffsetSpinBox, HeightOffsetValue, HeightOffset, 0.0f, 10.0f)
-                ]
-            ]
-            
-            +SVerticalBox::Slot()
-            .MaxHeight(1)
-            [
-                CreateSeparator()
-            ]
-            
-            // Load/Save Pose buttons
-            +SVerticalBox::Slot()
-            .AutoHeight()
-            .Padding(FMargin(0, 4, 0, 4))
-            [
-                CreatePoseFileButtons()
-            ]
-            
-            +SVerticalBox::Slot()
-            .MaxHeight(1)
-            [
-                CreateSeparator()
-            ]
-            
-            // Action buttons
-            +SVerticalBox::Slot()
-            .AutoHeight()
-            .Padding(FMargin(0, 4, 0, 2))
-            [
-                CreatePoseActionButtons()
-            ]
-        )
-    ];
-}
-
-TSharedRef<SWidget> SVCCSimPanel::CreateCapturePanel()
-{
-    return SNew(SVerticalBox)
-    +SVerticalBox::Slot()
-    .AutoHeight()
-    [
-        CreateSectionHeader("Image Capture")
-    ]
-        
-    +SVerticalBox::Slot()
-    .AutoHeight()
-    [
-        CreateSectionContent(
-            SNew(SVerticalBox)
-            +SVerticalBox::Slot()
-            .AutoHeight()
-            .Padding(0, 0, 0, 4)
-            [
-                CreateMovementButtons()
-            ]
-            
-            +SVerticalBox::Slot()
-            .MaxHeight(1)
-            [
-                CreateSeparator()
-            ]
-            
-            +SVerticalBox::Slot()
-            .AutoHeight()
-            .Padding(0, 4, 0, 0)
-            [
-                CreateCaptureButtons()
-            ]
-        )
-    ];
-}
 
 // ============================================================================
 // SCENE ANALYSIS OPERATIONS
@@ -689,191 +558,6 @@ TSharedRef<SWidget> SVCCSimPanel::CreateSeparator()
 // UI BUTTON GROUPS
 // ============================================================================
 
-TSharedRef<SWidget> SVCCSimPanel::CreatePoseFileButtons()
-{
-    return SNew(SHorizontalBox)
-    +SHorizontalBox::Slot()
-    .MaxWidth(180)
-    .Padding(FMargin(0, 0, 4, 0))
-    .HAlign(HAlign_Fill)
-    [
-        SNew(SButton)
-        .ButtonStyle(FAppStyle::Get(), "FlatButton.Default")
-        .ContentPadding(FMargin(4, 2))
-        .Text(FText::FromString("Load Predefined Pose"))
-        .HAlign(HAlign_Center)
-        .OnClicked(this, &SVCCSimPanel::OnLoadPoseClicked)
-        .IsEnabled_Lambda([this]() {
-            return SelectionManager.IsValid() && SelectionManager->GetSelectedFlashPawn().IsValid();
-        })
-    ]
-    +SHorizontalBox::Slot()
-    .MaxWidth(180)
-    .Padding(FMargin(4, 0, 4, 0))
-    .HAlign(HAlign_Fill)
-    [
-        SNew(SButton)
-        .ButtonStyle(FAppStyle::Get(), "FlatButton.Default")
-        .ContentPadding(FMargin(4, 2))
-        .HAlign(HAlign_Center)
-        .Text(FText::FromString("Save Generated Pose"))
-        .OnClicked(this, &SVCCSimPanel::OnSavePoseClicked)
-        .IsEnabled_Lambda([this]() {
-            return SelectionManager.IsValid() && SelectionManager->GetSelectedFlashPawn().IsValid() && SelectionManager->GetSelectedFlashPawn()->GetPoseCount() > 0;
-        })
-    ];
-}
-
-TSharedRef<SWidget> SVCCSimPanel::CreatePoseActionButtons()
-{
-    return SNew(SHorizontalBox)
-    +SHorizontalBox::Slot()
-    .MaxWidth(180)
-    .Padding(FMargin(0, 0, 4, 0))
-    .HAlign(HAlign_Fill)
-    [
-        SNew(SButton)
-        .ButtonStyle(FAppStyle::Get(), "FlatButton.Success")
-        .ContentPadding(FMargin(5, 2))
-        .Text(FText::FromString("Generate Poses"))
-        .HAlign(HAlign_Center)
-        .OnClicked(this, &SVCCSimPanel::OnGeneratePosesClicked)
-        .IsEnabled_Lambda([this]() {
-            return SelectionManager.IsValid() && SelectionManager->GetSelectedFlashPawn().IsValid() && SelectionManager->GetSelectedTargetObject().IsValid();
-        })
-    ]
-    +SHorizontalBox::Slot()
-    .MaxWidth(180)
-    .Padding(FMargin(4, 0, 4, 0))
-    .HAlign(HAlign_Fill)
-    [
-        SAssignNew(VisualizePathButton, SButton)
-        .ButtonStyle(bPathVisualized ? 
-           &FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Danger") : 
-           &FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Primary"))
-        .ContentPadding(FMargin(5, 2))
-        .HAlign(HAlign_Center)
-        .Text_Lambda([this]() {
-            return FText::FromString(bPathVisualized ? "Hide Path" : "Show Path");
-        })
-        .OnClicked(this, &SVCCSimPanel::OnTogglePathVisualizationClicked)
-        .IsEnabled_Lambda([this]() {
-            return SelectionManager.IsValid() && SelectionManager->GetSelectedFlashPawn().IsValid() && !bPathNeedsUpdate;
-        })
-    ];
-}
-
-TSharedRef<SWidget> SVCCSimPanel::CreateMovementButtons()
-{
-    return SNew(SHorizontalBox)
-    +SHorizontalBox::Slot()
-    .MaxWidth(180)
-    .Padding(FMargin(0, 0, 4, 0))
-    .HAlign(HAlign_Fill)
-    [
-        SNew(SButton)
-        .ButtonStyle(FAppStyle::Get(), "FlatButton.Default")
-        .ContentPadding(FMargin(5, 2))
-        .Text(FText::FromString("Move Back"))
-        .HAlign(HAlign_Center)
-        .OnClicked_Lambda([this]() {
-            if (SelectionManager.IsValid() && SelectionManager->GetSelectedFlashPawn().IsValid())
-            {
-                SelectionManager->GetSelectedFlashPawn()->MoveBackward();
-            }
-            return FReply::Handled();
-        })
-        .IsEnabled_Lambda([this]() {
-            return SelectionManager.IsValid() && SelectionManager->GetSelectedFlashPawn().IsValid();
-        })
-    ]
-    +SHorizontalBox::Slot()
-    .MaxWidth(180)
-    .Padding(FMargin(4, 0, 4, 0))
-    .HAlign(HAlign_Fill)
-    [
-        SNew(SButton)
-        .ButtonStyle(FAppStyle::Get(), "FlatButton.Default")
-        .ContentPadding(FMargin(5, 2))
-        .Text(FText::FromString("Move Next"))
-        .HAlign(HAlign_Center)
-        .OnClicked_Lambda([this]() {
-            if (SelectionManager.IsValid() && SelectionManager->GetSelectedFlashPawn().IsValid())
-            {
-                SelectionManager->GetSelectedFlashPawn()->MoveForward();
-            }
-            return FReply::Handled();
-        })
-        .IsEnabled_Lambda([this]() {
-            return SelectionManager.IsValid() && SelectionManager->GetSelectedFlashPawn().IsValid();
-        })
-    ];
-}
-
-TSharedRef<SWidget> SVCCSimPanel::CreateCaptureButtons()
-{
-    return SNew(SHorizontalBox)
-    
-    // Single Capture button
-    +SHorizontalBox::Slot()
-    .MaxWidth(180)
-    .Padding(FMargin(0, 0, 4, 0))
-    .HAlign(HAlign_Fill)
-    [
-        SNew(SButton)
-        .ButtonStyle(FAppStyle::Get(), "FlatButton.Success")
-        .ContentPadding(FMargin(5, 2))
-        .Text(FText::FromString("Capture Current View"))
-        .HAlign(HAlign_Center)
-        .OnClicked(this, &SVCCSimPanel::OnCaptureImagesClicked)
-        .IsEnabled_Lambda([this]() {
-            return SelectionManager.IsValid() && SelectionManager->GetSelectedFlashPawn().IsValid() && 
-                   (SelectionManager.IsValid() && (
-                    (SelectionManager->IsUsingRGBCamera() && SelectionManager->HasRGBCamera()) || 
-                    (SelectionManager->IsUsingDepthCamera() && SelectionManager->HasDepthCamera()) || 
-                    (SelectionManager->IsUsingNormalCamera() && SelectionManager->HasNormalCamera()) ||
-                    (SelectionManager->IsUsingSegmentationCamera() && SelectionManager->HasSegmentationCamera())));
-        })
-    ]
-    
-    // Auto Capture button
-    +SHorizontalBox::Slot()
-    .MaxWidth(180)
-    .Padding(FMargin(4, 0, 4, 0))
-    .HAlign(HAlign_Fill)
-    [
-        SAssignNew(AutoCaptureButton, SButton)
-        .ButtonStyle(FAppStyle::Get(), "FlatButton.Primary")
-        .ContentPadding(FMargin(5, 2))
-        .Text_Lambda([this]() {
-            return bAutoCaptureInProgress ? 
-                FText::FromString("Stop Capture") : 
-                FText::FromString("Auto-Capture All Poses");
-        })
-        .HAlign(HAlign_Center)
-        .OnClicked_Lambda([this]() {
-            if (bAutoCaptureInProgress)
-            {
-                StopAutoCapture();
-                AutoCaptureButton->SetButtonStyle(&FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Primary"));
-            }
-            else
-            {
-                StartAutoCapture();
-                AutoCaptureButton->SetButtonStyle(&FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Danger"));
-            }
-            return FReply::Handled();
-        })
-        .IsEnabled_Lambda([this]() {
-            return SelectionManager.IsValid() && SelectionManager->GetSelectedFlashPawn().IsValid() && 
-                   (SelectionManager.IsValid() && (
-                    (SelectionManager->IsUsingRGBCamera() && SelectionManager->HasRGBCamera()) || 
-                    (SelectionManager->IsUsingDepthCamera() && SelectionManager->HasDepthCamera()) || 
-                    (SelectionManager->IsUsingSegmentationCamera() && SelectionManager->HasSegmentationCamera()) ||
-                    (SelectionManager->IsUsingNormalCamera() && SelectionManager->HasNormalCamera())));
-        })
-    ];
-}
 
 
 

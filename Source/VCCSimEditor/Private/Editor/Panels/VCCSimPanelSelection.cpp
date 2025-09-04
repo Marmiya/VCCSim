@@ -595,12 +595,6 @@ void FVCCSimPanelSelection::RefreshCameraAvailability()
     bHasDepthCamera = (DepthCameras.Num() > 0);
     bHasSegmentationCamera = (SegmentationCameras.Num() > 0);
     bHasNormalCamera = (NormalCameras.Num() > 0);
-    
-    UE_LOG(LogTemp, Log, TEXT("Camera availability updated - RGB: %s, Depth: %s, Segmentation: %s, Normal: %s"), 
-        bHasRGBCamera ? TEXT("Yes") : TEXT("No"),
-        bHasDepthCamera ? TEXT("Yes") : TEXT("No"),
-        bHasSegmentationCamera ? TEXT("Yes") : TEXT("No"),
-        bHasNormalCamera ? TEXT("Yes") : TEXT("No"));
 }
 
 void FVCCSimPanelSelection::ClearSelections()

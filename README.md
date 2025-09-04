@@ -12,7 +12,7 @@ I am using the following development environment.
 
 We recommend using the same environment to avoid compatibility issues.
 
-- Unreal Engine 5.4.4
+- Unreal Engine 5.6.1
 - JetBrains Rider 2024.3.5 (Attention: Rider needs Visual Studio for essential environment toolkits)
 - Windows 11 (We are not sure if it works on other platforms)
 

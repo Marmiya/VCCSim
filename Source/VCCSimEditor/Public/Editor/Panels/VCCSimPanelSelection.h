@@ -184,5 +184,5 @@ private:
     bool bUseNormalCamera = false;
     
     /** UI section expansion state */
-    bool bFlashPawnSectionExpanded = true;
+    bool bFlashPawnSectionExpanded = false;
 };

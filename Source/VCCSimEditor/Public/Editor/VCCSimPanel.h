@@ -36,6 +36,7 @@ class FTriangleSplattingManager;
 class FColmapManager;
 class FVCCSimPanelPointCloud;
 class FVCCSimPanelSelection;
+class FVCCSimPanelPathImageCapture;
 struct FCameraInfo;
 
 /**
@@ -61,7 +62,8 @@ struct VCCSIMEDITOR_API FTriangleSplattingConfig
     int32 ImageWidth = 1297;
     int32 ImageHeight = 840;
     
-    // Camera intrinsics (optional - if provided, fx/fy are used directly instead of FOV calculation)
+    // Camera intrinsics (optional - if provided,
+    // fx/fy are used directly instead of FOV calculation)
     float FocalLengthX = 961.22f;  // fx - horizontal focal length in pixels
     float FocalLengthY = 963.089f;  // fy - vertical focal length in pixels
     
@@ -102,18 +104,12 @@ private:
     TSharedPtr<FSlateDynamicImageBrush> SZULogoBrush;
     
     // Expandable area states
-    bool bPoseConfigSectionExpanded = false;
-    bool bCaptureSectionExpanded = false;
     bool bSceneAnalysisSectionExpanded = false;  
     bool bTriangleSplattingSectionExpanded = true;
     
     TSharedPtr<class SCheckBox> SelectUseLimitedToggle;
     
     // Configuration spinboxes
-    TSharedPtr<class SNumericEntryBox<int32>> NumPosesSpinBox;
-    TSharedPtr<class SNumericEntryBox<float>> RadiusSpinBox;
-    TSharedPtr<class SNumericEntryBox<float>> HeightOffsetSpinBox;
-    TSharedPtr<class SNumericEntryBox<float>> VerticalGapSpinBox;
     TSharedPtr<class SNumericEntryBox<float>> SafeDistanceSpinBox;
     TSharedPtr<class SNumericEntryBox<float>> SafeHeightSpinBox;
     TSharedPtr<class SNumericEntryBox<float>> LimitedMinXSpinBox;
@@ -125,13 +121,9 @@ private:
     
     
     // Visualization buttons
-    TSharedPtr<class SButton> VisualizePathButton;
     TSharedPtr<class SButton> VisualizeSafeZoneButton;
     TSharedPtr<class SButton> VisualizeCoverageButton;
     TSharedPtr<class SButton> VisualizeComplexityButton;
-    
-    // Capture buttons
-    TSharedPtr<class SButton> AutoCaptureButton;
 
     // Triangle Splatting UI elements (simplified with UE official asset picker)
     TSharedPtr<SEditableTextBox> GSImageDirectoryTextBox;
@@ -156,12 +148,7 @@ private:
     // Path configuration state
     bool bUseLimited = false;
     
-    // Path configuration
-    int32 NumPoses = 50;
-    float Radius = 500.0f;
-    float HeightOffset = 0.0f;
-    float VerticalGap = 50.0f;
-    FString SaveDirectory;
+    // Scene analysis configuration
     float SafeDistance = 200.0f;
     float SafeHeight = 200.0f;
     float LimitedMinX = 0.0f;
@@ -172,10 +159,6 @@ private:
     float LimitedMaxZ = 2000.0f;
     
     // TOptional attributes for SpinBox values
-    TOptional<int32> NumPosesValue;
-    TOptional<float> RadiusValue;
-    TOptional<float> HeightOffsetValue;
-    TOptional<float> VerticalGapValue;
     TOptional<float> SafeDistanceValue;
     TOptional<float> SafeHeightValue;
     TOptional<float> LimitedMinXValue;
@@ -185,16 +168,6 @@ private:
     TOptional<float> LimitedMinZValue;
     TOptional<float> LimitedMaxZValue;
     
-    
-    // Auto-capture state
-    bool bAutoCaptureInProgress = false;
-    FTimerHandle AutoCaptureTimerHandle;
-    TSharedPtr<std::atomic<int32>> JobNum;
-    
-    // Path visualization state
-    bool bPathVisualized = false;
-    bool bPathNeedsUpdate = true;
-    TWeakObjectPtr<AActor> PathVisualizationActor;
     
     // Scene analysis state
     TWeakObjectPtr<ASceneAnalysisManager> SceneAnalysisManager = nullptr;
@@ -223,6 +196,7 @@ private:
     // Panel managers
     TSharedPtr<FVCCSimPanelPointCloud> PointCloudManager;
     TSharedPtr<FVCCSimPanelSelection> SelectionManager;
+    TSharedPtr<FVCCSimPanelPathImageCapture> PathImageCaptureManager;
     
     // TOptional attributes for Triangle Splatting SpinBox values
     TOptional<float> GSFOVValue;
@@ -242,40 +216,6 @@ private:
     void CreateMainLayout();
     void OnUseLimitedToggleChanged(ECheckBoxState NewState);
     
-
-
-    // ============================================================================
-    // POSE GENERATION AND MANAGEMENT
-    // ============================================================================
-    
-    FReply OnGeneratePosesClicked();
-    void GeneratePosesAroundTarget();
-    void LoadPredefinedPose();
-    void SaveGeneratedPose();
-    FReply OnLoadPoseClicked();
-    FReply OnSavePoseClicked();
-
-    // ============================================================================
-    // PATH VISUALIZATION
-    // ============================================================================
-    
-    FReply OnTogglePathVisualizationClicked();
-    void UpdatePathVisualization();
-    void ShowPathVisualization();
-    void HidePathVisualization();
-
-    // ============================================================================
-    // IMAGE CAPTURE OPERATIONS
-    // ============================================================================
-    
-    FReply OnCaptureImagesClicked();
-    void CaptureImageFromCurrentPose();
-    void SaveRGB(int32 PoseIndex, bool& bAnyCaptured);
-    void SaveDepth(int32 PoseIndex, bool& bAnyCaptured);
-    void SaveSeg(int32 PoseIndex, bool& bAnyCaptured);
-    void SaveNormal(int32 PoseIndex, bool& bAnyCaptured);
-    void StartAutoCapture();
-    void StopAutoCapture();
 
     // ============================================================================
     // SCENE ANALYSIS OPERATIONS
@@ -316,7 +256,6 @@ private:
     bool ValidateGSConfiguration();
     void ShowGSNotification(const FString& Message, bool bIsError = false);
     
-    
     // Test and validation helpers
     void ExportCamerasToPLY(const TArray<FCameraInfo>& CameraInfos, const FString& OutputPath);
     
@@ -329,8 +268,6 @@ private:
     
     // Main panel creators
     TSharedRef<SWidget> CreateLogoPanel();
-    TSharedRef<SWidget> CreatePoseConfigPanel();
-    TSharedRef<SWidget> CreateCapturePanel();
     TSharedRef<SWidget> CreateSceneAnalysisPanel();
     TSharedRef<SWidget> CreatePointCloudPanel();
     TSharedRef<SWidget> CreateTriangleSplattingPanel();
@@ -343,11 +280,6 @@ private:
     TSharedRef<SWidget> CreateCoverageButtons();
     TSharedRef<SWidget> CreateComplexityButtons();
     
-    // Button group creators
-    TSharedRef<SWidget> CreatePoseFileButtons();
-    TSharedRef<SWidget> CreatePoseActionButtons();
-    TSharedRef<SWidget> CreateMovementButtons();
-    TSharedRef<SWidget> CreateCaptureButtons();
     
     // Triangle Splatting UI creators (implemented in VCCSimPanel_gs.cpp)
     TSharedRef<SWidget> CreateGSDataInputSection();
@@ -366,10 +298,12 @@ private:
         TFunction<void(T)> OnValueChanged);
     
     // Style and layout helpers
-    TSharedRef<SWidget> CreateCollapsibleSection(const FString& Title, TSharedRef<SWidget> Content, bool& bExpanded);
+    TSharedRef<SWidget> CreateCollapsibleSection(
+        const FString& Title, TSharedRef<SWidget> Content, bool& bExpanded);
     TSharedRef<SWidget> CreateSectionHeader(const FString& Title);
     TSharedRef<SWidget> CreateSectionContent(TSharedRef<SWidget> Content);
-    TSharedRef<SWidget> CreatePropertyRow(const FString& Label, TSharedRef<SWidget> Content);
+    TSharedRef<SWidget> CreatePropertyRow(
+        const FString& Label, TSharedRef<SWidget> Content);
     TSharedRef<SWidget> CreateSeparator();
     
     // Numeric property row creators
@@ -401,9 +335,6 @@ private:
     // UTILITY FUNCTIONS
     // ============================================================================
 
-    UStaticMesh* LoadBasicSphereMesh();
-    UStaticMesh* LoadBasicCylinderMesh();
-    UStaticMesh* CreateFallbackSphereMesh();
     static FString GetTimestampedFilename();
 };
 
@@ -412,4 +343,3 @@ namespace FVCCSimPanelFactory
     extern const FName TabId;
     void RegisterTabSpawner(FTabManager& TabManager);
 }
-
