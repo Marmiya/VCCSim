@@ -554,31 +554,24 @@ def main():
         print(f"[info] Writing UE pose file: {pose_ue_out}")
     with open(pose_ue_out, 'w', encoding='utf-8') as f:
         f.write("# UE coordinate system poses (left-handed, cm)\n")
-        f.write("# Converted from COLMAP (OpenCV convention: +X right, +Y down, +Z forward)\n")
         f.write("# UE coordinate axes: +X forward, +Y right, +Z up\n")
         f.write("# Format: X Y Z Qx Qy Qz Qw\n")
         f.write("# Quaternion order: [x, y, z, w] (UE format, scalar last)\n")
-        f.write("# Quaternion represents camera orientation (camera-to-world rotation)\n")
         for i, cam in enumerate(cameras):
             # Get UE position
             ue_pos = cam_ue_xyz[i]
             
-            # Convert rotation matrix to UE coordinate system
-            # COLMAP world: +X right, +Y down, +Z forward (right-handed)
-            # UE world: +X forward, +Y right, +Z up (left-handed)
+            R_w2c_colmap = cam["R_w2c"]
             
-            R_w2c_colmap = cam["R_w2c"]  # world-to-camera in COLMAP coordinates
+            R_c2w_colmap = R_w2c_colmap.T
             
-            # Convert world-to-camera to camera-to-world (camera orientation)
-            R_c2w_colmap = R_w2c_colmap.T  # camera-to-world = transpose of world-to-camera
-            
-            # Coordinate system transformation: COLMAP -> UE
-            # X_ue = Y_colmap, Y_ue = X_colmap, Z_ue = Z_colmap
             T_colmap_to_ue = np.array([
-                [0, 1, 0],   # X_ue = Y_colmap
-                [1, 0, 0],   # Y_ue = X_colmap
-                [0, 0, 1]    # Z_ue = Z_colmap
+                [0,  1,  0],  # X_ue = Y_colmap  
+                [1,  0,  0],  # Y_ue = X_colmap
+                [0,  0,  1]   # Z_ue = Z_colmap
             ])
+            
+            # Apply transformation: R_ue = T * R_colmap * T^T
             R_c2w_ue = T_colmap_to_ue @ R_c2w_colmap @ T_colmap_to_ue.T
             
             # Extract UE quaternion [x, y, z, w] from camera-to-world rotation

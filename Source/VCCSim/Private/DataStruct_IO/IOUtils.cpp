@@ -53,7 +53,8 @@ FPLYLoader::FPLYLoadResult FPLYLoader::LoadPLYFile(const FString& FilePath,
     // Validate file path
     if (!FPaths::FileExists(FilePath))
     {
-        Result.ErrorMessage = FString::Printf(TEXT("PLY file not found: %s"), *FilePath);
+        Result.ErrorMessage = FString::Printf(
+            TEXT("PLY file not found: %s"), *FilePath);
         UE_LOG(LogTemp, Error, TEXT("%s"), *Result.ErrorMessage);
         return Result;
     }
@@ -62,7 +63,8 @@ FPLYLoader::FPLYLoadResult FPLYLoader::LoadPLYFile(const FString& FilePath,
     TArray<FString> FileLines;
     if (!FFileHelper::LoadFileToStringArray(FileLines, *FilePath))
     {
-        Result.ErrorMessage = FString::Printf(TEXT("Failed to read PLY file: %s"), *FilePath);
+        Result.ErrorMessage = FString::Printf(TEXT("Failed to read PLY "
+                                                   "file: %s"), *FilePath);
         UE_LOG(LogTemp, Error, TEXT("%s"), *Result.ErrorMessage);
         return Result;
     }
@@ -111,7 +113,8 @@ FPLYLoader::FPLYLoadResult FPLYLoader::LoadPLYFile(const FString& FilePath,
     // Reserve space for points
     Result.Points.Reserve(VertexCount);
     
-    UE_LOG(LogTemp, Warning, TEXT("Loading PLY: Format=%s, Vertices=%d, HasColors=%s, HasNormals=%s"), 
+    UE_LOG(LogTemp, Warning, TEXT("Loading PLY: Format=%s, Vertices=%d, "
+                                  "HasColors=%s, HasNormals=%s"), 
         Format == EPLYFormat::ASCII ? TEXT("ASCII") : TEXT("Binary"), 
         VertexCount, 
         Result.bHasColors ? TEXT("Yes") : TEXT("No"),
@@ -122,7 +125,8 @@ FPLYLoader::FPLYLoadResult FPLYLoader::LoadPLYFile(const FString& FilePath,
     if (Format == EPLYFormat::ASCII)
     {
         bLoadSuccess = LoadASCIIPLY(FileLines, HeaderEndIndex, VertexCount, Properties,
-                                   DefaultColor, Result.Points, Result.bHasColors, Result.bHasNormals);
+                                   DefaultColor, Result.Points, Result.bHasColors,
+                                   Result.bHasNormals);
     }
     else
     {
@@ -135,7 +139,8 @@ FPLYLoader::FPLYLoadResult FPLYLoader::LoadPLYFile(const FString& FilePath,
         int32 HeaderSize = FTCHARToUTF8(HeaderText.GetCharArray().GetData()).Length();
         
         bLoadSuccess = LoadBinaryPLY(FilePath, HeaderSize, VertexCount, Properties, Format,
-                                    DefaultColor, Result.Points, Result.bHasColors, Result.bHasNormals);
+                                    DefaultColor, Result.Points, Result.bHasColors,
+                                    Result.bHasNormals);
     }
 
     Result.bSuccess = bLoadSuccess;
@@ -165,7 +170,8 @@ bool FPLYLoader::LoadASCIIPLY(const TArray<FString>& Lines,
 {
     int32 CurrentVertexIndex = 0;
     
-    for (int32 LineIndex = HeaderEndIndex + 1; LineIndex < Lines.Num() && CurrentVertexIndex < VertexCount; ++LineIndex)
+    for (int32 LineIndex = HeaderEndIndex + 1; LineIndex < Lines.Num() &&
+        CurrentVertexIndex < VertexCount; ++LineIndex)
     {
         TArray<FString> Components;
         Lines[LineIndex].ParseIntoArray(Components, TEXT(" "), true);
@@ -178,7 +184,8 @@ bool FPLYLoader::LoadASCIIPLY(const TArray<FString>& Lines,
             bool bHasValidNormal = false;
             
             // Parse each property
-            for (int32 PropIndex = 0; PropIndex < Properties.Num() && PropIndex < Components.Num(); ++PropIndex)
+            for (int32 PropIndex = 0; PropIndex < Properties.Num() && PropIndex <
+                Components.Num(); ++PropIndex)
             {
                 const FPLYProperty& Prop = Properties[PropIndex];
                 const FString& Value = Components[PropIndex];
@@ -270,7 +277,8 @@ bool FPLYLoader::LoadBinaryPLY(const FString& FilePath,
     int32 ExpectedDataSize = HeaderSize + (RecordSize * VertexCount);
     if (FileData.Num() < ExpectedDataSize)
     {
-        UE_LOG(LogTemp, Error, TEXT("PLY file too small: expected %d bytes, got %d bytes"), 
+        UE_LOG(LogTemp, Error, TEXT("PLY file too small: expected %d bytes, "
+                                    "got %d bytes"), 
             ExpectedDataSize, FileData.Num());
         return false;
     }
@@ -414,7 +422,8 @@ FPLYLoader::EPLYFormat FPLYLoader::DetectPLYFormat(const TArray<FString>& Header
     return EPLYFormat::Unknown;
 }
 
-TArray<FPLYLoader::FPLYProperty> FPLYLoader::ParsePLYProperties(const TArray<FString>& HeaderLines)
+TArray<FPLYLoader::FPLYProperty> FPLYLoader::ParsePLYProperties(
+    const TArray<FString>& HeaderLines)
 {
     TArray<FPLYProperty> Properties;
     bool bInVertexElement = false;
@@ -425,7 +434,8 @@ TArray<FPLYLoader::FPLYProperty> FPLYLoader::ParsePLYProperties(const TArray<FSt
         {
             bInVertexElement = true;
         }
-        else if (Line.StartsWith(TEXT("element")) && !Line.StartsWith(TEXT("element vertex")))
+        else if (Line.StartsWith(TEXT("element")) && !Line.StartsWith(
+            TEXT("element vertex")))
         {
             bInVertexElement = false;
         }
@@ -477,17 +487,23 @@ int32 FPLYLoader::GetVertexCount(const TArray<FString>& HeaderLines)
 
 bool FPLYLoader::HasColorProperties(const TArray<FPLYProperty>& Properties)
 {
-    bool bHasRed = Properties.ContainsByPredicate([](const FPLYProperty& Prop) { return Prop.Name == TEXT("red"); });
-    bool bHasGreen = Properties.ContainsByPredicate([](const FPLYProperty& Prop) { return Prop.Name == TEXT("green"); });
-    bool bHasBlue = Properties.ContainsByPredicate([](const FPLYProperty& Prop) { return Prop.Name == TEXT("blue"); });
+    bool bHasRed = Properties.ContainsByPredicate([](const FPLYProperty& Prop)
+        { return Prop.Name == TEXT("red"); });
+    bool bHasGreen = Properties.ContainsByPredicate([](const FPLYProperty& Prop)
+        { return Prop.Name == TEXT("green"); });
+    bool bHasBlue = Properties.ContainsByPredicate([](const FPLYProperty& Prop)
+        { return Prop.Name == TEXT("blue"); });
     return bHasRed && bHasGreen && bHasBlue;
 }
 
 bool FPLYLoader::HasNormalProperties(const TArray<FPLYProperty>& Properties)
 {
-    bool bHasNX = Properties.ContainsByPredicate([](const FPLYProperty& Prop) { return Prop.Name == TEXT("nx"); });
-    bool bHasNY = Properties.ContainsByPredicate([](const FPLYProperty& Prop) { return Prop.Name == TEXT("ny"); });
-    bool bHasNZ = Properties.ContainsByPredicate([](const FPLYProperty& Prop) { return Prop.Name == TEXT("nz"); });
+    bool bHasNX = Properties.ContainsByPredicate([](const FPLYProperty& Prop)
+        { return Prop.Name == TEXT("nx"); });
+    bool bHasNY = Properties.ContainsByPredicate([](const FPLYProperty& Prop)
+        { return Prop.Name == TEXT("ny"); });
+    bool bHasNZ = Properties.ContainsByPredicate([](const FPLYProperty& Prop)
+        { return Prop.Name == TEXT("nz"); });
     return bHasNX && bHasNY && bHasNZ;
 }
 
@@ -614,7 +630,8 @@ bool FPLYWriter::WritePointCloudToPLY(
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("FPLYWriter: Failed to write PLY file: %s"), *OutputFilePath);
+        UE_LOG(LogTemp, Error, TEXT("FPLYWriter: Failed to write PLY "
+                                    "file: %s"), *OutputFilePath);
     }
     
     return bSuccess;
@@ -645,7 +662,8 @@ bool FPLYWriter::WriteCamerasToPLY(
         FVector CameraPosition = CameraInfo.Translation;
         
         // Get camera forward direction using rotation matrix
-        FVector CameraForward = CameraInfo.RotationMatrix.Rotator().RotateVector(FVector(1,0,0));
+        FVector CameraForward = CameraInfo.RotationMatrix.Rotator().RotateVector(
+            FVector(0, 0, 1));
         
         // Generate color based on camera UID for visualization
         int32 ColorIndex = CameraInfo.UID % 6;
@@ -668,7 +686,8 @@ bool FPLYWriter::WriteCamerasToPLY(
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("FPLYWriter: Failed to write camera PLY file: %s"), *OutputFilePath);
+        UE_LOG(LogTemp, Error, TEXT("FPLYWriter: Failed to write camera"
+                                    " PLY file: %s"), *OutputFilePath);
     }
     
     return bSuccess;
@@ -717,7 +736,8 @@ bool FPLYWriter::WritePointArrayToPLY(
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("FPLYWriter: Failed to write PLY file: %s"), *OutputFilePath);
+        UE_LOG(LogTemp, Error, TEXT("FPLYWriter: Failed to "
+                                    "write PLY file: %s"), *OutputFilePath);
     }
     
     return bSuccess;

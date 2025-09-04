@@ -106,9 +106,6 @@ private:
     /** Load point cloud from PLY file */
     bool LoadPointCloudFromFile(const FString& FilePath);
     
-    /** Create sphere-based point cloud visualization */
-    void CreateSpherePointCloudVisualization();
-    
     /** Create colored point cloud visualization using particle system */
     void CreateColoredPointCloudVisualization(UWorld* World);
     

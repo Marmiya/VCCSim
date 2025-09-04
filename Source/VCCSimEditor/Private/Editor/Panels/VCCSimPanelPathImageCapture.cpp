@@ -587,8 +587,6 @@ void FVCCSimPanelPathImageCapture::UpdatePathVisualization()
         GEditor->GetEditorWorldContext().World(),
         Positions,
         Rotations,
-        nullptr, // PathMaterial
-        nullptr, // CameraMaterial  
         5.f,     // Path width
         15.0f,   // Cone size
         75.0f    // Cone length

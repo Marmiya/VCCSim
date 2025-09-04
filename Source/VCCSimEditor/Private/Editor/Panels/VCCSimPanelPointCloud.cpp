@@ -21,6 +21,7 @@
 #include "Engine/World.h"
 #include "Engine/Engine.h"
 #include "UObject/UObjectGlobals.h"
+#include "EngineUtils.h"
 #include "Framework/Application/SlateApplication.h"
 #include "IDesktopPlatform.h"
 #include "DesktopPlatformModule.h"
@@ -509,12 +510,6 @@ bool FVCCSimPanelPointCloud::LoadPointCloudFromFile(const FString& FilePath)
     }
 }
 
-void FVCCSimPanelPointCloud::CreateSpherePointCloudVisualization()
-{
-    // Implementation will be moved from VCCSimPanel_UI.cpp
-    UE_LOG(LogTemp, Log, TEXT("CreateSpherePointCloudVisualization - Implementation to be moved"));
-}
-
 void FVCCSimPanelPointCloud::CreateColoredPointCloudVisualization(UWorld* World)
 {
     if (!World || PointCloudData.Num() == 0)
@@ -524,6 +519,18 @@ void FVCCSimPanelPointCloud::CreateColoredPointCloudVisualization(UWorld* World)
 
     // Clear existing visualization
     ClearPointCloudVisualization();
+    
+    // Find and remove any existing VCCSim_PointCloud actors in the world
+    // This handles cases where actors were left behind from previous sessions
+    for (TActorIterator<AActor> ActorIterator(World); ActorIterator; ++ActorIterator)
+    {
+        AActor* Actor = *ActorIterator;
+        if (Actor && Actor->GetActorLabel() == TEXT("VCCSim_PointCloud"))
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Found existing VCCSim_PointCloud actor, removing it: %s"), *Actor->GetName());
+            Actor->Destroy();
+        }
+    }
 
     // Create point cloud data structure
     FPointCloudData PointCloudDataStruct;
@@ -539,13 +546,15 @@ void FVCCSimPanelPointCloud::CreateColoredPointCloudVisualization(UWorld* World)
         // Ensure a valid root component exists
         if (!NewActor->GetRootComponent())
         {
-            USceneComponent* RootComp = NewObject<USceneComponent>(NewActor, TEXT("PointCloudRoot"));
+            USceneComponent* RootComp = NewObject<USceneComponent>(
+                NewActor, TEXT("PointCloudRoot"));
             NewActor->SetRootComponent(RootComp);
             RootComp->RegisterComponent();
         }
 
         // Add and attach point cloud renderer component
-        UPointCloudRenderer* PointCloudRenderer = NewObject<UPointCloudRenderer>(NewActor, TEXT("PointCloudRenderer"));
+        UPointCloudRenderer* PointCloudRenderer = NewObject<UPointCloudRenderer>(
+            NewActor, TEXT("PointCloudRenderer"));
         if (PointCloudRenderer)
         {
             PointCloudRenderer->SetupAttachment(NewActor->GetRootComponent());
@@ -555,7 +564,8 @@ void FVCCSimPanelPointCloud::CreateColoredPointCloudVisualization(UWorld* World)
             PointCloudRenderer->RenderPointCloud(PointCloudDataStruct, bShowColors, 1.0f);
             ParticlePointCloudRenderer = PointCloudRenderer;
 
-            UE_LOG(LogTemp, Log, TEXT("Created point cloud visualization: %d points"), PointCloudData.Num());
+            UE_LOG(LogTemp, Log, TEXT("Created point cloud visualization:"
+                                      " %d points"), PointCloudData.Num());
 
             // Optionally render normals if available and requested
             if (bShowNormals && bPointCloudHasNormals)
@@ -578,7 +588,8 @@ void FVCCSimPanelPointCloud::CreateNormalVisualization(AActor* Owner)
     UInstancedStaticMeshComponent* NormISM = NormalLinesInstancedComponent.Get();
     if (!NormISM)
     {
-        NormISM = NewObject<UInstancedStaticMeshComponent>(Owner, TEXT("PointCloudNormalInstanced"));
+        NormISM = NewObject<UInstancedStaticMeshComponent>(Owner,
+            TEXT("PointCloudNormalInstanced"));
         if (!NormISM)
         {
             return;
@@ -594,7 +605,8 @@ void FVCCSimPanelPointCloud::CreateNormalVisualization(AActor* Owner)
         NormISM->bCastStaticShadow = false;
 
         // Load a cylinder mesh aligned on Z axis
-        if (UStaticMesh* Cylinder = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder")))
+        if (UStaticMesh* Cylinder = LoadObject<UStaticMesh>(nullptr,
+            TEXT("/Engine/BasicShapes/Cylinder.Cylinder")))
         {
             NormISM->SetStaticMesh(Cylinder);
         }
@@ -604,13 +616,15 @@ void FVCCSimPanelPointCloud::CreateNormalVisualization(AActor* Owner)
         NormalLinesInstancedComponent = NormISM;
 
         // Set a simple dynamic material (e.g., blue)
-        UMaterialInterface* BaseMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
+        UMaterialInterface* BaseMaterial = LoadObject<UMaterialInterface>(
+            nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
         if (BaseMaterial)
         {
             UMaterialInstanceDynamic* MID = UMaterialInstanceDynamic::Create(BaseMaterial, NormISM);
             if (MID)
             {
-                MID->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.2f, 0.6f, 1.0f, 1.0f));
+                MID->SetVectorParameterValue(TEXT("Color"),
+                    FLinearColor(0.2f, 0.6f, 1.0f, 1.0f));
                 NormISM->SetMaterial(0, MID);
             }
         }
@@ -636,7 +650,8 @@ void FVCCSimPanelPointCloud::CreateNormalVisualization(AActor* Owner)
         Xform.SetLocation(Mid);
         Xform.SetRotation(Rot);
         // Cylinder height is ~100 units; scale Z accordingly
-        Xform.SetScale3D(FVector(NormalRadiusScale, NormalRadiusScale, FMath::Max(0.01f, NormalLength / 100.0f)));
+        Xform.SetScale3D(FVector(NormalRadiusScale, NormalRadiusScale,
+            FMath::Max(0.01f, NormalLength / 100.0f)));
         NormISM->AddInstance(Xform);
     }
 
@@ -665,11 +680,26 @@ void FVCCSimPanelPointCloud::ClearPointCloudVisualization()
         NormalLinesInstancedComponent.Reset();
     }
 
-    // Destroy actor
+    // Destroy our tracked actor
     if (PointCloudActor.IsValid())
     {
         PointCloudActor->Destroy();
         PointCloudActor.Reset();
+    }
+    
+    // Also search for and remove any orphaned VCCSim_PointCloud actors
+    // This provides extra cleanup in case our WeakObjectPtr became invalid
+    if (UWorld* World = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr)
+    {
+        for (TActorIterator<AActor> ActorIterator(World); ActorIterator; ++ActorIterator)
+        {
+            AActor* Actor = *ActorIterator;
+            if (Actor && Actor->GetActorLabel() == TEXT("VCCSim_PointCloud"))
+            {
+                UE_LOG(LogTemp, Warning, TEXT("Cleaning up orphaned VCCSim_PointCloud actor: %s"), *Actor->GetName());
+                Actor->Destroy();
+            }
+        }
     }
 
     UE_LOG(LogTemp, Log, TEXT("Cleared point cloud visualization"));

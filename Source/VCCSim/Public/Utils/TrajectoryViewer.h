@@ -41,8 +41,6 @@ public:
         UWorld* World,
         const TArray<FVector>& InPositions,
         const TArray<FRotator>& InRotations,
-        UMaterialInterface* PathMaterial,
-        UMaterialInterface* CameraMaterial,
         float PathWidth = 5.0f,
         float ConeSize = 20.0f,
         float ConeLength = 30.0f);
