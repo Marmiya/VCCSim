@@ -84,9 +84,19 @@ TArray<FCameraInfo> FVCCSimDataConverter::ConvertPoseFile(
         FCameraInfo CameraInfo;
         CameraInfo.UID = ValidPoseIndex;
         
-        // Convert coordinate system
-        CameraInfo.RotationMatrix = ConvertRotation(PoseData.Quaternion);
-        CameraInfo.Translation = ConvertLocation(PoseData.Location);
+        // Convert coordinate system - swap X and Y axes for right-handed to left-handed conversion
+        // COLMAP: Right-handed (+X right, +Y down, +Z forward) -> UE: Left-handed (+X forward, +Y right, +Z up)
+        // Transformation: (X_colmap, Y_colmap, Z_colmap) -> (Y_colmap, X_colmap, Z_colmap)
+        FMatrix UEMatrix = FQuatRotationMatrix::Make(PoseData.Quaternion);
+        FMatrix CoordTransform = FMatrix::Identity;
+        CoordTransform.M[0][0] = 0.0f;   // X_ue = Y_colmap
+        CoordTransform.M[0][1] = 1.0f;   
+        CoordTransform.M[1][0] = 1.0f;   // Y_ue = X_colmap
+        CoordTransform.M[1][1] = 0.0f;   
+        CoordTransform.M[2][2] = 1.0f;   // Z_ue = Z_colmap
+        FMatrix ConvertedMatrix = CoordTransform * UEMatrix * CoordTransform.GetTransposed();
+        CameraInfo.Rotation = ConvertedMatrix.ToQuat();
+        CameraInfo.Position = ConvertLocation(PoseData.Location);
         
         // Set camera parameters
         CameraInfo.FOVDegrees = FMath::RadiansToDegrees(2.0f * FMath::Atan(Intrinsics.Width * 0.5f / Intrinsics.FocalX));
@@ -192,22 +202,23 @@ bool FVCCSimDataConverter::DeterminePoseFileFormat(const FString& PoseFilePath)
 FVector FVCCSimDataConverter::ConvertLocation(const FVector& UELocation)
 {
     // Convert from UE left-handed system (cm) to right-handed system (m)
-    // X and Z axes maintain direction, Y axis flipped, units converted to meters
+    // Swap X and Y axes: UE(X_forward, Y_right, Z_up) -> RightHanded(X_right, Y_forward, Z_up)
+    // This matches the inverse transformation in Colmap_2_ply.py
     return FVector(
-        UELocation.X * 0.01f,  // X: forward direction unchanged, cm to m
-        -UELocation.Y * 0.01f, // Y: right to left (flipped for right-handed), cm to m  
-        UELocation.Z * 0.01f   // Z: up direction unchanged, cm to m
+        UELocation.Y * 0.01f,  // X_rh = Y_ue (right direction), cm to m
+        UELocation.X * 0.01f,  // Y_rh = X_ue (forward direction), cm to m
+        UELocation.Z * 0.01f   // Z_rh = Z_ue (up direction unchanged), cm to m
     );
 }
 
 FVector FVCCSimDataConverter::ConvertNormal(const FVector& UENormal)
 {
     // Convert normal from UE left-handed system to right-handed system
-    // Normal vectors don't need unit conversion, only coordinate system flip
+    // Swap X and Y axes, consistent with position transformation
     return FVector(
-        UENormal.X,   // X: forward direction unchanged  
-        -UENormal.Y,  // Y: right to left (flipped for right-handed)
-        UENormal.Z    // Z: up direction unchanged
+        UENormal.Y,   // X_rh = Y_ue (right direction)
+        UENormal.X,   // Y_rh = X_ue (forward direction)  
+        UENormal.Z    // Z_rh = Z_ue (up direction unchanged)
     );
 }
 
@@ -216,14 +227,16 @@ FMatrix FVCCSimDataConverter::ConvertRotation(const FRotator& UERotation)
     // Get UE rotation matrix
     FMatrix UEMatrix = FRotationMatrix::Make(UERotation);
     
+    // Swap X and Y axes transformation matrix
     FMatrix CoordTransform = FMatrix::Identity;
-    CoordTransform.M[0][0] = 1.0f;   // X -> X
-    CoordTransform.M[1][1] = -1.0f;  // Y -> -Y  
-    CoordTransform.M[2][2] = 1.0f;   // Z -> Z
+    CoordTransform.M[0][0] = 0.0f;   // X_rh = Y_ue
+    CoordTransform.M[0][1] = 1.0f;   
+    CoordTransform.M[1][0] = 1.0f;   // Y_rh = X_ue
+    CoordTransform.M[1][1] = 0.0f;   
+    CoordTransform.M[2][2] = 1.0f;   // Z_rh = Z_ue
     
     // Apply transformation: ConvertedMatrix = CoordTransform * UEMatrix * CoordTransform^T
-    // Since CoordTransform is diagonal, CoordTransform^T = CoordTransform
-    return CoordTransform * UEMatrix * CoordTransform;
+    return CoordTransform * UEMatrix * CoordTransform.GetTransposed();
 }
 
 FMatrix FVCCSimDataConverter::ConvertRotation(const FQuat& UEQuaternion)
@@ -231,14 +244,16 @@ FMatrix FVCCSimDataConverter::ConvertRotation(const FQuat& UEQuaternion)
     // Convert quaternion to rotation matrix
     FMatrix UEMatrix = FQuatRotationMatrix::Make(UEQuaternion);
     
+    // Swap X and Y axes transformation matrix
     FMatrix CoordTransform = FMatrix::Identity;
-    CoordTransform.M[0][0] = 1.0f;   // X -> X
-    CoordTransform.M[1][1] = -1.0f;  // Y -> -Y  
-    CoordTransform.M[2][2] = 1.0f;   // Z -> Z
+    CoordTransform.M[0][0] = 0.0f;   // X_rh = Y_ue
+    CoordTransform.M[0][1] = 1.0f;   
+    CoordTransform.M[1][0] = 1.0f;   // Y_rh = X_ue
+    CoordTransform.M[1][1] = 0.0f;   
+    CoordTransform.M[2][2] = 1.0f;   // Z_rh = Z_ue
     
     // Apply transformation: ConvertedMatrix = CoordTransform * UEMatrix * CoordTransform^T
-    // Since CoordTransform is diagonal, CoordTransform^T = CoordTransform
-    return CoordTransform * UEMatrix * CoordTransform;
+    return CoordTransform * UEMatrix * CoordTransform.GetTransposed();
 }
 
 FVector FVCCSimDataConverter::GetCameraForwardDirection(const FMatrix& ConvertedRotationMatrix)
@@ -456,10 +471,10 @@ bool FVCCSimDataConverter::SaveCameraInfo(
             Info.FocalY,
             Info.CenterX,
             Info.CenterY,
-            Info.RotationMatrix.M[0][0], Info.RotationMatrix.M[0][1], Info.RotationMatrix.M[0][2],
-            Info.RotationMatrix.M[1][0], Info.RotationMatrix.M[1][1], Info.RotationMatrix.M[1][2],
-            Info.RotationMatrix.M[2][0], Info.RotationMatrix.M[2][1], Info.RotationMatrix.M[2][2],
-            Info.Translation.X, Info.Translation.Y, Info.Translation.Z,
+            (float)FCameraInfoUtils::GetRotationMatrix(Info).M[0][0], (float)FCameraInfoUtils::GetRotationMatrix(Info).M[0][1], (float)FCameraInfoUtils::GetRotationMatrix(Info).M[0][2],
+            (float)FCameraInfoUtils::GetRotationMatrix(Info).M[1][0], (float)FCameraInfoUtils::GetRotationMatrix(Info).M[1][1], (float)FCameraInfoUtils::GetRotationMatrix(Info).M[1][2],
+            (float)FCameraInfoUtils::GetRotationMatrix(Info).M[2][0], (float)FCameraInfoUtils::GetRotationMatrix(Info).M[2][1], (float)FCameraInfoUtils::GetRotationMatrix(Info).M[2][2],
+            (float)Info.Position.X, (float)Info.Position.Y, (float)Info.Position.Z,
             (i < CameraInfos.Num() - 1) ? TEXT(",") : TEXT("")
         );
     }
@@ -559,7 +574,7 @@ FBox FVCCSimDataConverter::CalculateSceneBounds(const TArray<FCameraInfo>& Camer
     
     for (const FCameraInfo& CameraInfo : CameraInfos)
     {
-        Bounds += CameraInfo.Translation;
+        Bounds += CameraInfo.Position;
     }
     
     if (!Bounds.IsValid)

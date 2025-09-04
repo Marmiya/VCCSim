@@ -1174,13 +1174,14 @@ FReply SVCCSimPanel::OnGSTestTransformationClicked()
         return FReply::Handled();
     }
     
-    // Ensure output directory exists
+    // Create Test Transform subdirectory
+    FString TestTransformOutputDir = FPaths::Combine(GSConfig.OutputDirectory, TEXT("Test Transform"));
     IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
-    if (!PlatformFile.DirectoryExists(*GSConfig.OutputDirectory))
+    if (!PlatformFile.DirectoryExists(*TestTransformOutputDir))
     {
-        if (!PlatformFile.CreateDirectoryTree(*GSConfig.OutputDirectory))
+        if (!PlatformFile.CreateDirectoryTree(*TestTransformOutputDir))
         {
-            ShowGSNotification(TEXT("Failed to create output directory"), true);
+            ShowGSNotification(TEXT("Failed to create Test Transform directory"), true);
             return FReply::Handled();
         }
     }
@@ -1198,7 +1199,7 @@ FReply SVCCSimPanel::OnGSTestTransformationClicked()
             FPointCloudData OriginalMesh = FVCCSimDataConverter::ConvertMeshToPointCloud(
                 GSConfig.SelectedMesh.Get(), PointCount, false); 
             
-            FString MeshUEPath = FPaths::Combine(GSConfig.OutputDirectory,
+            FString MeshUEPath = FPaths::Combine(TestTransformOutputDir,
                 TEXT("test_mesh_ue_coordinates.ply"));
             if (FVCCSimDataConverter::SavePointCloudToPLY(OriginalMesh, MeshUEPath))
             {
@@ -1210,7 +1211,7 @@ FReply SVCCSimPanel::OnGSTestTransformationClicked()
             FPointCloudData TransformedMesh = FVCCSimDataConverter::ConvertMeshToPointCloud(
                 GSConfig.SelectedMesh.Get(), PointCount, true);
             
-            FString MeshTSPath = FPaths::Combine(GSConfig.OutputDirectory,
+            FString MeshTSPath = FPaths::Combine(TestTransformOutputDir,
                 TEXT("test_mesh_ts_coordinates.ply"));
             if (FVCCSimDataConverter::SavePointCloudToPLY(TransformedMesh, MeshTSPath))
             {
@@ -1269,11 +1270,17 @@ FReply SVCCSimPanel::OnGSTestTransformationClicked()
             
             if (CameraInfos.Num() > 0)
             {
-                FString CameraPLYPath = FPaths::Combine(GSConfig.OutputDirectory,
+                FString CameraPLYPath = FPaths::Combine(TestTransformOutputDir,
                     TEXT("test_cameras_transformed.ply"));
                 ExportCamerasToPLY(CameraInfos, CameraPLYPath);
+                
+                // Save CameraInfo data for comparison
+                FString CameraInfoPath = FPaths::Combine(TestTransformOutputDir,
+                    TEXT("camera_info_data.txt"));
+                SaveCameraInfoData(CameraInfos, CameraInfoPath);
+                
                 StatusMessage += FString::Printf(
-                    TEXT("✓ %d cameras exported\n"), CameraInfos.Num());
+                    TEXT("✓ %d cameras exported\n✓ CameraInfo data saved\n"), CameraInfos.Num());
                 bExportedAny = true;
             }
             else
@@ -1452,6 +1459,22 @@ void SVCCSimPanel::ExportCamerasToPLY(
     if (!bSuccess)
     {
         UE_LOG(LogTemp, Error, TEXT("Failed to export cameras to PLY file: %s"), *OutputPath);
+    }
+}
+
+void SVCCSimPanel::SaveCameraInfoData(
+    const TArray<FCameraInfo>& CameraInfos, const FString& OutputPath)
+{
+    // Use the new utility function from FCameraInfoUtils
+    bool bSuccess = FCameraInfoUtils::SaveCameraInfoToFile(
+        CameraInfos, 
+        OutputPath, 
+        TEXT("Triangle Splatting (Right-handed, Z-up, meters)")
+    );
+    
+    if (!bSuccess)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Failed to save CameraInfo data using utility function"));
     }
 }
 

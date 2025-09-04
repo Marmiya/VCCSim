@@ -84,10 +84,10 @@ public:
     int32 UID;
     
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
-    FMatrix RotationMatrix;
+    FQuat Rotation;
     
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
-    FVector Translation;
+    FVector Position;
     
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
     float FOVDegrees;
@@ -119,8 +119,8 @@ public:
 
     FCameraInfo()
         : UID(0)
-        , RotationMatrix(FMatrix::Identity)
-        , Translation(FVector::ZeroVector)
+        , Rotation(FQuat::Identity)
+        , Position(FVector::ZeroVector)
         , FOVDegrees(90.0f)
         , ImagePath(TEXT(""))
         , ImageName(TEXT(""))
@@ -168,3 +168,59 @@ public:
     {
     }
 };
+
+/**
+ * Camera data utility functions
+ */
+namespace FCameraInfoUtils
+{
+    /**
+     * Create FCameraInfo from position and rotation quaternion
+     */
+    VCCSIM_API FCameraInfo CreateCameraInfo(
+        int32 UID,
+        const FVector& Position,
+        const FQuat& Rotation,
+        const FString& ImagePath,
+        const FCameraIntrinsics& Intrinsics
+    );
+    
+    /**
+     * Convert FCameraInfo to rotation matrix (for legacy compatibility)
+     */
+    VCCSIM_API FMatrix GetRotationMatrix(const FCameraInfo& CameraInfo);
+    
+    /**
+     * Set rotation from matrix (for legacy compatibility)
+     */
+    VCCSIM_API void SetRotationFromMatrix(FCameraInfo& CameraInfo, const FMatrix& RotationMatrix);
+    
+    /**
+     * Save array of FCameraInfo to text file for comparison/debugging
+     * Format: ImageName X Y Z QW QX QY QZ
+     */
+    VCCSIM_API bool SaveCameraInfoToFile(
+        const TArray<FCameraInfo>& CameraInfos,
+        const FString& FilePath,
+        const FString& CoordinateSystemDescription = TEXT("Triangle Splatting (Right-handed, Z-up, meters)")
+    );
+    
+    /**
+     * Load array of FCameraInfo from text file
+     * Format: ImageName X Y Z QW QX QY QZ
+     */
+    VCCSIM_API bool LoadCameraInfoFromFile(
+        TArray<FCameraInfo>& OutCameraInfos,
+        const FString& FilePath
+    );
+    
+    /**
+     * Calculate angular distance between two camera rotations in degrees
+     */
+    VCCSIM_API float CalculateAngularDistance(const FCameraInfo& Camera1, const FCameraInfo& Camera2);
+    
+    /**
+     * Calculate position distance between two cameras in meters
+     */
+    VCCSIM_API float CalculatePositionDistance(const FCameraInfo& Camera1, const FCameraInfo& Camera2);
+}

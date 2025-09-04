@@ -659,11 +659,10 @@ bool FPLYWriter::WriteCamerasToPLY(
     // Write camera data
     for (const FCameraInfo& CameraInfo : CameraInfos)
     {
-        FVector CameraPosition = CameraInfo.Translation;
+        FVector CameraPosition = CameraInfo.Position;
         
-        // Get camera forward direction using rotation matrix
-        FVector CameraForward = CameraInfo.RotationMatrix.Rotator().RotateVector(
-            FVector(0, 0, 1));
+        // Get camera forward direction using quaternion
+        FVector CameraForward = CameraInfo.Rotation.RotateVector(FVector(0, 0, 1));
         
         // Generate color based on camera UID for visualization
         int32 ColorIndex = CameraInfo.UID % 6;
