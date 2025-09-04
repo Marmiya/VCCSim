@@ -458,7 +458,7 @@ bool FVCCSimDataConverter::SaveCameraInfo(
             "    \"focal_y\": %.6f,\n"
             "    \"center_x\": %.6f,\n"
             "    \"center_y\": %.6f,\n"
-            "    \"rotation\": [%.6f, %.6f, %.6f, %.6f, %.6f, %.6f, %.6f, %.6f, %.6f],\n"
+            "    \"rotation\": [%.6f, %.6f, %.6f, %.6f],\n"
             "    \"translation\": [%.6f, %.6f, %.6f]\n"
             "  }%s\n"
         ),
@@ -471,9 +471,7 @@ bool FVCCSimDataConverter::SaveCameraInfo(
             Info.FocalY,
             Info.CenterX,
             Info.CenterY,
-            (float)FCameraInfoUtils::GetRotationMatrix(Info).M[0][0], (float)FCameraInfoUtils::GetRotationMatrix(Info).M[0][1], (float)FCameraInfoUtils::GetRotationMatrix(Info).M[0][2],
-            (float)FCameraInfoUtils::GetRotationMatrix(Info).M[1][0], (float)FCameraInfoUtils::GetRotationMatrix(Info).M[1][1], (float)FCameraInfoUtils::GetRotationMatrix(Info).M[1][2],
-            (float)FCameraInfoUtils::GetRotationMatrix(Info).M[2][0], (float)FCameraInfoUtils::GetRotationMatrix(Info).M[2][1], (float)FCameraInfoUtils::GetRotationMatrix(Info).M[2][2],
+            (float)Info.Rotation.X, (float)Info.Rotation.Y, (float)Info.Rotation.Z, (float)Info.Rotation.W,
             (float)Info.Position.X, (float)Info.Position.Y, (float)Info.Position.Z,
             (i < CameraInfos.Num() - 1) ? TEXT(",") : TEXT("")
         );
@@ -780,12 +778,16 @@ TArray<FVector> FVCCSimDataConverter::CalculatePointNormals(const TArray<FVector
 
 FString FVCCSimDataConverter::CreateTimestampedColmapDirectory(const FString& BaseOutputPath)
 {
+    // Create organized COLMAP directory structure
+    FString ColmapParentDir = FPaths::Combine(BaseOutputPath, TEXT("TriangleSplatting"));
+    FString ColmapOutputDir = FPaths::Combine(ColmapParentDir, TEXT("colmap_output"));
+    
     // Generate timestamp string
     FDateTime Now = FDateTime::Now();
     FString Timestamp = Now.ToString(TEXT("%Y%m%d_%H%M%S"));
-    FString TimestampedDirName = FString::Printf(TEXT("colmap_dataset_%s"), *Timestamp);
+    FString TimestampedDirName = FString::Printf(TEXT("dataset_%s"), *Timestamp);
     
-    FString TimestampedPath = FPaths::Combine(BaseOutputPath, TimestampedDirName);
+    FString TimestampedPath = FPaths::Combine(ColmapOutputDir, TimestampedDirName);
     
     // Create the directory
     IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();

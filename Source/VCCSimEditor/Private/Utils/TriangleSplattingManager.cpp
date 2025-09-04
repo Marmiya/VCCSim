@@ -119,10 +119,30 @@ bool FTriangleSplattingManager::StartColmapTraining(const FString& PythonCommand
     TrainingProgress = 0.0f;
     StatusMessage = TEXT("Starting Triangle Splatting training with COLMAP data...");
     TrainingStartTime = FDateTime::Now();
-    OutputDirectory = OutputDir;
     
-    // Set up log file path
-    LogFilePath = FPaths::Combine(OutputDirectory, TEXT("training_log.txt"));
+    // Create organized session directory for COLMAP training
+    FString TSParentDir = FPaths::Combine(OutputDir, TEXT("TriangleSplatting"));
+    FString TSTrainingDir = FPaths::Combine(TSParentDir, TEXT("training_sessions"));
+    
+    FDateTime Now = FDateTime::Now();
+    FString Timestamp = Now.ToString(TEXT("%Y%m%d_%H%M%S"));
+    FString SessionDirName = FString::Printf(TEXT("colmap_session_%s"), *Timestamp);
+    OutputDirectory = FPaths::Combine(TSTrainingDir, SessionDirName);
+    
+    // Ensure session directory structure exists
+    if (!EnsureDirectoryExists(OutputDirectory) ||
+        !EnsureDirectoryExists(FPaths::Combine(OutputDirectory, TEXT("logs"))) ||
+        !EnsureDirectoryExists(FPaths::Combine(OutputDirectory, TEXT("outputs"))) ||
+        !EnsureDirectoryExists(FPaths::Combine(OutputDirectory, TEXT("runtime"))))
+    {
+        CurrentStatus = ETrainingStatus::Failed;
+        StatusMessage = TEXT("Failed to create training session directories");
+        LogMessage(StatusMessage, true);
+        return false;
+    }
+    
+    // Set up log file path in organized structure
+    LogFilePath = FPaths::Combine(OutputDirectory, TEXT("logs"), TEXT("colmap_training_log.txt"));
     
     UE_LOG(LogTemp, Log, TEXT("Starting COLMAP training: %s %s"), *PythonCommand, *Arguments);
     
@@ -331,32 +351,46 @@ bool FTriangleSplattingManager::ValidateConfiguration(const FTriangleSplattingCo
 
 bool FTriangleSplattingManager::PrepareTrainingData(const FTriangleSplattingConfig& Config)
 {
-    // Create timestamped subdirectory for this training session
-    FString TSOutputParentDir = FPaths::Combine(Config.OutputDirectory, TEXT("triangle_splatting_output"));
+    // Create organized directory structure for Triangle Splatting training sessions
+    FString TSParentDir = FPaths::Combine(Config.OutputDirectory, TEXT("TriangleSplatting"));
+    FString TSTrainingDir = FPaths::Combine(TSParentDir, TEXT("training_sessions"));
     
     // Generate timestamp for this training session
     FDateTime Now = FDateTime::Now();
     FString Timestamp = Now.ToString(TEXT("%Y%m%d_%H%M%S"));
-    FString SessionDirName = FString::Printf(TEXT("training_%s"), *Timestamp);
-    OutputDirectory = FPaths::Combine(TSOutputParentDir, SessionDirName);
+    FString SessionDirName = FString::Printf(TEXT("session_%s"), *Timestamp);
+    OutputDirectory = FPaths::Combine(TSTrainingDir, SessionDirName);
     
-    UE_LOG(LogTemp, Log, TEXT("Creating Triangle Splatting session directory: %s"), *OutputDirectory);
+    UE_LOG(LogTemp, Log, TEXT("Creating Triangle Splatting training session: %s"), *OutputDirectory);
     
-    // Ensure output directory exists
+    // Create main session directory
     if (!EnsureDirectoryExists(OutputDirectory))
     {
         return false;
     }
     
-    // Create subdirectories
-    TArray<FString> SubDirectories = { TEXT("logs"), TEXT("output"), TEXT("config") };
-    for (const FString& SubDir : SubDirectories)
+    // Create organized subdirectories without redundancy
+    TArray<FString> MainSubDirectories = { 
+        TEXT("config"),    // Training configuration files
+        TEXT("logs"),      // Training logs and progress
+        TEXT("outputs"),   // Training outputs (point clouds, renders)
+        TEXT("runtime")    // Runtime temporary files (checkpoints)
+    };
+    
+    for (const FString& SubDir : MainSubDirectories)
     {
         FString SubDirPath = FPaths::Combine(OutputDirectory, SubDir);
         if (!EnsureDirectoryExists(SubDirPath))
         {
             return false;
         }
+    }
+    
+    // Create renders subdirectory under outputs
+    FString RendersDir = FPaths::Combine(OutputDirectory, TEXT("outputs"), TEXT("renders"));
+    if (!EnsureDirectoryExists(RendersDir))
+    {
+        return false;
     }
     
     // Create configuration file

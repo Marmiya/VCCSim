@@ -408,12 +408,26 @@ def validate_cameras_txt(path: str):
         print(f"[warn] cameras.txt not found at: {path} (this is fine)")
 
 def bin_exists(colmap_dir: str) -> bool:
-    return (os.path.isfile(os.path.join(colmap_dir, "images.bin")) and
-            os.path.isfile(os.path.join(colmap_dir, "points3D.bin")))
+    # Check direct directory first
+    if (os.path.isfile(os.path.join(colmap_dir, "images.bin")) and
+        os.path.isfile(os.path.join(colmap_dir, "points3D.bin"))):
+        return True
+    
+    # Check sparse/0 subdirectory
+    sparse_dir = os.path.join(colmap_dir, "sparse", "0")
+    return (os.path.isfile(os.path.join(sparse_dir, "images.bin")) and
+            os.path.isfile(os.path.join(sparse_dir, "points3D.bin")))
 
 def txt_exists(colmap_dir: str) -> bool:
-    return (os.path.isfile(os.path.join(colmap_dir, "images.txt")) and
-            os.path.isfile(os.path.join(colmap_dir, "points3D.txt")))
+    # Check direct directory first
+    if (os.path.isfile(os.path.join(colmap_dir, "images.txt")) and
+        os.path.isfile(os.path.join(colmap_dir, "points3D.txt"))):
+        return True
+    
+    # Check sparse/0 subdirectory
+    sparse_dir = os.path.join(colmap_dir, "sparse", "0")
+    return (os.path.isfile(os.path.join(sparse_dir, "images.txt")) and
+            os.path.isfile(os.path.join(sparse_dir, "points3D.txt")))
 
 
 # ============================ Main ============================
@@ -446,12 +460,26 @@ def main():
     use_txt = txt_exists(src_dir)
     use_bin = bin_exists(src_dir)
 
-    images_txt = os.path.join(src_dir, 'images.txt')
-    points3D_txt = os.path.join(src_dir, 'points3D.txt')
-    cameras_txt = os.path.join(src_dir, 'cameras.txt')
+    # Determine actual COLMAP data directory
+    sparse_dir = os.path.join(src_dir, "sparse", "0")
+    if (os.path.isfile(os.path.join(sparse_dir, "images.txt")) and
+        os.path.isfile(os.path.join(sparse_dir, "points3D.txt"))) or \
+       (os.path.isfile(os.path.join(sparse_dir, "images.bin")) and
+        os.path.isfile(os.path.join(sparse_dir, "points3D.bin"))):
+        # Use sparse/0 subdirectory
+        data_dir = sparse_dir
+        print(f"[info] Using COLMAP data from: {data_dir}")
+    else:
+        # Use main directory
+        data_dir = src_dir
+        print(f"[info] Using COLMAP data from: {data_dir}")
 
-    images_bin = os.path.join(src_dir, 'images.bin')
-    points3D_bin = os.path.join(src_dir, 'points3D.bin')
+    images_txt = os.path.join(data_dir, 'images.txt')
+    points3D_txt = os.path.join(data_dir, 'points3D.txt')
+    cameras_txt = os.path.join(data_dir, 'cameras.txt')
+
+    images_bin = os.path.join(data_dir, 'images.bin')
+    points3D_bin = os.path.join(data_dir, 'points3D.bin')
 
     cameras = []
     xyz_pts = np.zeros((0,3), dtype=float)
@@ -462,7 +490,7 @@ def main():
     try:
         if use_txt:
             if args.verbose:
-                print(f"[info] Parsing TEXT model at {src_dir}")
+                print(f"[info] Parsing TEXT model at {data_dir}")
             validate_cameras_txt(cameras_txt)
             cameras = parse_images_txt(images_txt)
             xyz_pts, rgb_pts, n_bad = parse_points3D_txt(points3D_txt)
@@ -471,14 +499,14 @@ def main():
             parsed_ok = True
         elif use_bin:
             if args.verbose:
-                print(f"[info] Parsing BINARY model at {src_dir}")
+                print(f"[info] Parsing BINARY model at {data_dir}")
             cameras = parse_images_bin(images_bin)
             xyz_pts, rgb_pts, n_bad = parse_points3D_bin(points3D_bin)
             if args.verbose:
                 print(f"[info] Binary model: cameras={len(cameras)}, points={xyz_pts.shape[0]} (skipped={n_bad})")
             parsed_ok = True
         else:
-            print(f"[warn] No COLMAP model files found at: {src_dir}")
+            print(f"[warn] No COLMAP model files found at: {src_dir} or {sparse_dir}")
     except Exception as e:
         print(f"[warn] Parse failed: {e}")
 
