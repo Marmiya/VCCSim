@@ -368,11 +368,18 @@ FPointCloudData FVCCSimDataConverter::ConvertMeshToPointCloud(
         UE_LOG(LogTemp, Log, TEXT("Transformed %d points to right-handed coordinates"), SampledPoints.Num());
     }
     
-    // Fill point cloud data without normals (normals not meaningful for randomly sampled mesh vertices)
+    // Fill point cloud data with random normals for Triangle Splatting compatibility
     PointCloudData.Reserve(SampledPoints.Num());
     for (int32 i = 0; i < SampledPoints.Num(); ++i)
     {
-        PointCloudData.AddPoint(SampledPoints[i], Colors[i], FVector::ZeroVector, false);
+        // Generate random normalized normal vector for Triangle Splatting compatibility
+        FVector RandomNormal = FVector(
+            FMath::RandRange(-1.0f, 1.0f),
+            FMath::RandRange(-1.0f, 1.0f), 
+            FMath::RandRange(-1.0f, 1.0f)
+        ).GetSafeNormal();
+        
+        PointCloudData.AddPoint(SampledPoints[i], Colors[i], RandomNormal, true);
     }
     
     UE_LOG(LogTemp, Log, TEXT("Created point cloud with %d points"), PointCloudData.GetPointCount());
@@ -488,7 +495,7 @@ bool FVCCSimDataConverter::SavePointCloudToPLY(const FPointCloudData& PointCloud
     // Use the new unified FPLYWriter class
     FPLYWriter::FPLYWriteConfig Config;
     Config.bIncludeColors = true;
-    Config.bIncludeNormals = false;  // Don't include normals for sampled mesh vertices
+    Config.bIncludeNormals = true;   // Include normals for Triangle Splatting compatibility
     Config.bBinaryFormat = false;
     
     return FPLYWriter::WritePointCloudToPLY(PointCloudData, OutputFilePath, Config);

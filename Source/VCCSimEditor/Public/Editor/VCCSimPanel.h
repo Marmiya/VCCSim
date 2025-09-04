@@ -69,7 +69,7 @@ struct VCCSIMEDITOR_API FTriangleSplattingConfig
     
     // Training parameters
     int32 MaxIterations = 30000;
-    int32 InitPointCount = 10000;
+    int32 InitPointCount = 100000;
     
     // Constructor
     FTriangleSplattingConfig()
