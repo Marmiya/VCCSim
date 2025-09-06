@@ -172,7 +172,8 @@ private:
     
     // File paths
     FString ConfigFilePath;
-    FString LogFilePath;
+    FString LogFilePath;        // C++ manager log file
+    FString PythonLogFilePath;  // Python script log file
     FString OutputDirectory;
     
     // Timing
@@ -254,9 +255,10 @@ private:
     /**
      * Read latest entries from training log file
      * @param MaxLines Maximum number of lines to read from end of file
+     * @param SpecificLogFilePath Optional specific log file path (defaults to LogFilePath)
      * @return Array of log lines
      */
-    TArray<FString> ReadRecentLogLines(int32 MaxLines = 50);
+    TArray<FString> ReadRecentLogLines(int32 MaxLines = 50, const FString& SpecificLogFilePath = TEXT(""));
     
     /**
      * Check if training process is still running

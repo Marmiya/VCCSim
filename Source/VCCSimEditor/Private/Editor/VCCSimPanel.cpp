@@ -19,6 +19,7 @@
 #include "Editor/Panels/VCCSimPanelPointCloud.h"
 #include "Editor/Panels/VCCSimPanelSelection.h"
 #include "Editor/Panels/VCCSimPanelPathImageCapture.h"
+#include "Editor/Panels/VCCSimPanelSceneAnalysis.h"
 #include "Engine/Selection.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Layout/SBox.h"
@@ -30,6 +31,9 @@
 #include "Misc/FileHelper.h"
 #include "Utils/TriangleSplattingManager.h"
 #include "DrawDebugHelpers.h"
+#include "Framework/Docking/TabManager.h"
+#include "Widgets/Docking/SDockTab.h"
+#include "Internationalization/Internationalization.h"
 
 // ============================================================================
 // CONSTRUCTOR & DESTRUCTOR
@@ -50,12 +54,11 @@ SVCCSimPanel::~SVCCSimPanel()
         PathImageCaptureManager.Reset();
     }
 
-    // Clean up scene analysis visualizations
+    // Clean up Scene Analysis manager
     if (SceneAnalysisManager.IsValid())
     {
-        SceneAnalysisManager->InterfaceClearSafeZoneVisualization();
-        SceneAnalysisManager->InterfaceClearCoverageVisualization();
-        SceneAnalysisManager->InterfaceClearComplexityVisualization();
+        SceneAnalysisManager->Cleanup();
+        SceneAnalysisManager.Reset();
     }
 
     // Clean up Point Cloud manager
@@ -86,10 +89,6 @@ SVCCSimPanel::~SVCCSimPanel()
     }
 }
 
-void SVCCSimPanel::OnUseLimitedToggleChanged(ECheckBoxState NewState)
-{
-    bUseLimited = (NewState == ECheckBoxState::Checked);
-}
 
 void SVCCSimPanel::OnSelectionChanged(UObject* Object)
 {
@@ -106,5 +105,28 @@ void SVCCSimPanel::OnSelectionChanged(UObject* Object)
             }
         }
         return;
+    }
+}
+
+// ============================================================================
+// PANEL FACTORY IMPLEMENTATION
+// ============================================================================
+
+namespace FVCCSimPanelFactory
+{
+    const FName TabId = FName("VCCSimPanel");
+    
+    void RegisterTabSpawner(FTabManager& TabManager)
+    {
+        TabManager.RegisterTabSpawner(TabId, FOnSpawnTab::CreateLambda([](const FSpawnTabArgs& Args)
+        {
+            return SNew(SDockTab)
+                .TabRole(ETabRole::NomadTab)
+                [
+                    SNew(SVCCSimPanel)
+                ];
+        }))
+        .SetDisplayName(NSLOCTEXT("VCCSimEditor", "VCCSimPanelTabTitle", "VCCSim"))
+        .SetMenuType(ETabSpawnerMenuType::Hidden);
     }
 }

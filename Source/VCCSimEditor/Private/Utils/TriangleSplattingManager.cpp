@@ -37,6 +37,7 @@ FTriangleSplattingManager::FTriangleSplattingManager()
     , LastError(TEXT(""))
     , ConfigFilePath(TEXT(""))
     , LogFilePath(TEXT(""))
+    , PythonLogFilePath(TEXT(""))
     , OutputDirectory(TEXT(""))
     , TrainingStartTime(FDateTime::MinValue())
     , LastUpdateTime(FDateTime::MinValue())
@@ -121,28 +122,26 @@ bool FTriangleSplattingManager::StartColmapTraining(const FString& PythonCommand
     TrainingStartTime = FDateTime::Now();
     
     // Create organized session directory for COLMAP training
-    FString TSParentDir = FPaths::Combine(OutputDir, TEXT("TriangleSplatting"));
-    FString TSTrainingDir = FPaths::Combine(TSParentDir, TEXT("training_sessions"));
+    // OutputDir is already: ProjectSavedDir()/TriangleSplatting
+    FString TSTrainingDir = FPaths::Combine(OutputDir, TEXT("RatSplatting"));
     
     FDateTime Now = FDateTime::Now();
     FString Timestamp = Now.ToString(TEXT("%Y%m%d_%H%M%S"));
     FString SessionDirName = FString::Printf(TEXT("colmap_session_%s"), *Timestamp);
     OutputDirectory = FPaths::Combine(TSTrainingDir, SessionDirName);
     
-    // Ensure session directory structure exists
-    if (!EnsureDirectoryExists(OutputDirectory) ||
-        !EnsureDirectoryExists(FPaths::Combine(OutputDirectory, TEXT("logs"))) ||
-        !EnsureDirectoryExists(FPaths::Combine(OutputDirectory, TEXT("outputs"))) ||
-        !EnsureDirectoryExists(FPaths::Combine(OutputDirectory, TEXT("runtime"))))
+    // Ensure session directory structure exists (simplified)
+    if (!EnsureDirectoryExists(OutputDirectory))
     {
         CurrentStatus = ETrainingStatus::Failed;
-        StatusMessage = TEXT("Failed to create training session directories");
+        StatusMessage = TEXT("Failed to create training session directory");
         LogMessage(StatusMessage, true);
         return false;
     }
     
-    // Set up log file path in organized structure
-    LogFilePath = FPaths::Combine(OutputDirectory, TEXT("logs"), TEXT("colmap_training_log.txt"));
+    // Set up log file path directly in session directory
+    LogFilePath = FPaths::Combine(OutputDirectory, TEXT("training.log"));
+    PythonLogFilePath = FPaths::Combine(OutputDirectory, TEXT("python_training.log"));
     
     UE_LOG(LogTemp, Log, TEXT("Starting COLMAP training: %s %s"), *PythonCommand, *Arguments);
     
@@ -352,8 +351,8 @@ bool FTriangleSplattingManager::ValidateConfiguration(const FTriangleSplattingCo
 bool FTriangleSplattingManager::PrepareTrainingData(const FTriangleSplattingConfig& Config)
 {
     // Create organized directory structure for Triangle Splatting training sessions
-    FString TSParentDir = FPaths::Combine(Config.OutputDirectory, TEXT("TriangleSplatting"));
-    FString TSTrainingDir = FPaths::Combine(TSParentDir, TEXT("training_sessions"));
+    // Config.OutputDirectory is already: ProjectSavedDir()/TriangleSplatting
+    FString TSTrainingDir = FPaths::Combine(Config.OutputDirectory, TEXT("RatSplatting"));
     
     // Generate timestamp for this training session
     FDateTime Now = FDateTime::Now();
@@ -370,11 +369,10 @@ bool FTriangleSplattingManager::PrepareTrainingData(const FTriangleSplattingConf
     }
     
     // Create organized subdirectories without redundancy
+    // Create simplified directory structure (reduced redundancy)
     TArray<FString> MainSubDirectories = { 
         TEXT("config"),    // Training configuration files
-        TEXT("logs"),      // Training logs and progress
-        TEXT("outputs"),   // Training outputs (point clouds, renders)
-        TEXT("runtime")    // Runtime temporary files (checkpoints)
+        TEXT("renders")    // Training outputs and renders (flattened)
     };
     
     for (const FString& SubDir : MainSubDirectories)
@@ -386,13 +384,6 @@ bool FTriangleSplattingManager::PrepareTrainingData(const FTriangleSplattingConf
         }
     }
     
-    // Create renders subdirectory under outputs
-    FString RendersDir = FPaths::Combine(OutputDirectory, TEXT("outputs"), TEXT("renders"));
-    if (!EnsureDirectoryExists(RendersDir))
-    {
-        return false;
-    }
-    
     // Create configuration file
     ConfigFilePath = CreateConfigurationFile(Config);
     if (ConfigFilePath.IsEmpty())
@@ -401,9 +392,9 @@ bool FTriangleSplattingManager::PrepareTrainingData(const FTriangleSplattingConf
         return false;
     }
     
-    // Set up log file path
-    LogFilePath = FPaths::Combine(OutputDirectory, TEXT("logs"), 
-        GenerateTimestampedFilename(TEXT("training"), TEXT("log")));
+    // Set up log file paths - separate files to avoid write conflicts
+    LogFilePath = FPaths::Combine(OutputDirectory, TEXT("training.log"));  // C++ manager log
+    PythonLogFilePath = FPaths::Combine(OutputDirectory, TEXT("python_training.log"));  // Python script log
     
     // Convert pose data and camera information with fx/fy priority over FOV
     FCameraIntrinsics Intrinsics = FVCCSimDataConverter::ConvertCameraParamsWithFocalLength(
@@ -473,9 +464,9 @@ bool FTriangleSplattingManager::LaunchTrainingProcess()
         return false;
     }
     
-    // Build command line arguments
-    FString Arguments = FString::Printf(TEXT("\"%s\" --config \"%s\" --output \"%s\" --log \"%s\""),
-        *ScriptPath, *ConfigFilePath, *OutputDirectory, *LogFilePath);
+    // Build command line arguments (simplified with single workspace parameter)
+    FString Arguments = FString::Printf(TEXT("\"%s\" --workspace \"%s\""),
+        *ScriptPath, *OutputDirectory);
     
     LogMessage(FString::Printf(TEXT("Launching Python process: %s %s"), *PythonPath, *Arguments));
     
@@ -627,12 +618,19 @@ FString FTriangleSplattingManager::GetTrainingScriptPath()
 
 float FTriangleSplattingManager::ParseTrainingProgress()
 {
-    if (LogFilePath.IsEmpty() || !FPaths::FileExists(LogFilePath))
+    // Check Python log file first, then fallback to manager log file
+    FString LogFileToCheck = PythonLogFilePath;
+    if (LogFileToCheck.IsEmpty() || !FPaths::FileExists(LogFileToCheck))
+    {
+        LogFileToCheck = LogFilePath;
+    }
+    
+    if (LogFileToCheck.IsEmpty() || !FPaths::FileExists(LogFileToCheck))
     {
         return 0.0f;
     }
     
-    TArray<FString> RecentLines = ReadRecentLogLines(10);
+    TArray<FString> RecentLines = ReadRecentLogLines(10, LogFileToCheck);
     
     // Look for progress indicators in log lines
     for (const FString& Line : RecentLines)
@@ -727,17 +725,18 @@ FString FTriangleSplattingManager::ParseCurrentLoss()
     return FString();
 }
 
-TArray<FString> FTriangleSplattingManager::ReadRecentLogLines(int32 MaxLines)
+TArray<FString> FTriangleSplattingManager::ReadRecentLogLines(int32 MaxLines, const FString& SpecificLogFilePath)
 {
     TArray<FString> Lines;
     
-    if (LogFilePath.IsEmpty() || !FPaths::FileExists(LogFilePath))
+    FString FileToRead = SpecificLogFilePath.IsEmpty() ? LogFilePath : SpecificLogFilePath;
+    if (FileToRead.IsEmpty() || !FPaths::FileExists(FileToRead))
     {
         return Lines;
     }
     
     TArray<FString> AllLines;
-    if (FFileHelper::LoadFileToStringArray(AllLines, *LogFilePath))
+    if (FFileHelper::LoadFileToStringArray(AllLines, *FileToRead))
     {
         // Get the last MaxLines lines
         int32 StartIndex = FMath::Max(0, AllLines.Num() - MaxLines);

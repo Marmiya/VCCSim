@@ -492,7 +492,6 @@ bool FVCCSimDataConverter::SaveCameraInfo(
 bool FVCCSimDataConverter::SavePointCloudToPLY(const FPointCloudData& PointCloudData,
     const FString& OutputFilePath)
 {
-    // Use the new unified FPLYWriter class
     FPLYWriter::FPLYWriteConfig Config;
     Config.bIncludeColors = true;
     Config.bIncludeNormals = true;   // Include normals for Triangle Splatting compatibility
@@ -511,24 +510,7 @@ bool FVCCSimDataConverter::CreateModelDirectoryStructure(const FString& OutputPa
         UE_LOG(LogTemp, Error, TEXT("Failed to create output directory: %s"), *OutputPath);
         return false;
     }
-    
-    // Create subdirectories if needed
-    TArray<FString> Subdirectories = {
-        TEXT("images"),
-        TEXT("output"),
-        TEXT("logs")
-    };
-    
-    for (const FString& SubDir : Subdirectories)
-    {
-        FString SubDirPath = FPaths::Combine(OutputPath, SubDir);
-        if (!PlatformFile.CreateDirectoryTree(*SubDirPath))
-        {
-            UE_LOG(LogTemp, Error, TEXT("Failed to create subdirectory: %s"), *SubDirPath);
-            return false;
-        }
-    }
-    
+
     return true;
 }
 

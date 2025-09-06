@@ -37,6 +37,7 @@ class FColmapManager;
 class FVCCSimPanelPointCloud;
 class FVCCSimPanelSelection;
 class FVCCSimPanelPathImageCapture;
+class FVCCSimPanelSceneAnalysis;
 struct FCameraInfo;
 
 /**
@@ -104,26 +105,7 @@ private:
     TSharedPtr<FSlateDynamicImageBrush> SZULogoBrush;
     
     // Expandable area states
-    bool bSceneAnalysisSectionExpanded = false;  
     bool bTriangleSplattingSectionExpanded = true;
-    
-    TSharedPtr<class SCheckBox> SelectUseLimitedToggle;
-    
-    // Configuration spinboxes
-    TSharedPtr<class SNumericEntryBox<float>> SafeDistanceSpinBox;
-    TSharedPtr<class SNumericEntryBox<float>> SafeHeightSpinBox;
-    TSharedPtr<class SNumericEntryBox<float>> LimitedMinXSpinBox;
-    TSharedPtr<class SNumericEntryBox<float>> LimitedMaxXSpinBox;
-    TSharedPtr<class SNumericEntryBox<float>> LimitedMinYSpinBox;
-    TSharedPtr<class SNumericEntryBox<float>> LimitedMaxYSpinBox;
-    TSharedPtr<class SNumericEntryBox<float>> LimitedMinZSpinBox;
-    TSharedPtr<class SNumericEntryBox<float>> LimitedMaxZSpinBox;
-    
-    
-    // Visualization buttons
-    TSharedPtr<class SButton> VisualizeSafeZoneButton;
-    TSharedPtr<class SButton> VisualizeCoverageButton;
-    TSharedPtr<class SButton> VisualizeComplexityButton;
 
     // Triangle Splatting UI elements (simplified with UE official asset picker)
     TSharedPtr<SEditableTextBox> GSImageDirectoryTextBox;
@@ -144,41 +126,6 @@ private:
     // ============================================================================
     // STATE VARIABLES
     // ============================================================================
-    
-    // Path configuration state
-    bool bUseLimited = false;
-    
-    // Scene analysis configuration
-    float SafeDistance = 200.0f;
-    float SafeHeight = 200.0f;
-    float LimitedMinX = 0.0f;
-    float LimitedMaxX = 5000.0f;
-    float LimitedMinY = -9500.0f;
-    float LimitedMaxY = -7000.0f;
-    float LimitedMinZ = -20.0f;
-    float LimitedMaxZ = 2000.0f;
-    
-    // TOptional attributes for SpinBox values
-    TOptional<float> SafeDistanceValue;
-    TOptional<float> SafeHeightValue;
-    TOptional<float> LimitedMinXValue;
-    TOptional<float> LimitedMaxXValue;
-    TOptional<float> LimitedMinYValue;
-    TOptional<float> LimitedMaxYValue;
-    TOptional<float> LimitedMinZValue;
-    TOptional<float> LimitedMaxZValue;
-    
-    
-    // Scene analysis state
-    TWeakObjectPtr<ASceneAnalysisManager> SceneAnalysisManager = nullptr;
-    bool bNeedScan = true;
-    bool bGenSafeZone = true;
-    bool bSafeZoneVisualized = false;
-    bool bInitCoverage = true;
-    bool bGenCoverage = true;
-    bool bCoverageVisualized = false;
-    bool bAnalyzeComplexity = true;
-    bool bComplexityVisualized = false;
 
     // Triangle Splatting state (simplified)
     FTriangleSplattingConfig GSConfig;
@@ -197,6 +144,7 @@ private:
     TSharedPtr<FVCCSimPanelPointCloud> PointCloudManager;
     TSharedPtr<FVCCSimPanelSelection> SelectionManager;
     TSharedPtr<FVCCSimPanelPathImageCapture> PathImageCaptureManager;
+    TSharedPtr<FVCCSimPanelSceneAnalysis> SceneAnalysisManager;
     
     // TOptional attributes for Triangle Splatting SpinBox values
     TOptional<float> GSFOVValue;
@@ -212,18 +160,9 @@ private:
     // ============================================================================
     
     void LoadLogoImages();
-    void InitializeSceneAnalysisManager();
     void CreateMainLayout();
-    void OnUseLimitedToggleChanged(ECheckBoxState NewState);
     
 
-    // ============================================================================
-    // SCENE ANALYSIS OPERATIONS
-    // ============================================================================
-    
-    FReply OnToggleSafeZoneVisualizationClicked();
-    FReply OnToggleCoverageVisualizationClicked();
-    FReply OnToggleComplexityVisualizationClicked();
 
     // ============================================================================
     // TRIANGLE SPLATTING OPERATIONS (implemented in VCCSimPanel_gs.cpp)
@@ -274,14 +213,6 @@ private:
     TSharedRef<SWidget> CreateTriangleSplattingPanel();
     
     
-    // Scene analysis UI helpers
-    TSharedRef<SWidget> CreateLimitedRegionControls();
-    TSharedRef<SWidget> CreateSceneOperationButtons();
-    TSharedRef<SWidget> CreateSafeZoneButtons();
-    TSharedRef<SWidget> CreateCoverageButtons();
-    TSharedRef<SWidget> CreateComplexityButtons();
-    
-    
     // Triangle Splatting UI creators (implemented in VCCSimPanel_gs.cpp)
     TSharedRef<SWidget> CreateGSDataInputSection();
     TSharedRef<SWidget> CreateGSCameraParamsSection();
@@ -307,22 +238,6 @@ private:
         const FString& Label, TSharedRef<SWidget> Content);
     TSharedRef<SWidget> CreateSeparator();
     
-    // Numeric property row creators
-    TSharedRef<SWidget> CreateNumericPropertyRowInt32(
-        const FString& Label,
-        TSharedPtr<SNumericEntryBox<int32>>& SpinBox,
-        TOptional<int32>& Value,
-        int32& ActualVariable,
-        int32 MinValue,
-        int32 DeltaValue);
-        
-    TSharedRef<SWidget> CreateNumericPropertyRowFloat(
-        const FString& Label,
-        TSharedPtr<SNumericEntryBox<float>>& SpinBox,
-        TOptional<float>& Value,
-        float& ActualVariable,
-        float MinValue,
-        float DeltaValue);
 
     template<typename T>
     TSharedRef<SWidget> CreateNumericPropertyRow(
