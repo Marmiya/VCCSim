@@ -54,7 +54,8 @@ TArray<FCameraInfo> FVCCSimDataConverter::ConvertPoseFile(
     TArray<FString> ImageFiles = ValidateImageDirectory(ImageDirectory);
     if (ImageFiles.Num() == 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("No valid images found in directory: %s"), *ImageDirectory);
+        UE_LOG(LogTemp, Warning, TEXT("No valid images found in directory: %s"),
+            *ImageDirectory);
     }
     
     int32 ValidPoseIndex = 0;
@@ -84,9 +85,6 @@ TArray<FCameraInfo> FVCCSimDataConverter::ConvertPoseFile(
         FCameraInfo CameraInfo;
         CameraInfo.UID = ValidPoseIndex;
         
-        // Convert coordinate system - swap X and Y axes for right-handed to left-handed conversion
-        // COLMAP: Right-handed (+X right, +Y down, +Z forward) -> UE: Left-handed (+X forward, +Y right, +Z up)
-        // Transformation: (X_colmap, Y_colmap, Z_colmap) -> (Y_colmap, X_colmap, Z_colmap)
         FMatrix UEMatrix = FQuatRotationMatrix::Make(PoseData.Quaternion);
         FMatrix CoordTransform = FMatrix::Identity;
         CoordTransform.M[0][0] = 0.0f;   // X_ue = Y_colmap
@@ -99,7 +97,8 @@ TArray<FCameraInfo> FVCCSimDataConverter::ConvertPoseFile(
         CameraInfo.Position = ConvertLocation(PoseData.Location);
         
         // Set camera parameters
-        CameraInfo.FOVDegrees = FMath::RadiansToDegrees(2.0f * FMath::Atan(Intrinsics.Width * 0.5f / Intrinsics.FocalX));
+        CameraInfo.FOVDegrees = FMath::RadiansToDegrees(2.0f *
+            FMath::Atan(Intrinsics.Width * 0.5f / Intrinsics.FocalX));
         CameraInfo.Width = Intrinsics.Width;
         CameraInfo.Height = Intrinsics.Height;
         CameraInfo.FocalX = Intrinsics.FocalX;
@@ -128,7 +127,8 @@ TArray<FCameraInfo> FVCCSimDataConverter::ConvertPoseFile(
     return CameraInfos;
 }
 
-FVCCSimPoseData FVCCSimDataConverter::ParsePoseLine(const FString& Line, bool& bIsRecorderFormat)
+FVCCSimPoseData FVCCSimDataConverter::ParsePoseLine(
+    const FString& Line, bool& bIsRecorderFormat)
 {
     FVCCSimPoseData PoseData;
     
@@ -187,7 +187,7 @@ bool FVCCSimDataConverter::DeterminePoseFileFormat(const FString& PoseFilePath)
         {
             TArray<FString> Values;
             Line.ParseIntoArray(Values, TEXT(" "), true);
-            return Values.Num() == 8; // True for Recorder format (8 values), false for Panel format (7 values)
+            return Values.Num() == 8;
         }
     }
     
@@ -289,7 +289,8 @@ FCameraIntrinsics FVCCSimDataConverter::ConvertCameraParams(
     float CenterX = Width * 0.5f;
     float CenterY = Height * 0.5f;
     
-    return FCameraIntrinsics(Width, Height, FocalX, FocalY, CenterX, CenterY);
+    return FCameraIntrinsics(Width, Height, FocalX, FocalY,
+        CenterX, CenterY);
 }
 
 FCameraIntrinsics FVCCSimDataConverter::ConvertCameraParamsWithFocalLength(
@@ -320,7 +321,8 @@ FCameraIntrinsics FVCCSimDataConverter::ConvertCameraParamsWithFocalLength(
     float CenterX = Width * 0.5f;
     float CenterY = Height * 0.5f;
     
-    return FCameraIntrinsics(Width, Height, EffectiveFocalX, EffectiveFocalY, CenterX, CenterY);
+    return FCameraIntrinsics(Width, Height, EffectiveFocalX,
+        EffectiveFocalY, CenterX, CenterY);
 }
 
 float FVCCSimDataConverter::CalculateFocalLength(float FOVDegrees, int32 ImageDimension)
@@ -350,7 +352,8 @@ FPointCloudData FVCCSimDataConverter::ConvertMeshToPointCloud(
     TArray<FVector> SampledPoints;
     TArray<FLinearColor> Colors;
     
-    if (!SampleMeshVerticesWithColors(Mesh, SampleCount, true, SampledPoints, Colors))
+    if (!SampleMeshVerticesWithColors(Mesh, SampleCount, true,
+        SampledPoints, Colors))
     {
         UE_LOG(LogTemp, Error, TEXT("Failed to sample mesh vertices with colors"));
         return PointCloudData;
@@ -365,7 +368,8 @@ FPointCloudData FVCCSimDataConverter::ConvertMeshToPointCloud(
             SampledPoints[i] = ConvertLocation(SampledPoints[i]);
         }
         
-        UE_LOG(LogTemp, Log, TEXT("Transformed %d points to right-handed coordinates"), SampledPoints.Num());
+        UE_LOG(LogTemp, Log, TEXT("Transformed %d points to"
+                                  " right-handed coordinates"), SampledPoints.Num());
     }
     
     // Fill point cloud data with random normals for Triangle Splatting compatibility
@@ -379,10 +383,12 @@ FPointCloudData FVCCSimDataConverter::ConvertMeshToPointCloud(
             FMath::RandRange(-1.0f, 1.0f)
         ).GetSafeNormal();
         
-        PointCloudData.AddPoint(SampledPoints[i], Colors[i], RandomNormal, true);
+        PointCloudData.AddPoint(SampledPoints[i], Colors[i],
+            RandomNormal, true);
     }
     
-    UE_LOG(LogTemp, Log, TEXT("Created point cloud with %d points"), PointCloudData.GetPointCount());
+    UE_LOG(LogTemp, Log, TEXT("Created point cloud with %d points"),
+        PointCloudData.GetPointCount());
     
     return PointCloudData;
 }
@@ -394,7 +400,8 @@ FPointCloudData FVCCSimDataConverter::GenerateRandomPointCloud(
     
     if (CameraInfos.Num() == 0)
     {
-        UE_LOG(LogTemp, Error, TEXT("No camera info provided for random point cloud generation"));
+        UE_LOG(LogTemp, Error, TEXT("No camera info provided for "
+                                    "random point cloud generation"));
         return PointCloudData;
     }
     
@@ -424,10 +431,12 @@ FPointCloudData FVCCSimDataConverter::GenerateRandomPointCloud(
             1.0f
         );
         
-        PointCloudData.AddPoint(RandomPoint, RandomColor, FVector::ZeroVector, false);
+        PointCloudData.AddPoint(RandomPoint, RandomColor,
+            FVector::ZeroVector, false);
     }
     
-    UE_LOG(LogTemp, Log, TEXT("Generated %d random points"), PointCloudData.GetPointCount());
+    UE_LOG(LogTemp, Log, TEXT("Generated %d random points"),
+        PointCloudData.GetPointCount());
     
     return PointCloudData;
 }
@@ -507,7 +516,8 @@ bool FVCCSimDataConverter::CreateModelDirectoryStructure(const FString& OutputPa
     // Create main output directory
     if (!PlatformFile.CreateDirectoryTree(*OutputPath))
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to create output directory: %s"), *OutputPath);
+        UE_LOG(LogTemp, Error, TEXT("Failed to create output directory: %s"),
+            *OutputPath);
         return false;
     }
 
@@ -525,7 +535,8 @@ TArray<FString> FVCCSimDataConverter::ValidateImageDirectory(
     
     if (!FPaths::DirectoryExists(ImageDirectory))
     {
-        UE_LOG(LogTemp, Error, TEXT("Image directory does not exist: %s"), *ImageDirectory);
+        UE_LOG(LogTemp, Error, TEXT("Image directory does "
+                                    "not exist: %s"), *ImageDirectory);
         return ValidImages;
     }
     
@@ -544,7 +555,8 @@ TArray<FString> FVCCSimDataConverter::ValidateImageDirectory(
     
     ValidImages.Sort();
     
-    UE_LOG(LogTemp, Log, TEXT("Found %d images in %s"), ValidImages.Num(), *ImageDirectory);
+    UE_LOG(LogTemp, Log, TEXT("Found %d images in %s"),
+        ValidImages.Num(), *ImageDirectory);
     
     return ValidImages;
 }
@@ -729,7 +741,8 @@ TArray<FLinearColor> FVCCSimDataConverter::GeneratePointColors(const TArray<FVec
         float NormalizedZ = (Point.Z + 1000.0f) / 2000.0f; // Assume Z range [-1000, 1000]
         NormalizedZ = FMath::Clamp(NormalizedZ, 0.0f, 1.0f);
         
-        FLinearColor Color = FLinearColor(NormalizedZ, 1.0f - NormalizedZ, 0.5f, 1.0f);
+        FLinearColor Color = FLinearColor(NormalizedZ, 1.0f - NormalizedZ,
+            0.5f, 1.0f);
         Colors.Add(Color);
     }
     
@@ -782,11 +795,13 @@ FString FVCCSimDataConverter::CreateTimestampedColmapDirectory(const FString& Ba
     IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
     if (!PlatformFile.CreateDirectoryTree(*TimestampedPath))
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to create timestamped COLMAP directory: %s"), *TimestampedPath);
+        UE_LOG(LogTemp, Error, TEXT("Failed to create timestamped "
+                                    "COLMAP directory: %s"), *TimestampedPath);
         return FString();
     }
     
-    UE_LOG(LogTemp, Log, TEXT("Created COLMAP dataset: %s"), *FPaths::GetCleanFilename(TimestampedPath));
+    UE_LOG(LogTemp, Log, TEXT("Created COLMAP dataset: %s"),
+        *FPaths::GetCleanFilename(TimestampedPath));
     return TimestampedPath;
 }
 
@@ -799,7 +814,8 @@ bool FVCCSimDataConverter::PrepareColmapDataset(
     // Validate source image directory
     if (!PlatformFile.DirectoryExists(*ImageDirectory))
     {
-        UE_LOG(LogTemp, Error, TEXT("Source image directory does not exist: %s"), *ImageDirectory);
+        UE_LOG(LogTemp, Error, TEXT("Source image directory does not exist: %s"),
+            *ImageDirectory);
         return false;
     }
     
@@ -816,7 +832,8 @@ bool FVCCSimDataConverter::PrepareColmapDataset(
     
     if (ValidImageFiles.Num() == 0)
     {
-        UE_LOG(LogTemp, Error, TEXT("No valid images found in directory: %s"), *ImageDirectory);
+        UE_LOG(LogTemp, Error, TEXT("No valid images found in directory: %s"),
+            *ImageDirectory);
         return false;
     }
     
@@ -825,7 +842,8 @@ bool FVCCSimDataConverter::PrepareColmapDataset(
     
     for (const FString& SourceImagePath : ValidImageFiles)
     {
-        FString DestImagePath = FPaths::Combine(ImagesDir, FPaths::GetCleanFilename(SourceImagePath));
+        FString DestImagePath = FPaths::Combine(ImagesDir,
+            FPaths::GetCleanFilename(SourceImagePath));
         
         if (PlatformFile.CopyFile(*DestImagePath, *SourceImagePath))
         {
@@ -833,7 +851,8 @@ bool FVCCSimDataConverter::PrepareColmapDataset(
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("Failed to copy: %s"), *FPaths::GetCleanFilename(SourceImagePath));
+            UE_LOG(LogTemp, Warning, TEXT("Failed to copy: %s"),
+                *FPaths::GetCleanFilename(SourceImagePath));
         }
     }
     
@@ -854,14 +873,16 @@ bool FVCCSimDataConverter::RunColmapFeatureExtraction(
     IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
     if (!PlatformFile.FileExists(*ColmapExePath))
     {
-        UE_LOG(LogTemp, Error, TEXT("COLMAP executable not found at: %s"), *ColmapExePath);
+        UE_LOG(LogTemp, Error, TEXT("COLMAP executable not found at: %s"),
+            *ColmapExePath);
         return false;
     }
     
     // Prepare command arguments
     FString ImagePath = FPaths::Combine(DatasetPath, TEXT("images"));
     FString Arguments = FString::Printf(
-        TEXT("feature_extractor --database_path \"%s\" --image_path \"%s\" --ImageReader.single_camera 1 --ImageReader.camera_model PINHOLE"),
+        TEXT("feature_extractor --database_path \"%s\" --image_path \"%s\" "
+             "--ImageReader.single_camera 1 --ImageReader.camera_model PINHOLE"),
         *DatabasePath, *ImagePath);
     
     // Use custom command executor if provided (for proper process management)
@@ -871,7 +892,8 @@ bool FVCCSimDataConverter::RunColmapFeatureExtraction(
     }
     
     // Fallback to basic execution (legacy mode)
-    UE_LOG(LogTemp, Log, TEXT("Running COLMAP feature extraction: %s %s"), *ColmapExePath, *Arguments);
+    UE_LOG(LogTemp, Log, TEXT("Running COLMAP feature extraction: %s %s"),
+        *ColmapExePath, *Arguments);
     
     int32 ReturnCode = -1;
     FString StdOut, StdErr;
@@ -886,7 +908,8 @@ bool FVCCSimDataConverter::RunColmapFeatureExtraction(
     
     if (!bSuccess || ReturnCode != 0)
     {
-        UE_LOG(LogTemp, Error, TEXT("COLMAP feature extraction failed. Return code: %d"), ReturnCode);
+        UE_LOG(LogTemp, Error, TEXT("COLMAP feature extraction failed. "
+                                    "Return code: %d"), ReturnCode);
         if (!StdErr.IsEmpty())
         {
             UE_LOG(LogTemp, Error, TEXT("COLMAP error output: %s"), *StdErr);
@@ -918,7 +941,8 @@ bool FVCCSimDataConverter::RunColmapFeatureMatching(
     }
     
     // Fallback to basic execution (legacy mode)
-    UE_LOG(LogTemp, Log, TEXT("Running COLMAP feature matching: %s %s"), *ColmapExePath, *Arguments);
+    UE_LOG(LogTemp, Log, TEXT("Running COLMAP feature matching: %s %s"),
+        *ColmapExePath, *Arguments);
     
     int32 ReturnCode = -1;
     FString StdOut, StdErr;
@@ -933,7 +957,8 @@ bool FVCCSimDataConverter::RunColmapFeatureMatching(
     
     if (!bSuccess || ReturnCode != 0)
     {
-        UE_LOG(LogTemp, Error, TEXT("COLMAP feature matching failed. Return code: %d"), ReturnCode);
+        UE_LOG(LogTemp, Error, TEXT("COLMAP feature matching failed. "
+                                    "Return code: %d"), ReturnCode);
         if (!StdErr.IsEmpty())
         {
             UE_LOG(LogTemp, Error, TEXT("COLMAP error output: %s"), *StdErr);
@@ -960,7 +985,8 @@ bool FVCCSimDataConverter::RunColmapSparseReconstruction(
     FString SparseOutputPath = FPaths::Combine(OutputPath, TEXT("sparse"));
     if (!PlatformFile.CreateDirectoryTree(*SparseOutputPath))
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to create sparse output directory: %s"), *SparseOutputPath);
+        UE_LOG(LogTemp, Error, TEXT("Failed to create sparse "
+                                    "output directory: %s"), *SparseOutputPath);
         return false;
     }
     
@@ -976,7 +1002,8 @@ bool FVCCSimDataConverter::RunColmapSparseReconstruction(
     }
     
     // Fallback to basic execution (legacy mode)
-    UE_LOG(LogTemp, Log, TEXT("Running COLMAP sparse reconstruction: %s %s"), *ColmapExePath, *Arguments);
+    UE_LOG(LogTemp, Log, TEXT("Running COLMAP sparse reconstruction: %s %s"),
+        *ColmapExePath, *Arguments);
     
     int32 ReturnCode = -1;
     FString StdOut, StdErr;
@@ -991,7 +1018,8 @@ bool FVCCSimDataConverter::RunColmapSparseReconstruction(
     
     if (!bSuccess || ReturnCode != 0)
     {
-        UE_LOG(LogTemp, Error, TEXT("COLMAP sparse reconstruction failed. Return code: %d"), ReturnCode);
+        UE_LOG(LogTemp, Error, TEXT("COLMAP sparse reconstruction failed. "
+                                    "Return code: %d"), ReturnCode);
         if (!StdErr.IsEmpty())
         {
             UE_LOG(LogTemp, Error, TEXT("COLMAP error output: %s"), *StdErr);
@@ -1016,23 +1044,27 @@ bool FVCCSimDataConverter::RunColmapModelConverter(
     IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
     if (!PlatformFile.CreateDirectoryTree(*TextModelPath))
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to create text model output directory: %s"), *TextModelPath);
+        UE_LOG(LogTemp, Error, TEXT("Failed to create text model"
+                                    " output directory: %s"), *TextModelPath);
         return false;
     }
     
     // Prepare command arguments for binary to text conversion
     FString Arguments = FString::Printf(
-        TEXT("model_converter --input_path \"%s\" --output_path \"%s\" --output_type TXT"),
+        TEXT("model_converter --input_path \"%s\" --output_path \"%s\""
+             " --output_type TXT"),
         *BinaryModelPath, *TextModelPath);
     
     // Use custom command executor if provided (for proper process management)
     if (CommandExecutor)
     {
-        return CommandExecutor(ColmapExePath, Arguments, TEXT("Model Converter (Binary to Text)"));
+        return CommandExecutor(ColmapExePath, Arguments,
+            TEXT("Model Converter (Binary to Text)"));
     }
     
     // Fallback to basic execution (legacy mode)
-    UE_LOG(LogTemp, Log, TEXT("Running COLMAP model converter: %s %s"), *ColmapExePath, *Arguments);
+    UE_LOG(LogTemp, Log, TEXT("Running COLMAP model converter: %s %s"),
+        *ColmapExePath, *Arguments);
     
     int32 ReturnCode = -1;
     FString StdOut, StdErr;
@@ -1047,10 +1079,12 @@ bool FVCCSimDataConverter::RunColmapModelConverter(
     
     if (!bSuccess || ReturnCode != 0)
     {
-        UE_LOG(LogTemp, Error, TEXT("COLMAP model converter failed. Return code: %d"), ReturnCode);
+        UE_LOG(LogTemp, Error, TEXT("COLMAP model converter failed. "
+                                    "Return code: %d"), ReturnCode);
         if (!StdErr.IsEmpty())
         {
-            UE_LOG(LogTemp, Error, TEXT("COLMAP model converter error output: %s"), *StdErr);
+            UE_LOG(LogTemp, Error, TEXT("COLMAP model converter error "
+                                        "output: %s"), *StdErr);
         }
         return false;
     }
@@ -1064,9 +1098,11 @@ bool FVCCSimDataConverter::RunColmapPipeline(
     const FString& OutputPath,
     const FString& ColmapExecutablePath)
 {
-    if (ImageDirectory.IsEmpty() || !FPlatformFileManager::Get().GetPlatformFile().DirectoryExists(*ImageDirectory))
+    if (ImageDirectory.IsEmpty() ||
+        !FPlatformFileManager::Get().GetPlatformFile().DirectoryExists(*ImageDirectory))
     {
-        UE_LOG(LogTemp, Error, TEXT("Invalid image directory provided for COLMAP pipeline: %s"), *ImageDirectory);
+        UE_LOG(LogTemp, Error, TEXT("Invalid image directory provided "
+                                    "for COLMAP pipeline: %s"), *ImageDirectory);
         return false;
     }
     
@@ -1088,10 +1124,12 @@ bool FVCCSimDataConverter::RunColmapPipeline(
     FString DatabasePath = FPaths::Combine(TimestampedDir, TEXT("database.db"));
     FString ImagePath = FPaths::Combine(TimestampedDir, TEXT("images"));
     
-    UE_LOG(LogTemp, Log, TEXT("Starting COLMAP pipeline from %s"), *FPaths::GetCleanFilename(ImageDirectory));
+    UE_LOG(LogTemp, Log, TEXT("Starting COLMAP pipeline from %s"),
+        *FPaths::GetCleanFilename(ImageDirectory));
     
     UE_LOG(LogTemp, Log, TEXT("Step 1/3: Feature extraction"));
-    if (!RunColmapFeatureExtraction(ColmapExecutablePath, TimestampedDir, DatabasePath))
+    if (!RunColmapFeatureExtraction(ColmapExecutablePath,
+        TimestampedDir, DatabasePath))
     {
         UE_LOG(LogTemp, Error, TEXT("COLMAP feature extraction failed"));
         return false;
@@ -1105,13 +1143,15 @@ bool FVCCSimDataConverter::RunColmapPipeline(
     }
     
     UE_LOG(LogTemp, Log, TEXT("Step 3/3: Sparse reconstruction"));
-    if (!RunColmapSparseReconstruction(ColmapExecutablePath, DatabasePath, ImagePath, TimestampedDir))
+    if (!RunColmapSparseReconstruction(ColmapExecutablePath, DatabasePath,
+        ImagePath, TimestampedDir))
     {
         UE_LOG(LogTemp, Error, TEXT("COLMAP sparse reconstruction failed"));
         return false;
     }
     
-    UE_LOG(LogTemp, Log, TEXT("COLMAP pipeline completed: %s"), *FPaths::GetCleanFilename(TimestampedDir));
+    UE_LOG(LogTemp, Log, TEXT("COLMAP pipeline completed: %s"),
+        *FPaths::GetCleanFilename(TimestampedDir));
     
     return true;
 }

@@ -15,18 +15,25 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "Editor/VCCSimPanel.h"
+#include "Editor/Panels/VCCSimPanelTriangleSplatting.h"
+#include "Editor/Panels/VCCSimPanelSelection.h"
 #include "Utils/TriangleSplattingManager.h"
 #include "Utils/ColmapManager.h"
 #include "Utils/VCCSimDataConverter.h"
 #include "DataStruct_IO/IOUtils.h"
-#include "HAL/PlatformFilemanager.h"
+#include "HAL/PlatformFileManager.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SScrollBox.h"
 #include "Widgets/Layout/SSeparator.h"
 #include "Widgets/Layout/SBorder.h"
+#include "Widgets/Layout/SExpandableArea.h"
+#include "Widgets/Layout/SSpacer.h"
 #include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Input/SNumericEntryBox.h"
+#include "Widgets/Input/SEditableTextBox.h"
+#include "Widgets/Input/SButton.h"
+#include "Widgets/Text/STextBlock.h"
+#include "Widgets/SBoxPanel.h"
 #include "PropertyCustomizationHelpers.h"
 #include "SlateOptMacros.h"
 #include "DesktopPlatformModule.h"
@@ -37,8 +44,9 @@
 #include "Framework/Notifications/NotificationManager.h"
 #include "Widgets/Notifications/SNotificationList.h"
 #include "Engine/StaticMesh.h"
-#include "UObject/ConstructorHelpers.h"
+#include "Editor/UnrealEd/Public/Editor.h"
 #include "Engine/Engine.h"
+#include "UObject/ConstructorHelpers.h"
 #include "ThumbnailRendering/ThumbnailManager.h"
 #include "Widgets/Images/SImage.h"
 #include "Framework/Application/SlateApplication.h"
@@ -46,11 +54,14 @@
 BEGIN_SLATE_FUNCTION_BUILD_OPTIMIZATION
 
 // ============================================================================
-// TRIANGLE SPLATTING INITIALIZATION
+// CONSTRUCTOR & DESTRUCTOR
 // ============================================================================
 
-void SVCCSimPanel::InitializeGSManager()
+FVCCSimPanelTriangleSplatting::FVCCSimPanelTriangleSplatting()
 {
+    // Set default output directory
+    GSConfig.OutputDirectory = TEXT("C:/UEProjects/VCCSimDev/Saved/TriangleSplatting");
+    
     // Initialize default values
     GSFOVValue = GSConfig.FOVDegrees;
     GSImageWidthValue = GSConfig.ImageWidth;
@@ -59,7 +70,72 @@ void SVCCSimPanel::InitializeGSManager()
     GSFocalLengthYValue = GSConfig.FocalLengthY;
     GSMaxIterationsValue = GSConfig.MaxIterations;
     GSInitPointCountValue = GSConfig.InitPointCount;
+}
+
+FVCCSimPanelTriangleSplatting::~FVCCSimPanelTriangleSplatting()
+{
+    // Clean up training resources
+    if (GSTrainingManager.IsValid() && GSTrainingManager->IsTrainingInProgress())
+    {
+        GSTrainingManager->StopTraining();
+    }
     
+    // Clear training timer
+    if (GEditor && GSStatusUpdateTimerHandle.IsValid())
+    {
+        GEditor->GetTimerManager()->ClearTimer(GSStatusUpdateTimerHandle);
+        GSStatusUpdateTimerHandle.Invalidate();
+    }
+}
+
+void FVCCSimPanelTriangleSplatting::Initialize(TSharedPtr<FVCCSimPanelSelection> InSelectionManager)
+{
+    SelectionManager = InSelectionManager;
+    
+    // Initialize managers
+    InitializeGSManager();
+    InitializeColmapManager();
+}
+
+void FVCCSimPanelTriangleSplatting::Cleanup()
+{
+    // Clean up training resources
+    if (GSTrainingManager.IsValid())
+    {
+        if (GSTrainingManager->IsTrainingInProgress())
+        {
+            GSTrainingManager->StopTraining();
+        }
+        GSTrainingManager.Reset();
+    }
+    
+    // Clean up COLMAP resources
+    if (ColmapManager.IsValid())
+    {
+        ColmapManager.Reset();
+    }
+    
+    // Clear timer
+    if (GEditor && GSStatusUpdateTimerHandle.IsValid())
+    {
+        GEditor->GetTimerManager()->ClearTimer(GSStatusUpdateTimerHandle);
+        GSStatusUpdateTimerHandle.Invalidate();
+    }
+    
+    SelectionManager.Reset();
+}
+
+void FVCCSimPanelTriangleSplatting::UpdateVisualization()
+{
+    // Update any UI state if needed
+}
+
+// ============================================================================
+// TRIANGLE SPLATTING INITIALIZATION
+// ============================================================================
+
+void FVCCSimPanelTriangleSplatting::InitializeGSManager()
+{
     // Create training manager
     GSTrainingManager = MakeShared<FTriangleSplattingManager>();
     
@@ -86,7 +162,7 @@ void SVCCSimPanel::InitializeGSManager()
     });
 }
 
-void SVCCSimPanel::InitializeColmapManager()
+void FVCCSimPanelTriangleSplatting::InitializeColmapManager()
 {
     // Create COLMAP manager
     ColmapManager = MakeShared<FColmapManager>();
@@ -134,7 +210,7 @@ void SVCCSimPanel::InitializeColmapManager()
 // TRIANGLE SPLATTING UI CONSTRUCTION
 // ============================================================================
 
-TSharedRef<SWidget> SVCCSimPanel::CreateTriangleSplattingPanel()
+TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateTriangleSplattingPanel()
 {
     return CreateCollapsibleSection(TEXT("Triangle Splatting"), 
         SNew(SVerticalBox)
@@ -192,7 +268,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreateTriangleSplattingPanel()
     );
 }
 
-TSharedRef<SWidget> SVCCSimPanel::CreateGSDataInputSection()
+TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSDataInputSection()
 {
     return SNew(SVerticalBox)
         
@@ -215,7 +291,10 @@ TSharedRef<SWidget> SVCCSimPanel::CreateGSDataInputSection()
                 .FillWidth(1.0f)
                 [
                     SAssignNew(GSImageDirectoryTextBox, SEditableTextBox)
-                    .Text(FText::FromString(GSConfig.ImageDirectory))
+                    .Text_Lambda([this]()
+                    {
+                        return FText::FromString(GSConfig.ImageDirectory);
+                    })
                     .OnTextChanged_Lambda([this](const FText& Text)
                     {
                         GSConfig.ImageDirectory = Text.ToString();
@@ -227,7 +306,9 @@ TSharedRef<SWidget> SVCCSimPanel::CreateGSDataInputSection()
                 [
                     SNew(SButton)
                     .Text(FText::FromString(TEXT("Browse...")))
-                    .OnClicked(this, &SVCCSimPanel::OnGSBrowseImageDirectoryClicked)
+                    .OnClicked_Lambda([this]() {
+                        return OnGSBrowseImageDirectoryClicked();
+                    })
                 ]
             )
         ]
@@ -243,7 +324,10 @@ TSharedRef<SWidget> SVCCSimPanel::CreateGSDataInputSection()
                 .FillWidth(1.0f)
                 [
                     SAssignNew(GSPoseFileTextBox, SEditableTextBox)
-                    .Text(FText::FromString(GSConfig.PoseFilePath))
+                    .Text_Lambda([this]()
+                    {
+                        return FText::FromString(GSConfig.PoseFilePath);
+                    })
                     .OnTextChanged_Lambda([this](const FText& Text)
                     {
                         GSConfig.PoseFilePath = Text.ToString();
@@ -255,7 +339,9 @@ TSharedRef<SWidget> SVCCSimPanel::CreateGSDataInputSection()
                 [
                     SNew(SButton)
                     .Text(FText::FromString(TEXT("Browse...")))
-                    .OnClicked(this, &SVCCSimPanel::OnGSBrowsePoseFileClicked)
+                    .OnClicked_Lambda([this]() {
+                        return OnGSBrowsePoseFileClicked();
+                    })
                 ]
             )
         ]
@@ -271,7 +357,10 @@ TSharedRef<SWidget> SVCCSimPanel::CreateGSDataInputSection()
                 .FillWidth(1.0f)
                 [
                     SAssignNew(GSOutputDirectoryTextBox, SEditableTextBox)
-                    .Text(FText::FromString(GSConfig.OutputDirectory))
+                    .Text_Lambda([this]()
+                    {
+                        return FText::FromString(GSConfig.OutputDirectory);
+                    })
                     .OnTextChanged_Lambda([this](const FText& Text)
                     {
                         GSConfig.OutputDirectory = Text.ToString();
@@ -283,7 +372,9 @@ TSharedRef<SWidget> SVCCSimPanel::CreateGSDataInputSection()
                 [
                     SNew(SButton)
                     .Text(FText::FromString(TEXT("Browse...")))
-                    .OnClicked(this, &SVCCSimPanel::OnGSBrowseOutputDirectoryClicked)
+                    .OnClicked_Lambda([this]() {
+                        return OnGSBrowseOutputDirectoryClicked();
+                    })
                 ]
             )
         ]
@@ -315,7 +406,9 @@ TSharedRef<SWidget> SVCCSimPanel::CreateGSDataInputSection()
                 [
                     SNew(SButton)
                     .Text(FText::FromString(TEXT("Browse...")))
-                    .OnClicked(this, &SVCCSimPanel::OnGSBrowseColmapDatasetClicked)
+                    .OnClicked_Lambda([this]() {
+                        return OnGSBrowseColmapDatasetClicked();
+                    })
                 ]
             )
         ]
@@ -358,7 +451,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreateGSDataInputSection()
         ];
 }
 
-TSharedRef<SWidget> SVCCSimPanel::CreateGSCameraParamsSection()
+TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSCameraParamsSection()
 {
     return SNew(SVerticalBox)
         
@@ -465,7 +558,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreateGSCameraParamsSection()
         ];
 }
 
-TSharedRef<SWidget> SVCCSimPanel::CreateGSTrainingParamsSection()
+TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSTrainingParamsSection()
 {
     return SNew(SVerticalBox)
         
@@ -514,7 +607,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreateGSTrainingParamsSection()
         ];
 }
 
-TSharedRef<SWidget> SVCCSimPanel::CreateGSTrainingControlSection()
+TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSTrainingControlSection()
 {
     return SNew(SVerticalBox)
         
@@ -542,7 +635,9 @@ TSharedRef<SWidget> SVCCSimPanel::CreateGSTrainingControlSection()
                 .VAlign(VAlign_Center)
                 .HAlign(HAlign_Center)
                 .IsEnabled_Lambda([this]() { return !bGSTrainingInProgress; })
-                .OnClicked(this, &SVCCSimPanel::OnGSTestTransformationClicked)
+                .OnClicked_Lambda([this]() {
+                    return OnGSTestTransformationClicked();
+                })
                 .ToolTipText(FText::FromString(TEXT("Export mesh and camera poses "
                                                     "as PLY files for MeshLab validation")))
             ]
@@ -632,7 +727,9 @@ TSharedRef<SWidget> SVCCSimPanel::CreateGSTrainingControlSection()
                 .VAlign(VAlign_Center)
                 .HAlign(HAlign_Center)
                 .IsEnabled_Lambda([this]() { return !bGSTrainingInProgress && !bColmapPipelineInProgress; })
-                .OnClicked(this, &SVCCSimPanel::OnGSColmapTrainingClicked)
+                .OnClicked_Lambda([this]() {
+                    return OnGSColmapTrainingClicked();
+                })
                 .ToolTipText(FText::FromString(TEXT("Train with original Triangle Splatting (train.py) for comparison")))
             ]
         ]
@@ -728,7 +825,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreateGSTrainingControlSection()
 // ============================================================================
 
 template<typename T>
-TSharedRef<SWidget> SVCCSimPanel::CreateGSNumericPropertyRow(
+TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSNumericPropertyRow(
     const FString& Label,
     TSharedPtr<SNumericEntryBox<T>>& SpinBox,
     TOptional<T>& Value,
@@ -762,33 +859,118 @@ TSharedRef<SWidget> SVCCSimPanel::CreateGSNumericPropertyRow(
 }
 
 // ============================================================================
+// UI STYLING HELPERS
+// ============================================================================
+
+TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateCollapsibleSection(
+    const FString& Title, TSharedRef<SWidget> Content, bool& bExpanded)
+{
+    return SNew(SExpandableArea)
+        .InitiallyCollapsed(!bExpanded)
+        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryTop"))
+        .BorderBackgroundColor(FColor(48, 48, 48))
+        .OnAreaExpansionChanged_Lambda([&bExpanded](bool bIsExpanded) {
+            bExpanded = bIsExpanded;
+        })
+        .HeaderContent()
+        [
+            SNew(STextBlock)
+            .Text(FText::FromString(Title))
+            .Font(FAppStyle::GetFontStyle("PropertyWindow.BoldFont"))
+            .ColorAndOpacity(FColor(233, 233, 233))
+            .TransformPolicy(ETextTransformPolicy::ToUpper)
+        ]
+        .BodyContent()
+        [
+            SNew(SBorder)
+            .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
+            .BorderBackgroundColor(FColor(5, 5, 5, 255))
+            .Padding(FMargin(15, 6))
+            [
+                Content
+            ]
+        ];
+}
+
+TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateSectionHeader(const FString& Title)
+{
+    return SNew(SBorder)
+        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryTop"))
+        .Padding(FMargin(10, 7))
+        [
+            SNew(STextBlock)
+            .Text(FText::FromString(Title))
+            .Font(FAppStyle::GetFontStyle("PropertyWindow.BoldFont"))
+            .ColorAndOpacity(FColor(233, 233, 233))
+            .TransformPolicy(ETextTransformPolicy::ToUpper)
+        ];
+}
+
+TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateSectionContent(TSharedRef<SWidget> Content)
+{
+    return SNew(SBorder)
+        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
+        .BorderBackgroundColor(FColor(5, 5, 5, 255))
+        .Padding(FMargin(15, 6))
+        [
+            Content
+        ];
+}
+
+TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreatePropertyRow(
+    const FString& Label, TSharedRef<SWidget> Content)
+{
+    return SNew(SHorizontalBox)
+    +SHorizontalBox::Slot()
+    .AutoWidth()
+    .VAlign(VAlign_Center)
+    .Padding(FMargin(0, 0, 8, 0))
+    [
+        SNew(STextBlock)
+        .Text(FText::FromString(Label))
+        .MinDesiredWidth(80)
+        .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
+        .ColorAndOpacity(FColor(233, 233, 233)) 
+    ]
+    +SHorizontalBox::Slot()
+    .FillWidth(1.0f)
+    [
+        Content
+    ];
+}
+
+TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateSeparator()
+{
+    return SNew(SBorder)
+        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
+        .BorderBackgroundColor(FColor(2, 2, 2))
+        .Padding(0)
+        .Content()
+        [
+            SNew(SBox)
+            .HeightOverride(1.0f)
+        ];
+}
+
+// ============================================================================
 // TRIANGLE SPLATTING EVENT HANDLERS
 // ============================================================================
 
-void* SVCCSimPanel::GetParentWindowHandle()
+void* FVCCSimPanelTriangleSplatting::GetParentWindowHandle()
 {
     void* ParentWindowHandle = nullptr;
     
-    // Try to find the widget's parent window first
-    TSharedPtr<SWindow> ParentWindow = FSlateApplication::Get().FindWidgetWindow(AsShared());
-    if (ParentWindow.IsValid())
+    // Use the active top level window for the panel
+    TSharedPtr<SWindow> ActiveTopLevelWindow = FSlateApplication::Get().GetActiveTopLevelWindow();
+    if (ActiveTopLevelWindow.IsValid())
     {
-        ParentWindowHandle = ParentWindow->GetNativeWindow()->GetOSWindowHandle();
-    }
-    else
-    {
-        // Fallback to the active top level window
-        TSharedPtr<SWindow> ActiveTopLevelWindow = FSlateApplication::Get().GetActiveTopLevelWindow();
-        if (ActiveTopLevelWindow.IsValid())
-        {
-            ParentWindowHandle = ActiveTopLevelWindow->GetNativeWindow()->GetOSWindowHandle();
-        }
+        ParentWindowHandle = ActiveTopLevelWindow->GetNativeWindow()->GetOSWindowHandle();
     }
     
     return ParentWindowHandle;
 }
 
-FReply SVCCSimPanel::OnGSBrowseImageDirectoryClicked()
+FReply FVCCSimPanelTriangleSplatting::OnGSBrowseImageDirectoryClicked()
 {
     IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
     if (DesktopPlatform)
@@ -811,7 +993,7 @@ FReply SVCCSimPanel::OnGSBrowseImageDirectoryClicked()
     return FReply::Handled();
 }
 
-FReply SVCCSimPanel::OnGSBrowsePoseFileClicked()
+FReply FVCCSimPanelTriangleSplatting::OnGSBrowsePoseFileClicked()
 {
     IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
     if (DesktopPlatform)
@@ -837,7 +1019,7 @@ FReply SVCCSimPanel::OnGSBrowsePoseFileClicked()
     return FReply::Handled();
 }
 
-FReply SVCCSimPanel::OnGSBrowseOutputDirectoryClicked()
+FReply FVCCSimPanelTriangleSplatting::OnGSBrowseOutputDirectoryClicked()
 {
     IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
     if (DesktopPlatform)
@@ -860,7 +1042,7 @@ FReply SVCCSimPanel::OnGSBrowseOutputDirectoryClicked()
     return FReply::Handled();
 }
 
-FReply SVCCSimPanel::OnGSBrowseColmapDatasetClicked()
+FReply FVCCSimPanelTriangleSplatting::OnGSBrowseColmapDatasetClicked()
 {
     IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
     if (DesktopPlatform)
@@ -899,37 +1081,37 @@ FReply SVCCSimPanel::OnGSBrowseColmapDatasetClicked()
     return FReply::Handled();
 }
 
-void SVCCSimPanel::OnGSFOVChanged(float NewValue)
+void FVCCSimPanelTriangleSplatting::OnGSFOVChanged(float NewValue)
 {
     GSConfig.FOVDegrees = NewValue;
 }
 
-void SVCCSimPanel::OnGSImageWidthChanged(int32 NewValue)
+void FVCCSimPanelTriangleSplatting::OnGSImageWidthChanged(int32 NewValue)
 {
     GSConfig.ImageWidth = NewValue;
 }
 
-void SVCCSimPanel::OnGSImageHeightChanged(int32 NewValue)
+void FVCCSimPanelTriangleSplatting::OnGSImageHeightChanged(int32 NewValue)
 {
     GSConfig.ImageHeight = NewValue;
 }
 
-void SVCCSimPanel::OnGSFocalLengthXChanged(float NewValue)
+void FVCCSimPanelTriangleSplatting::OnGSFocalLengthXChanged(float NewValue)
 {
     GSConfig.FocalLengthX = NewValue;
 }
 
-void SVCCSimPanel::OnGSFocalLengthYChanged(float NewValue)
+void FVCCSimPanelTriangleSplatting::OnGSFocalLengthYChanged(float NewValue)
 {
     GSConfig.FocalLengthY = NewValue;
 }
 
-void SVCCSimPanel::OnGSMaxIterationsChanged(int32 NewValue)
+void FVCCSimPanelTriangleSplatting::OnGSMaxIterationsChanged(int32 NewValue)
 {
     GSConfig.MaxIterations = NewValue;
 }
 
-void SVCCSimPanel::OnGSInitPointCountChanged(int32 NewValue)
+void FVCCSimPanelTriangleSplatting::OnGSInitPointCountChanged(int32 NewValue)
 {
     GSConfig.InitPointCount = NewValue;
 }
@@ -938,7 +1120,7 @@ void SVCCSimPanel::OnGSInitPointCountChanged(int32 NewValue)
 // TRIANGLE SPLATTING TRAINING CONTROL
 // ============================================================================
 
-FReply SVCCSimPanel::OnGSStartTrainingClicked()
+FReply FVCCSimPanelTriangleSplatting::OnGSStartTrainingClicked()
 {
     if (ValidateGSConfiguration())
     {
@@ -977,7 +1159,7 @@ FReply SVCCSimPanel::OnGSStartTrainingClicked()
     return FReply::Handled();
 }
 
-FReply SVCCSimPanel::OnGSStopTrainingClicked()
+FReply FVCCSimPanelTriangleSplatting::OnGSStopTrainingClicked()
 {
     if (GSTrainingManager.IsValid())
     {
@@ -998,7 +1180,7 @@ FReply SVCCSimPanel::OnGSStopTrainingClicked()
     return FReply::Handled();
 }
 
-FReply SVCCSimPanel::OnGSColmapTrainingClicked()
+FReply FVCCSimPanelTriangleSplatting::OnGSColmapTrainingClicked()
 {
     // Validate COLMAP dataset path
     if (GSConfig.ColmapDatasetPath.IsEmpty() || !FPaths::DirectoryExists(GSConfig.ColmapDatasetPath))
@@ -1073,7 +1255,7 @@ FReply SVCCSimPanel::OnGSColmapTrainingClicked()
     return FReply::Handled();
 }
 
-void SVCCSimPanel::StartTriangleSplattingWithColmapData(const FString& ColmapDatasetPath)
+void FVCCSimPanelTriangleSplatting::StartTriangleSplattingWithColmapData(const FString& ColmapDatasetPath)
 {
     // Use original train.py for comparison experiments
     FString TriangleSplattingRoot = FPaths::Combine(FPaths::ProjectPluginsDir(), TEXT("VCCSim/Source/triangle-splatting"));
@@ -1165,7 +1347,7 @@ void SVCCSimPanel::StartTriangleSplattingWithColmapData(const FString& ColmapDat
     }
 }
 
-FReply SVCCSimPanel::OnGSTestTransformationClicked()
+FReply FVCCSimPanelTriangleSplatting::OnGSTestTransformationClicked()
 {
     // Validate basic configuration first
     if (GSConfig.OutputDirectory.IsEmpty())
@@ -1313,7 +1495,7 @@ FReply SVCCSimPanel::OnGSTestTransformationClicked()
     return FReply::Handled();
 }
 
-FReply SVCCSimPanel::OnGSExportColmapClicked()
+FReply FVCCSimPanelTriangleSplatting::OnGSExportColmapClicked()
 {
     // Validate basic configuration first
     if (GSConfig.OutputDirectory.IsEmpty())
@@ -1367,7 +1549,7 @@ FReply SVCCSimPanel::OnGSExportColmapClicked()
 // TRIANGLE SPLATTING TRAINING VALIDATION AND UTILITIES
 // ============================================================================
 
-bool SVCCSimPanel::ValidateGSConfiguration()
+bool FVCCSimPanelTriangleSplatting::ValidateGSConfiguration()
 {
     TArray<FString> ErrorMessages;
     
@@ -1426,7 +1608,7 @@ bool SVCCSimPanel::ValidateGSConfiguration()
     return true;
 }
 
-void SVCCSimPanel::ShowGSNotification(const FString& Message, bool bIsError)
+void FVCCSimPanelTriangleSplatting::ShowGSNotification(const FString& Message, bool bIsError)
 {
     FNotificationInfo NotificationInfo(FText::FromString(Message));
     NotificationInfo.bFireAndForget = true;
@@ -1445,7 +1627,7 @@ void SVCCSimPanel::ShowGSNotification(const FString& Message, bool bIsError)
     FSlateNotificationManager::Get().AddNotification(NotificationInfo);
 }
 
-void SVCCSimPanel::ExportCamerasToPLY(
+void FVCCSimPanelTriangleSplatting::ExportCamerasToPLY(
     const TArray<FCameraInfo>& CameraInfos, const FString& OutputPath)
 {
     // Use the new unified FPLYWriter class
@@ -1462,7 +1644,7 @@ void SVCCSimPanel::ExportCamerasToPLY(
     }
 }
 
-void SVCCSimPanel::SaveCameraInfoData(
+void FVCCSimPanelTriangleSplatting::SaveCameraInfoData(
     const TArray<FCameraInfo>& CameraInfos, const FString& OutputPath)
 {
     // Use the new utility function from FCameraInfoUtils

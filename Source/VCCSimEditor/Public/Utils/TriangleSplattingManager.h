@@ -20,9 +20,34 @@
 #include "CoreMinimal.h"
 #include "HAL/PlatformProcess.h"
 #include "Misc/DateTime.h"
+#include "Engine/StaticMesh.h"
 
-// Forward declarations
-struct FTriangleSplattingConfig;
+/**
+ * Triangle Splatting Configuration Structure
+ */
+struct FTriangleSplattingConfig
+{
+    // Data Input
+    FString ImageDirectory;
+    FString PoseFilePath;
+    FString OutputDirectory;
+    FString ColmapDatasetPath;
+    TWeakObjectPtr<UStaticMesh> SelectedMesh;
+    
+    // Mesh configuration
+    bool bUseMeshInitialization = true;
+    
+    // Camera Parameters
+    float FOVDegrees = 90.0f;
+    int32 ImageWidth = 1920;
+    int32 ImageHeight = 1080;
+    float FocalLengthX = 1000.0f;
+    float FocalLengthY = 1000.0f;
+    
+    // Training Parameters
+    int32 MaxIterations = 30000;
+    int32 InitPointCount = 100000;
+};
 
 DECLARE_DELEGATE_TwoParams(FOnTrainingProgressUpdated, float /* Progress */, FString /* StatusMessage */);
 DECLARE_DELEGATE_TwoParams(FOnTrainingCompleted, bool /* bSuccessful */, FString /* ResultMessage */);

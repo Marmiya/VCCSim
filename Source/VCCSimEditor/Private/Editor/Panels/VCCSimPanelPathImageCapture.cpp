@@ -425,11 +425,13 @@ void FVCCSimPanelPathImageCapture::LoadPredefinedPose()
                     bPathVisualized = false;
                     bPathNeedsUpdate = false;
                     
-                    UE_LOG(LogTemp, Log, TEXT("Successfully loaded %d poses from file"), Positions.Num());
+                    UE_LOG(LogTemp, Log, TEXT("Successfully loaded %d "
+                                              "poses from file"), Positions.Num());
                 }
                 else
                 {
-                    UE_LOG(LogTemp, Warning, TEXT("Failed to parse pose file: Invalid format or empty file"));
+                    UE_LOG(LogTemp, Warning, TEXT("Failed to parse pose file: "
+                                                  "Invalid format or empty file"));
                 }
             }
             else
@@ -672,7 +674,8 @@ void FVCCSimPanelPathImageCapture::CaptureImageFromCurrentPose()
     // Create a directory for saving images if it doesn't exist yet
     if (SaveDirectory.IsEmpty())
     {
-        SaveDirectory = FPaths::ProjectSavedDir() / TEXT("VCCSimCaptures") / GetTimestampedFilename();
+        SaveDirectory = FPaths::ProjectSavedDir() / TEXT("VCCSimCaptures")
+        / GetTimestampedFilename();
         IFileManager::Get().MakeDirectory(*SaveDirectory, true);
     }
     
@@ -710,7 +713,8 @@ void FVCCSimPanelPathImageCapture::CaptureImageFromCurrentPose()
         }
         
         // Capture with Segmentation cameras if enabled
-        if (SelectionManagerPin->IsUsingSegmentationCamera() && SelectionManagerPin->HasSegmentationCamera())
+        if (SelectionManagerPin->IsUsingSegmentationCamera() &&
+            SelectionManagerPin->HasSegmentationCamera())
         {
             SaveSeg(PoseIndex, bAnyCaptured);
         }
@@ -718,12 +722,14 @@ void FVCCSimPanelPathImageCapture::CaptureImageFromCurrentPose()
         // Log if no images were captured
         if (!bAnyCaptured)
         {
-            UE_LOG(LogTemp, Warning, TEXT("No images captured. Ensure cameras are enabled."));
+            UE_LOG(LogTemp, Warning, TEXT("No images captured. "
+                                          "Ensure cameras are enabled."));
         }
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("FlashPawn not ready for capture. Wait for it to reach position."));
+        UE_LOG(LogTemp, Warning, TEXT("FlashPawn not ready for capture. "
+                                      "Wait for it to reach position."));
     }
 }
 
@@ -854,7 +860,8 @@ void FVCCSimPanelPathImageCapture::SaveDepth(int32 PoseIndex, bool& bAnyCaptured
                 PoseIndex
             );
             
-            FIntPoint Size = {Camera->GetImageSize().first, Camera->GetImageSize().second};
+            FIntPoint Size = {Camera->GetImageSize().first,
+                Camera->GetImageSize().second};
             
             Camera->AsyncGetDepthImageData(
            [DepthFilename, Size, JobNum = this->JobNum]
@@ -1051,7 +1058,8 @@ void FVCCSimPanelPathImageCapture::StartAutoCapture()
                 // Reset button style to original color
                 if (AutoCaptureButton.IsValid())
                 {
-                    AutoCaptureButton->SetButtonStyle(&FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Primary"));
+                    AutoCaptureButton->SetButtonStyle(&FAppStyle::Get().
+                        GetWidgetStyle<FButtonStyle>("FlatButton.Primary"));
                 }
                 return;
             }
@@ -1072,7 +1080,8 @@ void FVCCSimPanelPathImageCapture::StartAutoCapture()
                     // Reset button style to original color
                     if (AutoCaptureButton.IsValid())
                     {
-                        AutoCaptureButton->SetButtonStyle(&FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Primary"));
+                        AutoCaptureButton->SetButtonStyle(&FAppStyle::Get().
+                            GetWidgetStyle<FButtonStyle>("FlatButton.Primary"));
                     }
                 }
             }
@@ -1121,7 +1130,8 @@ TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreatePoseFileButtons()
         .HAlign(HAlign_Center)
         .OnClicked_Lambda([this]() { return OnLoadPoseClicked(); })
         .IsEnabled_Lambda([this]() {
-            return SelectionManager.IsValid() && SelectionManager.Pin()->GetSelectedFlashPawn().IsValid();
+            return SelectionManager.IsValid() &&
+                SelectionManager.Pin()->GetSelectedFlashPawn().IsValid();
         })
     ]
     +SHorizontalBox::Slot()
@@ -1136,12 +1146,12 @@ TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreatePoseFileButtons()
         .Text(FText::FromString("Save Generated Pose"))
         .OnClicked_Lambda([this]() { return OnSavePoseClicked(); })
         .IsEnabled_Lambda([this]() {
-            return SelectionManager.IsValid() && SelectionManager.Pin()->GetSelectedFlashPawn().IsValid() && 
+            return SelectionManager.IsValid() &&
+                SelectionManager.Pin()->GetSelectedFlashPawn().IsValid() && 
                    SelectionManager.Pin()->GetSelectedFlashPawn()->GetPoseCount() > 0;
         })
     ];
 }
-
 TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreatePoseActionButtons()
 {
     return SNew(SHorizontalBox)
@@ -1157,7 +1167,8 @@ TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreatePoseActionButtons()
         .HAlign(HAlign_Center)
         .OnClicked_Lambda([this]() { return OnGeneratePosesClicked(); })
         .IsEnabled_Lambda([this]() {
-            return SelectionManager.IsValid() && SelectionManager.Pin()->GetSelectedFlashPawn().IsValid() && 
+            return SelectionManager.IsValid() &&
+                SelectionManager.Pin()->GetSelectedFlashPawn().IsValid() && 
                    SelectionManager.Pin()->GetSelectedTargetObject().IsValid();
         })
     ]
@@ -1177,7 +1188,8 @@ TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreatePoseActionButtons()
         })
         .OnClicked_Lambda([this]() { return OnTogglePathVisualizationClicked(); })
         .IsEnabled_Lambda([this]() {
-            return SelectionManager.IsValid() && SelectionManager.Pin()->GetSelectedFlashPawn().IsValid() && !bPathNeedsUpdate;
+            return SelectionManager.IsValid() &&
+                SelectionManager.Pin()->GetSelectedFlashPawn().IsValid() && !bPathNeedsUpdate;
         })
     ];
 }
@@ -1196,14 +1208,16 @@ TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreateMovementButtons()
         .Text(FText::FromString("Move Back"))
         .HAlign(HAlign_Center)
         .OnClicked_Lambda([this]() {
-            if (SelectionManager.IsValid() && SelectionManager.Pin()->GetSelectedFlashPawn().IsValid())
+            if (SelectionManager.IsValid() &&
+                SelectionManager.Pin()->GetSelectedFlashPawn().IsValid())
             {
                 SelectionManager.Pin()->GetSelectedFlashPawn()->MoveBackward();
             }
             return FReply::Handled();
         })
         .IsEnabled_Lambda([this]() {
-            return SelectionManager.IsValid() && SelectionManager.Pin()->GetSelectedFlashPawn().IsValid();
+            return SelectionManager.IsValid() &&
+                SelectionManager.Pin()->GetSelectedFlashPawn().IsValid();
         })
     ]
     +SHorizontalBox::Slot()
@@ -1217,14 +1231,16 @@ TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreateMovementButtons()
         .Text(FText::FromString("Move Next"))
         .HAlign(HAlign_Center)
         .OnClicked_Lambda([this]() {
-            if (SelectionManager.IsValid() && SelectionManager.Pin()->GetSelectedFlashPawn().IsValid())
+            if (SelectionManager.IsValid() &&
+                SelectionManager.Pin()->GetSelectedFlashPawn().IsValid())
             {
                 SelectionManager.Pin()->GetSelectedFlashPawn()->MoveForward();
             }
             return FReply::Handled();
         })
         .IsEnabled_Lambda([this]() {
-            return SelectionManager.IsValid() && SelectionManager.Pin()->GetSelectedFlashPawn().IsValid();
+            return SelectionManager.IsValid() &&
+                SelectionManager.Pin()->GetSelectedFlashPawn().IsValid();
         })
     ];
 }
