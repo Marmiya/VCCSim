@@ -464,8 +464,8 @@ bool FTriangleSplattingManager::LaunchTrainingProcess()
         return false;
     }
     
-    // Build command line arguments (simplified with single workspace parameter)
-    FString Arguments = FString::Printf(TEXT("\"%s\" --workspace \"%s\""),
+    // Build command line arguments with unbuffered output (simplified with single workspace parameter)
+    FString Arguments = FString::Printf(TEXT("-u \"%s\" --workspace \"%s\""),
         *ScriptPath, *OutputDirectory);
     
     LogMessage(FString::Printf(TEXT("Launching Python process: %s %s"), *PythonPath, *Arguments));
@@ -1032,7 +1032,14 @@ bool FTriangleSplattingManager::IsImportantLogLine(const FString& Line)
            (TrimmedLine.Contains(TEXT("Loss")) && !TrimmedLine.Contains(TEXT("Setting up"))) ||
            TrimmedLine.Contains(TEXT("PSNR")) ||
            TrimmedLine.Contains(TEXT("iter:")) ||
-           TrimmedLine.Contains(TEXT("Iteration"));
+           TrimmedLine.Contains(TEXT("Iteration")) ||
+           TrimmedLine.Contains(TEXT("Triangles:")) ||
+           TrimmedLine.Contains(TEXT("Speed:")) ||
+           TrimmedLine.Contains(TEXT("Densification:")) ||
+           TrimmedLine.Contains(TEXT("Final Pruning:")) ||
+           TrimmedLine.Contains(TEXT("Initial triangles:")) ||
+           TrimmedLine.Contains(TEXT("Final triangles:")) ||
+           TrimmedLine.Contains(TEXT("[TRIANGLE STATS]"));
 }
 
 FString FTriangleSplattingManager::GetCurrentLoss()

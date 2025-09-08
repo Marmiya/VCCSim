@@ -1303,7 +1303,7 @@ void FVCCSimPanelTriangleSplatting::StartTriangleSplattingWithColmapData(const F
         UE_LOG(LogTemp, Warning, TEXT("Micromamba triangle_splatting environment not found, using system python"));
     }
     
-    FString Arguments = FString::Printf(TEXT("\"%s\" -s \"%s\" -m \"%s\" --eval"), 
+    FString Arguments = FString::Printf(TEXT("-u \"%s\" -s \"%s\" -m \"%s\" --eval"), 
         *TrainingScript, *ColmapDatasetPath, *TSOutputDir);
     
     // Add outdoor flag if scene seems outdoor (based on camera coverage)

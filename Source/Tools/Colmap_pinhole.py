@@ -384,8 +384,8 @@ def main():
     """Main function"""
     # Default paths - updated to use base directory
     default_input = r"D:\Data\360_v2\garden\mesh\Colmap"
-    default_output = r"D:\Data\360_v2\garden\mesh\Colmap_Refine/sparse/0/"
-    
+    default_output = r"D:\Data\360_v2\garden\mesh\Colmap_Refine"
+
     if len(sys.argv) >= 3:
         input_dir = sys.argv[1]
         output_dir = sys.argv[2]
