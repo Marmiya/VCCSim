@@ -29,6 +29,7 @@ struct FTriangleSplattingConfig
 {
     // Data Input
     FString ImageDirectory;
+    FString CameraIntrinsicsFilePath;
     FString PoseFilePath;
     FString OutputDirectory;
     FString ColmapDatasetPath;

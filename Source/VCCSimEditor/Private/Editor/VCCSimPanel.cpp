@@ -480,12 +480,13 @@ namespace FVCCSimPanelFactory
         TabManager.RegisterTabSpawner(TabId, FOnSpawnTab::CreateLambda([](const FSpawnTabArgs& Args)
         {
             return SNew(SDockTab)
-                .TabRole(ETabRole::NomadTab)
+                .TabRole(ETabRole::PanelTab)
                 [
                     SNew(SVCCSimPanel)
                 ];
         }))
         .SetDisplayName(NSLOCTEXT("VCCSimEditor", "VCCSimPanelTabTitle", "VCCSim"))
-        .SetMenuType(ETabSpawnerMenuType::Hidden);
+        .SetMenuType(ETabSpawnerMenuType::Hidden)
+        .SetIcon(FSlateIcon(FAppStyle::GetAppStyleSetName(), "LevelEditor.Tabs.Viewports"));
     }
 }

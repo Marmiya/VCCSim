@@ -313,6 +313,41 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSDataInputSection()
             )
         ]
         
+        // Camera Intrinsics
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        .Padding(0, 2)
+        [
+            CreatePropertyRow(TEXT("Camera Intrinsics"),
+                SNew(SHorizontalBox)
+                + SHorizontalBox::Slot()
+                .FillWidth(1.0f)
+                [
+                    SAssignNew(GSCameraIntrinsicsFileTextBox, SEditableTextBox)
+                    .Text_Lambda([this]()
+                    {
+                        return FText::FromString(GSConfig.CameraIntrinsicsFilePath);
+                    })
+                    .OnTextChanged_Lambda([this](const FText& Text)
+                    {
+                        GSConfig.CameraIntrinsicsFilePath = Text.ToString();
+                        OnGSCameraIntrinsicsLoaded();
+                    })
+                    .HintText(FText::FromString(TEXT("Select COLMAP cameras.txt or cameras.bin file")))
+                ]
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .Padding(5, 0, 0, 0)
+                [
+                    SNew(SButton)
+                    .Text(FText::FromString(TEXT("Browse...")))
+                    .OnClicked_Lambda([this]() {
+                        return OnGSBrowseCameraIntrinsicsFileClicked();
+                    })
+                ]
+            )
+        ]
+        
         // Pose File
         + SVerticalBox::Slot()
         .AutoHeight()
@@ -993,6 +1028,33 @@ FReply FVCCSimPanelTriangleSplatting::OnGSBrowseImageDirectoryClicked()
     return FReply::Handled();
 }
 
+FReply FVCCSimPanelTriangleSplatting::OnGSBrowseCameraIntrinsicsFileClicked()
+{
+    IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
+    if (DesktopPlatform)
+    {
+        TArray<FString> SelectedFiles;
+        const bool bFileSelected = DesktopPlatform->OpenFileDialog(
+            GetParentWindowHandle(),
+            TEXT("Select Camera Intrinsics File"),
+            GSConfig.CameraIntrinsicsFilePath.IsEmpty() ? FPaths::ProjectSavedDir() : FPaths::GetPath(GSConfig.CameraIntrinsicsFilePath),
+            TEXT("cameras.txt"),
+            TEXT("COLMAP Camera Files|cameras.txt;cameras.bin|Text Files (*.txt)|*.txt|Binary Files (*.bin)|*.bin|All Files (*.*)|*.*"),
+            EFileDialogFlags::None,
+            SelectedFiles
+        );
+
+        if (bFileSelected && SelectedFiles.Num() > 0)
+        {
+            GSConfig.CameraIntrinsicsFilePath = SelectedFiles[0];
+            GSCameraIntrinsicsFileTextBox->SetText(FText::FromString(SelectedFiles[0]));
+            OnGSCameraIntrinsicsLoaded();
+        }
+    }
+    
+    return FReply::Handled();
+}
+
 FReply FVCCSimPanelTriangleSplatting::OnGSBrowsePoseFileClicked()
 {
     IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
@@ -1658,6 +1720,256 @@ void FVCCSimPanelTriangleSplatting::SaveCameraInfoData(
     {
         UE_LOG(LogTemp, Error, TEXT("Failed to save CameraInfo data using utility function"));
     }
+}
+
+void FVCCSimPanelTriangleSplatting::OnGSCameraIntrinsicsLoaded()
+{
+    if (!GSConfig.CameraIntrinsicsFilePath.IsEmpty() && FPaths::FileExists(GSConfig.CameraIntrinsicsFilePath))
+    {
+        if (LoadCameraIntrinsicsFromColmap(GSConfig.CameraIntrinsicsFilePath))
+        {
+            ShowGSNotification(TEXT("Camera intrinsics loaded successfully"), false);
+        }
+        else
+        {
+            ShowGSNotification(TEXT("Failed to load camera intrinsics"), true);
+        }
+    }
+}
+
+bool FVCCSimPanelTriangleSplatting::LoadCameraIntrinsicsFromColmap(const FString& FilePath)
+{
+    if (!FPaths::FileExists(FilePath))
+    {
+        UE_LOG(LogTemp, Error, TEXT("Camera intrinsics file does not exist: %s"), *FilePath);
+        return false;
+    }
+    
+    FString FileName = FPaths::GetCleanFilename(FilePath);
+    
+    if (FileName.Contains(TEXT("cameras.txt")))
+    {
+        return LoadCameraIntrinsicsFromColmapText(FilePath);
+    }
+    else if (FileName.Contains(TEXT("cameras.bin")))
+    {
+        return LoadCameraIntrinsicsFromColmapBinary(FilePath);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("Unsupported camera file format: %s"), *FileName);
+        return false;
+    }
+}
+
+bool FVCCSimPanelTriangleSplatting::LoadCameraIntrinsicsFromColmapText(const FString& FilePath)
+{
+    TArray<FString> Lines;
+    if (!FFileHelper::LoadFileToStringArray(Lines, *FilePath))
+    {
+        UE_LOG(LogTemp, Error, TEXT("Failed to read camera file: %s"), *FilePath);
+        return false;
+    }
+    
+    for (const FString& Line : Lines)
+    {
+        FString TrimmedLine = Line.TrimStartAndEnd();
+        if (TrimmedLine.IsEmpty() || TrimmedLine.StartsWith(TEXT("#")))
+        {
+            continue;
+        }
+        
+        TArray<FString> Parts;
+        TrimmedLine.ParseIntoArray(Parts, TEXT(" "), true);
+        
+        if (Parts.Num() < 4)
+        {
+            continue;
+        }
+        
+        // Parse camera parameters
+        // COLMAP format: CAMERA_ID MODEL WIDTH HEIGHT PARAMS[]
+        FString Model = Parts[1];
+        int32 Width = FCString::Atoi(*Parts[2]);
+        int32 Height = FCString::Atoi(*Parts[3]);
+        
+        // Update UI values
+        GSImageWidthValue = Width;
+        GSImageHeightValue = Height;
+        GSConfig.ImageWidth = Width;
+        GSConfig.ImageHeight = Height;
+        
+        if (Model == TEXT("PINHOLE") && Parts.Num() >= 8)
+        {
+            // PINHOLE: fx, fy, cx, cy
+            float fx = FCString::Atof(*Parts[4]);
+            float fy = FCString::Atof(*Parts[5]);
+            float cx = FCString::Atof(*Parts[6]);
+            float cy = FCString::Atof(*Parts[7]);
+            
+            // Update focal lengths
+            GSFocalLengthXValue = fx;
+            GSFocalLengthYValue = fy;
+            GSConfig.FocalLengthX = fx;
+            GSConfig.FocalLengthY = fy;
+            
+            // Calculate FOV from focal length
+            float FovRadians = 2.0f * FMath::Atan(Width / (2.0f * fx));
+            float FovDegrees = FMath::RadiansToDegrees(FovRadians);
+            GSFOVValue = FovDegrees;
+            GSConfig.FOVDegrees = FovDegrees;
+            
+            UE_LOG(LogTemp, Log, TEXT("Loaded PINHOLE camera: %dx%d, fx=%.2f, fy=%.2f, FOV=%.2f°"), 
+                Width, Height, fx, fy, FovDegrees);
+            return true;
+        }
+        else if (Model == TEXT("SIMPLE_PINHOLE") && Parts.Num() >= 7)
+        {
+            // SIMPLE_PINHOLE: f, cx, cy
+            float f = FCString::Atof(*Parts[4]);
+            float cx = FCString::Atof(*Parts[5]);
+            float cy = FCString::Atof(*Parts[6]);
+            
+            // Use same focal length for both directions
+            GSFocalLengthXValue = f;
+            GSFocalLengthYValue = f;
+            GSConfig.FocalLengthX = f;
+            GSConfig.FocalLengthY = f;
+            
+            // Calculate FOV from focal length
+            float FovRadians = 2.0f * FMath::Atan(Width / (2.0f * f));
+            float FovDegrees = FMath::RadiansToDegrees(FovRadians);
+            GSFOVValue = FovDegrees;
+            GSConfig.FOVDegrees = FovDegrees;
+            
+            UE_LOG(LogTemp, Log, TEXT("Loaded SIMPLE_PINHOLE camera: %dx%d, f=%.2f, FOV=%.2f°"), 
+                Width, Height, f, FovDegrees);
+            return true;
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Unsupported camera model: %s"), *Model);
+        }
+    }
+    
+    return false;
+}
+
+bool FVCCSimPanelTriangleSplatting::LoadCameraIntrinsicsFromColmapBinary(const FString& FilePath)
+{
+    TArray<uint8> FileData;
+    if (!FFileHelper::LoadFileToArray(FileData, *FilePath))
+    {
+        UE_LOG(LogTemp, Error, TEXT("Failed to read binary camera file: %s"), *FilePath);
+        return false;
+    }
+    
+    if (FileData.Num() < 8)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Camera file too small: %s"), *FilePath);
+        return false;
+    }
+    
+    // Read number of cameras (8 bytes)
+    uint64 NumCameras = *reinterpret_cast<const uint64*>(FileData.GetData());
+    
+    if (NumCameras == 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("No cameras found in file: %s"), *FilePath);
+        return false;
+    }
+    
+    int32 Offset = 8;
+    
+    // We only process the first valid camera we find
+    for (uint64 i = 0; i < NumCameras && Offset < FileData.Num(); ++i)
+    {
+        if (Offset + 24 > FileData.Num()) // Minimum required bytes for camera header
+        {
+            break;
+        }
+        
+        // Read camera ID (4 bytes)
+        uint32 CameraId = *reinterpret_cast<const uint32*>(FileData.GetData() + Offset);
+        Offset += 4;
+        
+        // Read model ID (4 bytes)
+        uint32 ModelId = *reinterpret_cast<const uint32*>(FileData.GetData() + Offset);
+        Offset += 4;
+        
+        // Read width and height (8 bytes)
+        uint64 Width = *reinterpret_cast<const uint64*>(FileData.GetData() + Offset);
+        Offset += 8;
+        uint64 Height = *reinterpret_cast<const uint64*>(FileData.GetData() + Offset);
+        Offset += 8;
+        
+        // Update UI values
+        GSImageWidthValue = static_cast<int32>(Width);
+        GSImageHeightValue = static_cast<int32>(Height);
+        GSConfig.ImageWidth = static_cast<int32>(Width);
+        GSConfig.ImageHeight = static_cast<int32>(Height);
+        
+        // Read parameters based on model
+        if (ModelId == 0) // SIMPLE_PINHOLE
+        {
+            if (Offset + 24 > FileData.Num()) 
+            {
+                break; // Not enough data for parameters
+            }
+            
+            double f = *reinterpret_cast<const double*>(FileData.GetData() + Offset);
+            double cx = *reinterpret_cast<const double*>(FileData.GetData() + Offset + 8);
+            double cy = *reinterpret_cast<const double*>(FileData.GetData() + Offset + 16);
+            
+            GSFocalLengthXValue = static_cast<float>(f);
+            GSFocalLengthYValue = static_cast<float>(f);
+            GSConfig.FocalLengthX = static_cast<float>(f);
+            GSConfig.FocalLengthY = static_cast<float>(f);
+            
+            float FovRadians = 2.0f * FMath::Atan(Width / (2.0f * f));
+            float FovDegrees = FMath::RadiansToDegrees(FovRadians);
+            GSFOVValue = FovDegrees;
+            GSConfig.FOVDegrees = FovDegrees;
+            
+            UE_LOG(LogTemp, Log, TEXT("Loaded SIMPLE_PINHOLE camera from binary: %dx%d, f=%.2f, FOV=%.2f°"), 
+                (int32)Width, (int32)Height, (float)f, FovDegrees);
+            return true;
+        }
+        else if (ModelId == 1) // PINHOLE
+        {
+            if (Offset + 32 > FileData.Num()) 
+            {
+                break; // Not enough data for parameters
+            }
+            
+            double fx = *reinterpret_cast<const double*>(FileData.GetData() + Offset);
+            double fy = *reinterpret_cast<const double*>(FileData.GetData() + Offset + 8);
+            double cx = *reinterpret_cast<const double*>(FileData.GetData() + Offset + 16);
+            double cy = *reinterpret_cast<const double*>(FileData.GetData() + Offset + 24);
+            
+            GSFocalLengthXValue = static_cast<float>(fx);
+            GSFocalLengthYValue = static_cast<float>(fy);
+            GSConfig.FocalLengthX = static_cast<float>(fx);
+            GSConfig.FocalLengthY = static_cast<float>(fy);
+            
+            float FovRadians = 2.0f * FMath::Atan(Width / (2.0f * fx));
+            float FovDegrees = FMath::RadiansToDegrees(FovRadians);
+            GSFOVValue = FovDegrees;
+            GSConfig.FOVDegrees = FovDegrees;
+            
+            UE_LOG(LogTemp, Log, TEXT("Loaded PINHOLE camera from binary: %dx%d, fx=%.2f, fy=%.2f, FOV=%.2f°"), 
+                (int32)Width, (int32)Height, (float)fx, (float)fy, FovDegrees);
+            return true;
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Unsupported camera model ID: %d"), ModelId);
+            // Skip this camera and try the next one
+            continue;
+        }
+    }
+    
+    return false;
 }
 
 END_SLATE_FUNCTION_BUILD_OPTIMIZATION

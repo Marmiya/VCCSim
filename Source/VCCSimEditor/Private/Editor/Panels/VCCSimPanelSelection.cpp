@@ -336,22 +336,89 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateCameraSelectPanel()
         ]
     ]
     
-    // Update Button
+    // Camera Parameters Section
     +SVerticalBox::Slot()
     .AutoHeight()
-    .HAlign(HAlign_Right)
+    .Padding(FMargin(0, 8, 0, 8))
     [
-        SNew(SButton)
-        .ButtonStyle(FAppStyle::Get(), "FlatButton.Default")
-        .Text(FText::FromString("Update Cameras"))
-        .ContentPadding(FMargin(6, 2))
-        .OnClicked_Lambda([this]() {
-            UpdateActiveCameras();
-            return FReply::Handled();
-        })
-        .IsEnabled_Lambda([this]() {
-            return SelectedFlashPawn.IsValid() && (bHasRGBCamera || bHasDepthCamera || bHasSegmentationCamera);
-        })
+        SNew(SHorizontalBox)
+        +SHorizontalBox::Slot()
+        .AutoWidth()
+        .VAlign(VAlign_Center)
+        .Padding(FMargin(0, 0, 8, 0))
+        [
+            SNew(STextBlock)
+            .Text(FText::FromString("FOV:"))
+            .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
+            .ColorAndOpacity(FColor(233, 233, 233))
+        ]
+        +SHorizontalBox::Slot()
+        .AutoWidth()
+        .VAlign(VAlign_Center)
+        .Padding(FMargin(0, 0, 16, 0))
+        [
+            SNew(STextBlock)
+            .Text_Lambda([this]()
+            {
+                if (SelectedFlashPawn.IsValid() && HasAnyActiveCamera())
+                {
+                    float FOV = GetActiveCameraFOV();
+                    return FText::FromString(FString::Printf(TEXT("%.1f°"), FOV));
+                }
+                return FText::FromString(TEXT("N/A"));
+            })
+            .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
+            .ColorAndOpacity(FColor(180, 180, 180))
+        ]
+        +SHorizontalBox::Slot()
+        .AutoWidth()
+        .VAlign(VAlign_Center)
+        .Padding(FMargin(0, 0, 8, 0))
+        [
+            SNew(STextBlock)
+            .Text(FText::FromString("Resolution:"))
+            .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
+            .ColorAndOpacity(FColor(233, 233, 233))
+        ]
+        +SHorizontalBox::Slot()
+        .AutoWidth()
+        .VAlign(VAlign_Center)
+        .Padding(FMargin(0, 0, 16, 0))
+        [
+            SNew(STextBlock)
+            .Text_Lambda([this]()
+            {
+                if (SelectedFlashPawn.IsValid() && HasAnyActiveCamera())
+                {
+                    FIntPoint Resolution = GetActiveCameraResolution();
+                    return FText::FromString(FString::Printf(TEXT("%dx%d"), Resolution.X, Resolution.Y));
+                }
+                return FText::FromString(TEXT("N/A"));
+            })
+            .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
+            .ColorAndOpacity(FColor(180, 180, 180))
+        ]
+        +SHorizontalBox::Slot()
+        .FillWidth(1.0f)
+        [
+            SNew(SSpacer)
+        ]
+        +SHorizontalBox::Slot()
+        .AutoWidth()
+        .VAlign(VAlign_Center)
+        [
+            SNew(SButton)
+            .ButtonStyle(FAppStyle::Get(), "FlatButton.Default")
+            .Text(FText::FromString("Update Cameras"))
+            .ContentPadding(FMargin(6, 2))
+            .OnClicked_Lambda([this]() {
+                UpdateActiveCameras();
+                return FReply::Handled();
+            })
+            .IsEnabled_Lambda([this]() {
+                return SelectedFlashPawn.IsValid() && (bHasRGBCamera || bHasDepthCamera || bHasSegmentationCamera);
+            })
+        ]
     ];
 }
 
@@ -613,4 +680,114 @@ void FVCCSimPanelSelection::ClearSelections()
     bUseDepthCamera = false;
     bUseSegmentationCamera = false;
     bUseNormalCamera = false;
+}
+
+bool FVCCSimPanelSelection::HasAnyActiveCamera() const
+{
+    return (bHasRGBCamera && bUseRGBCamera) || 
+           (bHasDepthCamera && bUseDepthCamera) || 
+           (bHasSegmentationCamera && bUseSegmentationCamera) || 
+           (bHasNormalCamera && bUseNormalCamera);
+}
+
+float FVCCSimPanelSelection::GetActiveCameraFOV() const
+{
+    if (!SelectedFlashPawn.IsValid())
+    {
+        return 90.0f; // Default FOV
+    }
+    
+    // Priority order: RGB -> Depth -> Segmentation -> Normal
+    if (bHasRGBCamera && bUseRGBCamera)
+    {
+        TArray<URGBCameraComponent*> RGBCameras;
+        SelectedFlashPawn->GetComponents<URGBCameraComponent>(RGBCameras);
+        if (RGBCameras.Num() > 0 && RGBCameras[0])
+        {
+            return RGBCameras[0]->FOV;
+        }
+    }
+    
+    if (bHasDepthCamera && bUseDepthCamera)
+    {
+        TArray<UDepthCameraComponent*> DepthCameras;
+        SelectedFlashPawn->GetComponents<UDepthCameraComponent>(DepthCameras);
+        if (DepthCameras.Num() > 0 && DepthCameras[0])
+        {
+            return DepthCameras[0]->FOV;
+        }
+    }
+    
+    if (bHasSegmentationCamera && bUseSegmentationCamera)
+    {
+        TArray<USegmentationCameraComponent*> SegmentationCameras;
+        SelectedFlashPawn->GetComponents<USegmentationCameraComponent>(SegmentationCameras);
+        if (SegmentationCameras.Num() > 0 && SegmentationCameras[0])
+        {
+            return SegmentationCameras[0]->FOV;
+        }
+    }
+    
+    if (bHasNormalCamera && bUseNormalCamera)
+    {
+        TArray<UNormalCameraComponent*> NormalCameras;
+        SelectedFlashPawn->GetComponents<UNormalCameraComponent>(NormalCameras);
+        if (NormalCameras.Num() > 0 && NormalCameras[0])
+        {
+            return NormalCameras[0]->FOV;
+        }
+    }
+    
+    return 90.0f; // Default FOV
+}
+
+FIntPoint FVCCSimPanelSelection::GetActiveCameraResolution() const
+{
+    if (!SelectedFlashPawn.IsValid())
+    {
+        return FIntPoint(1920, 1080); // Default resolution
+    }
+    
+    // Priority order: RGB -> Depth -> Segmentation -> Normal
+    if (bHasRGBCamera && bUseRGBCamera)
+    {
+        TArray<URGBCameraComponent*> RGBCameras;
+        SelectedFlashPawn->GetComponents<URGBCameraComponent>(RGBCameras);
+        if (RGBCameras.Num() > 0 && RGBCameras[0])
+        {
+            return FIntPoint(RGBCameras[0]->Width, RGBCameras[0]->Height);
+        }
+    }
+    
+    if (bHasDepthCamera && bUseDepthCamera)
+    {
+        TArray<UDepthCameraComponent*> DepthCameras;
+        SelectedFlashPawn->GetComponents<UDepthCameraComponent>(DepthCameras);
+        if (DepthCameras.Num() > 0 && DepthCameras[0])
+        {
+            return FIntPoint(DepthCameras[0]->Width, DepthCameras[0]->Height);
+        }
+    }
+    
+    if (bHasSegmentationCamera && bUseSegmentationCamera)
+    {
+        TArray<USegmentationCameraComponent*> SegmentationCameras;
+        SelectedFlashPawn->GetComponents<USegmentationCameraComponent>(SegmentationCameras);
+        if (SegmentationCameras.Num() > 0 && SegmentationCameras[0])
+        {
+            return FIntPoint(SegmentationCameras[0]->Width, SegmentationCameras[0]->Height);
+        }
+    }
+    
+    if (bHasNormalCamera && bUseNormalCamera)
+    {
+        TArray<UNormalCameraComponent*> NormalCameras;
+        SelectedFlashPawn->GetComponents<UNormalCameraComponent>(NormalCameras);
+        if (NormalCameras.Num() > 0 && NormalCameras[0])
+        {
+            return FIntPoint(NormalCameras[0]->Width, NormalCameras[0]->Height);
+        }
+    }
+    
+    return FIntPoint(1920, 1080); // Default resolution
 }

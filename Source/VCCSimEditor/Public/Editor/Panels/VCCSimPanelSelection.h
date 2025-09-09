@@ -91,6 +91,13 @@ public:
     bool IsUsingDepthCamera() const { return bUseDepthCamera; }
     bool IsUsingSegmentationCamera() const { return bUseSegmentationCamera; }
     bool IsUsingNormalCamera() const { return bUseNormalCamera; }
+    
+    /** Get camera parameters from active cameras */
+    float GetActiveCameraFOV() const;
+    FIntPoint GetActiveCameraResolution() const;
+    
+    /** Check if any camera is both available and active */
+    bool HasAnyActiveCamera() const;
 
 private:
     // ============================================================================

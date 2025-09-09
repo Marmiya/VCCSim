@@ -62,6 +62,7 @@ private:
     
     // Data Input UI Controls
     TSharedPtr<SEditableTextBox> GSImageDirectoryTextBox;
+    TSharedPtr<SEditableTextBox> GSCameraIntrinsicsFileTextBox;
     TSharedPtr<SEditableTextBox> GSPoseFileTextBox;
     TSharedPtr<SEditableTextBox> GSOutputDirectoryTextBox;
     TSharedPtr<SEditableTextBox> GSColmapDatasetTextBox;
@@ -157,9 +158,16 @@ private:
     
     // Browse dialog handlers
     FReply OnGSBrowseImageDirectoryClicked();
+    FReply OnGSBrowseCameraIntrinsicsFileClicked();
     FReply OnGSBrowsePoseFileClicked();
     FReply OnGSBrowseOutputDirectoryClicked();
     FReply OnGSBrowseColmapDatasetClicked();
+    
+    // Camera intrinsics loading
+    void OnGSCameraIntrinsicsLoaded();
+    bool LoadCameraIntrinsicsFromColmap(const FString& FilePath);
+    bool LoadCameraIntrinsicsFromColmapText(const FString& FilePath);
+    bool LoadCameraIntrinsicsFromColmapBinary(const FString& FilePath);
     
     // Parameter change handlers
     void OnGSFOVChanged(float NewValue);

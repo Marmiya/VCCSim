@@ -20,6 +20,7 @@
 #include "Modules/ModuleManager.h"
 #include "WorkspaceMenuStructure.h"
 #include "WorkspaceMenuStructureModule.h"
+#include "ToolMenus.h"
 #include "Framework/Docking/TabManager.h"
 #include "LevelEditor.h"
 
@@ -106,12 +107,41 @@ void FVCCSimEditorModule::UnregisterTabSpawner()
 
 void FVCCSimEditorModule::RegisterMenuExtensions()
 {
-    // Menu extensions can be added here if needed in the future
+    // Register VCCSim panel in the Level Editor Window menu
+    UToolMenus* ToolMenus = UToolMenus::Get();
+    if (ToolMenus)
+    {
+        UToolMenu* WindowMenu = ToolMenus->ExtendMenu("LevelEditor.MainMenu.Window");
+        if (WindowMenu)
+        {
+            FToolMenuSection& LevelEditorSection = WindowMenu->FindOrAddSection("LevelEditor");
+            LevelEditorSection.AddMenuEntry(
+                "VCCSimPanel",
+                NSLOCTEXT("VCCSimEditor", "VCCSimPanelMenuItem", "VCCSim"),
+                NSLOCTEXT("VCCSimEditor", "VCCSimPanelMenuTooltip", "Opens the VCCSim panel"),
+                FSlateIcon(FAppStyle::GetAppStyleSetName(), "LevelEditor.Tabs.Viewports"),
+                FUIAction(FExecuteAction::CreateLambda([]()
+                {
+                    FLevelEditorModule& LevelEditorModule = FModuleManager::GetModuleChecked<FLevelEditorModule>("LevelEditor");
+                    TSharedPtr<FTabManager> TabManager = LevelEditorModule.GetLevelEditorTabManager();
+                    if (TabManager.IsValid())
+                    {
+                        TabManager->TryInvokeTab(FVCCSimPanelFactory::TabId);
+                    }
+                }))
+            );
+        }
+    }
 }
 
 void FVCCSimEditorModule::UnregisterMenuExtensions()
 {
-    // Menu extension cleanup can be added here if needed in the future
+    // Clean up menu extensions
+    UToolMenus* ToolMenus = UToolMenus::Get();
+    if (ToolMenus)
+    {
+        ToolMenus->RemoveMenu("VCCSimPanel");
+    }
 }
 
 #undef LOCTEXT_NAMESPACE

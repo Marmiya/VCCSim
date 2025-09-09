@@ -22,7 +22,6 @@
 #include "Widgets/SCompoundWidget.h"
 #include "Widgets/Layout/SExpandableArea.h"
 #include "Editor/PropertyEditor/Public/IDetailsView.h"
-#include "ProceduralMeshComponent.h"
 #include "Misc/Paths.h"
 #include "AssetRegistry/AssetData.h"
 
