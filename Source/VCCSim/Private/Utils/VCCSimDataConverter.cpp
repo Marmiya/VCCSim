@@ -372,19 +372,15 @@ FPointCloudData FVCCSimDataConverter::ConvertMeshToPointCloud(
                                   " right-handed coordinates"), SampledPoints.Num());
     }
     
-    // Fill point cloud data with random normals for Triangle Splatting compatibility
+    // Fill point cloud data with zero normals
     PointCloudData.Reserve(SampledPoints.Num());
     for (int32 i = 0; i < SampledPoints.Num(); ++i)
     {
-        // Generate random normalized normal vector for Triangle Splatting compatibility
-        FVector RandomNormal = FVector(
-            FMath::RandRange(-1.0f, 1.0f),
-            FMath::RandRange(-1.0f, 1.0f), 
-            FMath::RandRange(-1.0f, 1.0f)
-        ).GetSafeNormal();
+        // Use zero normal vector
+        FVector ZeroNormal = FVector::ZeroVector;
         
         PointCloudData.AddPoint(SampledPoints[i], Colors[i],
-            RandomNormal, true);
+            ZeroNormal, true);
     }
     
     UE_LOG(LogTemp, Log, TEXT("Created point cloud with %d points"),

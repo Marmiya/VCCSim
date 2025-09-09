@@ -570,12 +570,20 @@ def main():
     pts_ue_out = os.path.join(args.out_dir, 'points_ue.ply')
     pose_ue_out = os.path.join(args.out_dir, 'pose_ue.txt')
 
+    # Create zero normals for point clouds
+    if len(xyz_pts) > 0:
+        pts_normals = np.zeros_like(xyz_pts)  # (N, 3) array of zeros for COLMAP points
+        pts_ue_normals = np.zeros_like(pts_ue_xyz)  # (N, 3) array of zeros for UE points
+    else:
+        pts_normals = None
+        pts_ue_normals = None
+
     if args.verbose:
         print("[info] Writing output PLY files...")
     write_ply(cams_out, cam_xyz, rgb=cam_rgb, normals=cam_dirs)
-    write_ply(pts_out, xyz_pts, rgb=rgb_pts, normals=None)
+    write_ply(pts_out, xyz_pts, rgb=rgb_pts, normals=pts_normals)
     write_ply(cams_ue_out, cam_ue_xyz, rgb=cam_ue_rgb, normals=cam_ue_dirs)
-    write_ply(pts_ue_out, pts_ue_xyz, rgb=pts_ue_rgb, normals=None)
+    write_ply(pts_ue_out, pts_ue_xyz, rgb=pts_ue_rgb, normals=pts_ue_normals)
 
     # Write UE pose file with quaternions
     if args.verbose:
