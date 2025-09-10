@@ -369,10 +369,9 @@ bool FTriangleSplattingManager::PrepareTrainingData(const FTriangleSplattingConf
     }
     
     // Create organized subdirectories without redundancy
-    // Create simplified directory structure (reduced redundancy)
+    // Create simplified directory structure (reduced redundancy) 
     TArray<FString> MainSubDirectories = { 
-        TEXT("config"),    // Training configuration files
-        TEXT("renders")    // Training outputs and renders (flattened)
+        TEXT("config")    // Training configuration files
     };
     
     for (const FString& SubDir : MainSubDirectories)

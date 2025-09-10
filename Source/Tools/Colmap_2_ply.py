@@ -5,16 +5,6 @@ COLMAP to UE Converter
 
 Converts COLMAP sparse reconstruction (cameras and 3D points) to UE coordinate system.
 
-Key assumptions:
-- COLMAP world coordinate system: Right-handed, arbitrary orientation (determined by reconstruction)
-- We assume COLMAP world frame follows OpenCV convention: +X right, +Y down, +Z forward (right-handed)
-- UE coordinate system: Left-handed, +X forward, +Y right, +Z up, centimeters
-
-Conversion:
-- COLMAP (+X right, +Y down, +Z forward) -> UE (+X forward, +Y right, +Z up)
-- Position: (X, Y, Z) -> (Y*100, X*100, Z*100)  [Y->X, X->Y, Z->Z, scale to cm]
-- Direction: (X, Y, Z) -> (Y, X, Z)  [same transformation, no scaling]
-
 Outputs:
 - cameras_colmap.ply: Original COLMAP camera positions
 - points_colmap.ply: Original COLMAP 3D points  
@@ -25,11 +15,27 @@ Outputs:
 
 import os
 import sys
-import argparse
 import math
 import struct
 from typing import Tuple
 import numpy as np
+
+# ============================ Configuration Parameters ============================
+# Modify your configuration here, no need to use command line parameters
+
+# Input and output paths
+COLMAP_DIR = r'D:\Data\360_v2\garden\mesh\rc_colmap'          # COLMAP sparse reconstruction file directory
+OUTPUT_DIR = r'C:\UEProjects\VCCSimDev\Saved'           # Output directory
+
+# Camera point colors (RGB)
+CAMERA_COLOR = [255, 0, 0]        # COLMAP camera point color (red)
+CAMERA_UE_COLOR = [0, 255, 0]     # UE camera point color (green)
+
+# Processing options
+SANITIZE = False                  # Whether to remove NaN/Inf vertices
+FILTER_OUTLIERS = True           # Whether to filter outliers (remove farthest points as noise)
+FILTER_RATIO = 0.05               # Ratio of farthest points to remove (default 5%)
+VERBOSE = True                    # Whether to enable verbose output
 
 
 # ============================ Math helpers ============================
@@ -95,22 +101,11 @@ def filter_outlier_points(xyz: np.ndarray, rgb: np.ndarray, filter_ratio: float 
 
 
 def colmap_to_ue_transform(xyz: np.ndarray, dirs: np.ndarray = None) -> Tuple[np.ndarray, np.ndarray]:
-    """Convert COLMAP coordinates directly to UE coordinates.
 
-    COLMAP uses an arbitrary right-handed world coordinate system determined by reconstruction.
-    We assume COLMAP world follows OpenCV convention: +X right, +Y down, +Z forward (right-handed)
-    UE uses: +X forward, +Y right, +Z up (left-handed)
-    
-    Conversion: COLMAP (X=right, Y=down, Z=forward) -> UE (X=forward, Y=right, Z=up)
-    Mapping: (Xc, Yc, Zc) -> (Yc, Xc, Zc) and scale from meters to centimeters
-    """
     if xyz.size == 0:
         ue_xyz = xyz.reshape(0, 3)
     else:
-        # Convert COLMAP -> UE coordinate transformation
-        # X_ue = Y_colmap (forward, was down in COLMAP)
-        # Y_ue = X_colmap (right, same as COLMAP)
-        # Z_ue = Z_colmap (up, was forward in COLMAP)
+
         ue_xyz = np.column_stack([xyz[:, 1], xyz[:, 0], xyz[:, 2]])
         ue_xyz *= 100.0  # Scale: meters -> centimeters
 
@@ -167,7 +162,6 @@ def rotation_matrix_to_ue_quaternion(R: np.ndarray) -> np.ndarray:
     
     # Return UE format: [x, y, z, w]
     return np.array([qx, qy, qz, qw], dtype=float)
-
 
 
 # ============================ IO helpers ============================
@@ -288,7 +282,7 @@ def parse_points3D_txt(path: str) -> Tuple[np.ndarray, np.ndarray, int]:
 def parse_images_bin(path: str):
     cams = []
     with open(path, 'rb') as f:
-        # 先读数量头
+        # Read the count header first
         hdr = f.read(8)
         if len(hdr) != 8:
             return cams
@@ -300,7 +294,7 @@ def parse_images_bin(path: str):
             t = struct.unpack('<3d', f.read(24))
             cam_id = struct.unpack('<I', f.read(4))[0]
 
-            # 读以 \0 结尾的名字
+            # Read null-terminated name
             name_bytes = bytearray()
             while True:
                 c = f.read(1)
@@ -310,7 +304,7 @@ def parse_images_bin(path: str):
             name = name_bytes.decode('utf-8', errors='ignore')
 
             n_pts = struct.unpack('<Q', f.read(8))[0]
-            # 跳过 2D 点 (24 bytes each)
+            # Skip 2D points (24 bytes each)
             if n_pts:
                 f.seek(int(24 * n_pts), os.SEEK_CUR)
 
@@ -343,7 +337,7 @@ def parse_points3D_bin(path: str):
     xyz, rgb = [], []
     skipped = 0
     with open(path, 'rb') as f:
-        # 先读数量头
+        # Read the count header first
         hdr = f.read(8)
         if len(hdr) != 8:
             return np.zeros((0,3)), np.zeros((0,3), np.uint8), 0
@@ -433,30 +427,10 @@ def txt_exists(colmap_dir: str) -> bool:
 # ============================ Main ============================
 
 def main():
-    ap = argparse.ArgumentParser(description="Convert COLMAP (TXT or BIN) model to PLY point clouds and UE poses.")
-    ap.add_argument('--colmap_dir', type=str,
-                    default=r'D:\Data\360_v2\garden\mesh\Colmap',
-                    help='Directory containing COLMAP sparse reconstruction files')
-    ap.add_argument('--out_dir', type=str,
-                    default=r'C:\UEProjects\VCCSimDev\Saved',
-                    help='Output directory for PLY files and UE poses')
-    ap.add_argument('--camera_color', type=int, nargs=3, default=[255, 0, 0],
-                    help='RGB color for COLMAP camera points (default: red)')
-    ap.add_argument('--camera_ue_color', type=int, nargs=3, default=[0, 255, 0],
-                    help='RGB color for UE camera points (default: green)')
-    ap.add_argument('--sanitize', action='store_true',
-                    help='Remove NaN/Inf vertices before writing PLY files')
-    ap.add_argument('--no_filter_outliers', action='store_true',
-                    help='Disable outlier filtering (by default, farthest 5%% of points are removed as noise)')
-    ap.add_argument('--filter_ratio', type=float, default=0.05,
-                    help='Fraction of farthest points to remove (default: 0.05 = 5%%)')
-    ap.add_argument('--verbose', action='store_true',
-                    help='Enable verbose output with conversion details')
-    args = ap.parse_args()
+    # Use configuration parameters defined at the top
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    os.makedirs(args.out_dir, exist_ok=True)
-
-    src_dir = args.colmap_dir
+    src_dir = COLMAP_DIR
     use_txt = txt_exists(src_dir)
     use_bin = bin_exists(src_dir)
 
@@ -489,20 +463,20 @@ def main():
 
     try:
         if use_txt:
-            if args.verbose:
+            if VERBOSE:
                 print(f"[info] Parsing TEXT model at {data_dir}")
             validate_cameras_txt(cameras_txt)
             cameras = parse_images_txt(images_txt)
             xyz_pts, rgb_pts, n_bad = parse_points3D_txt(points3D_txt)
-            if args.verbose:
+            if VERBOSE:
                 print(f"[info] Text model: cameras={len(cameras)}, points={xyz_pts.shape[0]} (skipped={n_bad})")
             parsed_ok = True
         elif use_bin:
-            if args.verbose:
+            if VERBOSE:
                 print(f"[info] Parsing BINARY model at {data_dir}")
             cameras = parse_images_bin(images_bin)
             xyz_pts, rgb_pts, n_bad = parse_points3D_bin(points3D_bin)
-            if args.verbose:
+            if VERBOSE:
                 print(f"[info] Binary model: cameras={len(cameras)}, points={xyz_pts.shape[0]} (skipped={n_bad})")
             parsed_ok = True
         else:
@@ -520,11 +494,11 @@ def main():
     if len(cameras) > 0:
         cam_xyz = np.stack([c["center"] for c in cameras], axis=0)
         cam_dirs = np.stack([c["dir"] for c in cameras], axis=0)
-        cam_rgb = np.tile(np.array(args.camera_color, dtype=np.uint8), (len(cameras), 1))
+        cam_rgb = np.tile(np.array(CAMERA_COLOR, dtype=np.uint8), (len(cameras), 1))
         
         # Convert cameras directly to UE coordinates (left-handed, centimeters)
         cam_ue_xyz, cam_ue_dirs = colmap_to_ue_transform(cam_xyz, cam_dirs)
-        cam_ue_rgb = np.tile(np.array(args.camera_ue_color, dtype=np.uint8), (len(cameras), 1))
+        cam_ue_rgb = np.tile(np.array(CAMERA_UE_COLOR, dtype=np.uint8), (len(cameras), 1))
     else:
         print("[warn] No cameras found in the model.")
 
@@ -533,20 +507,20 @@ def main():
     pts_ue_rgb = rgb_pts
 
     # Optional outlier filtering - remove farthest points as noise (enabled by default)
-    if not args.no_filter_outliers and len(xyz_pts) > 0:
-        if args.verbose:
-            print(f"[info] Filtering outliers: removing {args.filter_ratio*100:.1f}% farthest points from point cloud center")
-        xyz_pts, rgb_pts, n_removed = filter_outlier_points(xyz_pts, rgb_pts, args.filter_ratio)
+    if FILTER_OUTLIERS and len(xyz_pts) > 0:
+        if VERBOSE:
+            print(f"[info] Filtering outliers: removing {FILTER_RATIO*100:.1f}% farthest points from point cloud center")
+        xyz_pts, rgb_pts, n_removed = filter_outlier_points(xyz_pts, rgb_pts, FILTER_RATIO)
         # Recompute UE coordinates after filtering
         pts_ue_xyz, _ = colmap_to_ue_transform(xyz_pts, None)
         pts_ue_rgb = rgb_pts
-        if args.verbose:
+        if VERBOSE:
             print(f"[info] Outlier filtering: removed {n_removed} points, kept {len(xyz_pts)} points")
-    elif args.verbose and len(xyz_pts) > 0:
+    elif VERBOSE and len(xyz_pts) > 0:
         print(f"[info] Outlier filtering disabled, keeping all {len(xyz_pts)} points")
 
     # Optional sanitization to avoid NaN warnings in Meshlab
-    if args.sanitize:
+    if SANITIZE:
         cam_mask = (np.isfinite(cam_xyz).all(axis=1) &
                     np.isfinite(cam_dirs).all(axis=1) &
                     np.isfinite(cam_ue_xyz).all(axis=1) &
@@ -555,7 +529,7 @@ def main():
                     np.isfinite(pts_ue_xyz).all(axis=1))
         kept_cam = int(cam_mask.sum())
         kept_pts = int(pts_mask.sum())
-        if args.verbose:
+        if VERBOSE:
             print(f"[info] sanitize: cameras kept={kept_cam}/{len(cam_xyz)}, points kept={kept_pts}/{len(xyz_pts)}")
         cam_xyz, cam_dirs, cam_rgb = cam_xyz[cam_mask], cam_dirs[cam_mask], cam_rgb[cam_mask]
         cam_ue_xyz, cam_ue_dirs, cam_ue_rgb = cam_ue_xyz[cam_mask], cam_ue_dirs[cam_mask], cam_ue_rgb[cam_mask]
@@ -564,11 +538,11 @@ def main():
         cameras = [cam for i, cam in enumerate(cameras) if cam_mask[i]]
 
     # Write PLYs
-    cams_out = os.path.join(args.out_dir, 'cameras_colmap.ply')
-    pts_out = os.path.join(args.out_dir, 'points_colmap.ply')
-    cams_ue_out = os.path.join(args.out_dir, 'cameras_ue.ply')
-    pts_ue_out = os.path.join(args.out_dir, 'points_ue.ply')
-    pose_ue_out = os.path.join(args.out_dir, 'pose_ue.txt')
+    cams_out = os.path.join(OUTPUT_DIR, 'cameras_colmap.ply')
+    pts_out = os.path.join(OUTPUT_DIR, 'points_colmap.ply')
+    cams_ue_out = os.path.join(OUTPUT_DIR, 'cameras_ue.ply')
+    pts_ue_out = os.path.join(OUTPUT_DIR, 'points_ue.ply')
+    pose_ue_out = os.path.join(OUTPUT_DIR, 'pose_ue.txt')
 
     # Create zero normals for point clouds
     if len(xyz_pts) > 0:
@@ -578,7 +552,7 @@ def main():
         pts_normals = None
         pts_ue_normals = None
 
-    if args.verbose:
+    if VERBOSE:
         print("[info] Writing output PLY files...")
     write_ply(cams_out, cam_xyz, rgb=cam_rgb, normals=cam_dirs)
     write_ply(pts_out, xyz_pts, rgb=rgb_pts, normals=pts_normals)
@@ -586,7 +560,7 @@ def main():
     write_ply(pts_ue_out, pts_ue_xyz, rgb=pts_ue_rgb, normals=pts_ue_normals)
 
     # Write UE pose file with quaternions
-    if args.verbose:
+    if VERBOSE:
         print(f"[info] Writing UE pose file: {pose_ue_out}")
     with open(pose_ue_out, 'w', encoding='utf-8') as f:
         f.write("# UE coordinate system poses (left-handed, cm)\n")
@@ -615,13 +589,11 @@ def main():
             
             f.write(f"{ue_pos[0]:.6f} {ue_pos[1]:.6f} {ue_pos[2]:.6f} {ue_quat[0]:.6f} {ue_quat[1]:.6f} {ue_quat[2]:.6f} {ue_quat[3]:.6f}\n")
 
-    if args.verbose:
+    if VERBOSE:
         print("[done] Outputs:")
         print(f"  COLMAP cameras: {cams_out}\n  COLMAP points:  {pts_out}\n  UE cameras:     {cams_ue_out}\n  UE points:      {pts_ue_out}\n  UE poses:       {pose_ue_out}")
-        print("[note] COLMAP->UE: Assumes COLMAP world follows OpenCV convention (+X right, +Y down, +Z forward).")
-        print("      UE conversion: (X,Y,Z) -> (Y,X,Z) to get left-handed (+X forward, +Y right, +Z up).")
     else:
-        print("[done] Conversion complete. Use --verbose for details.")
+        print("[done] Conversion complete.")
 
 
 if __name__ == "__main__":

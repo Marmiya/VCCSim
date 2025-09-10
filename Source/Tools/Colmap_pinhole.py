@@ -383,8 +383,8 @@ def find_actual_image_files(images_dir: str, image_names: List[str]) -> Dict[str
 def main():
     """Main function"""
     # Default paths - updated to use base directory
-    default_input = r"D:\Data\360_v2\garden\mesh\Colmap"
-    default_output = r"D:\Data\360_v2\garden\mesh\Colmap_Refine"
+    default_input = r"D:\Data\360_v2\garden\mesh\rc_colmap"
+    default_output = r"D:\Data\360_v2\garden\mesh\rc_colmap_refine"
 
     if len(sys.argv) >= 3:
         input_dir = sys.argv[1]
@@ -421,3 +421,7 @@ def main():
 
 if __name__ == "__main__":
     exit(main())
+    
+
+
+colmap model_aligner --input_path D:/Data/360_v2/garden/mesh/rc_colmap --output_path D:/Data/360_v2/garden/mesh/rc_reprojected --ref_images_path D:/Data/360_v2/garden/sparse/0/images.txt  --ref_is_gps 0   --alignment_type custom  --transform_path D:/Data/360_v2/garden/mesh/rc_reprojected/RC_to_BASE.sim3.txt
