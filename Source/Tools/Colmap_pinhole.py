@@ -5,10 +5,8 @@ Converts Reality Capture COLMAP datasets with multiple non-pinhole cameras
 to a single pinhole camera model for 3D Gaussian Splatting compatibility.
 
 Usage:
-    python Colmap_pinhole.py input_path output_path
-    
-Example:
-    python Colmap_pinhole.py "D:\Data\360_v2\garden\mesh\Colmap\sparse\0" "D:\Data\360_v2\garden\mesh\Colmap_Refine"
+    Modify the parameters in the CONFIG section below and run:
+    python Colmap_pinhole.py
 """
 
 import os
@@ -18,6 +16,18 @@ import numpy as np
 from pathlib import Path
 from typing import Dict, List, Tuple, NamedTuple
 import struct
+
+# ================================
+# CONFIG - Modify these parameters
+# ================================
+INPUT_DIR = r"D:\Data\360_v2\garden\mesh\rc_scale_aligned"
+OUTPUT_DIR = r"D:\Data\360_v2\garden\mesh\rc_colmap_refine"
+
+# Optional: Set target resolution (None for automatic)
+TARGET_WIDTH = None   # e.g., 1920 or None
+TARGET_HEIGHT = None  # e.g., 1080 or None
+
+# ================================
 
 
 class Camera(NamedTuple):
@@ -382,33 +392,21 @@ def find_actual_image_files(images_dir: str, image_names: List[str]) -> Dict[str
 
 def main():
     """Main function"""
-    # Default paths - updated to use base directory
-    default_input = r"D:\Data\360_v2\garden\mesh\rc_colmap"
-    default_output = r"D:\Data\360_v2\garden\mesh\rc_colmap_refine"
-
-    if len(sys.argv) >= 3:
-        input_dir = sys.argv[1]
-        output_dir = sys.argv[2]
-    elif len(sys.argv) == 2:
-        input_dir = sys.argv[1]
-        output_dir = default_output
-    else:
-        input_dir = default_input
-        output_dir = default_output
-        print(f"Using default paths:")
-        print(f"Input:  {input_dir}")
-        print(f"Output: {output_dir}")
-        print("Usage: python Colmap_pinhole.py [input_dir] [output_dir] [target_width] [target_height]")
-        print("Expected structure: input_dir/sparse/0/ (COLMAP files) and input_dir/images/ (image files)")
+    # Use parameters from CONFIG section
+    input_dir = INPUT_DIR
+    output_dir = OUTPUT_DIR
     
+    print(f"Using configured paths:")
+    print(f"Input:  {input_dir}")
+    print(f"Output: {output_dir}")
+    
+    # Set target resolution if specified
     target_resolution = None
-    if len(sys.argv) >= 5:
-        try:
-            target_width = int(sys.argv[3])
-            target_height = int(sys.argv[4])
-            target_resolution = (target_width, target_height)
-        except ValueError:
-            print("Warning: Invalid resolution parameters, using automatic resolution")
+    if TARGET_WIDTH and TARGET_HEIGHT:
+        target_resolution = (TARGET_WIDTH, TARGET_HEIGHT)
+        print(f"Target resolution: {TARGET_WIDTH}x{TARGET_HEIGHT}")
+    else:
+        print("Using automatic resolution detection")
     
     try:
         convert_dataset(input_dir, output_dir, target_resolution)
@@ -421,7 +419,3 @@ def main():
 
 if __name__ == "__main__":
     exit(main())
-    
-
-
-colmap model_aligner --input_path D:/Data/360_v2/garden/mesh/rc_colmap --output_path D:/Data/360_v2/garden/mesh/rc_reprojected --ref_images_path D:/Data/360_v2/garden/sparse/0/images.txt  --ref_is_gps 0   --alignment_type custom  --transform_path D:/Data/360_v2/garden/mesh/rc_reprojected/RC_to_BASE.sim3.txt

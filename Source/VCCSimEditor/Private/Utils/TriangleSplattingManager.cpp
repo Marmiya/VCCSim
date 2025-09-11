@@ -281,11 +281,30 @@ void FTriangleSplattingManager::UpdateTrainingStatus()
         UpdateProgress(NewProgress);
     }
     
-    // Update status message with current loss
+    // Update status message with current metrics (Loss, PSNR, Triangle count)
     FString CurrentLoss = ParseCurrentLoss();
-    if (!CurrentLoss.IsEmpty())
+    FString CurrentPSNR = ParseCurrentPSNR();
+    FString CurrentTriangleCount = ParseCurrentTriangleCount();
+    
+    if (!CurrentLoss.IsEmpty() || !CurrentPSNR.IsEmpty() || !CurrentTriangleCount.IsEmpty())
     {
-        FString NewStatusMessage = FString::Printf(TEXT("Training... Loss: %s"), *CurrentLoss);
+        FString NewStatusMessage = TEXT("Training...");
+        
+        if (!CurrentLoss.IsEmpty())
+        {
+            NewStatusMessage += FString::Printf(TEXT(" Loss: %s"), *CurrentLoss);
+        }
+        
+        if (!CurrentPSNR.IsEmpty())
+        {
+            NewStatusMessage += FString::Printf(TEXT(" PSNR: %s"), *CurrentPSNR);
+        }
+        
+        if (!CurrentTriangleCount.IsEmpty())
+        {
+            NewStatusMessage += FString::Printf(TEXT(" Triangles: %s"), *CurrentTriangleCount);
+        }
+        
         UpdateStatusMessage(NewStatusMessage);
     }
 }
@@ -682,17 +701,24 @@ float FTriangleSplattingManager::ParseTrainingProgress()
 
 FString FTriangleSplattingManager::ParseCurrentLoss()
 {
-    if (LogFilePath.IsEmpty() || !FPaths::FileExists(LogFilePath))
+    // Check Python log file first, then fallback to manager log file
+    FString LogFileToCheck = PythonLogFilePath;
+    if (LogFileToCheck.IsEmpty() || !FPaths::FileExists(LogFileToCheck))
+    {
+        LogFileToCheck = LogFilePath;
+    }
+    
+    if (LogFileToCheck.IsEmpty() || !FPaths::FileExists(LogFileToCheck))
     {
         return FString();
     }
     
-    TArray<FString> RecentLines = ReadRecentLogLines(5);
+    TArray<FString> RecentLines = ReadRecentLogLines(10, LogFileToCheck);
     
     // Look for loss values in recent log lines
     for (const FString& Line : RecentLines)
     {
-        if (Line.Contains(TEXT("Loss:")) || Line.Contains(TEXT("loss:")))
+        if (Line.Contains(TEXT("Loss:")) || Line.Contains(TEXT("loss:")) || Line.Contains(TEXT("Loss=")))
         {
             // Extract loss value
             TArray<FString> LossPatterns = { TEXT("Loss: "), TEXT("loss: "), TEXT("Loss="), TEXT("loss=") };
@@ -711,10 +737,150 @@ FString FTriangleSplattingManager::ParseCurrentLoss()
                         AfterLoss = AfterLoss.Left(SpaceIndex);
                     }
                     
+                    // Also check for comma separator (in case PSNR follows)
+                    int32 CommaIndex = AfterLoss.Find(TEXT(","));
+                    if (CommaIndex != INDEX_NONE)
+                    {
+                        AfterLoss = AfterLoss.Left(CommaIndex);
+                    }
+                    
                     // Validate that it's a number
                     if (AfterLoss.IsNumeric() || AfterLoss.Contains(TEXT("e")) || AfterLoss.Contains(TEXT("E")))
                     {
                         return AfterLoss.TrimStartAndEnd();
+                    }
+                }
+            }
+        }
+    }
+    
+    return FString();
+}
+
+FString FTriangleSplattingManager::ParseCurrentPSNR()
+{
+    // Check Python log file first, then fallback to manager log file
+    FString LogFileToCheck = PythonLogFilePath;
+    if (LogFileToCheck.IsEmpty() || !FPaths::FileExists(LogFileToCheck))
+    {
+        LogFileToCheck = LogFilePath;
+    }
+    
+    if (LogFileToCheck.IsEmpty() || !FPaths::FileExists(LogFileToCheck))
+    {
+        return FString();
+    }
+    
+    TArray<FString> RecentLines = ReadRecentLogLines(10, LogFileToCheck);
+    
+    // Look for PSNR values in recent log lines
+    for (const FString& Line : RecentLines)
+    {
+        if (Line.Contains(TEXT("PSNR")) && (Line.Contains(TEXT("=")) || Line.Contains(TEXT(":"))))
+        {
+            // Extract PSNR value
+            TArray<FString> PSNRPatterns = { TEXT("PSNR="), TEXT("PSNR: "), TEXT("PSNR ") };
+            
+            for (const FString& Pattern : PSNRPatterns)
+            {
+                int32 PSNRIndex = Line.Find(Pattern, ESearchCase::IgnoreCase);
+                if (PSNRIndex != INDEX_NONE)
+                {
+                    FString AfterPSNR = Line.Mid(PSNRIndex + Pattern.Len());
+                    
+                    // Extract numeric value
+                    int32 SpaceIndex = AfterPSNR.Find(TEXT(" "));
+                    if (SpaceIndex != INDEX_NONE)
+                    {
+                        AfterPSNR = AfterPSNR.Left(SpaceIndex);
+                    }
+                    
+                    // Also check for comma separator  
+                    int32 CommaIndex = AfterPSNR.Find(TEXT(","));
+                    if (CommaIndex != INDEX_NONE)
+                    {
+                        AfterPSNR = AfterPSNR.Left(CommaIndex);
+                    }
+                    
+                    // Validate that it's a number
+                    if (AfterPSNR.IsNumeric() || AfterPSNR.Contains(TEXT(".")))
+                    {
+                        return AfterPSNR.TrimStartAndEnd();
+                    }
+                }
+            }
+        }
+    }
+    
+    return FString();
+}
+
+FString FTriangleSplattingManager::ParseCurrentTriangleCount()
+{
+    // Check Python log file first, then fallback to manager log file
+    FString LogFileToCheck = PythonLogFilePath;
+    if (LogFileToCheck.IsEmpty() || !FPaths::FileExists(LogFileToCheck))
+    {
+        LogFileToCheck = LogFilePath;
+    }
+    
+    if (LogFileToCheck.IsEmpty() || !FPaths::FileExists(LogFileToCheck))
+    {
+        return FString();
+    }
+    
+    TArray<FString> RecentLines = ReadRecentLogLines(10, LogFileToCheck);
+    
+    // Look for triangle count in recent log lines
+    for (const FString& Line : RecentLines)
+    {
+        if (Line.Contains(TEXT("Triangles=")) || Line.Contains(TEXT("triangles")))
+        {
+            // Extract triangle count
+            if (Line.Contains(TEXT("Triangles=")))
+            {
+                int32 TriangleIndex = Line.Find(TEXT("Triangles="));
+                if (TriangleIndex != INDEX_NONE)
+                {
+                    FString AfterTriangles = Line.Mid(TriangleIndex + 10); // "Triangles=" length
+                    
+                    // Extract numeric value
+                    int32 SpaceIndex = AfterTriangles.Find(TEXT(" "));
+                    if (SpaceIndex != INDEX_NONE)
+                    {
+                        AfterTriangles = AfterTriangles.Left(SpaceIndex);
+                    }
+                    
+                    // Validate that it's a number
+                    if (AfterTriangles.IsNumeric())
+                    {
+                        return AfterTriangles.TrimStartAndEnd();
+                    }
+                }
+            }
+            else if (Line.Contains(TEXT("[TRIANGLE STATS]")))
+            {
+                // Parse format like "[TRIANGLE STATS] Iteration 100: 5000 triangles"
+                int32 ColonIndex = Line.Find(TEXT(": "));
+                if (ColonIndex != INDEX_NONE)
+                {
+                    FString AfterColon = Line.Mid(ColonIndex + 2);
+                    int32 TriangleWordIndex = AfterColon.Find(TEXT(" triangles"));
+                    if (TriangleWordIndex != INDEX_NONE)
+                    {
+                        FString TriangleCountStr = AfterColon.Left(TriangleWordIndex);
+                        
+                        // Find the last space before triangles (to get the count)
+                        int32 LastSpaceIndex = TriangleCountStr.Find(TEXT(" "), ESearchCase::CaseSensitive, ESearchDir::FromEnd);
+                        if (LastSpaceIndex != INDEX_NONE)
+                        {
+                            TriangleCountStr = TriangleCountStr.Mid(LastSpaceIndex + 1);
+                        }
+                        
+                        if (TriangleCountStr.IsNumeric())
+                        {
+                            return TriangleCountStr.TrimStartAndEnd();
+                        }
                     }
                 }
             }
@@ -1024,6 +1190,7 @@ bool FTriangleSplattingManager::IsImportantLogLine(const FString& Line)
            TrimmedLine.Contains(TEXT("Reading camera")) ||
            TrimmedLine.Contains(TEXT("Saving")) ||
            TrimmedLine.Contains(TEXT("Complete")) ||
+           TrimmedLine.Contains(TEXT("Training Progress")) ||
            TrimmedLine.Contains(TEXT("Training")) ||
            TrimmedLine.Contains(TEXT("Error")) ||
            TrimmedLine.Contains(TEXT("Traceback")) ||
@@ -1032,13 +1199,16 @@ bool FTriangleSplattingManager::IsImportantLogLine(const FString& Line)
            TrimmedLine.Contains(TEXT("PSNR")) ||
            TrimmedLine.Contains(TEXT("iter:")) ||
            TrimmedLine.Contains(TEXT("Iteration")) ||
-           TrimmedLine.Contains(TEXT("Triangles:")) ||
+           TrimmedLine.Contains(TEXT("Triangles=")) ||
+           TrimmedLine.Contains(TEXT("triangles")) ||
            TrimmedLine.Contains(TEXT("Speed:")) ||
            TrimmedLine.Contains(TEXT("Densification:")) ||
            TrimmedLine.Contains(TEXT("Final Pruning:")) ||
            TrimmedLine.Contains(TEXT("Initial triangles:")) ||
            TrimmedLine.Contains(TEXT("Final triangles:")) ||
-           TrimmedLine.Contains(TEXT("[TRIANGLE STATS]"));
+           TrimmedLine.Contains(TEXT("[TRIANGLE STATS]")) ||
+           TrimmedLine.Contains(TEXT("Train PSNR:")) ||
+           TrimmedLine.Contains(TEXT("Test PSNR:"));
 }
 
 FString FTriangleSplattingManager::GetCurrentLoss()

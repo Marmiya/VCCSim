@@ -265,6 +265,18 @@ private:
     FString ParseCurrentLoss();
     
     /**
+     * Parse training log file to extract current PSNR value
+     * @return Current PSNR value as string
+     */
+    FString ParseCurrentPSNR();
+    
+    /**
+     * Parse training log file to extract current triangle count
+     * @return Current triangle count as string
+     */
+    FString ParseCurrentTriangleCount();
+    
+    /**
      * Filter training output to reduce repetitive content
      * @param RawOutput Raw output from Python process
      * @return Filtered output with reduced repetition
