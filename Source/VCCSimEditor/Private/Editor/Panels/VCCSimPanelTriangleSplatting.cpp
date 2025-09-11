@@ -831,28 +831,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSTrainingControlSectio
             )
         ]
         
-        // Current Loss Display
-        + SVerticalBox::Slot()
-        .AutoHeight()
-        .Padding(5, 4)
-        [
-            CreatePropertyRow(TEXT("Current Loss"),
-                SNew(STextBlock)
-                .Text_Lambda([this]()
-                {
-                    if (bGSTrainingInProgress && !GSCurrentLoss.IsEmpty())
-                    {
-                        return FText::FromString(GSCurrentLoss);
-                    }
-                    return FText::FromString(TEXT("N/A"));
-                })
-                .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
-                .ColorAndOpacity_Lambda([this]()
-                {
-                    return bGSTrainingInProgress ? FLinearColor::Green : FLinearColor::White;
-                })
-            )
-        ];
+        ;
 }
 
 // ============================================================================
@@ -1191,7 +1170,6 @@ FReply FVCCSimPanelTriangleSplatting::OnGSStartTrainingClicked()
             bGSTrainingInProgress = true;
             
             // Training started
-            GSCurrentLoss = TEXT("N/A");
             
             // Start status update timer
             if (GEditor)
@@ -1380,7 +1358,6 @@ void FVCCSimPanelTriangleSplatting::StartTriangleSplattingWithColmapData(const F
         bGSTrainingInProgress = true;
         
         // Training with COLMAP data started
-        GSCurrentLoss = TEXT("N/A");
         
         // Start status update timer
         if (GEditor)

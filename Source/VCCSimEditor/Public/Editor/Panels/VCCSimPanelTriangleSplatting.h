@@ -102,7 +102,6 @@ private:
     // Training state
     bool bGSTrainingInProgress = false;
     bool bColmapPipelineInProgress = false;
-    FString GSCurrentLoss;
     FTimerHandle GSStatusUpdateTimerHandle;
     
     // Managers
