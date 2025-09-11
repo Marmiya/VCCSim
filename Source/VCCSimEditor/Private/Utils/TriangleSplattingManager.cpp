@@ -25,6 +25,90 @@
 #include "Engine/Engine.h"
 
 // ============================================================================
+// ASYNC TRIANGLE EXTRACTION TASK
+// ============================================================================
+
+/**
+ * Async task for extracting mesh triangles without blocking the UI thread
+ */
+class FTriangleExtractionTask : public FNonAbandonableTask
+{
+public:
+    FTriangleExtractionTask(const FTriangleSplattingConfig& InConfig, const FString& InOutputPath, FTriangleSplattingManager* InManager)
+        : Config(InConfig)
+        , OutputPath(InOutputPath)
+        , Manager(InManager)
+        , bSucceeded(false)
+    {
+    }
+
+    void DoWork()
+    {
+        if (!Config.SelectedMesh.IsValid())
+        {
+            ErrorMessage = TEXT("Selected mesh is not valid");
+            bSucceeded = false;
+            return;
+        }
+
+        try
+        {
+            // Extract mesh triangles
+            FVCCSimDataConverter::FMeshTriangleData TriangleData =
+                FVCCSimDataConverter::ExtractMeshTriangles(
+                Config.SelectedMesh.Get(),
+                Config.MaxMeshTriangles,
+                Config.MeshTriangleMethod,
+                true // Apply coordinate transformation
+            );
+            
+            // Save to PLY file
+            if (FVCCSimDataConverter::SaveMeshTrianglesToPLY(TriangleData, OutputPath))
+            {
+                bSucceeded = true;
+                ResultMessage = FString::Printf(TEXT("Successfully exported %d triangles to %s"), TriangleData.TriangleCount, *OutputPath);
+            }
+            else
+            {
+                bSucceeded = false;
+                ErrorMessage = TEXT("Failed to save triangles to PLY file");
+            }
+        }
+        catch (const std::exception& e)
+        {
+            bSucceeded = false;
+            ErrorMessage = FString::Printf(TEXT("Triangle extraction failed: %s"), UTF8_TO_TCHAR(e.what()));
+        }
+        catch (...)
+        {
+            bSucceeded = false;
+            ErrorMessage = TEXT("Unknown error during triangle extraction");
+        }
+    }
+
+    FORCEINLINE TStatId GetStatId() const
+    {
+        RETURN_QUICK_DECLARE_CYCLE_STAT(FTriangleExtractionTask, STATGROUP_ThreadPoolAsyncTasks);
+    }
+
+    bool WasSuccessful() const { return bSucceeded; }
+    FString GetErrorMessage() const { return ErrorMessage; }
+    FString GetResultMessage() const { return ResultMessage; }
+
+private:
+    FTriangleSplattingConfig Config;
+    FString OutputPath;
+    FTriangleSplattingManager* Manager;
+    
+    bool bSucceeded;
+    FString ErrorMessage;
+    FString ResultMessage;
+};
+
+// Type alias for the async task
+typedef TSharedPtr<FAsyncTask<FTriangleExtractionTask>> FTriangleExtractionTaskPtr;
+
+// ============================================================================
 // CONSTRUCTION / DESTRUCTION
 // ============================================================================
 
@@ -41,12 +125,22 @@ FTriangleSplattingManager::FTriangleSplattingManager()
     , OutputDirectory(TEXT(""))
     , TrainingStartTime(FDateTime::MinValue())
     , LastUpdateTime(FDateTime::MinValue())
+    , TriangleExtractionTask(nullptr)
+    , bTriangleExtractionInProgress(false)
 {
 }
 
 FTriangleSplattingManager::~FTriangleSplattingManager()
 {
     StopTraining();
+    
+    // Clean up async task if still running
+    if (TriangleExtractionTask)
+    {
+        FTriangleExtractionTaskPtr* TaskPtr = static_cast<FTriangleExtractionTaskPtr*>(TriangleExtractionTask);
+        delete TaskPtr;
+        TriangleExtractionTask = nullptr;
+    }
 }
 
 // ============================================================================
@@ -83,7 +177,7 @@ bool FTriangleSplattingManager::StartTraining(const FTriangleSplattingConfig& Co
         return false;
     }
     
-    // Prepare training data
+    // Prepare training data (directories, config files, pose conversion)
     if (!PrepareTrainingData(Config))
     {
         CurrentStatus = ETrainingStatus::Failed;
@@ -92,7 +186,15 @@ bool FTriangleSplattingManager::StartTraining(const FTriangleSplattingConfig& Co
         return false;
     }
     
-    // Launch training process
+    // If using mesh triangles, start async extraction, otherwise launch training directly
+    if (Config.bUseMeshTriangles && Config.SelectedMesh.IsValid())
+    {
+        // Start async triangle extraction - training will launch when extraction completes
+        StartAsyncTriangleExtraction(Config);
+        return true; // Return success, training will start asynchronously
+    }
+    
+    // Launch training process directly (non-mesh case)
     if (!LaunchTrainingProcess())
     {
         CurrentStatus = ETrainingStatus::Failed;
@@ -208,6 +310,13 @@ void FTriangleSplattingManager::StopTraining()
 
 void FTriangleSplattingManager::UpdateTrainingStatus()
 {
+    // Check for triangle extraction completion first
+    if (bTriangleExtractionInProgress)
+    {
+        OnTriangleExtractionComplete();
+        return;
+    }
+    
     if (!IsTrainingInProgress())
     {
         return;
@@ -410,16 +519,25 @@ bool FTriangleSplattingManager::PrepareTrainingData(const FTriangleSplattingConf
         return false;
     }
     
-    // If mesh is provided, convert to point cloud for initialization
+    // Handle initialization data based on configuration
     if (Config.SelectedMesh.IsValid())
     {
-        FPointCloudData PointCloud = FVCCSimDataConverter::ConvertMeshToPointCloud(
-            Config.SelectedMesh.Get(), Config.InitPointCount, true);
-        
-        if (PointCloud.GetPointCount() > 0)
+        if (Config.bUseMeshTriangles)
         {
-            FString PointCloudPath = FPaths::Combine(OutputDirectory, TEXT("config"), TEXT("init_points.ply"));
-            FVCCSimDataConverter::SavePointCloudToPLY(PointCloud, PointCloudPath);
+            // Skip point cloud generation when using direct mesh triangles
+            UE_LOG(LogTemp, Log, TEXT("Using mesh triangles for initialization - skipping point cloud generation"));
+        }
+        else
+        {
+            // Traditional point cloud initialization from mesh
+            FPointCloudData PointCloud = FVCCSimDataConverter::ConvertMeshToPointCloud(
+                Config.SelectedMesh.Get(), Config.InitPointCount, true);
+            
+            if (PointCloud.GetPointCount() > 0)
+            {
+                FString PointCloudPath = FPaths::Combine(OutputDirectory, TEXT("config"), TEXT("init_points.ply"));
+                FVCCSimDataConverter::SavePointCloudToPLY(PointCloud, PointCloudPath);
+            }
         }
     }
     
@@ -480,8 +598,8 @@ bool FTriangleSplattingManager::LaunchTrainingProcess()
         *PythonPath,
         *Arguments,
         true,  // bLaunchDetached
-        true,  // bLaunchHidden
-        true,  // bLaunchReallyHidden
+        false, // bLaunchHidden - set to false for better debugging
+        false, // bLaunchReallyHidden - set to false for better debugging  
         nullptr, // OutProcessID
         0,     // PriorityModifier
         nullptr, // OptionalWorkingDirectory
@@ -495,7 +613,28 @@ bool FTriangleSplattingManager::LaunchTrainingProcess()
         return false;
     }
     
+    // Update status to running
+    CurrentStatus = ETrainingStatus::Running;
+    
     LogMessage(TEXT("Training process launched successfully"));
+    
+    // Give the process a moment to start, then check if it's actually running
+    FPlatformProcess::Sleep(0.5f);  // Wait 500ms
+    if (!IsProcessRunning())
+    {
+        int32 ExitCode;
+        if (GetProcessExitCode(ExitCode))
+        {
+            LogMessage(FString::Printf(TEXT("Python process exited immediately with code: %d"), ExitCode), true);
+        }
+        else
+        {
+            LogMessage(TEXT("Python process failed to start or exited immediately"), true);
+        }
+        CurrentStatus = ETrainingStatus::Failed;
+        return false;
+    }
+    
     return true;
 }
 
@@ -809,6 +948,18 @@ FString FTriangleSplattingManager::GenerateTimestampedFilename(const FString& Ba
 
 FString FTriangleSplattingManager::ConfigToJsonString(const FTriangleSplattingConfig& Config)
 {
+    // Handle mesh triangle data export path - actual extraction will be done asynchronously
+    FString MeshTrianglesPath;
+    if (Config.bUseMeshTriangles && Config.SelectedMesh.IsValid())
+    {
+        // Set the expected path for mesh triangles (will be created by async extraction)
+        MeshTrianglesPath = FPaths::Combine(OutputDirectory, TEXT("config"), TEXT("mesh_triangles.ply"));
+        MeshTrianglesPath = MeshTrianglesPath.Replace(TEXT("\\"), TEXT("/"));
+        
+        // Note: Actual triangle extraction is handled asynchronously in StartTraining
+        UE_LOG(LogTemp, Log, TEXT("Mesh triangles will be exported to: %s"), *MeshTrianglesPath);
+    }
+
     return FString::Printf(TEXT(
         "{\n"
         "  \"image_directory\": \"%s\",\n"
@@ -826,7 +977,11 @@ FString FTriangleSplattingManager::ConfigToJsonString(const FTriangleSplattingCo
         "  },\n"
         "  \"mesh\": {\n"
         "    \"use_mesh_initialization\": %s,\n"
-        "    \"mesh_path\": \"%s\"\n"
+        "    \"mesh_path\": \"%s\",\n"
+        "    \"use_mesh_triangles\": %s,\n"
+        "    \"max_mesh_triangles\": %d,\n"
+        "    \"mesh_triangle_method\": \"%s\",\n"
+        "    \"mesh_triangles_file\": \"%s\"\n"
         "  }\n"
         "}\n"
     ),
@@ -840,7 +995,11 @@ FString FTriangleSplattingManager::ConfigToJsonString(const FTriangleSplattingCo
         Config.FocalLengthY,
         Config.MaxIterations,
         Config.bUseMeshInitialization ? TEXT("true") : TEXT("false"),
-        Config.SelectedMesh.IsValid() ? *Config.SelectedMesh->GetPathName() : TEXT("")
+        Config.SelectedMesh.IsValid() ? *Config.SelectedMesh->GetPathName() : TEXT(""),
+        Config.bUseMeshTriangles ? TEXT("true") : TEXT("false"),
+        Config.MaxMeshTriangles,
+        *Config.MeshTriangleMethod,
+        *MeshTrianglesPath
     );
 }
 
@@ -881,4 +1040,94 @@ FString FTriangleSplattingManager::GetTrainingOutput()
     }
     
     return PythonOutputBuffer;
+}
+
+// ============================================================================
+// ASYNC TRIANGLE EXTRACTION
+// ============================================================================
+
+void FTriangleSplattingManager::StartAsyncTriangleExtraction(const FTriangleSplattingConfig& Config)
+{
+    if (bTriangleExtractionInProgress)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Triangle extraction already in progress"));
+        return;
+    }
+    
+    if (!Config.SelectedMesh.IsValid())
+    {
+        UE_LOG(LogTemp, Error, TEXT("Cannot extract triangles: no mesh selected"));
+        return;
+    }
+    
+    bTriangleExtractionInProgress = true;
+    StatusMessage = TEXT("Extracting mesh triangles...");
+    
+    // Determine output path for mesh triangles
+    FString MeshTrianglesPath = FPaths::Combine(OutputDirectory, TEXT("config"), TEXT("mesh_triangles.ply"));
+    
+    // Create the async task
+    FTriangleExtractionTaskPtr* TaskPtr = new FTriangleExtractionTaskPtr(
+        MakeShared<FAsyncTask<FTriangleExtractionTask>>(Config, MeshTrianglesPath, this)
+    );
+    TriangleExtractionTask = TaskPtr;
+    
+    // Start the async task
+    (*TaskPtr)->StartBackgroundTask();
+    
+    UE_LOG(LogTemp, Log, TEXT("Started async triangle extraction for %d triangles"), Config.MaxMeshTriangles);
+}
+
+void FTriangleSplattingManager::OnTriangleExtractionComplete()
+{
+    if (!TriangleExtractionTask)
+    {
+        return;
+    }
+    
+    FTriangleExtractionTaskPtr* TaskPtr = static_cast<FTriangleExtractionTaskPtr*>(TriangleExtractionTask);
+    if (!TaskPtr->IsValid() || !(*TaskPtr)->IsDone())
+    {
+        return;
+    }
+    
+    const FTriangleExtractionTask& Task = (*TaskPtr)->GetTask();
+    
+    bTriangleExtractionInProgress = false;
+    
+    if (Task.WasSuccessful())
+    {
+        UE_LOG(LogTemp, Log, TEXT("Triangle extraction completed successfully: %s"), *Task.GetResultMessage());
+        StatusMessage = TEXT("Triangle extraction completed, starting training...");
+        
+        // Continue with training process after successful extraction
+        if (CurrentConfig.IsValid())
+        {
+            // Launch training process now that triangle extraction is complete
+            if (!LaunchTrainingProcess())
+            {
+                CurrentStatus = ETrainingStatus::Failed;
+                StatusMessage = TEXT("Failed to launch training process");
+                LogMessage(StatusMessage, true);
+                OnTrainingCompleted.ExecuteIfBound(false, StatusMessage);
+            }
+            else
+            {
+                // Training launched successfully
+                StatusMessage = TEXT("Training started successfully");
+                LogMessage(StatusMessage);
+            }
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("Triangle extraction failed: %s"), *Task.GetErrorMessage());
+        CurrentStatus = ETrainingStatus::Failed;
+        StatusMessage = FString::Printf(TEXT("Triangle extraction failed: %s"), *Task.GetErrorMessage());
+        OnTrainingCompleted.ExecuteIfBound(false, StatusMessage);
+    }
+    
+    // Clean up the task
+    delete TaskPtr;
+    TriangleExtractionTask = nullptr;
 }

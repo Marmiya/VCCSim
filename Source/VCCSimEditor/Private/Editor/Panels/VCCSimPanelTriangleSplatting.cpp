@@ -32,6 +32,7 @@
 #include "Widgets/Input/SNumericEntryBox.h"
 #include "Widgets/Input/SEditableTextBox.h"
 #include "Widgets/Input/SButton.h"
+#include "Widgets/Input/STextComboBox.h"
 #include "Widgets/Text/STextBlock.h"
 #include "Widgets/SBoxPanel.h"
 #include "PropertyCustomizationHelpers.h"
@@ -70,6 +71,13 @@ FVCCSimPanelTriangleSplatting::FVCCSimPanelTriangleSplatting()
     GSFocalLengthYValue = GSConfig.FocalLengthY;
     GSMaxIterationsValue = GSConfig.MaxIterations;
     GSInitPointCountValue = GSConfig.InitPointCount;
+    
+    // Initialize mesh triangle values
+    GSMaxMeshTrianglesValue = GSConfig.MaxMeshTriangles;
+    
+    // Initialize triangle selection methods
+    TriangleSelectionMethods.Add(MakeShared<FString>(TEXT("Random")));
+    // Future: Add more methods like "Uniform", "ImportanceBased", etc.
 }
 
 FVCCSimPanelTriangleSplatting::~FVCCSimPanelTriangleSplatting()
@@ -637,6 +645,68 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSTrainingParamsSection
                     GSInitPointCountValue,
                     1, TNumericLimits<int32>::Max(), 1000,  // No upper limit
                     [this](int32 NewValue) { OnGSInitPointCountChanged(NewValue); }
+                )
+            ]
+        ]
+        
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        .Padding(0, 4, 0, 2)
+        [
+            CreateSeparator()
+        ]
+        
+        // Mesh Triangle Initialization Options
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        .Padding(2, 4)
+        [
+            CreatePropertyRow(TEXT("Use Mesh Triangles"),
+                SNew(SCheckBox)
+                .IsChecked_Lambda([this]() 
+                { 
+                    return GSConfig.bUseMeshTriangles ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; 
+                })
+                .OnCheckStateChanged_Lambda([this](ECheckBoxState NewState)
+                {
+                    GSConfig.bUseMeshTriangles = (NewState == ECheckBoxState::Checked);
+                })
+                .ToolTipText(FText::FromString(TEXT("Use mesh triangles directly instead of generating from points")))
+            )
+        ]
+
+        // Triangle Selection Method and Max Count
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        .Padding(2, 2)
+        [
+            SNew(SHorizontalBox)
+            
+            // Triangle Selection Method (left half)
+            + SHorizontalBox::Slot()
+            .FillWidth(0.5f)
+            .Padding(0, 0, 5, 0)
+            [
+                CreatePropertyRow(TEXT("Triangle Method"),
+                    SNew(STextBlock)
+                    .Text(FText::FromString(TEXT("Random")))
+                    .ToolTipText(FText::FromString(TEXT("Method for selecting triangles from mesh (Random only for now)")))
+                )
+            ]
+            
+            // Max Mesh Triangles (right half)
+            + SHorizontalBox::Slot()
+            .FillWidth(0.5f)
+            .Padding(5, 0, 0, 0)
+            [
+                CreateGSNumericPropertyRow<int32>(
+                    TEXT("Max Mesh Triangles"),
+                    GSMaxMeshTrianglesSpinBox,
+                    GSMaxMeshTrianglesValue,
+                    1000, 100000, 1000,
+                    [this](int32 NewValue) { 
+                        GSConfig.MaxMeshTriangles = NewValue; 
+                    }
                 )
             ]
         ];

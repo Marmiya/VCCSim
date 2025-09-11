@@ -141,6 +141,45 @@ public:
         bool bApplyCoordinateTransformation = true);
     
     /**
+     * Mesh triangle data structure for direct triangle initialization
+     */
+    struct FMeshTriangleData
+    {
+        TArray<FVector> Vertices;    // All triangle vertices (3 per triangle)
+        TArray<FVector> Colors;      // Per-vertex colors
+        TArray<FVector> Normals;     // Per-vertex normals
+        int32 TriangleCount;
+        
+        FMeshTriangleData() : TriangleCount(0) {}
+    };
+    
+    /**
+     * Extract triangles directly from mesh for Triangle Splatting initialization
+     * @param Mesh Static mesh to extract triangles from
+     * @param MaxTriangles Maximum number of triangles to extract
+     * @param Method Method for triangle selection (e.g., "Random")
+     * @param bTransformCoordinates If true, apply UE to Triangle Splatting coordinate transformation
+     * @return Mesh triangle data structure
+     */
+    static FMeshTriangleData ExtractMeshTriangles(
+        UStaticMesh* Mesh, 
+        int32 MaxTriangles = 100000,
+        const FString& Method = TEXT("Random"),
+        bool bTransformCoordinates = true
+    );
+    
+    /**
+     * Save mesh triangle data to PLY file for Triangle Splatting training
+     * @param TriangleData Triangle data to save
+     * @param OutputPath Output PLY file path
+     * @return True if successful
+     */
+    static bool SaveMeshTrianglesToPLY(
+        const FMeshTriangleData& TriangleData, 
+        const FString& OutputPath
+    );
+    
+    /**
      * Generate random point cloud for initialization when no mesh is provided
      * @param CameraInfos Camera information array to determine scene bounds
      * @param PointCount Number of points to generate
@@ -301,6 +340,14 @@ public:
     static FVector GetCameraUpDirection(const FMatrix& ConvertedRotationMatrix);
     
 private:
+    /**
+     * Helper function for random triangle selection using reservoir sampling
+     * @param TotalTriangles Total number of triangles available
+     * @param TargetTriangles Number of triangles to select
+     * @return Array of selected triangle indices
+     */
+    static TArray<int32> SelectRandomTriangles(int32 TotalTriangles, int32 TargetTriangles);
+    
     /**
      * Sample points from mesh vertices
      * @param Mesh Static mesh to sample from

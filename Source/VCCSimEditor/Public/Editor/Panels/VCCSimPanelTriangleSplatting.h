@@ -78,6 +78,9 @@ private:
     TSharedPtr<SNumericEntryBox<int32>> GSMaxIterationsSpinBox;
     TSharedPtr<SNumericEntryBox<int32>> GSInitPointCountSpinBox;
     
+    // NEW: Mesh triangle initialization UI controls
+    TSharedPtr<SNumericEntryBox<int32>> GSMaxMeshTrianglesSpinBox;
+    
     // Training Control UI Controls
     TSharedPtr<SButton> GSTrainingToggleButton;
     TSharedPtr<SButton> GSColmapTrainingButton;
@@ -99,6 +102,9 @@ private:
     TOptional<int32> GSMaxIterationsValue;
     TOptional<int32> GSInitPointCountValue;
     
+    // NEW: Mesh triangle initialization values
+    TOptional<int32> GSMaxMeshTrianglesValue;
+    
     // Training state
     bool bGSTrainingInProgress = false;
     bool bColmapPipelineInProgress = false;
@@ -110,6 +116,9 @@ private:
     
     // Dependencies
     TWeakPtr<FVCCSimPanelSelection> SelectionManager;
+    
+    // Triangle selection method options
+    TArray<TSharedPtr<FString>> TriangleSelectionMethods;
     
     // ============================================================================
     // INITIALIZATION AND MANAGER OPERATIONS

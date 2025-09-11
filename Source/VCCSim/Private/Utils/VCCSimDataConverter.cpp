@@ -27,6 +27,7 @@
 #include "Math/RandomStream.h"
 #include "HAL/PlatformProcess.h"
 #include "Misc/DateTime.h"
+#include "Async/Async.h"
 
 // ============================================================================
 // POSE FILE CONVERSION
@@ -1150,4 +1151,159 @@ bool FVCCSimDataConverter::RunColmapPipeline(
         *FPaths::GetCleanFilename(TimestampedDir));
     
     return true;
+}
+
+// ============================================================================
+// MESH TRIANGLE EXTRACTION
+// ============================================================================
+
+FVCCSimDataConverter::FMeshTriangleData FVCCSimDataConverter::ExtractMeshTriangles(
+    UStaticMesh* Mesh, 
+    int32 MaxTriangles,
+    const FString& Method,
+    bool bTransformCoordinates)
+{
+    FMeshTriangleData Result;
+    
+    if (!Mesh || !Mesh->GetRenderData() || Mesh->GetRenderData()->LODResources.Num() == 0)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Invalid mesh provided for triangle extraction"));
+        return Result;
+    }
+    
+    // Get mesh LOD 0 data
+    const FStaticMeshLODResources& LODResource = Mesh->GetRenderData()->LODResources[0];
+    const FRawStaticIndexBuffer& IndexBuffer = LODResource.IndexBuffer;
+    const FPositionVertexBuffer& PositionBuffer = LODResource.VertexBuffers.PositionVertexBuffer;
+    const FColorVertexBuffer& ColorBuffer = LODResource.VertexBuffers.ColorVertexBuffer;
+    
+    int32 TotalTriangles = LODResource.GetNumTriangles();
+    int32 ActualTriangles = FMath::Min(MaxTriangles, TotalTriangles);
+    
+    UE_LOG(LogTemp, Log, TEXT("Extracting %d triangles from mesh (total: %d triangles)"), 
+        ActualTriangles, TotalTriangles);
+    
+    Result.TriangleCount = ActualTriangles;
+    Result.Vertices.Reserve(ActualTriangles * 3);
+    Result.Colors.Reserve(ActualTriangles * 3);
+    Result.Normals.Reserve(ActualTriangles * 3);
+    
+    if (Method == TEXT("Random"))
+    {
+        // Use reservoir sampling for efficient random selection
+        TArray<int32> SelectedTriangleIndices = SelectRandomTriangles(
+            TotalTriangles, ActualTriangles);
+        
+        for (int32 TriangleIdx : SelectedTriangleIndices)
+        {
+            // Extract 3 vertices per triangle
+            for (int32 VertIdx = 0; VertIdx < 3; ++VertIdx)
+            {
+                uint32 Index = IndexBuffer.GetArrayView()[TriangleIdx * 3 + VertIdx];
+                
+                // Get vertex position
+                FVector Position = (FVector)PositionBuffer.VertexPosition(Index);
+                if (bTransformCoordinates)
+                {
+                    Position = ConvertLocation(Position);
+                }
+                Result.Vertices.Add(Position);
+                
+                // Get vertex color (default to white if no color buffer)
+                FVector Color = FVector(1.0f, 1.0f, 1.0f);
+                if (ColorBuffer.GetNumVertices() > 0)
+                {
+                    FColor VertexColor = ColorBuffer.VertexColor(Index);
+                    Color = FVector(
+                        VertexColor.R / 255.0f,
+                        VertexColor.G / 255.0f, 
+                        VertexColor.B / 255.0f
+                    );
+                }
+                Result.Colors.Add(Color);
+                
+                // Calculate normal (simplified - we'll compute face normal)
+                if (VertIdx == 2) // After getting all 3 vertices
+                {
+                    FVector V0 = Result.Vertices[Result.Vertices.Num() - 3];
+                    FVector V1 = Result.Vertices[Result.Vertices.Num() - 2]; 
+                    FVector V2 = Result.Vertices[Result.Vertices.Num() - 1];
+                    
+                    FVector Normal = FVector::CrossProduct((V1 - V0), (V2 - V0)).GetSafeNormal();
+                    if (bTransformCoordinates)
+                    {
+                        Normal = ConvertNormal(Normal);
+                    }
+                    
+                    // Apply the same normal to all 3 vertices of this triangle
+                    Result.Normals.Add(Normal);
+                    Result.Normals.Add(Normal);
+                    Result.Normals.Add(Normal);
+                }
+            }
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Unsupported triangle selection method: %s. Using Random."), *Method);
+        // Fallback to random method - could add more methods here in the future
+        return ExtractMeshTriangles(Mesh, MaxTriangles, TEXT("Random"), bTransformCoordinates);
+    }
+    
+    UE_LOG(LogTemp, Log, TEXT("Successfully extracted %d triangles with %d vertices"), 
+        Result.TriangleCount, Result.Vertices.Num());
+    
+    return Result;
+}
+
+TArray<int32> FVCCSimDataConverter::SelectRandomTriangles(int32 TotalTriangles, int32 TargetTriangles)
+{
+    TArray<int32> SelectedIndices;
+    
+    if (TargetTriangles >= TotalTriangles)
+    {
+        // Select all triangles
+        SelectedIndices.Reserve(TotalTriangles);
+        for (int32 i = 0; i < TotalTriangles; ++i)
+        {
+            SelectedIndices.Add(i);
+        }
+    }
+    else
+    {
+        // Use reservoir sampling for efficient random selection
+        FRandomStream RandomStream(FPlatformProcess::GetCurrentProcessId());
+        SelectedIndices.Reserve(TargetTriangles);
+        
+        // Initialize with first TargetTriangles elements
+        for (int32 i = 0; i < TargetTriangles; ++i)
+        {
+            SelectedIndices.Add(i);
+        }
+        
+        // Replace elements with gradually decreasing probability
+        for (int32 i = TargetTriangles; i < TotalTriangles; ++i)
+        {
+            int32 j = RandomStream.RandRange(0, i);
+            if (j < TargetTriangles)
+            {
+                SelectedIndices[j] = i;
+            }
+        }
+    }
+    
+    return SelectedIndices;
+}
+
+bool FVCCSimDataConverter::SaveMeshTrianglesToPLY(
+    const FMeshTriangleData& TriangleData, 
+    const FString& OutputPath)
+{
+    // Use the new IOUtils function with face data for Triangle Splatting compatibility
+    return FPLYWriter::WriteMeshTrianglesWithFacesToPLY(
+        TriangleData.Vertices,
+        TriangleData.Colors,
+        TriangleData.Normals,
+        OutputPath
+    );
 }

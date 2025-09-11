@@ -21,6 +21,7 @@
 #include "HAL/PlatformProcess.h"
 #include "Misc/DateTime.h"
 #include "Engine/StaticMesh.h"
+#include "Async/AsyncWork.h"
 
 /**
  * Triangle Splatting Configuration Structure
@@ -37,6 +38,11 @@ struct FTriangleSplattingConfig
     
     // Mesh configuration
     bool bUseMeshInitialization = true;
+    
+    // NEW: Mesh triangle initialization options
+    bool bUseMeshTriangles = false;  // Use mesh triangles directly instead of point sampling
+    int32 MaxMeshTriangles = 100000; // 100K triangle limit for debugging CUDA issues
+    FString MeshTriangleMethod = TEXT("Random"); // Method for triangle selection
     
     // Camera Parameters
     float FOVDegrees = 90.0f;
@@ -332,4 +338,23 @@ private:
      * @param bIsError Whether this is an error message
      */
     void LogMessage(const FString& Message, bool bIsError = false);
+    
+    // ============================================================================
+    // ASYNC TRIANGLE EXTRACTION
+    // ============================================================================
+    
+    /**
+     * Start asynchronous triangle extraction from mesh
+     * @param Config Training configuration
+     */
+    void StartAsyncTriangleExtraction(const FTriangleSplattingConfig& Config);
+    
+    /**
+     * Handle completion of async triangle extraction
+     */
+    void OnTriangleExtractionComplete();
+    
+    // Async extraction state
+    void* TriangleExtractionTask; // PIMPL - actual type is TSharedPtr<FAsyncTask<FTriangleExtractionTask>>
+    bool bTriangleExtractionInProgress;
 };
