@@ -62,16 +62,20 @@ public:
                 true // Apply coordinate transformation
             );
             
-            // Save to PLY file
-            if (FVCCSimDataConverter::SaveMeshTrianglesToPLY(TriangleData, OutputPath))
+            // Save in dual format: PLY for visualization + NPY chunks for fast loading
+            FString BasePath = FPaths::GetPath(OutputPath) / FPaths::GetBaseFilename(OutputPath);
+            UE_LOG(LogTemp, Warning, TEXT("TriangleSplattingManager: Using dual format save - OutputPath: %s, BasePath: %s"), *OutputPath, *BasePath);
+            
+            if (FVCCSimDataConverter::SaveMeshTrianglesDualFormat(TriangleData, BasePath, 8))
             {
                 bSucceeded = true;
-                ResultMessage = FString::Printf(TEXT("Successfully exported %d triangles to %s"), TriangleData.TriangleCount, *OutputPath);
+                ResultMessage = FString::Printf(TEXT("Successfully exported %d triangles in dual format:\n  PLY: %s\n  NPY chunks: %s_chunks/"), 
+                    TriangleData.TriangleCount, *OutputPath, *BasePath);
             }
             else
             {
                 bSucceeded = false;
-                ErrorMessage = TEXT("Failed to save triangles to PLY file");
+                ErrorMessage = TEXT("Failed to save triangles in dual format");
             }
         }
         catch (const std::exception& e)

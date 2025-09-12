@@ -39,9 +39,9 @@ struct FTriangleSplattingConfig
     // Mesh configuration
     bool bUseMeshInitialization = true;
     
-    // NEW: Mesh triangle initialization options
-    bool bUseMeshTriangles = false;  // Use mesh triangles directly instead of point sampling
-    int32 MaxMeshTriangles = 100000; // 100K triangle limit for debugging CUDA issues
+    // Use mesh triangles directly instead of point sampling
+    bool bUseMeshTriangles = false;
+    int32 MaxMeshTriangles = 4000000;
     FString MeshTriangleMethod = TEXT("Random"); // Method for triangle selection
     
     // Camera Parameters

@@ -180,6 +180,33 @@ public:
     );
     
     /**
+     * Save mesh triangle data as NPY chunks for fast parallel loading
+     * This creates multiple .npy files that can be loaded much faster than PLY
+     * @param TriangleData Triangle data to save
+     * @param OutputDir Output directory for NPY chunks
+     * @param NumChunks Number of chunks to create (default: 8)
+     * @return True if successful
+     */
+    static bool SaveMeshTrianglesToNPY(
+        const FMeshTriangleData& TriangleData,
+        const FString& OutputDir,
+        int32 NumChunks = 8
+    );
+    
+    /**
+     * Save mesh data in dual format: PLY for visualization + NPY chunks for fast loading
+     * @param TriangleData Triangle data to save
+     * @param BasePath Base path (will create .ply file and _chunks/ directory)
+     * @param NumChunks Number of NPY chunks to create
+     * @return True if successful
+     */
+    static bool SaveMeshTrianglesDualFormat(
+        const FMeshTriangleData& TriangleData,
+        const FString& BasePath,
+        int32 NumChunks = 8
+    );
+    
+    /**
      * Generate random point cloud for initialization when no mesh is provided
      * @param CameraInfos Camera information array to determine scene bounds
      * @param PointCount Number of points to generate

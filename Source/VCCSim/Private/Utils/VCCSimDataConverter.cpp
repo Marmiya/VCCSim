@@ -28,6 +28,7 @@
 #include "HAL/PlatformProcess.h"
 #include "Misc/DateTime.h"
 #include "Async/Async.h"
+#include "Utils/NPYWriter.h"
 
 // ============================================================================
 // POSE FILE CONVERSION
@@ -1306,4 +1307,143 @@ bool FVCCSimDataConverter::SaveMeshTrianglesToPLY(
         TriangleData.Normals,
         OutputPath
     );
+}
+
+bool FVCCSimDataConverter::SaveMeshTrianglesToNPY(
+    const FMeshTriangleData& TriangleData,
+    const FString& OutputDir,
+    int32 NumChunks)
+{
+    UE_LOG(LogTemp, Warning, TEXT("VCCSimDataConverter: NPY SAVE CALLED! OutputDir: %s, Triangles: %d"), *OutputDir, TriangleData.TriangleCount);
+    
+    // Create output directory
+    IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
+    if (!PlatformFile.DirectoryExists(*OutputDir))
+    {
+        if (!PlatformFile.CreateDirectoryTree(*OutputDir))
+        {
+            UE_LOG(LogTemp, Error, TEXT("Failed to create NPY chunks directory: %s"), *OutputDir);
+            return false;
+        }
+    }
+    
+    int32 TotalVertices = TriangleData.Vertices.Num();
+    if (TotalVertices == 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("No vertices to save"));
+        return false;
+    }
+    
+    int32 ChunkSize = (TotalVertices + NumChunks - 1) / NumChunks;  // Ceiling division
+    
+    UE_LOG(LogTemp, Log, TEXT("Saving %d vertices as %d NPY chunks (chunk size: %d)"), 
+        TotalVertices, NumChunks, ChunkSize);
+    
+    bool bAllChunksSucceeded = true;
+    
+    for (int32 ChunkIndex = 0; ChunkIndex < NumChunks; ChunkIndex++)
+    {
+        int32 StartIdx = ChunkIndex * ChunkSize;
+        int32 EndIdx = FMath::Min(StartIdx + ChunkSize, TotalVertices);
+        
+        if (StartIdx >= TotalVertices)
+            break;
+            
+        int32 CurrentChunkSize = EndIdx - StartIdx;
+        
+        // Extract chunk data
+        TArray<FVector> PositionChunk;
+        TArray<FVector> ColorChunk;  // Colors are stored as FVector, not FLinearColor
+        TArray<FVector> NormalChunk;
+        
+        PositionChunk.Reserve(CurrentChunkSize);
+        ColorChunk.Reserve(CurrentChunkSize);
+        NormalChunk.Reserve(CurrentChunkSize);
+        
+        for (int32 i = StartIdx; i < EndIdx; i++)
+        {
+            PositionChunk.Add(TriangleData.Vertices[i]);
+            ColorChunk.Add(TriangleData.Colors[i]);
+            NormalChunk.Add(TriangleData.Normals[i]);
+        }
+        
+        // Create chunk file paths
+        FString PosFile = FPaths::Combine(OutputDir, FString::Printf(TEXT("positions_chunk_%02d.npy"), ChunkIndex));
+        FString ColorFile = FPaths::Combine(OutputDir, FString::Printf(TEXT("colors_chunk_%02d.npy"), ChunkIndex));
+        FString NormalFile = FPaths::Combine(OutputDir, FString::Printf(TEXT("normals_chunk_%02d.npy"), ChunkIndex));
+        
+        // Save chunk files
+        bool bPosSuccess = FNPYWriter::WritePositions(PosFile, PositionChunk);
+        bool bColorSuccess = FNPYWriter::WriteColorsFromVector(ColorFile, ColorChunk);  // Use Vector variant
+        bool bNormalSuccess = FNPYWriter::WriteNormals(NormalFile, NormalChunk);
+        
+        if (bPosSuccess && bColorSuccess && bNormalSuccess)
+        {
+            UE_LOG(LogTemp, Log, TEXT("Saved NPY chunk %d/%d: %d vertices"), 
+                ChunkIndex + 1, NumChunks, CurrentChunkSize);
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("Failed to save NPY chunk %d/%d"), ChunkIndex + 1, NumChunks);
+            bAllChunksSucceeded = false;
+        }
+    }
+    
+    // Save metadata
+    if (bAllChunksSucceeded)
+    {
+        FString MetadataFile = FPaths::Combine(OutputDir, TEXT("chunk_metadata.json"));
+        FString MetadataJson = FString::Printf(TEXT(
+            "{\n"
+            "  \"num_chunks\": %d,\n"
+            "  \"total_vertices\": %d,\n"
+            "  \"chunk_size\": %d,\n"
+            "  \"format_version\": \"1.0\",\n"
+            "  \"coordinate_system\": \"TriangleSplatting\",\n"
+            "  \"generated_time\": \"%s\"\n"
+            "}"
+        ), NumChunks, TotalVertices, ChunkSize, *FDateTime::Now().ToString());
+        
+        if (FFileHelper::SaveStringToFile(MetadataJson, *MetadataFile))
+        {
+            UE_LOG(LogTemp, Log, TEXT("NPY chunks metadata saved: %s"), *MetadataFile);
+        }
+    }
+    
+    return bAllChunksSucceeded;
+}
+
+bool FVCCSimDataConverter::SaveMeshTrianglesDualFormat(
+    const FMeshTriangleData& TriangleData,
+    const FString& BasePath,
+    int32 NumChunks)
+{
+    UE_LOG(LogTemp, Warning, TEXT("VCCSimDataConverter: DUAL FORMAT SAVE CALLED! BasePath: %s, Triangles: %d"), *BasePath, TriangleData.TriangleCount);
+    
+    // Generate paths
+    FString PLYPath = BasePath + TEXT(".ply");
+    FString NPYDir = BasePath + TEXT("_chunks");
+    
+    // Save PLY file (for visualization and debugging)
+    UE_LOG(LogTemp, Log, TEXT("Saving PLY file: %s"), *PLYPath);
+    bool bPLYSuccess = SaveMeshTrianglesToPLY(TriangleData, PLYPath);
+    
+    // Save NPY chunks (for fast loading)
+    UE_LOG(LogTemp, Log, TEXT("Saving NPY chunks: %s"), *NPYDir);
+    bool bNPYSuccess = SaveMeshTrianglesToNPY(TriangleData, NPYDir, NumChunks);
+    
+    if (bPLYSuccess && bNPYSuccess)
+    {
+        UE_LOG(LogTemp, Log, TEXT("Dual format save completed successfully"));
+        UE_LOG(LogTemp, Log, TEXT("  PLY file: %s (for visualization)"), *PLYPath);
+        UE_LOG(LogTemp, Log, TEXT("  NPY chunks: %s (for fast loading)"), *NPYDir);
+        return true;
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Dual format save partially failed (PLY: %s, NPY: %s)"), 
+            bPLYSuccess ? TEXT("OK") : TEXT("FAIL"),
+            bNPYSuccess ? TEXT("OK") : TEXT("FAIL"));
+        return false;
+    }
 }
