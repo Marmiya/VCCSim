@@ -45,7 +45,6 @@ public:
     void Initialize(TSharedPtr<FVCCSimPanelSelection> InSelectionManager);
     void Cleanup();
     TSharedRef<SWidget> CreateTriangleSplattingPanel();
-    void UpdateVisualization();
     
     // Getters for state access
     bool IsTriangleSplattingSectionExpanded() const { return bTriangleSplattingSectionExpanded; }
@@ -210,9 +209,7 @@ private:
     
     // Private path persistence helpers
     void SavePathsToProjectFile();
-    void SavePathsToEditorConfig();
     bool LoadPathsFromProjectFile();
-    void LoadPathsFromEditorConfig();
     FString GetPathConfigFilePath() const;
     void UpdateUIFromConfig();
     

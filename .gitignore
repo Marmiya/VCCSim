@@ -73,13 +73,10 @@ Plugins/**/Intermediate/*
 # Cache files for the editor to use
 DerivedDataCache/*
 
-Source/grpc/*
 Logs/*
-test/*
 Demo/*
 .vscode/*
 .github/*
-Source/.claude/*
 
 Client/PyClient/GRPC/VCCSim_pb2_grpc.py
 Client/PyClient/GRPC/VCCSim_pb2.py
@@ -99,11 +96,10 @@ Client/ros_client/log/
 Client/ros_client/install/
 Client/ros_client/share/
 
-flash_test.log
-
+Source/.claude/*
+Source/grpc/*
 Source/Tools/DGE/data/*
 Source/Tools/DGE/data_o/*
 Source/VCCSim/CLAUDE.md
 Source/VCCSim/TriangleSplatting_Integration_Design.md
 Source/CLAUDE.md
-Source/AGENTS.md
