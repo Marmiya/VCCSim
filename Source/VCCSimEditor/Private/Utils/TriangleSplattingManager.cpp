@@ -64,13 +64,12 @@ public:
             
             // Save in dual format: PLY for visualization + NPY chunks for fast loading
             FString BasePath = FPaths::GetPath(OutputPath) / FPaths::GetBaseFilename(OutputPath);
-            UE_LOG(LogTemp, Warning, TEXT("TriangleSplattingManager: Using dual format save - OutputPath: %s, BasePath: %s"), *OutputPath, *BasePath);
             
             if (FVCCSimDataConverter::SaveMeshTrianglesDualFormat(TriangleData, BasePath, 8))
             {
                 bSucceeded = true;
-                ResultMessage = FString::Printf(TEXT("Successfully exported %d triangles in dual format:\n  PLY: %s\n  NPY chunks: %s_chunks/"), 
-                    TriangleData.TriangleCount, *OutputPath, *BasePath);
+                ResultMessage = FString::Printf(TEXT("Successfully exported %d triangles"), 
+                    TriangleData.TriangleCount);
             }
             else
             {
@@ -1079,7 +1078,7 @@ void FTriangleSplattingManager::StartAsyncTriangleExtraction(const FTriangleSpla
     // Start the async task
     (*TaskPtr)->StartBackgroundTask();
     
-    UE_LOG(LogTemp, Log, TEXT("Started async triangle extraction for %d triangles"), Config.MaxMeshTriangles);
+    UE_LOG(LogTemp, Log, TEXT("Extracting %d mesh triangles..."), Config.MaxMeshTriangles);
 }
 
 void FTriangleSplattingManager::OnTriangleExtractionComplete()
@@ -1101,7 +1100,8 @@ void FTriangleSplattingManager::OnTriangleExtractionComplete()
     
     if (Task.WasSuccessful())
     {
-        UE_LOG(LogTemp, Log, TEXT("Triangle extraction completed successfully: %s"), *Task.GetResultMessage());
+        UE_LOG(LogTemp, Log, TEXT("Triangle extraction completed: %d triangles exported"), 
+            CurrentConfig->MaxMeshTriangles);
         StatusMessage = TEXT("Triangle extraction completed, starting training...");
         
         // Continue with training process after successful extraction

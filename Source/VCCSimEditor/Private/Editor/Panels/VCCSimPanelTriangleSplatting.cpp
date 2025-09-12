@@ -51,6 +51,7 @@
 #include "ThumbnailRendering/ThumbnailManager.h"
 #include "Widgets/Images/SImage.h"
 #include "Framework/Application/SlateApplication.h"
+#include "Misc/ConfigCacheIni.h"
 
 BEGIN_SLATE_FUNCTION_BUILD_OPTIMIZATION
 
@@ -78,10 +79,16 @@ FVCCSimPanelTriangleSplatting::FVCCSimPanelTriangleSplatting()
     // Initialize triangle selection methods
     TriangleSelectionMethods.Add(MakeShared<FString>(TEXT("Random")));
     // Future: Add more methods like "Uniform", "ImportanceBased", etc.
+    
+    // Load saved paths
+    LoadPaths();
 }
 
 FVCCSimPanelTriangleSplatting::~FVCCSimPanelTriangleSplatting()
 {
+    // Save paths before cleanup
+    SavePaths();
+    
     // Clean up training resources
     if (GSTrainingManager.IsValid() && GSTrainingManager->IsTrainingInProgress())
     {
@@ -306,6 +313,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSDataInputSection()
                     .OnTextChanged_Lambda([this](const FText& Text)
                     {
                         GSConfig.ImageDirectory = Text.ToString();
+                        SavePaths(); // Save when manually typed
                     })
                 ]
                 + SHorizontalBox::Slot()
@@ -340,6 +348,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSDataInputSection()
                     {
                         GSConfig.CameraIntrinsicsFilePath = Text.ToString();
                         OnGSCameraIntrinsicsLoaded();
+                        SavePaths(); // Save when manually typed
                     })
                     .HintText(FText::FromString(TEXT("Select COLMAP cameras.txt or cameras.bin file")))
                 ]
@@ -374,6 +383,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSDataInputSection()
                     .OnTextChanged_Lambda([this](const FText& Text)
                     {
                         GSConfig.PoseFilePath = Text.ToString();
+                        SavePaths(); // Save when manually typed
                     })
                 ]
                 + SHorizontalBox::Slot()
@@ -407,6 +417,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSDataInputSection()
                     .OnTextChanged_Lambda([this](const FText& Text)
                     {
                         GSConfig.OutputDirectory = Text.ToString();
+                        SavePaths(); // Save when manually typed
                     })
                 ]
                 + SHorizontalBox::Slot()
@@ -440,6 +451,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSDataInputSection()
                     .OnTextChanged_Lambda([this](const FText& Text)
                     {
                         GSConfig.ColmapDatasetPath = Text.ToString();
+                        SavePaths(); // Save when manually typed
                     })
                     .HintText(FText::FromString(TEXT("Select COLMAP dataset folder (containing sparse/ images/ folders)")))
                 ]
@@ -477,12 +489,14 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSDataInputSection()
                         {
                             GSConfig.SelectedMesh = NewMesh;
                             UE_LOG(LogTemp, Log, TEXT("Selected mesh via asset picker: %s"), *NewMesh->GetName());
+                            SavePaths(); // Save immediately after mesh selection
                         }
                     }
                     else
                     {
                         GSConfig.SelectedMesh.Reset();
                         UE_LOG(LogTemp, Log, TEXT("Cleared mesh selection"));
+                        SavePaths(); // Save immediately after mesh cleared
                     }
                 })
                 .AllowClear(true)
@@ -1071,6 +1085,7 @@ FReply FVCCSimPanelTriangleSplatting::OnGSBrowseImageDirectoryClicked()
         {
             GSConfig.ImageDirectory = SelectedDirectory;
             GSImageDirectoryTextBox->SetText(FText::FromString(SelectedDirectory));
+            SavePaths(); // Save immediately after path change
         }
     }
     
@@ -1098,6 +1113,7 @@ FReply FVCCSimPanelTriangleSplatting::OnGSBrowseCameraIntrinsicsFileClicked()
             GSConfig.CameraIntrinsicsFilePath = SelectedFiles[0];
             GSCameraIntrinsicsFileTextBox->SetText(FText::FromString(SelectedFiles[0]));
             OnGSCameraIntrinsicsLoaded();
+            SavePaths(); // Save immediately after path change
         }
     }
     
@@ -1124,6 +1140,7 @@ FReply FVCCSimPanelTriangleSplatting::OnGSBrowsePoseFileClicked()
         {
             GSConfig.PoseFilePath = SelectedFiles[0];
             GSPoseFileTextBox->SetText(FText::FromString(SelectedFiles[0]));
+            SavePaths(); // Save immediately after path change
         }
     }
     
@@ -1147,6 +1164,7 @@ FReply FVCCSimPanelTriangleSplatting::OnGSBrowseOutputDirectoryClicked()
         {
             GSConfig.OutputDirectory = SelectedDirectory;
             GSOutputDirectoryTextBox->SetText(FText::FromString(SelectedDirectory));
+            SavePaths(); // Save immediately after path change
         }
     }
     
@@ -1186,6 +1204,7 @@ FReply FVCCSimPanelTriangleSplatting::OnGSBrowseColmapDatasetClicked()
             }
             
             UE_LOG(LogTemp, Log, TEXT("Selected COLMAP dataset path: %s"), *SelectedDirectory);
+            SavePaths(); // Save immediately after path change
         }
     }
     
@@ -2017,6 +2036,403 @@ bool FVCCSimPanelTriangleSplatting::LoadCameraIntrinsicsFromColmapBinary(const F
     }
     
     return false;
+}
+
+// ============================================================================
+// PATH PERSISTENCE
+// ============================================================================
+
+void FVCCSimPanelTriangleSplatting::SavePaths()
+{
+    // Save to both project's Saved folder and editor config for better persistence
+    SavePathsToProjectFile();
+    SavePathsToEditorConfig();
+}
+
+void FVCCSimPanelTriangleSplatting::LoadPaths()
+{
+    // Try to load from project file first, then fall back to editor config
+    if (!LoadPathsFromProjectFile())
+    {
+        LoadPathsFromEditorConfig();
+    }
+    
+    // Update UI values to reflect loaded configuration
+    UpdateUIFromConfig();
+}
+
+// ============================================================================
+// PATH PERSISTENCE IMPLEMENTATION
+// ============================================================================
+
+void FVCCSimPanelTriangleSplatting::SavePathsToProjectFile()
+{
+    FString ConfigFilePath = GetPathConfigFilePath();
+    
+    // Create JSON configuration
+    FString JsonContent = TEXT("{\n");
+    JsonContent += FString::Printf(TEXT("  \"ImageDirectory\": \"%s\",\n"), *GSConfig.ImageDirectory.Replace(TEXT("\\"), TEXT("/")));
+    JsonContent += FString::Printf(TEXT("  \"CameraIntrinsicsFilePath\": \"%s\",\n"), *GSConfig.CameraIntrinsicsFilePath.Replace(TEXT("\\"), TEXT("/")));
+    JsonContent += FString::Printf(TEXT("  \"PoseFilePath\": \"%s\",\n"), *GSConfig.PoseFilePath.Replace(TEXT("\\"), TEXT("/")));
+    JsonContent += FString::Printf(TEXT("  \"OutputDirectory\": \"%s\",\n"), *GSConfig.OutputDirectory.Replace(TEXT("\\"), TEXT("/")));
+    JsonContent += FString::Printf(TEXT("  \"ColmapDatasetPath\": \"%s\",\n"), *GSConfig.ColmapDatasetPath.Replace(TEXT("\\"), TEXT("/")));
+    
+    // Add mesh asset path
+    FString MeshPath = GSConfig.SelectedMesh.IsValid() ? GSConfig.SelectedMesh->GetPathName() : TEXT("");
+    JsonContent += FString::Printf(TEXT("  \"SelectedMeshPath\": \"%s\",\n"), *MeshPath);
+    
+    // Add parameters
+    JsonContent += FString::Printf(TEXT("  \"FOVDegrees\": %.2f,\n"), GSConfig.FOVDegrees);
+    JsonContent += FString::Printf(TEXT("  \"ImageWidth\": %d,\n"), GSConfig.ImageWidth);
+    JsonContent += FString::Printf(TEXT("  \"ImageHeight\": %d,\n"), GSConfig.ImageHeight);
+    JsonContent += FString::Printf(TEXT("  \"FocalLengthX\": %.2f,\n"), GSConfig.FocalLengthX);
+    JsonContent += FString::Printf(TEXT("  \"FocalLengthY\": %.2f,\n"), GSConfig.FocalLengthY);
+    JsonContent += FString::Printf(TEXT("  \"MaxIterations\": %d,\n"), GSConfig.MaxIterations);
+    JsonContent += FString::Printf(TEXT("  \"InitPointCount\": %d,\n"), GSConfig.InitPointCount);
+    JsonContent += FString::Printf(TEXT("  \"MaxMeshTriangles\": %d,\n"), GSConfig.MaxMeshTriangles);
+    JsonContent += FString::Printf(TEXT("  \"bUseMeshTriangles\": %s,\n"), GSConfig.bUseMeshTriangles ? TEXT("true") : TEXT("false"));
+    JsonContent += FString::Printf(TEXT("  \"MeshTriangleMethod\": \"%s\",\n"), *GSConfig.MeshTriangleMethod);
+    
+    // Add timestamp
+    JsonContent += FString::Printf(TEXT("  \"LastSaved\": \"%s\"\n"), *FDateTime::Now().ToString());
+    JsonContent += TEXT("}\n");
+    
+    // Ensure directory exists
+    IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
+    FString ConfigDir = FPaths::GetPath(ConfigFilePath);
+    if (!PlatformFile.DirectoryExists(*ConfigDir))
+    {
+        PlatformFile.CreateDirectoryTree(*ConfigDir);
+    }
+    
+    // Save to file
+    if (FFileHelper::SaveStringToFile(JsonContent, *ConfigFilePath))
+    {
+        UE_LOG(LogTemp, Log, TEXT("Triangle Splatting paths saved to: %s"), *ConfigFilePath);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Failed to save Triangle Splatting paths to: %s"), *ConfigFilePath);
+    }
+}
+
+void FVCCSimPanelTriangleSplatting::SavePathsToEditorConfig()
+{
+    const FString ConfigSection = TEXT("VCCSimTriangleSplatting");
+    
+    // Save all path configurations to the editor config file
+    GConfig->SetString(*ConfigSection, TEXT("ImageDirectory"), *GSConfig.ImageDirectory, GEditorIni);
+    GConfig->SetString(*ConfigSection, TEXT("CameraIntrinsicsFilePath"), *GSConfig.CameraIntrinsicsFilePath, GEditorIni);
+    GConfig->SetString(*ConfigSection, TEXT("PoseFilePath"), *GSConfig.PoseFilePath, GEditorIni);
+    GConfig->SetString(*ConfigSection, TEXT("OutputDirectory"), *GSConfig.OutputDirectory, GEditorIni);
+    GConfig->SetString(*ConfigSection, TEXT("ColmapDatasetPath"), *GSConfig.ColmapDatasetPath, GEditorIni);
+    
+    // Save mesh asset path if valid
+    if (GSConfig.SelectedMesh.IsValid())
+    {
+        GConfig->SetString(*ConfigSection, TEXT("SelectedMeshPath"), *GSConfig.SelectedMesh->GetPathName(), GEditorIni);
+    }
+    else
+    {
+        GConfig->SetString(*ConfigSection, TEXT("SelectedMeshPath"), TEXT(""), GEditorIni);
+    }
+    
+    // Save parameters
+    GConfig->SetFloat(*ConfigSection, TEXT("FOVDegrees"), GSConfig.FOVDegrees, GEditorIni);
+    GConfig->SetInt(*ConfigSection, TEXT("ImageWidth"), GSConfig.ImageWidth, GEditorIni);
+    GConfig->SetInt(*ConfigSection, TEXT("ImageHeight"), GSConfig.ImageHeight, GEditorIni);
+    GConfig->SetFloat(*ConfigSection, TEXT("FocalLengthX"), GSConfig.FocalLengthX, GEditorIni);
+    GConfig->SetFloat(*ConfigSection, TEXT("FocalLengthY"), GSConfig.FocalLengthY, GEditorIni);
+    GConfig->SetInt(*ConfigSection, TEXT("MaxIterations"), GSConfig.MaxIterations, GEditorIni);
+    GConfig->SetInt(*ConfigSection, TEXT("InitPointCount"), GSConfig.InitPointCount, GEditorIni);
+    GConfig->SetInt(*ConfigSection, TEXT("MaxMeshTriangles"), GSConfig.MaxMeshTriangles, GEditorIni);
+    GConfig->SetBool(*ConfigSection, TEXT("bUseMeshTriangles"), GSConfig.bUseMeshTriangles, GEditorIni);
+    GConfig->SetString(*ConfigSection, TEXT("MeshTriangleMethod"), *GSConfig.MeshTriangleMethod, GEditorIni);
+    
+    // Flush config to ensure it's written to disk
+    GConfig->Flush(false, GEditorIni);
+}
+
+bool FVCCSimPanelTriangleSplatting::LoadPathsFromProjectFile()
+{
+    FString ConfigFilePath = GetPathConfigFilePath();
+    
+    // Check if config file exists
+    if (!FPaths::FileExists(ConfigFilePath))
+    {
+        return false;
+    }
+    
+    // Load JSON content
+    FString JsonContent;
+    if (!FFileHelper::LoadFileToString(JsonContent, *ConfigFilePath))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Failed to read Triangle Splatting config file: %s"), *ConfigFilePath);
+        return false;
+    }
+    
+    // Parse JSON manually (simple key-value extraction)
+    auto ExtractStringValue = [&JsonContent](const FString& Key) -> FString
+    {
+        FString SearchPattern = FString::Printf(TEXT("\"%s\": \""), *Key);
+        int32 StartIndex = JsonContent.Find(SearchPattern);
+        if (StartIndex == INDEX_NONE) return FString();
+        
+        StartIndex += SearchPattern.Len();
+        int32 EndIndex = JsonContent.Find(TEXT("\""), StartIndex);
+        if (EndIndex == INDEX_NONE) return FString();
+        
+        return JsonContent.Mid(StartIndex, EndIndex - StartIndex);
+    };
+    
+    auto ExtractFloatValue = [&JsonContent](const FString& Key) -> float
+    {
+        FString SearchPattern = FString::Printf(TEXT("\"%s\": "), *Key);
+        int32 StartIndex = JsonContent.Find(SearchPattern);
+        if (StartIndex == INDEX_NONE) return 0.0f;
+        
+        StartIndex += SearchPattern.Len();
+        int32 EndIndex = JsonContent.Find(TEXT(","), StartIndex);
+        if (EndIndex == INDEX_NONE) EndIndex = JsonContent.Find(TEXT("\n"), StartIndex);
+        if (EndIndex == INDEX_NONE) return 0.0f;
+        
+        FString ValueStr = JsonContent.Mid(StartIndex, EndIndex - StartIndex).TrimStartAndEnd();
+        return FCString::Atof(*ValueStr);
+    };
+    
+    auto ExtractIntValue = [&JsonContent](const FString& Key) -> int32
+    {
+        FString SearchPattern = FString::Printf(TEXT("\"%s\": "), *Key);
+        int32 StartIndex = JsonContent.Find(SearchPattern);
+        if (StartIndex == INDEX_NONE) return 0;
+        
+        StartIndex += SearchPattern.Len();
+        int32 EndIndex = JsonContent.Find(TEXT(","), StartIndex);
+        if (EndIndex == INDEX_NONE) EndIndex = JsonContent.Find(TEXT("\n"), StartIndex);
+        if (EndIndex == INDEX_NONE) return 0;
+        
+        FString ValueStr = JsonContent.Mid(StartIndex, EndIndex - StartIndex).TrimStartAndEnd();
+        return FCString::Atoi(*ValueStr);
+    };
+    
+    auto ExtractBoolValue = [&JsonContent](const FString& Key) -> bool
+    {
+        FString SearchPattern = FString::Printf(TEXT("\"%s\": "), *Key);
+        int32 StartIndex = JsonContent.Find(SearchPattern);
+        if (StartIndex == INDEX_NONE) return false;
+        
+        StartIndex += SearchPattern.Len();
+        int32 EndIndex = JsonContent.Find(TEXT(","), StartIndex);
+        if (EndIndex == INDEX_NONE) EndIndex = JsonContent.Find(TEXT("\n"), StartIndex);
+        if (EndIndex == INDEX_NONE) return false;
+        
+        FString ValueStr = JsonContent.Mid(StartIndex, EndIndex - StartIndex).TrimStartAndEnd();
+        return ValueStr == TEXT("true");
+    };
+    
+    // Load paths
+    FString ImageDir = ExtractStringValue(TEXT("ImageDirectory"));
+    if (!ImageDir.IsEmpty()) GSConfig.ImageDirectory = ImageDir;
+    
+    FString IntrinsicsFile = ExtractStringValue(TEXT("CameraIntrinsicsFilePath"));
+    if (!IntrinsicsFile.IsEmpty()) GSConfig.CameraIntrinsicsFilePath = IntrinsicsFile;
+    
+    FString PoseFile = ExtractStringValue(TEXT("PoseFilePath"));
+    if (!PoseFile.IsEmpty()) GSConfig.PoseFilePath = PoseFile;
+    
+    FString OutputDir = ExtractStringValue(TEXT("OutputDirectory"));
+    if (!OutputDir.IsEmpty()) GSConfig.OutputDirectory = OutputDir;
+    
+    FString ColmapPath = ExtractStringValue(TEXT("ColmapDatasetPath"));
+    if (!ColmapPath.IsEmpty()) GSConfig.ColmapDatasetPath = ColmapPath;
+    
+    // Load mesh asset
+    FString MeshPath = ExtractStringValue(TEXT("SelectedMeshPath"));
+    if (!MeshPath.IsEmpty())
+    {
+        if (UStaticMesh* LoadedMesh = LoadObject<UStaticMesh>(nullptr, *MeshPath))
+        {
+            GSConfig.SelectedMesh = LoadedMesh;
+        }
+    }
+    
+    // Load parameters
+    float FOV = ExtractFloatValue(TEXT("FOVDegrees"));
+    if (FOV > 0) GSConfig.FOVDegrees = FOV;
+    
+    int32 Width = ExtractIntValue(TEXT("ImageWidth"));
+    if (Width > 0) GSConfig.ImageWidth = Width;
+    
+    int32 Height = ExtractIntValue(TEXT("ImageHeight"));
+    if (Height > 0) GSConfig.ImageHeight = Height;
+    
+    float FocalX = ExtractFloatValue(TEXT("FocalLengthX"));
+    if (FocalX > 0) GSConfig.FocalLengthX = FocalX;
+    
+    float FocalY = ExtractFloatValue(TEXT("FocalLengthY"));
+    if (FocalY > 0) GSConfig.FocalLengthY = FocalY;
+    
+    int32 MaxIter = ExtractIntValue(TEXT("MaxIterations"));
+    if (MaxIter > 0) GSConfig.MaxIterations = MaxIter;
+    
+    int32 InitPoints = ExtractIntValue(TEXT("InitPointCount"));
+    if (InitPoints > 0) GSConfig.InitPointCount = InitPoints;
+    
+    int32 MaxTriangles = ExtractIntValue(TEXT("MaxMeshTriangles"));
+    if (MaxTriangles > 0) GSConfig.MaxMeshTriangles = MaxTriangles;
+    
+    GSConfig.bUseMeshTriangles = ExtractBoolValue(TEXT("bUseMeshTriangles"));
+    
+    FString TriangleMethod = ExtractStringValue(TEXT("MeshTriangleMethod"));
+    if (!TriangleMethod.IsEmpty()) GSConfig.MeshTriangleMethod = TriangleMethod;
+    
+    UE_LOG(LogTemp, Log, TEXT("Triangle Splatting paths loaded from: %s"), *ConfigFilePath);
+    return true;
+}
+
+void FVCCSimPanelTriangleSplatting::LoadPathsFromEditorConfig()
+{
+    const FString ConfigSection = TEXT("VCCSimTriangleSplatting");
+    
+    // Load saved paths from editor config file
+    FString SavedPath;
+    float SavedFloat;
+    int32 SavedInt;
+    bool SavedBool;
+    
+    if (GConfig->GetString(*ConfigSection, TEXT("ImageDirectory"), SavedPath, GEditorIni) && !SavedPath.IsEmpty())
+    {
+        GSConfig.ImageDirectory = SavedPath;
+    }
+    
+    if (GConfig->GetString(*ConfigSection, TEXT("CameraIntrinsicsFilePath"), SavedPath, GEditorIni) && !SavedPath.IsEmpty())
+    {
+        GSConfig.CameraIntrinsicsFilePath = SavedPath;
+    }
+    
+    if (GConfig->GetString(*ConfigSection, TEXT("PoseFilePath"), SavedPath, GEditorIni) && !SavedPath.IsEmpty())
+    {
+        GSConfig.PoseFilePath = SavedPath;
+    }
+    
+    if (GConfig->GetString(*ConfigSection, TEXT("OutputDirectory"), SavedPath, GEditorIni) && !SavedPath.IsEmpty())
+    {
+        GSConfig.OutputDirectory = SavedPath;
+    }
+    
+    if (GConfig->GetString(*ConfigSection, TEXT("ColmapDatasetPath"), SavedPath, GEditorIni) && !SavedPath.IsEmpty())
+    {
+        GSConfig.ColmapDatasetPath = SavedPath;
+    }
+    
+    // Load mesh asset if path is valid
+    if (GConfig->GetString(*ConfigSection, TEXT("SelectedMeshPath"), SavedPath, GEditorIni) && !SavedPath.IsEmpty())
+    {
+        if (UStaticMesh* LoadedMesh = LoadObject<UStaticMesh>(nullptr, *SavedPath))
+        {
+            GSConfig.SelectedMesh = LoadedMesh;
+        }
+    }
+    
+    // Load parameters
+    if (GConfig->GetFloat(*ConfigSection, TEXT("FOVDegrees"), SavedFloat, GEditorIni) && SavedFloat > 0)
+    {
+        GSConfig.FOVDegrees = SavedFloat;
+    }
+    
+    if (GConfig->GetInt(*ConfigSection, TEXT("ImageWidth"), SavedInt, GEditorIni) && SavedInt > 0)
+    {
+        GSConfig.ImageWidth = SavedInt;
+    }
+    
+    if (GConfig->GetInt(*ConfigSection, TEXT("ImageHeight"), SavedInt, GEditorIni) && SavedInt > 0)
+    {
+        GSConfig.ImageHeight = SavedInt;
+    }
+    
+    if (GConfig->GetFloat(*ConfigSection, TEXT("FocalLengthX"), SavedFloat, GEditorIni) && SavedFloat > 0)
+    {
+        GSConfig.FocalLengthX = SavedFloat;
+    }
+    
+    if (GConfig->GetFloat(*ConfigSection, TEXT("FocalLengthY"), SavedFloat, GEditorIni) && SavedFloat > 0)
+    {
+        GSConfig.FocalLengthY = SavedFloat;
+    }
+    
+    if (GConfig->GetInt(*ConfigSection, TEXT("MaxIterations"), SavedInt, GEditorIni) && SavedInt > 0)
+    {
+        GSConfig.MaxIterations = SavedInt;
+    }
+    
+    if (GConfig->GetInt(*ConfigSection, TEXT("InitPointCount"), SavedInt, GEditorIni) && SavedInt > 0)
+    {
+        GSConfig.InitPointCount = SavedInt;
+    }
+    
+    if (GConfig->GetInt(*ConfigSection, TEXT("MaxMeshTriangles"), SavedInt, GEditorIni) && SavedInt > 0)
+    {
+        GSConfig.MaxMeshTriangles = SavedInt;
+    }
+    
+    if (GConfig->GetBool(*ConfigSection, TEXT("bUseMeshTriangles"), SavedBool, GEditorIni))
+    {
+        GSConfig.bUseMeshTriangles = SavedBool;
+    }
+    
+    if (GConfig->GetString(*ConfigSection, TEXT("MeshTriangleMethod"), SavedPath, GEditorIni) && !SavedPath.IsEmpty())
+    {
+        GSConfig.MeshTriangleMethod = SavedPath;
+    }
+}
+
+FString FVCCSimPanelTriangleSplatting::GetPathConfigFilePath() const
+{
+    // Save to project's Saved folder: ProjectDir/Saved/Config/VCCSimTriangleSplatting.json
+    FString ProjectSavedDir = FPaths::ProjectSavedDir();
+    FString ConfigDir = FPaths::Combine(ProjectSavedDir, TEXT("Config"));
+    return FPaths::Combine(ConfigDir, TEXT("VCCSimTriangleSplatting.json"));
+}
+
+void FVCCSimPanelTriangleSplatting::UpdateUIFromConfig()
+{
+    // Update TOptional values from config
+    GSFOVValue = GSConfig.FOVDegrees;
+    GSImageWidthValue = GSConfig.ImageWidth;
+    GSImageHeightValue = GSConfig.ImageHeight;
+    GSFocalLengthXValue = GSConfig.FocalLengthX;
+    GSFocalLengthYValue = GSConfig.FocalLengthY;
+    GSMaxIterationsValue = GSConfig.MaxIterations;
+    GSInitPointCountValue = GSConfig.InitPointCount;
+    GSMaxMeshTrianglesValue = GSConfig.MaxMeshTriangles;
+    
+    // Update text box contents if widgets exist
+    if (GSImageDirectoryTextBox.IsValid())
+    {
+        GSImageDirectoryTextBox->SetText(FText::FromString(GSConfig.ImageDirectory));
+    }
+    
+    if (GSCameraIntrinsicsFileTextBox.IsValid())
+    {
+        GSCameraIntrinsicsFileTextBox->SetText(FText::FromString(GSConfig.CameraIntrinsicsFilePath));
+    }
+    
+    if (GSPoseFileTextBox.IsValid())
+    {
+        GSPoseFileTextBox->SetText(FText::FromString(GSConfig.PoseFilePath));
+    }
+    
+    if (GSOutputDirectoryTextBox.IsValid())
+    {
+        GSOutputDirectoryTextBox->SetText(FText::FromString(GSConfig.OutputDirectory));
+    }
+    
+    if (GSColmapDatasetTextBox.IsValid())
+    {
+        GSColmapDatasetTextBox->SetText(FText::FromString(GSConfig.ColmapDatasetPath));
+    }
+    
+    UE_LOG(LogTemp, Log, TEXT("Triangle Splatting UI updated from loaded configuration"));
 }
 
 END_SLATE_FUNCTION_BUILD_OPTIMIZATION

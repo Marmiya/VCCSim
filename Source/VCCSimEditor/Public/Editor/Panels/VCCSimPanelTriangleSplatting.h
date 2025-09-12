@@ -208,6 +208,14 @@ private:
     void SavePaths();
     void LoadPaths();
     
+    // Private path persistence helpers
+    void SavePathsToProjectFile();
+    void SavePathsToEditorConfig();
+    bool LoadPathsFromProjectFile();
+    void LoadPathsFromEditorConfig();
+    FString GetPathConfigFilePath() const;
+    void UpdateUIFromConfig();
+    
     // ============================================================================
     // UTILITY FUNCTIONS
     // ============================================================================

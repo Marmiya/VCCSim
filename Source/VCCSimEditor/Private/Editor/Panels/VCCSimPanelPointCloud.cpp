@@ -660,11 +660,14 @@ void FVCCSimPanelPointCloud::CreateNormalVisualization(AActor* Owner)
 
 void FVCCSimPanelPointCloud::ClearPointCloudVisualization()
 {
+    bool bHadAnythingToClear = false;
+    
     // Clear particle renderer
     if (ParticlePointCloudRenderer.IsValid())
     {
         ParticlePointCloudRenderer->ClearPointCloud();
         ParticlePointCloudRenderer.Reset();
+        bHadAnythingToClear = true;
     }
 
     // Clear instanced components
@@ -672,12 +675,14 @@ void FVCCSimPanelPointCloud::ClearPointCloudVisualization()
     {
         PointCloudInstancedComponent->ClearInstances();
         PointCloudInstancedComponent.Reset();
+        bHadAnythingToClear = true;
     }
 
     if (NormalLinesInstancedComponent.IsValid())
     {
         NormalLinesInstancedComponent->ClearInstances();
         NormalLinesInstancedComponent.Reset();
+        bHadAnythingToClear = true;
     }
 
     // Destroy our tracked actor
@@ -685,6 +690,7 @@ void FVCCSimPanelPointCloud::ClearPointCloudVisualization()
     {
         PointCloudActor->Destroy();
         PointCloudActor.Reset();
+        bHadAnythingToClear = true;
     }
     
     // Also search for and remove any orphaned VCCSim_PointCloud actors
@@ -698,11 +704,16 @@ void FVCCSimPanelPointCloud::ClearPointCloudVisualization()
             {
                 UE_LOG(LogTemp, Warning, TEXT("Cleaning up orphaned VCCSim_PointCloud actor: %s"), *Actor->GetName());
                 Actor->Destroy();
+                bHadAnythingToClear = true;
             }
         }
     }
 
-    UE_LOG(LogTemp, Log, TEXT("Cleared point cloud visualization"));
+    // Only log if we actually cleared something
+    if (bHadAnythingToClear)
+    {
+        UE_LOG(LogTemp, Log, TEXT("Cleared point cloud visualization"));
+    }
 }
 
 // ============================================================================

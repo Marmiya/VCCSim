@@ -70,8 +70,8 @@ bool FNPYWriter::WriteFloat32Array2D(const FString& FilePath, const float* Data,
         return false;
     }
     
-    UE_LOG(LogTemp, Log, TEXT("NPYWriter: Successfully wrote NPY file: %s (%d x %d, %d bytes)"), 
-        *FilePath, NumRows, NumCols, FileData.Num());
+    UE_LOG(LogTemp, Log, TEXT("NPYWriter: Successfully wrote NPY file: %s (%d x %d, %.1f MB)"), 
+        *FilePath, NumRows, NumCols, FileData.Num() / 1048576.0f);
     return true;
 }
 
@@ -79,7 +79,6 @@ bool FNPYWriter::WritePositions(const FString& FilePath, const TArray<FVector>& 
 {
     if (Positions.Num() == 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("NPYWriter: Empty positions array"));
         return false;
     }
     
@@ -101,7 +100,6 @@ bool FNPYWriter::WriteColors(const FString& FilePath, const TArray<FLinearColor>
 {
     if (Colors.Num() == 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("NPYWriter: Empty colors array"));
         return false;
     }
     
@@ -123,7 +121,6 @@ bool FNPYWriter::WriteColorsFromVector(const FString& FilePath, const TArray<FVe
 {
     if (Colors.Num() == 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("NPYWriter: Empty colors array"));
         return false;
     }
     
@@ -146,7 +143,6 @@ bool FNPYWriter::WriteNormals(const FString& FilePath, const TArray<FVector>& No
 {
     if (Normals.Num() == 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("NPYWriter: Empty normals array"));
         return false;
     }
     
