@@ -20,8 +20,8 @@
 #include "CoreMinimal.h"
 #include "Engine/StaticMesh.h"
 #include "Math/Matrix.h"
-#include "DataStruct_IO/CameraData.h"
-#include "DataStruct_IO/PointCloud.h"
+#include "DataStructures/CameraData.h"
+#include "DataStructures/PointCloud.h"
 
 
 class VCCSIM_API FVCCSimDataConverter

@@ -20,7 +20,6 @@
 #include "CoreMinimal.h"
 #include "HAL/Runnable.h"
 #include "HAL/RunnableThread.h"
-#include "DataStruct_IO/CameraData.h"
 
 DECLARE_DELEGATE_TwoParams(FOnColmapProgressUpdated, float, FString);
 DECLARE_DELEGATE_TwoParams(FOnColmapCompleted, bool, FString);

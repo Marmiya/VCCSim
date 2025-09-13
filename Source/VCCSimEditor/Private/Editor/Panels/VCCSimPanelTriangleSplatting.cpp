@@ -20,7 +20,7 @@
 #include "Utils/TriangleSplattingManager.h"
 #include "Utils/ColmapManager.h"
 #include "Utils/VCCSimDataConverter.h"
-#include "DataStruct_IO/IOUtils.h"
+#include "IO/PLYUtils.h"
 #include "HAL/PlatformFileManager.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SScrollBox.h"

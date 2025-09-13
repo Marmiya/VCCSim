@@ -17,7 +17,7 @@
 
 #pragma once
 #include "CoreMinimal.h"
-#include "DataStruct_IO/Mesh.h"
+#include "DataStructures/Mesh.h"
 #include "SafeZoneAnalyzer.generated.h"
 
 class UProceduralMeshComponent;

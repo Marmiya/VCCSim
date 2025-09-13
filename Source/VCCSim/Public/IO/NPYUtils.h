@@ -1,8 +1,8 @@
 /*
 * Copyright (C) 2025 Visual Computing Research Center, Shenzhen University
 *
-* Simple NPY file writer for fast mesh data serialization
-* Optimized for Triangle Splatting mesh triangle data export
+* NPY file utilities for mesh data serialization
+* Optimized for Triangle Splatting mesh triangle data I/O
 */
 
 #pragma once
@@ -10,10 +10,11 @@
 #include "CoreMinimal.h"
 
 /**
- * Simple NPY file writer for float32 arrays
- * Supports only 2D float arrays (N, 3) format for positions, colors, normals
+ * NPY file utilities for float32 arrays
+ * Supports 2D float arrays (N, 3) format for positions, colors, normals
+ * Provides both read and write capabilities
  */
-class VCCSIM_API FNPYWriter
+class VCCSIM_API FNPYUtils
 {
 public:
     /**

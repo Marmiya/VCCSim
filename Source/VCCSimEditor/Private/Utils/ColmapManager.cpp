@@ -22,8 +22,6 @@
 #include "Misc/Paths.h"
 #include "Misc/DateTime.h"
 #include "Engine/Engine.h"
-#include "Framework/Notifications/NotificationManager.h"
-#include "Widgets/Notifications/SNotificationList.h"
 #include "Async/AsyncWork.h"
 
 FColmapManager::FColmapManager()

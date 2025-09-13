@@ -3,7 +3,6 @@
 #include "CoreMinimal.h"
 #include "Components/SceneComponent.h"
 #include "Components/InstancedStaticMeshComponent.h"
-#include "DataStruct_IO/PointCloud.h"
 #include "PointCloudRenderComponent.generated.h"
 
 UCLASS(ClassGroup=(VCCSim), meta=(BlueprintSpawnableComponent))

@@ -1,6 +1,6 @@
 #include "Utils/PLYPointCloudNiagaraActor.h"
 #include "NiagaraDataInterfaceArrayFunctionLibrary.h"
-#include "DataStruct_IO/IOUtils.h"
+#include "IO/PLYUtils.h"
 
 APLYPointCloudNiagaraActor::APLYPointCloudNiagaraActor()
 {

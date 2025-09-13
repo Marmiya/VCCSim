@@ -19,8 +19,8 @@
 
 #include "CoreMinimal.h"
 #include "Math/Vector.h"
-#include "DataStruct_IO/PointCloud.h"
-#include "DataStruct_IO/CameraData.h"
+#include "DataStructures/PointCloud.h"
+#include "DataStructures/CameraData.h"
 
 /**
  * PLY file loader utility class with enhanced normal support

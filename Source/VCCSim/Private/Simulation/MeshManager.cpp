@@ -17,7 +17,7 @@
 
 #include "Simulation/MeshManager.h"
 #include "Utils/ConfigParser.h"
-#include "DataStruct_IO/Mesh.h"
+#include "DataStructures/Mesh.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
 

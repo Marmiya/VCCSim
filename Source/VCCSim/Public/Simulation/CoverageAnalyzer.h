@@ -16,7 +16,7 @@
 */
 #pragma once
 #include "CoreMinimal.h"
-#include "DataStruct_IO/Mesh.h"
+#include "DataStructures/Mesh.h"
 #include "CoverageAnalyzer.generated.h"
 
 class UProceduralMeshComponent;

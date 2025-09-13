@@ -45,8 +45,8 @@
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceDynamic.h"
 
-#include "DataStruct_IO/PointCloudRenderer.h"
-#include "DataStruct_IO/IOUtils.h"
+#include "DataStructures/PointCloudRenderer.h"
+#include "IO/PLYUtils.h"
 
 // ============================================================================
 // CONSTRUCTOR / DESTRUCTOR

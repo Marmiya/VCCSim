@@ -20,7 +20,7 @@
 #include "CoreMinimal.h"
 #include "Widgets/SCompoundWidget.h"
 #include "Widgets/SWidget.h"
-#include "DataStruct_IO/PointCloud.h"
+#include "DataStructures/PointCloud.h"
 #include "Engine/World.h"
 
 class SButton;

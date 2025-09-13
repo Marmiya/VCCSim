@@ -22,13 +22,13 @@
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshSourceData.h"
 #include "MeshDescription.h"
-#include "DataStruct_IO/IOUtils.h"
 #include "Math/UnrealMathUtility.h"
 #include "Math/RandomStream.h"
 #include "HAL/PlatformProcess.h"
 #include "Misc/DateTime.h"
 #include "Async/Async.h"
-#include "Utils/NPYWriter.h"
+#include "IO/PLYUtils.h"
+#include "IO/NPYUtils.h"
 
 // ============================================================================
 // POSE FILE CONVERSION
@@ -1370,9 +1370,9 @@ bool FVCCSimDataConverter::SaveMeshTrianglesToNPY(
         FString NormalFile = FPaths::Combine(OutputDir, FString::Printf(TEXT("normals_chunk_%02d.npy"), ChunkIndex));
         
         // Save chunk files
-        bool bPosSuccess = FNPYWriter::WritePositions(PosFile, PositionChunk);
-        bool bColorSuccess = FNPYWriter::WriteColorsFromVector(ColorFile, ColorChunk);  // Use Vector variant
-        bool bNormalSuccess = FNPYWriter::WriteNormals(NormalFile, NormalChunk);
+        bool bPosSuccess = FNPYUtils::WritePositions(PosFile, PositionChunk);
+        bool bColorSuccess = FNPYUtils::WriteColorsFromVector(ColorFile, ColorChunk);  // Use Vector variant
+        bool bNormalSuccess = FNPYUtils::WriteNormals(NormalFile, NormalChunk);
         
         if (!bPosSuccess || !bColorSuccess || !bNormalSuccess)
         {

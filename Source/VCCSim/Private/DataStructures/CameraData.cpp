@@ -15,7 +15,7 @@
 * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "DataStruct_IO/CameraData.h"
+#include "DataStructures/CameraData.h"
 #include "Misc/FileHelper.h"
 #include "HAL/PlatformFilemanager.h"
 #include "Math/UnrealMathUtility.h"

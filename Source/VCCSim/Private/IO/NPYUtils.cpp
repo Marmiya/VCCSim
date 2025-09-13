@@ -2,13 +2,13 @@
 * Copyright (C) 2025 Visual Computing Research Center, Shenzhen University
 */
 
-#include "Utils/NPYWriter.h"
+#include "IO/NPYUtils.h"
 #include "HAL/PlatformFilemanager.h"
 #include "Misc/FileHelper.h"
 #include "Math/Vector.h"
 #include "Math/Color.h"
 
-bool FNPYWriter::WriteFloat32Array2D(const FString& FilePath, const float* Data, int32 NumRows, int32 NumCols)
+bool FNPYUtils::WriteFloat32Array2D(const FString& FilePath, const float* Data, int32 NumRows, int32 NumCols)
 {
     if (!Data || NumRows <= 0 || NumCols <= 0)
     {
@@ -73,7 +73,7 @@ bool FNPYWriter::WriteFloat32Array2D(const FString& FilePath, const float* Data,
     return true;
 }
 
-bool FNPYWriter::WritePositions(const FString& FilePath, const TArray<FVector>& Positions)
+bool FNPYUtils::WritePositions(const FString& FilePath, const TArray<FVector>& Positions)
 {
     if (Positions.Num() == 0)
     {
@@ -94,7 +94,7 @@ bool FNPYWriter::WritePositions(const FString& FilePath, const TArray<FVector>& 
     return WriteFloat32Array2D(FilePath, FloatData.GetData(), Positions.Num(), 3);
 }
 
-bool FNPYWriter::WriteColors(const FString& FilePath, const TArray<FLinearColor>& Colors)
+bool FNPYUtils::WriteColors(const FString& FilePath, const TArray<FLinearColor>& Colors)
 {
     if (Colors.Num() == 0)
     {
@@ -115,7 +115,7 @@ bool FNPYWriter::WriteColors(const FString& FilePath, const TArray<FLinearColor>
     return WriteFloat32Array2D(FilePath, FloatData.GetData(), Colors.Num(), 3);
 }
 
-bool FNPYWriter::WriteColorsFromVector(const FString& FilePath, const TArray<FVector>& Colors)
+bool FNPYUtils::WriteColorsFromVector(const FString& FilePath, const TArray<FVector>& Colors)
 {
     if (Colors.Num() == 0)
     {
@@ -137,7 +137,7 @@ bool FNPYWriter::WriteColorsFromVector(const FString& FilePath, const TArray<FVe
     return WriteFloat32Array2D(FilePath, FloatData.GetData(), Colors.Num(), 3);
 }
 
-bool FNPYWriter::WriteNormals(const FString& FilePath, const TArray<FVector>& Normals)
+bool FNPYUtils::WriteNormals(const FString& FilePath, const TArray<FVector>& Normals)
 {
     if (Normals.Num() == 0)
     {
@@ -158,14 +158,14 @@ bool FNPYWriter::WriteNormals(const FString& FilePath, const TArray<FVector>& No
     return WriteFloat32Array2D(FilePath, FloatData.GetData(), Normals.Num(), 3);
 }
 
-FString FNPYWriter::CreateNPYHeader(int32 NumRows, int32 NumCols)
+FString FNPYUtils::CreateNPYHeader(int32 NumRows, int32 NumCols)
 {
     // This was too complex - let me use a simpler approach
     // We'll write the raw bytes directly instead of using FString
     return FString(); // Placeholder - we'll write bytes directly in WriteFloat32Array2D
 }
 
-FVector FNPYWriter::ConvertCoordinate(const FVector& UEVector)
+FVector FNPYUtils::ConvertCoordinate(const FVector& UEVector)
 {
     // Convert UE coordinate (Left-handed, Z-up, centimeters) to Triangle Splatting (Right-handed, Z-up, meters)
     return FVector(

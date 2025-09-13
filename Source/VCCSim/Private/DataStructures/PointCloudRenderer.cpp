@@ -15,16 +15,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "DataStruct_IO/PointCloudRenderer.h"
+#include "DataStructures/PointCloudRenderer.h"
 #include "NiagaraFunctionLibrary.h"
 #include "NiagaraDataInterfaceArrayFunctionLibrary.h"
-#include "NiagaraSystemInstanceController.h"
 #include "Engine/World.h"
 #include "Engine/StaticMesh.h"
-#include "Engine/AssetManager.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/ConstructorHelpers.h"
-#include "AssetRegistry/AssetRegistryModule.h"
 
 UPointCloudRenderer::UPointCloudRenderer()
 {

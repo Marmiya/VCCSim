@@ -15,8 +15,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "DataStruct_IO/IOUtils.h"
-#include "DataStruct_IO/CameraData.h"
+#include "IO/PLYUtils.h"
+#include "DataStructures/CameraData.h"
 #include "Engine/Engine.h"
 #include "Misc/DateTime.h"
 #include "Misc/FileHelper.h"

@@ -15,8 +15,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "DataStruct_IO/PointCloud.h"
-#include "DataStruct_IO/CameraData.h"
+#include "DataStructures/PointCloud.h"
 #include "Engine/Engine.h"
 #include "Misc/DateTime.h"
 #include "Misc/FileHelper.h"

@@ -26,7 +26,7 @@
 #include "Simulation/SceneAnalysisManager.h"
 #include "Utils/ImageProcesser.h"
 #include "Utils/TrajectoryViewer.h"
-#include "DataStruct_IO/Mesh.h"
+#include "DataStructures/Mesh.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SNumericEntryBox.h"
 #include "Widgets/Layout/SBox.h"
