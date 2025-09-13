@@ -15,6 +15,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+DEFINE_LOG_CATEGORY_STATIC(LogCameraSensor, Log, All);
+
 #include "Sensors/CameraSensor.h"
 #include "Simulation/Recorder.h"
 #include "RenderingThread.h"
@@ -64,7 +66,7 @@ void URGBCameraComponent::TickComponent(float DeltaTime, ELevelTick TickType,
     
     if (bRecorded && RecordState)
     {
-        UE_LOG(LogTemp, Log, TEXT("Recording camera %s"), *CameraName);
+        UE_LOG(LogCameraSensor, Log, TEXT("Recording camera %s"), *CameraName);
         TimeSinceLastCapture += DeltaTime;
         if (TimeSinceLastCapture >= RecordInterval)
         {
@@ -160,7 +162,7 @@ void URGBCameraComponent::SetIgnoreLidar(
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("Capture component not initialized!"));
+        UE_LOG(LogCameraSensor, Error, TEXT("Capture component not initialized!"));
     }
 }
 
@@ -193,7 +195,7 @@ void URGBCameraComponent::SetCaptureComponent() const
     }
     else 
     {
-        UE_LOG(LogTemp, Error, TEXT("Capture component not initialized!"));
+        UE_LOG(LogCameraSensor, Error, TEXT("Capture component not initialized!"));
     }
 }
 
@@ -261,7 +263,7 @@ void URGBCameraComponent::ProcessRGBTextureAsyncRaw(TFunction<void()> OnComplete
     
     if (!RenderTargetResource)
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to get render target resource!"));
+        UE_LOG(LogCameraSensor, Error, TEXT("Failed to get render target resource!"));
         return;
     }
 
@@ -302,7 +304,7 @@ void URGBCameraComponent::ProcessRGBTextureAsync(
     
     if (!RenderTargetResource)
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to get render target resource!"));
+        UE_LOG(LogCameraSensor, Error, TEXT("Failed to get render target resource!"));
         return;
     }
 
@@ -341,7 +343,7 @@ bool URGBCameraComponent::CheckComponentAndRenderTarget() const
 {
     if (!CaptureComponent || !RGBRenderTarget)
     {
-        UE_LOG(LogTemp, Error, TEXT("URGBCameraComponent::CheckComponentAndRenderTarget: "
+        UE_LOG(LogCameraSensor, Error, TEXT("URGBCameraComponent::CheckComponentAndRenderTarget: "
                                     "Capture component or render target not initialized!"));
         return true;
     }

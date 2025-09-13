@@ -17,6 +17,8 @@
 
 #include "Core/VCCSim.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogVCCSim, Log, All);
+
 // Editor functionality moved to VCCSimEditor module
 
 #define LOCTEXT_NAMESPACE "FVCCSimModule"
@@ -24,13 +26,13 @@
 void FVCCSimModule::StartupModule()
 {
     // Runtime module initialization
-    UE_LOG(LogTemp, Warning, TEXT("VCCSim module starting up."));
+    UE_LOG(LogVCCSim, Display, TEXT("VCCSim module starting up."));
 }
 
 void FVCCSimModule::ShutdownModule()
 {
     // Runtime module shutdown
-    UE_LOG(LogTemp, Warning, TEXT("VCCSim module shutting down."));
+    UE_LOG(LogVCCSim, Display, TEXT("VCCSim module shutting down."));
 }
 
 #undef LOCTEXT_NAMESPACE

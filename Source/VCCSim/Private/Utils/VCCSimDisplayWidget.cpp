@@ -34,6 +34,8 @@
 #include "Windows/WindowsHWrapper.h" // Deal with UpdateResourceW error
 #include "HAL/FileManagerGeneric.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogVCCSimDisplayWidget, Log, All);
+
 
 void UVCCSIMDisplayWidget::NativeConstruct()
 {
@@ -162,7 +164,7 @@ void UVCCSIMDisplayWidget::InitFromConfig(const struct FVCCSimConfig& Config)
             }
             else
             {
-                UE_LOG(LogTemp, Warning, TEXT("StaticMeshActor not set"));
+                UE_LOG(LogVCCSimDisplayWidget, Warning, TEXT("StaticMeshActor not set"));
             }
         }
         else if (SubWindows[i] == "PointCloud")
@@ -178,7 +180,7 @@ void UVCCSIMDisplayWidget::InitFromConfig(const struct FVCCSimConfig& Config)
             }
             else
             {
-                UE_LOG(LogTemp, Error, TEXT("Failed to create InstancedMeshHolder"));
+                UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("Failed to create InstancedMeshHolder"));
             }
         }
         else if (SubWindows[i] == "Unit")
@@ -193,7 +195,7 @@ void UVCCSIMDisplayWidget::InitFromConfig(const struct FVCCSimConfig& Config)
             }
             else
             {
-                UE_LOG(LogTemp, Error, TEXT("Failed to set MeshHandler"));
+                UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("Failed to set MeshHandler"));
             }
         }
         else if (SubWindows[i] == "Depth")
@@ -204,7 +206,7 @@ void UVCCSIMDisplayWidget::InitFromConfig(const struct FVCCSimConfig& Config)
             }
             else
             {
-                UE_LOG(LogTemp, Error, TEXT("DepthImageDisplay not set"));
+                UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("DepthImageDisplay not set"));
             }
         }
         else if (SubWindows[i] == "RGB")
@@ -215,7 +217,7 @@ void UVCCSIMDisplayWidget::InitFromConfig(const struct FVCCSimConfig& Config)
             }
             else
             {
-                UE_LOG(LogTemp, Error, TEXT("RGBImageDisplay not set"));
+                UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("RGBImageDisplay not set"));
             }
         }
         else if (SubWindows[i] == "Segmentation")
@@ -226,7 +228,7 @@ void UVCCSIMDisplayWidget::InitFromConfig(const struct FVCCSimConfig& Config)
             }
             else
             {
-                UE_LOG(LogTemp, Error, TEXT("SegImageDisplay not set"));
+                UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("SegImageDisplay not set"));
             }
         }
         else if (SubWindows[i] == "Normal")
@@ -237,12 +239,12 @@ void UVCCSIMDisplayWidget::InitFromConfig(const struct FVCCSimConfig& Config)
             }
             else
             {
-                UE_LOG(LogTemp, Error, TEXT("NormalImageDisplay not set"));
+                UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("NormalImageDisplay not set"));
             }
         }
         else
         {
-            UE_LOG(LogTemp, Error, TEXT("Unknown SubWindow: %s"), 
+            UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("Unknown SubWindow: %s"), 
                 *FString(SubWindows[i].c_str()));
         }
     }
@@ -259,7 +261,7 @@ void UVCCSIMDisplayWidget::SetDepthContext(
     }
     else
     {
-        UE_LOG(LogTemp, Warning, 
+        UE_LOG(LogVCCSimDisplayWidget, Warning, 
             TEXT("SetDepthTexture failed - Material: %s, Texture: %s"),
             DepthMaterial ? TEXT("valid") : TEXT("null"),
             DepthTexture ? TEXT("valid") : TEXT("null"));
@@ -277,7 +279,7 @@ void UVCCSIMDisplayWidget::SetRGBContext(
     }
     else
     {
-        UE_LOG(LogTemp, Warning, 
+        UE_LOG(LogVCCSimDisplayWidget, Warning, 
             TEXT("SetRGBTexture failed - Material: %s, Texture: %s"),
             RGBMaterial ? TEXT("valid") : TEXT("null"),
             RGBTexture ? TEXT("valid") : TEXT("null"));
@@ -295,7 +297,7 @@ void UVCCSIMDisplayWidget::SetSegContext(
     }
     else
     {
-        UE_LOG(LogTemp, Warning, 
+        UE_LOG(LogVCCSimDisplayWidget, Warning, 
             TEXT("SetSegTexture failed - Material: %s, Texture: %s"),
             SegMaterial ? TEXT("valid") : TEXT("null"),
             SegTexture ? TEXT("valid") : TEXT("null"));
@@ -313,7 +315,7 @@ void UVCCSIMDisplayWidget::SetNormalContext(
     }
     else
     {
-        UE_LOG(LogTemp, Warning, 
+        UE_LOG(LogVCCSimDisplayWidget, Warning, 
             TEXT("SetNormalTexture failed - Material: %s, Texture: %s"),
             NormalMaterial ? TEXT("valid") : TEXT("null"),
             NormalTexture ? TEXT("valid") : TEXT("null"));
@@ -325,7 +327,7 @@ void UVCCSIMDisplayWidget::SetLitMeshComponent(
 {
     if (!LitImageDisplay || !GetWorld())
     {
-        UE_LOG(LogTemp, Error, TEXT("LitImageDisplay or World not valid"));
+        UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("LitImageDisplay or World not valid"));
         return;
     }
 
@@ -376,12 +378,12 @@ void UVCCSIMDisplayWidget::SetLitMeshComponent(
         }
         else
         {
-            UE_LOG(LogTemp, Error, TEXT("Failed to create LitMaterial"));
+            UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("Failed to create LitMaterial"));
         }
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("LitVisualizationMaterial not set"));
+        UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("LitVisualizationMaterial not set"));
     }
 }
 
@@ -390,7 +392,7 @@ void UVCCSIMDisplayWidget::SetPCViewComponent(
 {
     if (!PCImageDisplay || !GetWorld())
     {
-        UE_LOG(LogTemp, Error, TEXT("PCImageDisplay or World not valid"));
+        UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("PCImageDisplay or World not valid"));
         return;
     }
 
@@ -402,7 +404,7 @@ void UVCCSIMDisplayWidget::SetPCViewComponent(
 
     if (!Holder)
     {
-        UE_LOG(LogTemp, Error, TEXT("Holder not valid"));
+        UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("Holder not valid"));
         return;
     }
     PCSceneCapture = NewObject<USceneCaptureComponent2D>(Holder);
@@ -442,12 +444,12 @@ void UVCCSIMDisplayWidget::SetPCViewComponent(
         }
         else
         {
-            UE_LOG(LogTemp, Error, TEXT("Failed to create PCMaterial"));
+            UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("Failed to create PCMaterial"));
         }
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("PCVisualizationMaterial not set"));
+        UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("PCVisualizationMaterial not set"));
     }
 }
 
@@ -457,7 +459,7 @@ void UVCCSIMDisplayWidget::SetMeshHandler(UMeshHandlerComponent* InMeshHandler,
     MeshHandler = InMeshHandler;
     if (!UnitImageDisplay || !GetWorld())
     {
-        UE_LOG(LogTemp, Error, TEXT("UnitImageDisplay or World not valid"));
+        UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("UnitImageDisplay or World not valid"));
         return;
     }
 
@@ -508,12 +510,12 @@ void UVCCSIMDisplayWidget::SetMeshHandler(UMeshHandlerComponent* InMeshHandler,
         }
         else
         {
-            UE_LOG(LogTemp, Error, TEXT("Failed to create MeshMaterial"));
+            UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("Failed to create MeshMaterial"));
         }
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("MeshVisualizationMaterial not set"));
+        UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("MeshVisualizationMaterial not set"));
     }
 }
 
@@ -521,7 +523,7 @@ void UVCCSIMDisplayWidget::RequestCapture(const int& ID)
 {    
     if (CurrentQueueSize >= MaxQueuedCaptures)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Too many pending captures. Skipping."));
+        UE_LOG(LogVCCSimDisplayWidget, Warning, TEXT("Too many pending captures. Skipping."));
         return;
     }
 
@@ -544,7 +546,7 @@ void UVCCSIMDisplayWidget::UpdateLitImage(float InDeltaTime)
     
     if (!LitSceneCapture || !LitRenderTarget || !GetWorld())
     {
-        UE_LOG(LogTemp, Error, TEXT("Required components not set. "
+        UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("Required components not set. "
                                     "LitSceneCapture: %s, LitRenderTarget: %s"),
                LitSceneCapture ? TEXT("Valid") : TEXT("Invalid"),
                LitRenderTarget ? TEXT("Valid") : TEXT("Invalid"));
@@ -555,7 +557,7 @@ void UVCCSIMDisplayWidget::UpdateLitImage(float InDeltaTime)
     APlayerController* PlayerController = GetWorld()->GetFirstPlayerController();
     if (!PlayerController)
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerController not found"));
+        UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("PlayerController not found"));
         return;
     }
 
@@ -589,7 +591,7 @@ void UVCCSIMDisplayWidget::UpdatePCImage(float InDeltaTime)
     
     if (!PCSceneCapture || !PCRenderTarget || !GetWorld())
     {
-        UE_LOG(LogTemp, Error, TEXT("Required components not set. "
+        UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("Required components not set. "
                                     "PCSceneCapture: %s, PCRenderTarget: %s"),
                PCSceneCapture ? TEXT("Valid") : TEXT("Invalid"),
                PCRenderTarget ? TEXT("Valid") : TEXT("Invalid"));
@@ -600,7 +602,7 @@ void UVCCSIMDisplayWidget::UpdatePCImage(float InDeltaTime)
     APlayerController* PlayerController = GetWorld()->GetFirstPlayerController();
     if (!PlayerController)
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerController not found"));
+        UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("PlayerController not found"));
         return;
     }
 
@@ -634,7 +636,7 @@ void UVCCSIMDisplayWidget::UpdateMeshImage(float InDeltaTime)
     
     if (!MeshHandler || !MeshSceneCapture || !MeshRenderTarget || !GetWorld())
     {
-        UE_LOG(LogTemp, Error, TEXT("Required components not set. "
+        UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("Required components not set. "
                                     "MeshHandler: %s, SceneCapture: %s, RenderTarget: %s"), 
                MeshHandler ? TEXT("Valid") : TEXT("Invalid"),
                MeshSceneCapture ? TEXT("Valid") : TEXT("Invalid"),
@@ -646,7 +648,7 @@ void UVCCSIMDisplayWidget::UpdateMeshImage(float InDeltaTime)
     APlayerController* PlayerController = GetWorld()->GetFirstPlayerController();
     if (!PlayerController)
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerController not found"));
+        UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("PlayerController not found"));
         return;
     }
 
@@ -681,7 +683,7 @@ void UVCCSIMDisplayWidget::ProcessCapture(const int32 ID)
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("UVCCSIMDisplayWidget::ProcessCapture: "
+            UE_LOG(LogVCCSimDisplayWidget, Warning, TEXT("UVCCSIMDisplayWidget::ProcessCapture: "
                                           "SegRenderTarget not set"));
         }
         break;
@@ -693,7 +695,7 @@ void UVCCSIMDisplayWidget::ProcessCapture(const int32 ID)
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("UVCCSIMDisplayWidget::ProcessCapture: "
+            UE_LOG(LogVCCSimDisplayWidget, Warning, TEXT("UVCCSIMDisplayWidget::ProcessCapture: "
                                           "RGBRenderTarget not set"));
         }
         break;
@@ -704,7 +706,7 @@ void UVCCSIMDisplayWidget::ProcessCapture(const int32 ID)
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("UVCCSIMDisplayWidget::ProcessCapture: "
+            UE_LOG(LogVCCSimDisplayWidget, Warning, TEXT("UVCCSIMDisplayWidget::ProcessCapture: "
                                           "LitSceneCapture or LitRenderTarget not set"));
         }
         break;
@@ -715,7 +717,7 @@ void UVCCSIMDisplayWidget::ProcessCapture(const int32 ID)
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("UVCCSIMDisplayWidget::ProcessCapture: "
+            UE_LOG(LogVCCSimDisplayWidget, Warning, TEXT("UVCCSIMDisplayWidget::ProcessCapture: "
                                           "PCSceneCapture or PCRenderTarget not set"));
         }
         break;
@@ -726,7 +728,7 @@ void UVCCSIMDisplayWidget::ProcessCapture(const int32 ID)
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("UVCCSIMDisplayWidget::ProcessCapture: "
+            UE_LOG(LogVCCSimDisplayWidget, Warning, TEXT("UVCCSIMDisplayWidget::ProcessCapture: "
                                           "MeshSceneCapture or MeshRenderTarget not set"));
         }
         break;
@@ -738,12 +740,12 @@ void UVCCSIMDisplayWidget::ProcessCapture(const int32 ID)
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("UVCCSIMDisplayWidget::ProcessCapture: "
+            UE_LOG(LogVCCSimDisplayWidget, Warning, TEXT("UVCCSIMDisplayWidget::ProcessCapture: "
                                           "DepthRenderTarget not set"));
         }
         break;
     default:
-        UE_LOG(LogTemp, Warning, TEXT("Invalid ID: %d"), ID);
+        UE_LOG(LogVCCSimDisplayWidget, Warning, TEXT("Invalid ID: %d"), ID);
     }
 }
 
@@ -752,7 +754,7 @@ void UVCCSIMDisplayWidget::SaveRenderTargetToDisk(
 {
     if (!RenderTarget)
     {
-        UE_LOG(LogTemp, Error, TEXT("RenderTarget is null. Cannot save to disk."));
+        UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("RenderTarget is null. Cannot save to disk."));
         return;
     }
 
@@ -760,7 +762,7 @@ void UVCCSIMDisplayWidget::SaveRenderTargetToDisk(
         RenderTarget->GameThread_GetRenderTargetResource();
     if (!RTResource)
     {
-        UE_LOG(LogTemp, Error,
+        UE_LOG(LogVCCSimDisplayWidget, Error,
             TEXT("RenderTargetResource is null. Cannot save to disk."));
         return;
     }
@@ -772,7 +774,7 @@ void UVCCSIMDisplayWidget::SaveRenderTargetToDisk(
     bool bReadPixels = RTResource->ReadPixels(Pixels);
     if (!bReadPixels)
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to read pixels from RenderTarget."));
+        UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("Failed to read pixels from RenderTarget."));
         return;
     }
 
@@ -798,7 +800,7 @@ void UVCCSIMDisplayWidget::SaveRenderTargetToDisk(
     FFileManagerGeneric FileManager;
     if (!FileManager.MakeDirectory(*FPaths::GetPath(FilePath), true))
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to create directory for render target."));
+        UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("Failed to create directory for render target."));
         return;
     }
 

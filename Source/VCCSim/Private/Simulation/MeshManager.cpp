@@ -21,6 +21,8 @@
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogMeshManager, Log, All);
+
 UFMeshManager::UFMeshManager()
 {
     MeshMaterial = nullptr;
@@ -32,7 +34,7 @@ void UFMeshManager::RConfigure(const FVCCSimConfig& Config)
     OwnerActor = GetTypedOuter<AActor>();
     if (!OwnerActor)
     {
-        UE_LOG(LogTemp, Error, TEXT("MeshManager: Failed to find owner actor!"));
+        UE_LOG(LogMeshManager, Error, TEXT("MeshManager: Failed to find owner actor!"));
         return;
     }
 
@@ -53,7 +55,7 @@ void UFMeshManager::RConfigure(const FVCCSimConfig& Config)
             
         if (MeshMaterial == nullptr)
         {
-            UE_LOG(LogTemp, Error, TEXT("MeshManager: "
+            UE_LOG(LogMeshManager, Error, TEXT("MeshManager: "
                                         "Failed to load default material!"));
         }
     }
@@ -74,7 +76,7 @@ void UFMeshManager::RConfigure(const FVCCSimConfig& Config)
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("MeshManager: "
+        UE_LOG(LogMeshManager, Error, TEXT("MeshManager: "
                                     "World not available in RConfigure"));
     }
 }
@@ -83,7 +85,7 @@ int32 UFMeshManager::AddGlobalMesh()
 {
     if (!OwnerActor)
     {
-        UE_LOG(LogTemp, Error, TEXT("MeshManager: "
+        UE_LOG(LogMeshManager, Error, TEXT("MeshManager: "
                                     "Cannot add mesh, no owner actor!"));
         return -1;
     }
@@ -114,7 +116,7 @@ bool UFMeshManager::RemoveGlobalMesh(int32 MeshID)
         FScopeLock Lock(&MeshMapLock);
         if (!MeshComponents.Contains(MeshID) || !MeshInstanceData.Contains(MeshID))
         {
-            UE_LOG(LogTemp, Warning, TEXT("MeshManager: Trying to remove "
+            UE_LOG(LogMeshManager, Warning, TEXT("MeshManager: Trying to remove "
                                           "non-existent mesh ID %d"), MeshID);
             return false;
         }
@@ -146,7 +148,7 @@ bool UFMeshManager::UpdateMesh(
 {
     if (!MeshData || DataSize < sizeof(FMeshHeader))
     {
-        UE_LOG(LogTemp, Error, TEXT("MeshManager: Invalid mesh data "
+        UE_LOG(LogMeshManager, Error, TEXT("MeshManager: Invalid mesh data "
                                     "provided for ID %d"), MeshID);
         return false;
     }
@@ -159,7 +161,7 @@ bool UFMeshManager::UpdateMesh(
         FScopeLock Lock(&MeshMapLock);
         if (!MeshInstanceData.Contains(MeshID) || !MeshUpdateLocks.Contains(MeshID))
         {
-            UE_LOG(LogTemp, Warning, TEXT("MeshManager: Cannot update "
+            UE_LOG(LogMeshManager, Warning, TEXT("MeshManager: Cannot update "
                                           "mesh with ID %d, not found"), MeshID);
             return false;
         }
@@ -170,7 +172,7 @@ bool UFMeshManager::UpdateMesh(
     
     if (!InstanceData || !InstanceData->MeshComponent || !UpdateLock)
     {
-        UE_LOG(LogTemp, Warning, TEXT("MeshManager: Invalid "
+        UE_LOG(LogMeshManager, Warning, TEXT("MeshManager: Invalid "
                                       "mesh instance data for ID %d"), MeshID);
         return false;
     }
@@ -183,7 +185,7 @@ bool UFMeshManager::UpdateMesh(
         if (InstanceData->MeshBuffers[WriteBufferIndex].bNeedsUpdate)
         {
             // Instead of skipping, we could queue updates if needed
-            UE_LOG(LogTemp, Warning, TEXT("Mesh buffer for ID %d is "
+            UE_LOG(LogMeshManager, Warning, TEXT("Mesh buffer for ID %d is "
                                           "still being processed. Skipping update."), MeshID);
             return false;
         }
@@ -241,14 +243,14 @@ void UFMeshManager::ClearAllMeshes()
     MeshInstanceData.Empty();
     MeshUpdateLocks.Empty();
     
-    UE_LOG(LogTemp, Log, TEXT("MeshManager: Cleared all meshes"));
+    UE_LOG(LogMeshManager, Log, TEXT("MeshManager: Cleared all meshes"));
 }
 
 UProceduralMeshComponent* UFMeshManager::CreateProceduralMeshComponent()
 {
     if (!OwnerActor || !OwnerActor->GetWorld())
     {
-        UE_LOG(LogTemp, Error, TEXT("MeshManager: "
+        UE_LOG(LogMeshManager, Error, TEXT("MeshManager: "
                                     "No valid world to create procedural mesh!"));
         return nullptr;
     }
@@ -258,7 +260,7 @@ UProceduralMeshComponent* UFMeshManager::CreateProceduralMeshComponent()
         NewObject<UProceduralMeshComponent>(OwnerActor);
     if (!NewMeshComponent)
     {
-        UE_LOG(LogTemp, Error, TEXT("MeshManager: "
+        UE_LOG(LogMeshManager, Error, TEXT("MeshManager: "
                                     "Failed to create ProceduralMeshComponent!"));
         return nullptr;
     }
@@ -415,7 +417,7 @@ bool UFMeshManager::ProcessMeshData(const uint8* MeshData, uint32 DataSize,
     // Check minimum size for header
     if (DataSize < sizeof(FMeshHeader))
     {
-        UE_LOG(LogTemp, Error, TEXT("Received mesh data is too small for header"));
+        UE_LOG(LogMeshManager, Error, TEXT("Received mesh data is too small for header"));
         return false;
     }
 
@@ -423,7 +425,7 @@ bool UFMeshManager::ProcessMeshData(const uint8* MeshData, uint32 DataSize,
     
     if (Header->Magic != 0x48534D55)
     {
-        UE_LOG(LogTemp, Error, TEXT("Invalid mesh magic number"));
+        UE_LOG(LogMeshManager, Error, TEXT("Invalid mesh magic number"));
         return false;
     }
 
@@ -433,7 +435,7 @@ bool UFMeshManager::ProcessMeshData(const uint8* MeshData, uint32 DataSize,
     
     if (DataSize < ExpectedSize)
     {
-        UE_LOG(LogTemp, Error, TEXT("Mesh data size mismatch. "
+        UE_LOG(LogMeshManager, Error, TEXT("Mesh data size mismatch. "
                                     "Expected: %d, Got: %d"), ExpectedSize, DataSize);
         return false;
     }
@@ -532,7 +534,7 @@ int32 UFMeshManager::AddGlobalMeshInternal()
     UProceduralMeshComponent* NewMeshComponent = CreateProceduralMeshComponent();
     if (!NewMeshComponent)
     {
-        UE_LOG(LogTemp, Error, TEXT("MeshManager: "
+        UE_LOG(LogMeshManager, Error, TEXT("MeshManager: "
                                     "Failed to create procedural mesh component!"));
         return -1;
     }
@@ -557,7 +559,7 @@ int32 UFMeshManager::AddGlobalMeshInternal()
         MeshUpdateLocks.Add(MeshID, NewLock);
     }
 
-    UE_LOG(LogTemp, Log, TEXT("MeshManager: "
+    UE_LOG(LogMeshManager, Log, TEXT("MeshManager: "
                               "Added global mesh with ID %d"), MeshID);
     return MeshID;
 }
@@ -575,7 +577,7 @@ bool UFMeshManager::RemoveGlobalMeshInternal(int32 MeshID)
         
         if (!MeshComponents.Contains(MeshID) || !MeshInstanceData.Contains(MeshID))
         {
-            UE_LOG(LogTemp, Warning, TEXT("MeshManager: Trying to remove "
+            UE_LOG(LogMeshManager, Warning, TEXT("MeshManager: Trying to remove "
                                           "non-existent mesh ID %d"), MeshID);
             return false;
         }
@@ -601,7 +603,7 @@ bool UFMeshManager::RemoveGlobalMeshInternal(int32 MeshID)
         delete LockToDelete;
     }
     
-    UE_LOG(LogTemp, Log, TEXT("MeshManager: "
+    UE_LOG(LogMeshManager, Log, TEXT("MeshManager: "
                               "Removed global mesh with ID %d"), MeshID);
     return true;
 }

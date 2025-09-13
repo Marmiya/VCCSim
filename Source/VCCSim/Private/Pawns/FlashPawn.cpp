@@ -15,6 +15,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+DEFINE_LOG_CATEGORY_STATIC(LogFlashPawn, Log, All);
+
 #include "Pawns/FlashPawn.h"
 #include "Pawns/SimPath.h"
 
@@ -37,7 +39,7 @@ void AFlashPawn::SetPath(
 {
 	if (Positions.Num() != Rotations.Num())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("AFlashPawn::SetPath: "
+		UE_LOG(LogFlashPawn, Warning, TEXT("AFlashPawn::SetPath: "
 			"Positions and Rotations must have the same length!"));
 		return;
 	}
@@ -124,7 +126,7 @@ void AFlashPawn::Tick(float DeltaSeconds)
 	Super::Tick(DeltaSeconds);
 	if (bUseTarget && bUsePath)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("AFlashPawn::Tick: "
+		UE_LOG(LogFlashPawn, Warning, TEXT("AFlashPawn::Tick: "
 			"Both Target and Path are being used!"));
 		return;
 	}

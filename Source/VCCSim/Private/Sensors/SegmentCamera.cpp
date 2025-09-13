@@ -15,6 +15,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+DEFINE_LOG_CATEGORY_STATIC(LogSegmentCamera, Log, All);
+
 #include "Sensors/SegmentCamera.h"
 #include "Simulation/Recorder.h"
 #include "RenderingThread.h"
@@ -160,12 +162,12 @@ void USegmentationCameraComponent::SetCaptureComponent() const
         }
         else
         {
-            UE_LOG(LogTemp, Error, TEXT("Segmentation material not set!"));
+            UE_LOG(LogSegmentCamera, Error, TEXT("Segmentation material not set!"));
         }
     }
     else 
     {
-        UE_LOG(LogTemp, Error, TEXT("Capture component not initialized!"));
+        UE_LOG(LogSegmentCamera, Error, TEXT("Capture component not initialized!"));
     }
 }
 
@@ -232,7 +234,7 @@ void USegmentationCameraComponent::ProcessSegmentationTextureAsyncRaw(TFunction<
     
     if (!RenderTargetResource)
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to get render target resource!"));
+        UE_LOG(LogSegmentCamera, Error, TEXT("Failed to get render target resource!"));
         return;
     }
 
@@ -273,7 +275,7 @@ void USegmentationCameraComponent::ProcessSegmentationTextureAsync(
     
     if (!RenderTargetResource)
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to get render target resource!"));
+        UE_LOG(LogSegmentCamera, Error, TEXT("Failed to get render target resource!"));
         return;
     }
 
@@ -311,7 +313,7 @@ bool USegmentationCameraComponent::CheckComponentAndRenderTarget() const
 {
     if (!CaptureComponent || !SegmentationRenderTarget)
     {
-        UE_LOG(LogTemp, Error, TEXT("USegmentationCameraComponent::CheckComponentAndRenderTarget: "
+        UE_LOG(LogSegmentCamera, Error, TEXT("USegmentationCameraComponent::CheckComponentAndRenderTarget: "
                                     "Capture component or render target not initialized!"));
         return true;
     }

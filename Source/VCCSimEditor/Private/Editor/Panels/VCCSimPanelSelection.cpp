@@ -15,6 +15,8 @@
 * along with this program. If not, see <https://www.gnu.org/licenses/>.
 */
 
+DEFINE_LOG_CATEGORY_STATIC(LogSelection, Log, All);
+
 #include "Editor/Panels/VCCSimPanelSelection.h"
 
 // UE Core
@@ -58,7 +60,7 @@ FVCCSimPanelSelection::~FVCCSimPanelSelection()
 
 void FVCCSimPanelSelection::Initialize()
 {
-    UE_LOG(LogTemp, Log, TEXT("VCCSimPanelSelection initialized"));
+    UE_LOG(LogSelection, Log, TEXT("VCCSimPanelSelection initialized"));
 }
 
 void FVCCSimPanelSelection::Cleanup()
@@ -174,7 +176,7 @@ void FVCCSimPanelSelection::HandleActorSelection(AActor* Actor)
             // Update camera availability
             RefreshCameraAvailability();
             
-            UE_LOG(LogTemp, Log, TEXT("Selected FlashPawn: %s"), *FlashPawn->GetActorLabel());
+            UE_LOG(LogSelection, Log, TEXT("Selected FlashPawn: %s"), *FlashPawn->GetActorLabel());
         }
     }
     // Handle Target selection
@@ -196,11 +198,11 @@ void FVCCSimPanelSelection::HandleActorSelection(AActor* Actor)
                 SelectTargetToggle->SetIsChecked(ECheckBoxState::Unchecked);
             }
             
-            UE_LOG(LogTemp, Log, TEXT("Selected Target Object: %s"), *Actor->GetActorLabel());
+            UE_LOG(LogSelection, Log, TEXT("Selected Target Object: %s"), *Actor->GetActorLabel());
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("Cannot select a FlashPawn as a target"));
+            UE_LOG(LogSelection, Warning, TEXT("Cannot select a FlashPawn as a target"));
         }
     }
 }
@@ -241,7 +243,7 @@ void FVCCSimPanelSelection::AutoSelectFlashPawn()
         // Update camera availability
         RefreshCameraAvailability();
         
-        UE_LOG(LogTemp, Log, TEXT("Auto-selected FlashPawn: %s"), *FirstFoundFlashPawn->GetActorLabel());
+        UE_LOG(LogSelection, Log, TEXT("Auto-selected FlashPawn: %s"), *FirstFoundFlashPawn->GetActorLabel());
     }
     else
     {
@@ -250,7 +252,7 @@ void FVCCSimPanelSelection::AutoSelectFlashPawn()
         {
             SelectedFlashPawnText->SetText(FText::FromString("None selected"));
         }
-        UE_LOG(LogTemp, Log, TEXT("No FlashPawn found in the scene for auto-selection"));
+        UE_LOG(LogSelection, Log, TEXT("No FlashPawn found in the scene for auto-selection"));
     }
 }
 

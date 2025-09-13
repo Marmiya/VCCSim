@@ -30,7 +30,7 @@ DEFINE_LOG_CATEGORY(LogVCCSimEditor);
 
 void FVCCSimEditorModule::StartupModule()
 {
-    UE_LOG(LogVCCSimEditor, Warning, TEXT("VCCSimEditor module starting up."));
+    UE_LOG(LogVCCSimEditor, Display, TEXT("VCCSimEditor module starting up."));
     
     // Register tab spawner
     RegisterTabSpawner();
@@ -41,7 +41,7 @@ void FVCCSimEditorModule::StartupModule()
 
 void FVCCSimEditorModule::ShutdownModule()
 {
-    UE_LOG(LogVCCSimEditor, Warning, TEXT("VCCSimEditor module shutting down."));
+    UE_LOG(LogVCCSimEditor, Display, TEXT("VCCSimEditor module shutting down."));
     
     // Unregister menu extensions
     UnregisterMenuExtensions();

@@ -15,6 +15,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+DEFINE_LOG_CATEGORY_STATIC(LogPathImageCapture, Log, All);
+
 #include "Editor/Panels/VCCSimPanelPathImageCapture.h"
 #include "Editor/Panels/VCCSimPanelSelection.h"
 #include "Pawns/FlashPawn.h"
@@ -288,7 +290,7 @@ void FVCCSimPanelPathImageCapture::GeneratePosesAroundTarget()
     
     if (!SelectedFlashPawn.IsValid() || !SelectedTargetObject.IsValid())
     {
-        UE_LOG(LogTemp, Warning, TEXT("Must select both a FlashPawn and a target object"));
+        UE_LOG(LogPathImageCapture, Warning, TEXT("Must select both a FlashPawn and a target object"));
         return;
     }
 
@@ -347,7 +349,7 @@ void FVCCSimPanelPathImageCapture::LoadPredefinedPose()
     
     if (!SelectedFlashPawn.IsValid())
     {
-        UE_LOG(LogTemp, Warning, TEXT("No FlashPawn selected"));
+        UE_LOG(LogPathImageCapture, Warning, TEXT("No FlashPawn selected"));
         return;
     }
     
@@ -425,18 +427,18 @@ void FVCCSimPanelPathImageCapture::LoadPredefinedPose()
                     bPathVisualized = false;
                     bPathNeedsUpdate = false;
                     
-                    UE_LOG(LogTemp, Log, TEXT("Successfully loaded %d "
+                    UE_LOG(LogPathImageCapture, Log, TEXT("Successfully loaded %d "
                                               "poses from file"), Positions.Num());
                 }
                 else
                 {
-                    UE_LOG(LogTemp, Warning, TEXT("Failed to parse pose file: "
+                    UE_LOG(LogPathImageCapture, Warning, TEXT("Failed to parse pose file: "
                                                   "Invalid format or empty file"));
                 }
             }
             else
             {
-                UE_LOG(LogTemp, Warning, TEXT("Failed to load file"));
+                UE_LOG(LogPathImageCapture, Warning, TEXT("Failed to load file"));
             }
         }
     }
@@ -452,7 +454,7 @@ void FVCCSimPanelPathImageCapture::SaveGeneratedPose()
     
     if (!SelectedFlashPawn.IsValid())
     {
-        UE_LOG(LogTemp, Warning, TEXT("No FlashPawn selected"));
+        UE_LOG(LogPathImageCapture, Warning, TEXT("No FlashPawn selected"));
         return;
     }
     
@@ -460,7 +462,7 @@ void FVCCSimPanelPathImageCapture::SaveGeneratedPose()
     int32 PoseCount = SelectedFlashPawn->GetPoseCount();
     if (PoseCount <= 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("No poses to save"));
+        UE_LOG(LogPathImageCapture, Warning, TEXT("No poses to save"));
         return;
     }
     
@@ -522,7 +524,7 @@ void FVCCSimPanelPathImageCapture::SaveGeneratedPose()
             // Save to file
             if (!FFileHelper::SaveStringToFile(FileContent, *SelectedFile))
             {
-                UE_LOG(LogTemp, Warning, TEXT("Failed to save file"));
+                UE_LOG(LogPathImageCapture, Warning, TEXT("Failed to save file"));
             }
         }
     }
@@ -550,12 +552,12 @@ FReply FVCCSimPanelPathImageCapture::OnTogglePathVisualizationClicked()
 
     if (bPathVisualized)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Showing path visualization..."));
+        UE_LOG(LogPathImageCapture, Warning, TEXT("Showing path visualization..."));
         ShowPathVisualization();
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("Hiding path visualization..."));
+        UE_LOG(LogPathImageCapture, Warning, TEXT("Hiding path visualization..."));
         HidePathVisualization();
     }
 
@@ -667,7 +669,7 @@ void FVCCSimPanelPathImageCapture::CaptureImageFromCurrentPose()
     
     if (!SelectedFlashPawn.IsValid())
     {
-        UE_LOG(LogTemp, Warning, TEXT("No FlashPawn selected"));
+        UE_LOG(LogPathImageCapture, Warning, TEXT("No FlashPawn selected"));
         return;
     }
     
@@ -694,7 +696,7 @@ void FVCCSimPanelPathImageCapture::CaptureImageFromCurrentPose()
         // Capture with RGB cameras if enabled
         if (SelectionManagerPin->IsUsingRGBCamera() && SelectionManagerPin->HasRGBCamera())
         {
-            UE_LOG(LogTemp, Log, TEXT("Capturing RGB camera - Using: %s, Has: %s"), 
+            UE_LOG(LogPathImageCapture, Log, TEXT("Capturing RGB camera - Using: %s, Has: %s"), 
                 SelectionManagerPin->IsUsingRGBCamera() ? TEXT("Yes") : TEXT("No"),
                 SelectionManagerPin->HasRGBCamera() ? TEXT("Yes") : TEXT("No"));
             SaveRGB(PoseIndex, bAnyCaptured);
@@ -722,13 +724,13 @@ void FVCCSimPanelPathImageCapture::CaptureImageFromCurrentPose()
         // Log if no images were captured
         if (!bAnyCaptured)
         {
-            UE_LOG(LogTemp, Warning, TEXT("No images captured. "
+            UE_LOG(LogPathImageCapture, Warning, TEXT("No images captured. "
                                           "Ensure cameras are enabled."));
         }
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("FlashPawn not ready for capture. "
+        UE_LOG(LogPathImageCapture, Warning, TEXT("FlashPawn not ready for capture. "
                                       "Wait for it to reach position."));
     }
 }
@@ -764,7 +766,7 @@ void FVCCSimPanelPathImageCapture::SaveRGB(int32 PoseIndex, bool& bAnyCaptured)
     
     if (!ViewportClient)
     {
-        UE_LOG(LogTemp, Error, TEXT("No valid editor viewport found"));
+        UE_LOG(LogPathImageCapture, Error, TEXT("No valid editor viewport found"));
         *JobNum -= RGBCameras.Num();
         return;
     }
@@ -779,7 +781,7 @@ void FVCCSimPanelPathImageCapture::SaveRGB(int32 PoseIndex, bool& bAnyCaptured)
             if (!Camera->IsActive())
             {
                 Camera->SetActive(true);
-                UE_LOG(LogTemp, Log, TEXT("SaveRGB: Activated camera[%d]"), i);
+                UE_LOG(LogPathImageCapture, Log, TEXT("SaveRGB: Activated camera[%d]"), i);
             }
             // Get camera index or use iterator index
             int32 CameraIndex = Camera->GetCameraIndex();
@@ -848,7 +850,7 @@ void FVCCSimPanelPathImageCapture::SaveDepth(int32 PoseIndex, bool& bAnyCaptured
             if (!Camera->IsActive())
             {
                 Camera->SetActive(true);
-                UE_LOG(LogTemp, Log, TEXT("SaveDepth: Activated camera[%d]"), i);
+                UE_LOG(LogPathImageCapture, Log, TEXT("SaveDepth: Activated camera[%d]"), i);
             }
             // Get camera index or use iterator index
             int32 CameraIndex = Camera->GetCameraIndex();
@@ -915,7 +917,7 @@ void FVCCSimPanelPathImageCapture::SaveSeg(int32 PoseIndex, bool& bAnyCaptured)
             if (!Camera->IsActive())
             {
                 Camera->SetActive(true);
-                UE_LOG(LogTemp, Log, TEXT("SaveSeg: Activated camera[%d]"), i);
+                UE_LOG(LogPathImageCapture, Log, TEXT("SaveSeg: Activated camera[%d]"), i);
             }
             // Get camera index or use iterator index
             int32 CameraIndex = Camera->GetCameraIndex();
@@ -976,7 +978,7 @@ void FVCCSimPanelPathImageCapture::SaveNormal(int32 PoseIndex, bool& bAnyCapture
             if (!Camera->IsActive())
             {
                 Camera->SetActive(true);
-                UE_LOG(LogTemp, Log, TEXT("SaveNormal: Activated camera[%d]"), i);
+                UE_LOG(LogPathImageCapture, Log, TEXT("SaveNormal: Activated camera[%d]"), i);
             }
             // Get camera index or use iterator index
             int32 CameraIndex = Camera->GetCameraIndex();
@@ -1024,7 +1026,7 @@ void FVCCSimPanelPathImageCapture::StartAutoCapture()
     
     if (!SelectedFlashPawn.IsValid())
     {
-        UE_LOG(LogTemp, Warning, TEXT("No FlashPawn selected"));
+        UE_LOG(LogPathImageCapture, Warning, TEXT("No FlashPawn selected"));
         return;
     }
     
@@ -1107,7 +1109,7 @@ void FVCCSimPanelPathImageCapture::StopAutoCapture()
         }
         
         SaveDirectory.Empty(); // Reset for next capture session
-        UE_LOG(LogTemp, Log, TEXT("Auto-capture stopped by user"));
+        UE_LOG(LogPathImageCapture, Log, TEXT("Auto-capture stopped by user"));
     }
 }
 

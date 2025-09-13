@@ -1,6 +1,8 @@
 #include "Simulation/CoverageAnalyzer.h"
 #include "ProceduralMeshComponent.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogCoverageAnalyzer, Log, All);
+
 FCoverageData UCoverageAnalyzer::ComputeCoverage(
     const TArray<FTransform>& CameraTransforms, const FString& CameraName)
 {
@@ -20,7 +22,7 @@ FCoverageData UCoverageAnalyzer::ComputeCoverage(
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("ComputeCoverage: "
+        UE_LOG(LogCoverageAnalyzer, Warning, TEXT("ComputeCoverage: "
                                       "No intrinsics found for camera %s"), *CameraName);
     }
     
@@ -347,7 +349,7 @@ FCoverageData UCoverageAnalyzer::ComputeCoverage(
     CoverageData.VisiblePoints = VisiblePoints;
     CoverageData.TotalVisibleTriangles = VisibleTriangles;
     
-    UE_LOG(LogTemp, Display, TEXT("Coverage computed for camera %s: %.2f%% of points visible (%d/%d), %d visible meshes, ~%d visible triangles"),
+    UE_LOG(LogCoverageAnalyzer, Display, TEXT("Coverage computed for camera %s: %.2f%% of points visible (%d/%d), %d visible meshes, ~%d visible triangles"),
         *CameraName, CoveragePercentage, VisiblePointCount, TotalPoints, VisibleMeshIDs.Num(), VisibleTriangles);
     
     if (*GridInitializedPtr)
@@ -393,7 +395,7 @@ void UCoverageAnalyzer::InitializeCoverageVisualization()
         // Only log error if material failed to load
         if (!CoverageMaterial)
         {
-            UE_LOG(LogTemp, Error, TEXT("InitializeCoverageVisualization: "
+            UE_LOG(LogCoverageAnalyzer, Error, TEXT("InitializeCoverageVisualization: "
                                        "Failed to load coverage material."));
         }
     }
@@ -407,7 +409,7 @@ void UCoverageAnalyzer::VisualizeCoverage(bool bShow)
     // Check if we have coverage data
     if (!(*GridInitializedPtr))
     {
-        UE_LOG(LogTemp, Warning,
+        UE_LOG(LogCoverageAnalyzer, Warning,
             TEXT("VisualizeCoverage: No coverage grid initialized"));
         return;
     }
@@ -428,7 +430,7 @@ void UCoverageAnalyzer::VisualizeCoverage(bool bShow)
     // If mesh component failed to initialize, return
     if (!CoverageVisualizationMesh)
     {
-        UE_LOG(LogTemp, Error, TEXT("VisualizeCoverage: Coverage "
+        UE_LOG(LogCoverageAnalyzer, Error, TEXT("VisualizeCoverage: Coverage "
                                     "mesh component not initialized"));
         return;
     }
@@ -666,7 +668,7 @@ void UCoverageAnalyzer::CreateCoverageMesh()
         }
     }
     
-    UE_LOG(LogTemp, Display, TEXT("Coverage visualization: Created mesh with %d cells "
+    UE_LOG(LogCoverageAnalyzer, Display, TEXT("Coverage visualization: Created mesh with %d cells "
                                   "visible out of %d populated cells (%d vertices, %d triangles)"), 
            NumCellsVisualized, UnifiedGridPtr->Num(), Vertices.Num(), Triangles.Num() / 3);
 }

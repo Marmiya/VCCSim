@@ -1,6 +1,8 @@
 #include "Simulation/ComplexityAnalyzer.h"
 #include "ProceduralMeshComponent.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogComplexityAnalyzer, Log, All);
+
 UComplexityAnalyzer::UComplexityAnalyzer()
 {
 }
@@ -9,7 +11,7 @@ void UComplexityAnalyzer::AnalyzeGeometricComplexity()
 {
     if (!(*GridInitializedPtr) || MeshInfos->Num() == 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("AnalyzeGeometricComplexity: "
+        UE_LOG(LogComplexityAnalyzer, Warning, TEXT("AnalyzeGeometricComplexity: "
                                       "World not initialized or no meshes in scene"));
         return;
     }
@@ -20,7 +22,7 @@ void UComplexityAnalyzer::AnalyzeGeometricComplexity()
         ApplyComplexityPreset(SceneComplexityPreset);
     }
     
-    UE_LOG(LogTemp, Display, TEXT("Analyzing geometric complexity with weights: "
+    UE_LOG(LogComplexityAnalyzer, Display, TEXT("Analyzing geometric complexity with weights: "
                                   "Curvature=%.2f, EdgeDensity=%.2f, AngleVariation=%.2f"),
            CurvatureWeight, EdgeDensityWeight, AngleVariationWeight);
     
@@ -407,7 +409,7 @@ void UComplexityAnalyzer::AnalyzeGeometricComplexity()
             HighComplexityCells++;
     }
     
-    UE_LOG(LogTemp, Display, TEXT("Geometric complexity analysis complete: %d cells analyzed, %d high-complexity cells identified"),
+    UE_LOG(LogComplexityAnalyzer, Display, TEXT("Geometric complexity analysis complete: %d cells analyzed, %d high-complexity cells identified"),
            TotalAnalyzedCells, HighComplexityCells);
 }
 
@@ -616,7 +618,7 @@ void UComplexityAnalyzer::ApplyComplexityPreset(ESceneComplexityPreset Preset)
             break;
     }
     
-    UE_LOG(LogTemp, Display, TEXT("Applied complexity preset: %s"), 
+    UE_LOG(LogComplexityAnalyzer, Display, TEXT("Applied complexity preset: %s"), 
         *UEnum::GetValueAsString(Preset));
 }
 
@@ -643,7 +645,7 @@ void UComplexityAnalyzer::InitializeComplexityVisualization()
         // Only log error if material failed to load
         if (!ComplexityMaterial)
         {
-            UE_LOG(LogTemp, Error, TEXT("InitializeComplexityVisualization: "
+            UE_LOG(LogComplexityAnalyzer, Error, TEXT("InitializeComplexityVisualization: "
                                       "Failed to load complexity material."));
         }
     }
@@ -663,7 +665,7 @@ void UComplexityAnalyzer::VisualizeComplexity(bool bShow)
     
     if (!bHasComplexityData)
     {
-        UE_LOG(LogTemp, Warning, TEXT("VisualizeComplexity: No complexity data found."
+        UE_LOG(LogComplexityAnalyzer, Warning, TEXT("VisualizeComplexity: No complexity data found."
                                       " Run AnalyzeGeometricComplexity first."));
         return;
     }
@@ -684,7 +686,7 @@ void UComplexityAnalyzer::VisualizeComplexity(bool bShow)
     // If mesh component failed to initialize, return
     if (!ComplexityVisualizationMesh)
     {
-        UE_LOG(LogTemp, Error, TEXT("VisualizeComplexity: "
+        UE_LOG(LogComplexityAnalyzer, Error, TEXT("VisualizeComplexity: "
                                     "Complexity mesh component not initialized"));
         return;
     }
@@ -903,7 +905,7 @@ void UComplexityAnalyzer::CreateComplexityMesh()
         }
     }
     
-    UE_LOG(LogTemp, Display, TEXT("Complexity visualization: "
+    UE_LOG(LogComplexityAnalyzer, Display, TEXT("Complexity visualization: "
                                   "Created mesh with %d cells visible, %d vertices, %d triangles"),
           NumCellsVisualized, Vertices.Num(), Triangles.Num() / 3);
 }

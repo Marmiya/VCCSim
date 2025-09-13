@@ -7,6 +7,8 @@
 #include "HAL/PlatformFilemanager.h"
 #include "Misc/DateTime.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogSingleFrameReconstruction, Log, All);
+
 USingleFrameReconstruction::USingleFrameReconstruction()
 {
     PrimaryComponentTick.bCanEverTick = false;
@@ -55,13 +57,13 @@ void USingleFrameReconstruction::DoSingleRecon()
     
     if (!LidarComponent)
     {
-        UE_LOG(LogTemp, Error, TEXT("LidarComponent is not set!"));
+        UE_LOG(LogSingleFrameReconstruction, Error, TEXT("LidarComponent is not set!"));
         return;
     }
     
     if (!ProceduralMeshComponent)
     {
-        UE_LOG(LogTemp, Error, TEXT("ProceduralMeshComponent is not set!"));
+        UE_LOG(LogSingleFrameReconstruction, Error, TEXT("ProceduralMeshComponent is not set!"));
         return;
     }
 
@@ -69,7 +71,7 @@ void USingleFrameReconstruction::DoSingleRecon()
     
     // if (Data.Key.Num() == 0)
     // {
-    //     UE_LOG(LogTemp, Warning, TEXT("No points from LiDAR!"));
+    //     UE_LOG(LogSingleFrameReconstruction, Warning, TEXT("No points from LiDAR!"));
     //     return;
     // }
     //
@@ -82,14 +84,14 @@ void USingleFrameReconstruction::DoSingleRecon()
     // }
     //
     // LastProcessedPointCount = ConvertedPointCloud.Num();
-    // UE_LOG(LogTemp, Warning, TEXT("Processing %d points from LiDAR"), ConvertedPointCloud.Num());
+    // UE_LOG(LogSingleFrameReconstruction, Warning, TEXT("Processing %d points from LiDAR"), ConvertedPointCloud.Num());
     //
     // ReconstructFrame(ConvertedPointCloud, Data.Value.Location);
     //
     // LastGeneratedTriangleCount = Triangles.Num() / 3;
     // LastReconstructionTime = FPlatformTime::Seconds() - StartTime;
     //
-    // UE_LOG(LogTemp, Warning, TEXT("Reconstruction complete: %d vertices, %d triangles in %.3f seconds"), 
+    // UE_LOG(LogSingleFrameReconstruction, Warning, TEXT("Reconstruction complete: %d vertices, %d triangles in %.3f seconds"), 
     //     ReconstructedVertices.Num(), LastGeneratedTriangleCount, LastReconstructionTime);
     //
     // ApplyToProceduralMesh(ProceduralMeshComponent);
@@ -102,7 +104,7 @@ void USingleFrameReconstruction::ReconstructFrame(
 {
     if (PointCloud.Num() < ReconConfig.MinPointsPerSector)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Not enough points for reconstruction: %d < %d"), 
+        UE_LOG(LogSingleFrameReconstruction, Warning, TEXT("Not enough points for reconstruction: %d < %d"), 
             PointCloud.Num(), ReconConfig.MinPointsPerSector);
         return;
     }
@@ -112,7 +114,7 @@ void USingleFrameReconstruction::ReconstructFrame(
     // Step 1: Divide point cloud into sectors
     DivideSectors(PointCloud, ViewPoint);
     
-    UE_LOG(LogTemp, Log, TEXT("Divided %d points into %d sectors"), 
+    UE_LOG(LogSingleFrameReconstruction, Log, TEXT("Divided %d points into %d sectors"), 
         PointCloud.Num(), ReconConfig.SectorNum);
 
     // Step 2: Process each sector
@@ -169,7 +171,7 @@ void USingleFrameReconstruction::DivideSectors(
     // Log sector distribution
     for (int32 i = 0; i < SectorData.Num(); i++)
     {
-        UE_LOG(LogTemp, VeryVerbose, TEXT("Sector %d: %d points"), i, SectorData[i].Points.Num());
+        UE_LOG(LogSingleFrameReconstruction, VeryVerbose, TEXT("Sector %d: %d points"), i, SectorData[i].Points.Num());
     }
 }
 
@@ -179,7 +181,7 @@ void USingleFrameReconstruction::ProcessSector(int32 SectorIndex, const FVector&
     
     if (Sector.Points.Num() < ReconConfig.MinPointsPerSector)
     {
-        UE_LOG(LogTemp, VeryVerbose, TEXT("Sector %d skipped: insufficient points (%d < %d)"), 
+        UE_LOG(LogSingleFrameReconstruction, VeryVerbose, TEXT("Sector %d skipped: insufficient points (%d < %d)"), 
             SectorIndex, Sector.Points.Num(), ReconConfig.MinPointsPerSector);
         return;
     }
@@ -214,7 +216,7 @@ void USingleFrameReconstruction::ProcessSector(int32 SectorIndex, const FVector&
     // Step 4: Filter faces and compute normals
     FilterAndOrientFaces(HullFaces, SectorPoints, ViewPoint, HullToOriginalMapping, Sector.Faces);
     
-    UE_LOG(LogTemp, VeryVerbose, TEXT("Sector %d processed: %d points -> %d faces"), 
+    UE_LOG(LogSingleFrameReconstruction, VeryVerbose, TEXT("Sector %d processed: %d points -> %d faces"), 
         SectorIndex, SectorPoints.Num(), Sector.Faces.Num());
 }
 
@@ -274,7 +276,7 @@ TArray<FTriangleFace> USingleFrameReconstruction::ComputeConvexHull_Proper(
     
     if (Points.Num() < 4)
     {
-        UE_LOG(LogTemp, VeryVerbose, TEXT("Not enough points for convex hull: %d"), Points.Num());
+        UE_LOG(LogSingleFrameReconstruction, VeryVerbose, TEXT("Not enough points for convex hull: %d"), Points.Num());
         return Faces;
     }
 
@@ -286,7 +288,7 @@ TArray<FTriangleFace> USingleFrameReconstruction::ComputeConvexHull_Proper(
     TArray<int32> TetraIndices;
     if (!FindInitialTetrahedron(Points, TetraIndices))
     {
-        UE_LOG(LogTemp, Warning, TEXT("Failed to find initial tetrahedron"));
+        UE_LOG(LogSingleFrameReconstruction, Warning, TEXT("Failed to find initial tetrahedron"));
         return Faces;
     }
 
@@ -661,7 +663,7 @@ void USingleFrameReconstruction::ComputeVertexNormals(
             // Original code would use ray from viewpoint, but this is simpler
             VertexNormals[i] = FVector::UpVector;
             
-            UE_LOG(LogTemp, VeryVerbose, TEXT("Vertex %d has no associated faces, using default normal"), i);
+            UE_LOG(LogSingleFrameReconstruction, VeryVerbose, TEXT("Vertex %d has no associated faces, using default normal"), i);
         }
     }
 }
@@ -671,20 +673,20 @@ void USingleFrameReconstruction::ApplyToProceduralMesh(
 {
     if (!MeshComponent)
     {
-        UE_LOG(LogTemp, Error, TEXT("MeshComponent is null in ApplyToProceduralMesh!"));
+        UE_LOG(LogSingleFrameReconstruction, Error, TEXT("MeshComponent is null in ApplyToProceduralMesh!"));
         return;
     }
     
     if (ReconstructedVertices.Num() == 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("No vertices to apply to mesh!"));
+        UE_LOG(LogSingleFrameReconstruction, Warning, TEXT("No vertices to apply to mesh!"));
         MeshComponent->ClearAllMeshSections();
         return;
     }
     
     if (Triangles.Num() == 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("No triangles to apply to mesh!"));
+        UE_LOG(LogSingleFrameReconstruction, Warning, TEXT("No triangles to apply to mesh!"));
         MeshComponent->ClearAllMeshSections();
         return;
     }
@@ -760,11 +762,11 @@ void USingleFrameReconstruction::ApplyToProceduralMesh(
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("Failed to load material at %s"), *MaterialPath);
+            UE_LOG(LogSingleFrameReconstruction, Warning, TEXT("Failed to load material at %s"), *MaterialPath);
         }
     }
     
-    UE_LOG(LogTemp, Log, TEXT("Applied mesh with %d vertices and %d triangles"), 
+    UE_LOG(LogSingleFrameReconstruction, Log, TEXT("Applied mesh with %d vertices and %d triangles"), 
         ReconstructedVertices.Num(), Triangles.Num() / 3);
 }
 
@@ -1111,24 +1113,24 @@ bool USingleFrameReconstruction::IsValidTriangle(
 // Debug and validation methods
 void USingleFrameReconstruction::LogReconstructionStats() const
 {
-    UE_LOG(LogTemp, Warning, TEXT("=== Reconstruction Statistics ==="));
-    UE_LOG(LogTemp, Warning, TEXT("Last reconstruction time: %.3f seconds"), LastReconstructionTime);
-    UE_LOG(LogTemp, Warning, TEXT("Points processed: %d"), LastProcessedPointCount);
-    UE_LOG(LogTemp, Warning, TEXT("Vertices generated: %d"), ReconstructedVertices.Num());
-    UE_LOG(LogTemp, Warning, TEXT("Triangles generated: %d"), LastGeneratedTriangleCount);
-    UE_LOG(LogTemp, Warning, TEXT("Sectors used: %d"), SectorData.Num());
+    UE_LOG(LogSingleFrameReconstruction, Warning, TEXT("=== Reconstruction Statistics ==="));
+    UE_LOG(LogSingleFrameReconstruction, Warning, TEXT("Last reconstruction time: %.3f seconds"), LastReconstructionTime);
+    UE_LOG(LogSingleFrameReconstruction, Warning, TEXT("Points processed: %d"), LastProcessedPointCount);
+    UE_LOG(LogSingleFrameReconstruction, Warning, TEXT("Vertices generated: %d"), ReconstructedVertices.Num());
+    UE_LOG(LogSingleFrameReconstruction, Warning, TEXT("Triangles generated: %d"), LastGeneratedTriangleCount);
+    UE_LOG(LogSingleFrameReconstruction, Warning, TEXT("Sectors used: %d"), SectorData.Num());
     
     int32 ActiveSectors = 0;
     for (const FSectorData& Sector : SectorData)
     {
         if (Sector.Faces.Num() > 0) ActiveSectors++;
     }
-    UE_LOG(LogTemp, Warning, TEXT("Active sectors: %d"), ActiveSectors);
+    UE_LOG(LogSingleFrameReconstruction, Warning, TEXT("Active sectors: %d"), ActiveSectors);
     
     if (LastReconstructionTime > 0)
     {
         float PointsPerSecond = LastProcessedPointCount / LastReconstructionTime;
-        UE_LOG(LogTemp, Warning, TEXT("Processing rate: %.1f points/second"), PointsPerSecond);
+        UE_LOG(LogSingleFrameReconstruction, Warning, TEXT("Processing rate: %.1f points/second"), PointsPerSecond);
     }
 }
 
@@ -1139,14 +1141,14 @@ void USingleFrameReconstruction::ValidateReconstructionData() const
     // Check vertex array
     if (ReconstructedVertices.Num() == 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Validation: No vertices generated"));
+        UE_LOG(LogSingleFrameReconstruction, Warning, TEXT("Validation: No vertices generated"));
         bIsValid = false;
     }
     
     // Check normal array size
     if (VertexNormals.Num() != ReconstructedVertices.Num())
     {
-        UE_LOG(LogTemp, Error, TEXT("Validation: Normal count mismatch - Vertices: %d, Normals: %d"), 
+        UE_LOG(LogSingleFrameReconstruction, Error, TEXT("Validation: Normal count mismatch - Vertices: %d, Normals: %d"), 
             ReconstructedVertices.Num(), VertexNormals.Num());
         bIsValid = false;
     }
@@ -1154,7 +1156,7 @@ void USingleFrameReconstruction::ValidateReconstructionData() const
     // Check triangle indices
     if (Triangles.Num() % 3 != 0)
     {
-        UE_LOG(LogTemp, Error, TEXT("Validation: Triangle array size not multiple of 3: %d"), Triangles.Num());
+        UE_LOG(LogSingleFrameReconstruction, Error, TEXT("Validation: Triangle array size not multiple of 3: %d"), Triangles.Num());
         bIsValid = false;
     }
     
@@ -1163,7 +1165,7 @@ void USingleFrameReconstruction::ValidateReconstructionData() const
     {
         if (Triangles[i] >= ReconstructedVertices.Num() || Triangles[i] < 0)
         {
-            UE_LOG(LogTemp, Error, TEXT("Validation: Invalid triangle index %d at position %d (vertex count: %d)"), 
+            UE_LOG(LogSingleFrameReconstruction, Error, TEXT("Validation: Invalid triangle index %d at position %d (vertex count: %d)"), 
                 Triangles[i], i, ReconstructedVertices.Num());
             bIsValid = false;
             break;
@@ -1189,12 +1191,12 @@ void USingleFrameReconstruction::ValidateReconstructionData() const
     
     if (DegenerateCount > 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Validation: Found %d degenerate triangles"), DegenerateCount);
+        UE_LOG(LogSingleFrameReconstruction, Warning, TEXT("Validation: Found %d degenerate triangles"), DegenerateCount);
     }
     
     if (bIsValid)
     {
-        UE_LOG(LogTemp, Log, TEXT("Validation: Reconstruction data is valid"));
+        UE_LOG(LogSingleFrameReconstruction, Log, TEXT("Validation: Reconstruction data is valid"));
     }
 }
 

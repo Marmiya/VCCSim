@@ -15,6 +15,8 @@
 * along with this program. If not, see <https://www.gnu.org/licenses/>.
 */
 
+DEFINE_LOG_CATEGORY_STATIC(LogPointCloud, Log, All);
+
 #include "Editor/Panels/VCCSimPanelPointCloud.h"
 
 // UE Core
@@ -66,7 +68,7 @@ FVCCSimPanelPointCloud::~FVCCSimPanelPointCloud()
 void FVCCSimPanelPointCloud::Initialize()
 {
     // Initialize any required resources
-    UE_LOG(LogTemp, Log, TEXT("VCCSimPanelPointCloud initialized"));
+    UE_LOG(LogPointCloud, Log, TEXT("VCCSimPanelPointCloud initialized"));
 }
 
 void FVCCSimPanelPointCloud::Cleanup()
@@ -472,7 +474,7 @@ bool FVCCSimPanelPointCloud::LoadPointCloudFromFile(const FString& FilePath)
         const int32 MaxPointsLimit = 100000;
         if (PointCloudCount > MaxPointsLimit)
         {
-            UE_LOG(LogTemp, Warning, TEXT("Point cloud has %d points, exceeding limit of %d. Downsampling..."), 
+            UE_LOG(LogPointCloud, Warning, TEXT("Point cloud has %d points, exceeding limit of %d. Downsampling..."), 
                    PointCloudCount, MaxPointsLimit);
             
             // Perform uniform downsampling
@@ -489,14 +491,14 @@ bool FVCCSimPanelPointCloud::LoadPointCloudFromFile(const FString& FilePath)
             PointCloudData = MoveTemp(DownsampledPoints);
             PointCloudCount = PointCloudData.Num();
             
-            UE_LOG(LogTemp, Log, TEXT("Downsampled point cloud to %d points (%.1f%% reduction)"), 
+            UE_LOG(LogPointCloud, Log, TEXT("Downsampled point cloud to %d points (%.1f%% reduction)"), 
                    PointCloudCount,
                    (1.0f - (float)PointCloudCount / (float)LoadResult.PointCount) * 100.0f);
         }
         
         bPointCloudLoaded = true;
 
-        UE_LOG(LogTemp, Log, TEXT("Final point cloud: %d points (Colors: %s, Normals: %s)"), 
+        UE_LOG(LogPointCloud, Log, TEXT("Final point cloud: %d points (Colors: %s, Normals: %s)"), 
             PointCloudCount,
             bPointCloudHasColors ? TEXT("Yes") : TEXT("No"),
             bPointCloudHasNormals ? TEXT("Yes") : TEXT("No"));
@@ -505,7 +507,7 @@ bool FVCCSimPanelPointCloud::LoadPointCloudFromFile(const FString& FilePath)
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to load point cloud from: %s"), *FilePath);
+        UE_LOG(LogPointCloud, Error, TEXT("Failed to load point cloud from: %s"), *FilePath);
         return false;
     }
 }
@@ -527,7 +529,7 @@ void FVCCSimPanelPointCloud::CreateColoredPointCloudVisualization(UWorld* World)
         AActor* Actor = *ActorIterator;
         if (Actor && Actor->GetActorLabel() == TEXT("VCCSim_PointCloud"))
         {
-            UE_LOG(LogTemp, Warning, TEXT("Found existing VCCSim_PointCloud actor, removing it: %s"), *Actor->GetName());
+            UE_LOG(LogPointCloud, Warning, TEXT("Found existing VCCSim_PointCloud actor, removing it: %s"), *Actor->GetName());
             Actor->Destroy();
         }
     }
@@ -564,7 +566,7 @@ void FVCCSimPanelPointCloud::CreateColoredPointCloudVisualization(UWorld* World)
             PointCloudRenderer->RenderPointCloud(PointCloudDataStruct, bShowColors, 1.0f);
             ParticlePointCloudRenderer = PointCloudRenderer;
 
-            UE_LOG(LogTemp, Log, TEXT("Created point cloud visualization:"
+            UE_LOG(LogPointCloud, Log, TEXT("Created point cloud visualization:"
                                       " %d points"), PointCloudData.Num());
 
             // Optionally render normals if available and requested
@@ -702,7 +704,7 @@ void FVCCSimPanelPointCloud::ClearPointCloudVisualization()
             AActor* Actor = *ActorIterator;
             if (Actor && Actor->GetActorLabel() == TEXT("VCCSim_PointCloud"))
             {
-                UE_LOG(LogTemp, Warning, TEXT("Cleaning up orphaned VCCSim_PointCloud actor: %s"), *Actor->GetName());
+                UE_LOG(LogPointCloud, Warning, TEXT("Cleaning up orphaned VCCSim_PointCloud actor: %s"), *Actor->GetName());
                 Actor->Destroy();
                 bHadAnythingToClear = true;
             }
@@ -712,7 +714,7 @@ void FVCCSimPanelPointCloud::ClearPointCloudVisualization()
     // Only log if we actually cleared something
     if (bHadAnythingToClear)
     {
-        UE_LOG(LogTemp, Log, TEXT("Cleared point cloud visualization"));
+        UE_LOG(LogPointCloud, Log, TEXT("Cleared point cloud visualization"));
     }
 }
 
@@ -731,7 +733,7 @@ void FVCCSimPanelPointCloud::SetupPointCloudMaterial(UInstancedStaticMeshCompone
     if (Material)
     {
         MeshComponent->SetMaterial(0, Material);
-        UE_LOG(LogTemp, Log, TEXT("Applied point cloud material"));
+        UE_LOG(LogPointCloud, Log, TEXT("Applied point cloud material"));
     }
     else
     {
@@ -766,7 +768,7 @@ void FVCCSimPanelPointCloud::CreateSimplePointCloudMaterial(UInstancedStaticMesh
             // Set default orange color for points
             DynamicMaterial->SetVectorParameterValue(TEXT("Color"), FLinearColor(1.0f, 0.5f, 0.0f, 1.0f));
             MeshComponent->SetMaterial(0, DynamicMaterial);
-            UE_LOG(LogTemp, Log, TEXT("Created simple point cloud material"));
+            UE_LOG(LogPointCloud, Log, TEXT("Created simple point cloud material"));
         }
     }
 }
@@ -788,7 +790,7 @@ void FVCCSimPanelPointCloud::CreateBasicPointCloudMaterial(UProceduralMeshCompon
         {
             DynamicMaterial->SetVectorParameterValue(TEXT("Color"), FLinearColor(1.0f, 0.5f, 0.0f, 1.0f));
             MeshComponent->SetMaterial(0, DynamicMaterial);
-            UE_LOG(LogTemp, Log, TEXT("Applied basic point cloud material to procedural mesh"));
+            UE_LOG(LogPointCloud, Log, TEXT("Applied basic point cloud material to procedural mesh"));
         }
     }
 }

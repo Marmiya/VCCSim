@@ -15,6 +15,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+DEFINE_LOG_CATEGORY_STATIC(LogTriangleSplattingUI, Log, All);
+
 #include "Editor/Panels/VCCSimPanelTriangleSplatting.h"
 #include "Utils/TriangleSplattingManager.h"
 #include "Utils/ColmapManager.h"
@@ -301,14 +303,14 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSDataInputSection()
                         if (UStaticMesh* NewMesh = Cast<UStaticMesh>(AssetData.GetAsset()))
                         {
                             GSConfig.SelectedMesh = NewMesh;
-                            UE_LOG(LogTemp, Log, TEXT("Selected mesh via asset picker: %s"), *NewMesh->GetName());
+                            UE_LOG(LogTriangleSplattingUI, Log, TEXT("Selected mesh via asset picker: %s"), *NewMesh->GetName());
                             SavePaths(); // Save immediately after mesh selection
                         }
                     }
                     else
                     {
                         GSConfig.SelectedMesh.Reset();
-                        UE_LOG(LogTemp, Log, TEXT("Cleared mesh selection"));
+                        UE_LOG(LogTriangleSplattingUI, Log, TEXT("Cleared mesh selection"));
                         SavePaths(); // Save immediately after mesh cleared
                     }
                 })
@@ -1040,7 +1042,7 @@ FReply FVCCSimPanelTriangleSplatting::OnGSBrowseColmapDatasetClicked()
                                         "a COLMAP dataset (missing sparse/ or images/)"), false);
             }
             
-            UE_LOG(LogTemp, Log, TEXT("Selected COLMAP dataset path: %s"), *SelectedDirectory);
+            UE_LOG(LogTriangleSplattingUI, Log, TEXT("Selected COLMAP dataset path: %s"), *SelectedDirectory);
             SavePaths(); // Save immediately after path change
         }
     }

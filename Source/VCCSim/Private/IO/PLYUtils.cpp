@@ -15,6 +15,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+DEFINE_LOG_CATEGORY_STATIC(LogPLYUtils, Log, All);
+
 #include "IO/PLYUtils.h"
 #include "DataStructures/CameraData.h"
 #include "Engine/Engine.h"
@@ -55,7 +57,7 @@ FPLYLoader::FPLYLoadResult FPLYLoader::LoadPLYFile(const FString& FilePath,
     {
         Result.ErrorMessage = FString::Printf(
             TEXT("PLY file not found: %s"), *FilePath);
-        UE_LOG(LogTemp, Error, TEXT("%s"), *Result.ErrorMessage);
+        UE_LOG(LogPLYUtils, Error, TEXT("%s"), *Result.ErrorMessage);
         return Result;
     }
 
@@ -65,7 +67,7 @@ FPLYLoader::FPLYLoadResult FPLYLoader::LoadPLYFile(const FString& FilePath,
     {
         Result.ErrorMessage = FString::Printf(TEXT("Failed to read PLY "
                                                    "file: %s"), *FilePath);
-        UE_LOG(LogTemp, Error, TEXT("%s"), *Result.ErrorMessage);
+        UE_LOG(LogPLYUtils, Error, TEXT("%s"), *Result.ErrorMessage);
         return Result;
     }
 
@@ -73,7 +75,7 @@ FPLYLoader::FPLYLoadResult FPLYLoader::LoadPLYFile(const FString& FilePath,
     if (FileLines.Num() == 0 || !FileLines[0].StartsWith(TEXT("ply")))
     {
         Result.ErrorMessage = TEXT("Invalid PLY file - missing 'ply' header");
-        UE_LOG(LogTemp, Error, TEXT("%s"), *Result.ErrorMessage);
+        UE_LOG(LogPLYUtils, Error, TEXT("%s"), *Result.ErrorMessage);
         return Result;
     }
 
@@ -82,7 +84,7 @@ FPLYLoader::FPLYLoadResult FPLYLoader::LoadPLYFile(const FString& FilePath,
     if (HeaderEndIndex == INDEX_NONE)
     {
         Result.ErrorMessage = TEXT("Invalid PLY file - no 'end_header' found");
-        UE_LOG(LogTemp, Error, TEXT("%s"), *Result.ErrorMessage);
+        UE_LOG(LogPLYUtils, Error, TEXT("%s"), *Result.ErrorMessage);
         return Result;
     }
 
@@ -91,7 +93,7 @@ FPLYLoader::FPLYLoadResult FPLYLoader::LoadPLYFile(const FString& FilePath,
     if (Format == EPLYFormat::Unknown)
     {
         Result.ErrorMessage = TEXT("Unsupported PLY format");
-        UE_LOG(LogTemp, Error, TEXT("%s"), *Result.ErrorMessage);
+        UE_LOG(LogPLYUtils, Error, TEXT("%s"), *Result.ErrorMessage);
         return Result;
     }
 
@@ -102,7 +104,7 @@ FPLYLoader::FPLYLoadResult FPLYLoader::LoadPLYFile(const FString& FilePath,
     if (VertexCount <= 0)
     {
         Result.ErrorMessage = TEXT("Invalid or missing vertex count in PLY file");
-        UE_LOG(LogTemp, Error, TEXT("%s"), *Result.ErrorMessage);
+        UE_LOG(LogPLYUtils, Error, TEXT("%s"), *Result.ErrorMessage);
         return Result;
     }
 
@@ -113,7 +115,7 @@ FPLYLoader::FPLYLoadResult FPLYLoader::LoadPLYFile(const FString& FilePath,
     // Reserve space for points
     Result.Points.Reserve(VertexCount);
     
-    UE_LOG(LogTemp, Warning, TEXT("Loading PLY: Format=%s, Vertices=%d, "
+    UE_LOG(LogPLYUtils, Warning, TEXT("Loading PLY: Format=%s, Vertices=%d, "
                                   "HasColors=%s, HasNormals=%s"), 
         Format == EPLYFormat::ASCII ? TEXT("ASCII") : TEXT("Binary"), 
         VertexCount, 
@@ -153,7 +155,7 @@ FPLYLoader::FPLYLoadResult FPLYLoader::LoadPLYFile(const FString& FilePath,
     else
     {
         Result.ErrorMessage = TEXT("Failed to parse PLY data");
-        UE_LOG(LogTemp, Error, TEXT("%s"), *Result.ErrorMessage);
+        UE_LOG(LogPLYUtils, Error, TEXT("%s"), *Result.ErrorMessage);
     }
 
     return Result;
@@ -270,14 +272,14 @@ bool FPLYLoader::LoadBinaryPLY(const FString& FilePath,
     TArray<uint8> FileData;
     if (!FFileHelper::LoadFileToArray(FileData, *FilePath))
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to read binary PLY file"));
+        UE_LOG(LogPLYUtils, Error, TEXT("Failed to read binary PLY file"));
         return false;
     }
     
     int32 ExpectedDataSize = HeaderSize + (RecordSize * VertexCount);
     if (FileData.Num() < ExpectedDataSize)
     {
-        UE_LOG(LogTemp, Error, TEXT("PLY file too small: expected %d bytes, "
+        UE_LOG(LogPLYUtils, Error, TEXT("PLY file too small: expected %d bytes, "
                                     "got %d bytes"), 
             ExpectedDataSize, FileData.Num());
         return false;
@@ -596,7 +598,7 @@ bool FPLYWriter::WritePointCloudToPLY(
 {
     if (PointCloudData.GetPointCount() == 0)
     {
-        UE_LOG(LogTemp, Error, TEXT("FPLYWriter: No points to write to PLY file"));
+        UE_LOG(LogPLYUtils, Error, TEXT("FPLYWriter: No points to write to PLY file"));
         return false;
     }
     
@@ -625,12 +627,12 @@ bool FPLYWriter::WritePointCloudToPLY(
     bool bSuccess = FFileHelper::SaveStringToFile(PlyContent, *OutputFilePath);
     if (bSuccess)
     {
-        UE_LOG(LogTemp, Log, TEXT("FPLYWriter: Successfully wrote %d points to %s"), 
+        UE_LOG(LogPLYUtils, Log, TEXT("FPLYWriter: Successfully wrote %d points to %s"), 
             PointCloudData.GetPointCount(), *OutputFilePath);
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("FPLYWriter: Failed to write PLY "
+        UE_LOG(LogPLYUtils, Error, TEXT("FPLYWriter: Failed to write PLY "
                                     "file: %s"), *OutputFilePath);
     }
     
@@ -644,7 +646,7 @@ bool FPLYWriter::WriteCamerasToPLY(
 {
     if (CameraInfos.Num() == 0)
     {
-        UE_LOG(LogTemp, Error, TEXT("FPLYWriter: No cameras to write to PLY file"));
+        UE_LOG(LogPLYUtils, Error, TEXT("FPLYWriter: No cameras to write to PLY file"));
         return false;
     }
     
@@ -680,12 +682,12 @@ bool FPLYWriter::WriteCamerasToPLY(
     bool bSuccess = FFileHelper::SaveStringToFile(PlyContent, *OutputFilePath);
     if (bSuccess)
     {
-        UE_LOG(LogTemp, Log, TEXT("FPLYWriter: Successfully wrote %d cameras to %s"), 
+        UE_LOG(LogPLYUtils, Log, TEXT("FPLYWriter: Successfully wrote %d cameras to %s"), 
             CameraInfos.Num(), *OutputFilePath);
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("FPLYWriter: Failed to write camera"
+        UE_LOG(LogPLYUtils, Error, TEXT("FPLYWriter: Failed to write camera"
                                     " PLY file: %s"), *OutputFilePath);
     }
     
@@ -701,7 +703,7 @@ bool FPLYWriter::WritePointArrayToPLY(
 {
     if (Points.Num() == 0)
     {
-        UE_LOG(LogTemp, Error, TEXT("FPLYWriter: No points to write to PLY file"));
+        UE_LOG(LogPLYUtils, Error, TEXT("FPLYWriter: No points to write to PLY file"));
         return false;
     }
     
@@ -730,12 +732,12 @@ bool FPLYWriter::WritePointArrayToPLY(
     bool bSuccess = FFileHelper::SaveStringToFile(PlyContent, *OutputFilePath);
     if (bSuccess)
     {
-        UE_LOG(LogTemp, Log, TEXT("FPLYWriter: Successfully wrote %d points to %s"), 
+        UE_LOG(LogPLYUtils, Log, TEXT("FPLYWriter: Successfully wrote %d points to %s"), 
             Points.Num(), *OutputFilePath);
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("FPLYWriter: Failed to "
+        UE_LOG(LogPLYUtils, Error, TEXT("FPLYWriter: Failed to "
                                     "write PLY file: %s"), *OutputFilePath);
     }
     
@@ -864,7 +866,7 @@ bool FPLYWriter::WriteMeshTrianglesToPLY(
 {
     if (Vertices.Num() == 0 || Vertices.Num() % 3 != 0)
     {
-        UE_LOG(LogTemp, Error, TEXT("Invalid mesh triangle data - vertex count must be multiple of 3"));
+        UE_LOG(LogPLYUtils, Error, TEXT("Invalid mesh triangle data - vertex count must be multiple of 3"));
         return false;
     }
     
@@ -895,11 +897,11 @@ bool FPLYWriter::WriteMeshTrianglesToPLY(
     // Write to file
     if (!FFileHelper::SaveStringToFile(PLYContent, *OutputFilePath))
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to save mesh triangles to PLY file: %s"), *OutputFilePath);
+        UE_LOG(LogPLYUtils, Error, TEXT("Failed to save mesh triangles to PLY file: %s"), *OutputFilePath);
         return false;
     }
     
-    UE_LOG(LogTemp, Log, TEXT("Successfully saved %d triangle vertices to PLY: %s"), 
+    UE_LOG(LogPLYUtils, Log, TEXT("Successfully saved %d triangle vertices to PLY: %s"), 
         Vertices.Num(), *OutputFilePath);
     
     return true;
@@ -914,7 +916,7 @@ bool FPLYWriter::WriteMeshTrianglesWithFacesToPLY(
 {
     if (Vertices.Num() == 0 || Vertices.Num() % 3 != 0)
     {
-        UE_LOG(LogTemp, Error, TEXT("Invalid mesh triangle data - vertex count must be multiple of 3"));
+        UE_LOG(LogPLYUtils, Error, TEXT("Invalid mesh triangle data - vertex count must be multiple of 3"));
         return false;
     }
     
@@ -956,11 +958,11 @@ bool FPLYWriter::WriteMeshTrianglesWithFacesToPLY(
     // Write to file
     if (!FFileHelper::SaveStringToFile(PLYContent, *OutputFilePath))
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to save mesh triangles with faces to PLY file: %s"), *OutputFilePath);
+        UE_LOG(LogPLYUtils, Error, TEXT("Failed to save mesh triangles with faces to PLY file: %s"), *OutputFilePath);
         return false;
     }
     
-    UE_LOG(LogTemp, Log, TEXT("Successfully saved %d triangle vertices and %d faces to PLY: %s"), 
+    UE_LOG(LogPLYUtils, Log, TEXT("Successfully saved %d triangle vertices and %d faces to PLY: %s"), 
         Vertices.Num(), FaceCount, *OutputFilePath);
     
     return true;

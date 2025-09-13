@@ -19,6 +19,8 @@
 #include "UObject/ConstructorHelpers.h"
 #include "DataStructures/Mesh.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogMeshHandlerComponent, Log, All);
+
 UMeshHandlerComponent::UMeshHandlerComponent()
 {
     PrimaryComponentTick.bCanEverTick = false;
@@ -49,7 +51,7 @@ void UMeshHandlerComponent::OnRegister()
     MeshComponent = NewObject<UProceduralMeshComponent>(this);
     if (!MeshComponent)
     {
-        UE_LOG(LogTemp, Error,
+        UE_LOG(LogMeshHandlerComponent, Error,
             TEXT("MeshHandler Failed to create ProceduralMeshComponent"));
         return;
     }
@@ -83,7 +85,7 @@ void UMeshHandlerComponent::OnRegister()
     }
     else
     {
-        UE_LOG(LogTemp, Error,
+        UE_LOG(LogMeshHandlerComponent, Error,
             TEXT("MeshHandler Failed to load material"));
     }
 
@@ -100,7 +102,7 @@ void UMeshHandlerComponent::OnRegister()
     }
     else
     {
-        UE_LOG(LogTemp, Error,
+        UE_LOG(LogMeshHandlerComponent, Error,
             TEXT("World not available in OnRegister"));
     }
     
@@ -125,7 +127,7 @@ void UMeshHandlerComponent::UpdateMeshFromGRPC(
         FScopeLock Lock(&MeshUpdateLock);
         if (MeshBuffers[WriteBufferIndex].bNeedsUpdate)
         {
-            UE_LOG(LogTemp, Warning,
+            UE_LOG(LogMeshHandlerComponent, Warning,
                 TEXT("Mesh buffer is still being processed. "
                      "Skipping update."));
             return;
@@ -141,7 +143,7 @@ void UMeshHandlerComponent::UpdateMeshFromGRPC(
     // Check minimum size for header
     if (DataSize < sizeof(FMeshHeader))
     {
-        UE_LOG(LogTemp, Error,
+        UE_LOG(LogMeshHandlerComponent, Error,
             TEXT("Received mesh data is too small for header"));
         return;
     }
@@ -150,7 +152,7 @@ void UMeshHandlerComponent::UpdateMeshFromGRPC(
     
     if (Header->Magic != 0x48534D55)
     {
-        UE_LOG(LogTemp, Error, TEXT("Invalid mesh magic number"));
+        UE_LOG(LogMeshHandlerComponent, Error, TEXT("Invalid mesh magic number"));
         return;
     }
 
@@ -160,7 +162,7 @@ void UMeshHandlerComponent::UpdateMeshFromGRPC(
     
     if (DataSize < ExpectedSize)
     {
-        UE_LOG(LogTemp, Error, TEXT("Mesh data size mismatch. "
+        UE_LOG(LogMeshHandlerComponent, Error, TEXT("Mesh data size mismatch. "
                                     "Expected: %d, Got: %d"), ExpectedSize, DataSize);
         return;
     }
@@ -291,7 +293,7 @@ void UMeshHandlerComponent::UpdateMeshInternal()
     // Ensure we have valid mesh component before proceeding
     if (!MeshComponent)
     {
-        UE_LOG(LogTemp, Error, TEXT("MeshComponent is null during update!"));
+        UE_LOG(LogMeshHandlerComponent, Error, TEXT("MeshComponent is null during update!"));
         return;
     }
 

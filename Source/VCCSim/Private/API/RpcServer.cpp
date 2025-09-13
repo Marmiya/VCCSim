@@ -15,6 +15,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+DEFINE_LOG_CATEGORY_STATIC(LogRpcServer, Log, All);
+
 #include "API/RpcServer.h"
 #include "API/GRPCCall.h"
 #include "Sensors/LidarSensor.h"
@@ -106,7 +108,7 @@ public:
     	
         if (Server)
         {
-            UE_LOG(LogTemp, Warning, TEXT("Asynchronous Server listening on %s"),
+            UE_LOG(LogRpcServer, Warning, TEXT("Asynchronous Server listening on %s"),
             	*FString(Config.VCCSim.Server.c_str()));
 
             // Spawn initial asynchronous calls
@@ -216,7 +218,7 @@ public:
             }
 
         	// Real shutdown
-        	UE_LOG(LogTemp, Warning, TEXT("DoWork() sees ShutdownRequested,"
+        	UE_LOG(LogRpcServer, Warning, TEXT("DoWork() sees ShutdownRequested,"
 									   " shutting down server..."));
 
         	if (Server)
@@ -234,7 +236,7 @@ public:
         }
         else
         {
-            UE_LOG(LogTemp, Error, TEXT("Failed to start server on %s"),
+            UE_LOG(LogRpcServer, Error, TEXT("Failed to start server on %s"),
             	*FString(Config.VCCSim.Server.c_str()));
         }
     }
@@ -257,7 +259,7 @@ void RunServer(const FVCCSimConfig& Config, AActor* Holder,
 {
 	if (ShutdownRequested.load())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Server is already running!"
+		UE_LOG(LogRpcServer, Warning, TEXT("Server is already running!"
 							  "Not Cleaning up before starting a new one."));
 		ShutdownRequested.store(false);
 	}
@@ -270,7 +272,7 @@ void RunServer(const FVCCSimConfig& Config, AActor* Holder,
 		RGrpcMaps,
 		Recorder);
 	Server_Task->StartBackgroundTask();
-	UE_LOG(LogTemp, Warning, TEXT("GRPC server started."));
+	UE_LOG(LogRpcServer, Warning, TEXT("GRPC server started."));
 }
 
 void ShutdownServer()
@@ -283,7 +285,7 @@ void ShutdownServer()
 		delete Server_Task;
 		Server_Task = nullptr;
 		
-		UE_LOG(LogTemp, Warning, TEXT("GRPC Server shutdown."));
+		UE_LOG(LogRpcServer, Warning, TEXT("GRPC Server shutdown."));
 	}
 	ShutdownRequested.store(false);
 }

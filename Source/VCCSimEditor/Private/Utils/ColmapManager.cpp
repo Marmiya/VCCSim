@@ -15,6 +15,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+DEFINE_LOG_CATEGORY_STATIC(LogColmapManager, Log, All);
+
 #include "Utils/ColmapManager.h"
 #include "Utils/VCCSimDataConverter.h"
 #include "HAL/PlatformProcess.h"
@@ -45,7 +47,7 @@ bool FColmapManager::StartColmapPipeline(
 {
     if (bIsRunning)
     {
-        UE_LOG(LogTemp, Warning, TEXT("COLMAP pipeline is already running"));
+        UE_LOG(LogColmapManager, Warning, TEXT("COLMAP pipeline is already running"));
         return false;
     }
     
@@ -65,11 +67,11 @@ bool FColmapManager::StartColmapPipeline(
     if (ColmapThread)
     {
         bIsRunning = true;
-        UE_LOG(LogTemp, Log, TEXT("COLMAP pipeline started in background thread"));
+        UE_LOG(LogColmapManager, Log, TEXT("COLMAP pipeline started in background thread"));
         return true;
     }
     
-    UE_LOG(LogTemp, Error, TEXT("Failed to create COLMAP pipeline thread"));
+    UE_LOG(LogColmapManager, Error, TEXT("Failed to create COLMAP pipeline thread"));
     return false;
 }
 
@@ -77,7 +79,7 @@ void FColmapManager::StopColmapPipeline()
 {
     if (bIsRunning)
     {
-        UE_LOG(LogTemp, Log, TEXT("Stopping COLMAP pipeline..."));
+        UE_LOG(LogColmapManager, Log, TEXT("Stopping COLMAP pipeline..."));
         
         // Set stop flag
         StopTaskCounter.Increment();
@@ -98,7 +100,7 @@ void FColmapManager::StopColmapPipeline()
         bIsRunning = false;
         UpdateProgress(0.0f, TEXT("Stopped by user"));
         
-        UE_LOG(LogTemp, Log, TEXT("COLMAP pipeline stopped"));
+        UE_LOG(LogColmapManager, Log, TEXT("COLMAP pipeline stopped"));
     }
 }
 
@@ -109,7 +111,7 @@ bool FColmapManager::Init()
 
 uint32 FColmapManager::Run()
 {
-    UE_LOG(LogTemp, Log, TEXT("COLMAP pipeline thread started"));
+    UE_LOG(LogColmapManager, Log, TEXT("COLMAP pipeline thread started"));
     
     bool bSuccess = false;
     try
@@ -118,7 +120,7 @@ uint32 FColmapManager::Run()
     }
     catch (...)
     {
-        UE_LOG(LogTemp, Error, TEXT("Exception occurred in COLMAP pipeline thread"));
+        UE_LOG(LogColmapManager, Error, TEXT("Exception occurred in COLMAP pipeline thread"));
         UpdateProgress(0.0f, TEXT("Error: Unexpected exception occurred"));
     }
     
@@ -167,7 +169,7 @@ void FColmapManager::UpdateProgress(float Progress, const FString& StatusMessage
         }
     });
     
-    UE_LOG(LogTemp, Log, TEXT("COLMAP Progress: %.1f%% - %s"), Progress * 100.0f, *StatusMessage);
+    UE_LOG(LogColmapManager, Log, TEXT("COLMAP Progress: %.1f%% - %s"), Progress * 100.0f, *StatusMessage);
 }
 
 bool FColmapManager::RunColmapPipelineInternal()
@@ -315,7 +317,7 @@ void FColmapManager::TerminateCurrentProcess()
     
     if (CurrentProcessHandle.IsValid())
     {
-        UE_LOG(LogTemp, Log, TEXT("Terminating COLMAP process..."));
+        UE_LOG(LogColmapManager, Log, TEXT("Terminating COLMAP process..."));
         
         // Check if process is still running
         if (FPlatformProcess::IsProcRunning(CurrentProcessHandle))
@@ -329,7 +331,7 @@ void FColmapManager::TerminateCurrentProcess()
             // If still running, force kill
             if (FPlatformProcess::IsProcRunning(CurrentProcessHandle))
             {
-                UE_LOG(LogTemp, Warning, TEXT("Graceful termination failed, force killing COLMAP process"));
+                UE_LOG(LogColmapManager, Warning, TEXT("Graceful termination failed, force killing COLMAP process"));
                 FPlatformProcess::TerminateProc(CurrentProcessHandle, true);
             }
         }
@@ -338,7 +340,7 @@ void FColmapManager::TerminateCurrentProcess()
         FPlatformProcess::CloseProc(CurrentProcessHandle);
         CurrentProcessHandle.Reset();
         
-        UE_LOG(LogTemp, Log, TEXT("COLMAP process terminated"));
+        UE_LOG(LogColmapManager, Log, TEXT("COLMAP process terminated"));
     }
 }
 
@@ -347,8 +349,8 @@ bool FColmapManager::ExecuteColmapCommand(const FString& Command, const FString&
     if (StopTaskCounter.GetValue() != 0)
         return false;
     
-    UE_LOG(LogTemp, Log, TEXT("Executing COLMAP step: %s"), *StepName);
-    UE_LOG(LogTemp, Log, TEXT("Command: %s %s"), *Command, *Arguments);
+    UE_LOG(LogColmapManager, Log, TEXT("Executing COLMAP step: %s"), *StepName);
+    UE_LOG(LogColmapManager, Log, TEXT("Command: %s %s"), *Command, *Arguments);
     
     // Create the process
     {
@@ -368,7 +370,7 @@ bool FColmapManager::ExecuteColmapCommand(const FString& Command, const FString&
     
     if (!CurrentProcessHandle.IsValid())
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to create COLMAP process for %s"), *StepName);
+        UE_LOG(LogColmapManager, Error, TEXT("Failed to create COLMAP process for %s"), *StepName);
         return false;
     }
     
@@ -381,7 +383,7 @@ bool FColmapManager::ExecuteColmapCommand(const FString& Command, const FString&
         // Check if we should stop
         if (StopTaskCounter.GetValue() != 0)
         {
-            UE_LOG(LogTemp, Log, TEXT("Stop requested during %s"), *StepName);
+            UE_LOG(LogColmapManager, Log, TEXT("Stop requested during %s"), *StepName);
             TerminateCurrentProcess();
             return false;
         }
@@ -412,10 +414,10 @@ bool FColmapManager::ExecuteColmapCommand(const FString& Command, const FString&
     
     if (ReturnCode != 0)
     {
-        UE_LOG(LogTemp, Error, TEXT("COLMAP %s failed. Return code: %d"), *StepName, ReturnCode);
+        UE_LOG(LogColmapManager, Error, TEXT("COLMAP %s failed. Return code: %d"), *StepName, ReturnCode);
         return false;
     }
     
-    UE_LOG(LogTemp, Log, TEXT("COLMAP %s completed successfully"), *StepName);
+    UE_LOG(LogColmapManager, Log, TEXT("COLMAP %s completed successfully"), *StepName);
     return true;
 }

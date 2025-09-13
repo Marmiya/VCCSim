@@ -18,6 +18,8 @@
 #include "Core/VCCSimGameInstance.h"
 #include "Kismet/GameplayStatics.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogVCCSimGameInstance, Log, All);
+
 UVCCSimGameInstance::UVCCSimGameInstance()
 {
 	// Default values
@@ -30,7 +32,7 @@ void UVCCSimGameInstance::Init()
 	Super::Init();
 
 	DetectCurrentMapName();
-	UE_LOG(LogTemp, Log, TEXT("VCCSim GameInstance Initialized"));
+	UE_LOG(LogVCCSimGameInstance, Log, TEXT("VCCSim GameInstance Initialized"));
 }
 
 void UVCCSimGameInstance::LoadMap(const FString& MapName)
@@ -44,7 +46,7 @@ void UVCCSimGameInstance::LoadMap(const FString& MapName)
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning,
+		UE_LOG(LogVCCSimGameInstance, Warning,
 			TEXT("Attempted to load invalid map: %s"), *MapName);
 	}
 }
@@ -82,12 +84,12 @@ void UVCCSimGameInstance::ReloadCurrentMap()
     
 	if (!CurrentMapName.IsEmpty())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("GameInstance: Reloading current map: %s"), *CurrentMapName);
+		UE_LOG(LogVCCSimGameInstance, Warning, TEXT("GameInstance: Reloading current map: %s"), *CurrentMapName);
 		LoadMap(CurrentMapName);
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("GameInstance: Could not determine current map to reload"));
+		UE_LOG(LogVCCSimGameInstance, Error, TEXT("GameInstance: Could not determine current map to reload"));
 	}
 }
 
@@ -96,14 +98,14 @@ void UVCCSimGameInstance::DetectCurrentMapName()
     UWorld* CurrentWorld = GetWorld();
     if (!CurrentWorld)
     {
-        UE_LOG(LogTemp, Error, TEXT("GameInstance: Current world is null"));
+        UE_LOG(LogVCCSimGameInstance, Error, TEXT("GameInstance: Current world is null"));
         return;
     }
     
     // Try to get the map name from the world
     FString DetectedMapName = CurrentWorld->GetMapName();
     
-    UE_LOG(LogTemp, Warning, TEXT("GameInstance: Raw detected map name: %s"), *DetectedMapName);
+    UE_LOG(LogVCCSimGameInstance, Warning, TEXT("GameInstance: Raw detected map name: %s"), *DetectedMapName);
     
     // Clean up the map name
     if (DetectedMapName.StartsWith(TEXT("UEDPIE_0_")))
@@ -122,7 +124,7 @@ void UVCCSimGameInstance::DetectCurrentMapName()
     {
         FString URL = CurrentWorld->URL.Map;
         DetectedMapName = FPaths::GetBaseFilename(URL);
-        UE_LOG(LogTemp, Warning, TEXT("GameInstance: Using URL-based map name: %s"), *DetectedMapName);
+        UE_LOG(LogVCCSimGameInstance, Warning, TEXT("GameInstance: Using URL-based map name: %s"), *DetectedMapName);
     }
     
     // Try to match with available maps
@@ -134,7 +136,7 @@ void UVCCSimGameInstance::DetectCurrentMapName()
             if (DetectedMapName.Equals(AvailableMap, ESearchCase::IgnoreCase))
             {
                 CurrentMapName = AvailableMap;
-                UE_LOG(LogTemp, Warning, TEXT("GameInstance: Exact match - detected map '%s' matches available map '%s'"), *DetectedMapName, *AvailableMap);
+                UE_LOG(LogVCCSimGameInstance, Warning, TEXT("GameInstance: Exact match - detected map '%s' matches available map '%s'"), *DetectedMapName, *AvailableMap);
                 return;
             }
         }
@@ -145,14 +147,14 @@ void UVCCSimGameInstance::DetectCurrentMapName()
             if (DetectedMapName.Contains(AvailableMap) || AvailableMap.Contains(DetectedMapName))
             {
                 CurrentMapName = AvailableMap;
-                UE_LOG(LogTemp, Warning, TEXT("GameInstance: Partial match - detected map '%s' matched to available map '%s'"), *DetectedMapName, *AvailableMap);
+                UE_LOG(LogVCCSimGameInstance, Warning, TEXT("GameInstance: Partial match - detected map '%s' matched to available map '%s'"), *DetectedMapName, *AvailableMap);
                 return;
             }
         }
         
         // If no match found, use the detected name as-is
         CurrentMapName = DetectedMapName;
-        UE_LOG(LogTemp, Warning, TEXT("GameInstance: No match found, using detected map name: %s"), *CurrentMapName);
+        UE_LOG(LogVCCSimGameInstance, Warning, TEXT("GameInstance: No match found, using detected map name: %s"), *CurrentMapName);
     }
     else
     {
@@ -160,11 +162,11 @@ void UVCCSimGameInstance::DetectCurrentMapName()
         if (AvailableMaps.Num() > 0)
         {
             CurrentMapName = AvailableMaps[0];
-            UE_LOG(LogTemp, Warning, TEXT("GameInstance: Detection failed, defaulting to first available map: %s"), *CurrentMapName);
+            UE_LOG(LogVCCSimGameInstance, Warning, TEXT("GameInstance: Detection failed, defaulting to first available map: %s"), *CurrentMapName);
         }
         else
         {
-            UE_LOG(LogTemp, Error, TEXT("GameInstance: Could not detect current map name and no available maps"));
+            UE_LOG(LogVCCSimGameInstance, Error, TEXT("GameInstance: Could not detect current map name and no available maps"));
         }
     }
 }

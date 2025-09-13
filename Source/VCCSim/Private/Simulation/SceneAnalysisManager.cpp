@@ -28,6 +28,8 @@
 #include "Simulation/ComplexityAnalyzer.h"
 #include "Simulation/CoverageAnalyzer.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogSceneAnalysisManager, Log, All);
+
 ASceneAnalysisManager::ASceneAnalysisManager()
 {
     World = nullptr;
@@ -46,7 +48,7 @@ ASceneAnalysisManager::ASceneAnalysisManager()
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("ASceneAnalysisManager::ASceneAnalysisManager:"
+        UE_LOG(LogSceneAnalysisManager, Warning, TEXT("ASceneAnalysisManager::ASceneAnalysisManager:"
                                     " Failed to create SemanticAnalyzer component!"));
     }
 
@@ -60,7 +62,7 @@ ASceneAnalysisManager::ASceneAnalysisManager()
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("ASceneAnalysisManager::ASceneAnalysisManager:"
+        UE_LOG(LogSceneAnalysisManager, Warning, TEXT("ASceneAnalysisManager::ASceneAnalysisManager:"
                                     " Failed to create SafeZoneAnalyzer component!"));
     }
 
@@ -81,7 +83,7 @@ ASceneAnalysisManager::ASceneAnalysisManager()
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("ASceneAnalysisManager::ASceneAnalysisManager:"
+        UE_LOG(LogSceneAnalysisManager, Warning, TEXT("ASceneAnalysisManager::ASceneAnalysisManager:"
                                     " Failed to create ComplexityAnalyzer component!"));
     }
 
@@ -101,7 +103,7 @@ ASceneAnalysisManager::ASceneAnalysisManager()
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("ASceneAnalysisManager::ASceneAnalysisManager:"
+        UE_LOG(LogSceneAnalysisManager, Warning, TEXT("ASceneAnalysisManager::ASceneAnalysisManager:"
                                     " Failed to create CoverageAnalyzer component!"));
     }
 }
@@ -143,13 +145,13 @@ void ASceneAnalysisManager::ScanSceneImpl(const TOptional<FBox>& RegionBounds)
     if (RegionBounds.IsSet())
     {
         const FBox& Bounds = RegionBounds.GetValue();
-        UE_LOG(LogTemp, Display, TEXT("Scanning scene within region bounds: "
+        UE_LOG(LogSceneAnalysisManager, Display, TEXT("Scanning scene within region bounds: "
                                       "X(%.2f to %.2f), Y(%.2f to %.2f), Z(%.2f to %.2f)"),
                Bounds.Min.X, Bounds.Max.X, Bounds.Min.Y, Bounds.Max.Y, Bounds.Min.Z, Bounds.Max.Z);
     }
     else
     {
-        UE_LOG(LogTemp, Display, TEXT("Scanning entire scene (no bounds)"));
+        UE_LOG(LogSceneAnalysisManager, Display, TEXT("Scanning entire scene (no bounds)"));
     }
     
     // Clear previous data
@@ -205,7 +207,7 @@ void ASceneAnalysisManager::ScanSceneImpl(const TOptional<FBox>& RegionBounds)
                     if (bShouldIncludeMesh)
                     {
                         TotalMeshesInRegion++;
-                        UE_LOG(LogTemp, Verbose,
+                        UE_LOG(LogSceneAnalysisManager, Verbose,
                             TEXT("Mesh from %s is within region - Bounds: "
                                  "X(%.2f to %.2f), Y(%.2f to %.2f), Z(%.2f to %.2f)"),
                               *Actor->GetName(),
@@ -215,7 +217,7 @@ void ASceneAnalysisManager::ScanSceneImpl(const TOptional<FBox>& RegionBounds)
                     }
                     else
                     {
-                        UE_LOG(LogTemp, Verbose,
+                        UE_LOG(LogSceneAnalysisManager, Verbose,
                             TEXT("Mesh from %s is outside region - Bounds:"
                                  " X(%.2f to %.2f), Y(%.2f to %.2f), Z(%.2f to %.2f)"),
                               *Actor->GetName(),
@@ -238,7 +240,7 @@ void ASceneAnalysisManager::ScanSceneImpl(const TOptional<FBox>& RegionBounds)
         }
     }
     
-    UE_LOG(LogTemp, Display, TEXT("Scan complete: Found %d actors, "
+    UE_LOG(LogSceneAnalysisManager, Display, TEXT("Scan complete: Found %d actors, "
                                   "%d with mesh components, %d within region bounds. "
                                   "Added %d meshes with %d triangles and %d vertices."),
           TotalActorsFound, TotalMeshComponentsFound, TotalMeshesInRegion,
@@ -248,17 +250,17 @@ void ASceneAnalysisManager::ScanSceneImpl(const TOptional<FBox>& RegionBounds)
     {
         if (TotalActorsFound == 0)
         {
-            UE_LOG(LogTemp, Warning, TEXT("No actors found in the world!"));
+            UE_LOG(LogSceneAnalysisManager, Warning, TEXT("No actors found in the world!"));
         }
         else if (TotalMeshComponentsFound == 0)
         {
-            UE_LOG(LogTemp, Warning,
+            UE_LOG(LogSceneAnalysisManager, Warning,
                 TEXT("Found %d actors, but none have valid static mesh components!"), 
                 TotalActorsFound);
         }
         else if (RegionBounds.IsSet())
         {
-            UE_LOG(LogTemp, Warning,
+            UE_LOG(LogSceneAnalysisManager, Warning,
                 TEXT("Found %d actors with valid static mesh components, "
                      "but none intersect with the specified region!"), 
                   TotalMeshComponentsFound);
@@ -378,7 +380,7 @@ void ASceneAnalysisManager::InitializeUnifiedGrid()
     
     bGridInitialized = true;
     
-    UE_LOG(LogTemp, Display, TEXT("Unified grid initialized: "
+    UE_LOG(LogSceneAnalysisManager, Display, TEXT("Unified grid initialized: "
                                   "theoretical grid %dx%dx%d, actual populated cells: %d"), 
            GridSizeX, GridSizeY, GridSizeZ, UnifiedGrid.Num());
 }
@@ -468,14 +470,14 @@ void ASceneAnalysisManager::ExportMeshesToPly()
 {
     if (!World)
     {
-        UE_LOG(LogTemp, Warning, TEXT("USceneAnalysisManager::ExportMeshesToPly:"
+        UE_LOG(LogSceneAnalysisManager, Warning, TEXT("USceneAnalysisManager::ExportMeshesToPly:"
             " World not set!"));
         return;
     }
 
     if (SceneMeshes.Num() == 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("USceneAnalysisManager::ExportMeshesToPly:"
+        UE_LOG(LogSceneAnalysisManager, Warning, TEXT("USceneAnalysisManager::ExportMeshesToPly:"
             " No meshes found in the scene!"));
         return;
     }
@@ -596,7 +598,7 @@ void ASceneAnalysisManager::VisualizeSceneMeshes(
         }
     }
     
-    UE_LOG(LogTemp, Display, TEXT("Visualized %d meshes with %d total "
+    UE_LOG(LogSceneAnalysisManager, Display, TEXT("Visualized %d meshes with %d total "
                                   "triangles and %d total vertices"), 
         SceneMeshes.Num(), TotalTrianglesInScene, TotalPointsInScene);
 }

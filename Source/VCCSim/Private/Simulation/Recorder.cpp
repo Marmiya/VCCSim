@@ -15,6 +15,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+DEFINE_LOG_CATEGORY_STATIC(LogRecorder, Log, All);
+
 #include "Simulation/Recorder.h"
 #include "HAL/FileManager.h"
 #include "Misc/Paths.h"
@@ -48,7 +50,7 @@ TArray<uint8>* FBufferPool::AcquireBuffer(int32 Size)
     if (Buffers.Num() > 0)
     {
         auto* Buffer = Buffers.Pop();
-        Buffer->SetNum(Size, false);
+        Buffer->SetNum(Size, EAllowShrinking::No);
         return Buffer;
     }
     return new TArray<uint8>();
@@ -100,7 +102,7 @@ FRecorderWorker::FRecorderWorker(const FString& InBasePath, int32 InBufferSize)
     , bStopRequested(false)
 {
     // Debug logging
-    UE_LOG(LogTemp, Warning, TEXT("FRecorderWorker created with BufferSize: %d"), BufferSize);
+    UE_LOG(LogRecorder, Warning, TEXT("FRecorderWorker created with BufferSize: %d"), BufferSize);
     
     // Validate immediately
     check(BufferSize > 0 && BufferSize < 100000);
@@ -165,7 +167,7 @@ int32 FRecorderWorker::ProcessBatch(TArray<FPawnBuffers>& BatchBuffers)
     // Validate BufferSize before using it
     if (BufferSize <= 0 || BufferSize > 100000)
     {
-        UE_LOG(LogTemp, Error, TEXT("Corrupted BufferSize detected: %d."
+        UE_LOG(LogRecorder, Error, TEXT("Corrupted BufferSize detected: %d."
                                     " Stopping worker."), BufferSize);
         return 0;  // Stop processing to prevent crashes
     }
@@ -362,7 +364,7 @@ bool FRecorderWorker::SaveRGBData(
     auto* ImageBuffer = BufferPool.AcquireBuffer(ExpectedSize);
     if (!ImageBuffer) return false;
 
-    ImageBuffer->SetNum(ExpectedSize, false);
+    ImageBuffer->SetNum(ExpectedSize, EAllowShrinking::No);
 
     // Optimized memory copy using raw pointers
     uint8* Dest = ImageBuffer->GetData();
@@ -476,7 +478,7 @@ ARecorder::ARecorder()
     // Ensure BufferSize is always valid
     if (BufferSize <= 0 || BufferSize > 100000)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Invalid BufferSize in constructor: %d. Setting to 100."), BufferSize);
+        UE_LOG(LogRecorder, Warning, TEXT("Invalid BufferSize in constructor: %d. Setting to 100."), BufferSize);
         BufferSize = 100;
     }
 }
@@ -495,16 +497,16 @@ void ARecorder::StartRecording()
     // Validate BufferSize before creating worker
     if (BufferSize <= 0 || BufferSize > 100000)
     {
-        UE_LOG(LogTemp, Error, TEXT("Invalid BufferSize: %d. Resetting to default 100."), BufferSize);
+        UE_LOG(LogRecorder, Error, TEXT("Invalid BufferSize: %d. Resetting to default 100."), BufferSize);
         BufferSize = 100;  // Reset to safe default
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("Starting recording with BufferSize: %d"), BufferSize);
+    UE_LOG(LogRecorder, Warning, TEXT("Starting recording with BufferSize: %d"), BufferSize);
 
     IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
     if (!PlatformFile.CreateDirectoryTree(*RecordingPath))
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to create recording directory: %s"),
+        UE_LOG(LogRecorder, Error, TEXT("Failed to create recording directory: %s"),
             *RecordingPath);
         return;
     }
@@ -514,7 +516,7 @@ void ARecorder::StartRecording()
     {
         if (!CreatePawnDirectories(PawnEntry.Key, PawnEntry.Value))
         {
-            UE_LOG(LogTemp, Error, TEXT("Failed to create pawn directories"));
+            UE_LOG(LogRecorder, Error, TEXT("Failed to create pawn directories"));
             return;
         }
     }
@@ -539,7 +541,7 @@ void ARecorder::StopRecording()
         FPlatformProcess::Sleep(0.01f);
         if (FPlatformTime::Seconds() - StartTime > TimeoutSeconds)
         {
-            UE_LOG(LogTemp, Warning, TEXT("Timeout waiting for pending tasks. Remaining: %d"),
+            UE_LOG(LogRecorder, Warning, TEXT("Timeout waiting for pending tasks. Remaining: %d"),
                 PendingTasks.Load());
             break;
         }
@@ -557,7 +559,7 @@ void ARecorder::StopRecording()
             FPlatformProcess::Sleep(0.01f);
             if (FPlatformTime::Seconds() - WorkerStartTime > TimeoutSeconds)
             {
-                UE_LOG(LogTemp, Warning, TEXT("Timeout waiting for worker queue to empty"));
+                UE_LOG(LogRecorder, Warning, TEXT("Timeout waiting for worker queue to empty"));
                 break;
             }
         }
@@ -576,7 +578,7 @@ void ARecorder::ToggleRecording()
 {
     RecordState = !RecordState;
     
-    UE_LOG(LogTemp, Warning, TEXT("Recording state: "
+    UE_LOG(LogRecorder, Warning, TEXT("Recording state: "
                                   "%s"), RecordState ? TEXT("ON") : TEXT("OFF"));
     
     OnRecordStateChanged.Broadcast(RecordState);
@@ -601,7 +603,7 @@ void ARecorder::RegisterPawn(AActor* Pawn, bool bHasLidar,
     {
         if (!CreatePawnDirectories(Pawn, DirInfo))
         {
-            UE_LOG(LogTemp, Error, TEXT("Failed to create directories for pawn:"
+            UE_LOG(LogRecorder, Error, TEXT("Failed to create directories for pawn:"
                                         " %s"), *Pawn->GetName());
             return;
         }
@@ -700,20 +702,20 @@ void ARecorder::SubmitData(AActor* Pawn, T&& Data, EDataType Type)
 {
     if (!bRecording)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Data submitted while not recording"));
+        UE_LOG(LogRecorder, Warning, TEXT("Data submitted while not recording"));
         return;
     }
 
     if (!PawnDirectories.Contains(Pawn))
     {
-        UE_LOG(LogTemp, Warning, TEXT("Pawn not registered: %s"), 
+        UE_LOG(LogRecorder, Warning, TEXT("Pawn not registered: %s"), 
             *Pawn->GetName());
         return;
     }
 
     if (PendingTasks >= FRecorderConfig::MaxPendingTasks)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Max pending tasks reached"));
+        UE_LOG(LogRecorder, Warning, TEXT("Max pending tasks reached"));
         return;
     }
 
@@ -780,14 +782,14 @@ void ARecorder::SubmitRGBData(AActor* Pawn, FRGBCameraData&& Data)
     // Validate data before submission
     if (Data.Width <= 0 || Data.Height <= 0 || Data.Data.Num() == 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Invalid RGB data submitted: W=%d H=%d DataSize=%d"), 
+        UE_LOG(LogRecorder, Warning, TEXT("Invalid RGB data submitted: W=%d H=%d DataSize=%d"), 
             Data.Width, Data.Height, Data.Data.Num());
         return;
     }
 
     if (Data.Data.Num() != Data.Width * Data.Height)
     {
-        UE_LOG(LogTemp, Warning, TEXT("RGB data size mismatch: Expected %d, Got %d"), 
+        UE_LOG(LogRecorder, Warning, TEXT("RGB data size mismatch: Expected %d, Got %d"), 
             Data.Width * Data.Height, Data.Data.Num());
         return;
     }

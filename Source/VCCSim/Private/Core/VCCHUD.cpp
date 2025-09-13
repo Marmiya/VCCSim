@@ -35,6 +35,8 @@
 #include "Kismet/GameplayStatics.h"
 #include "Simulation/SemanticAnalyzer.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogVCCHUD, Log, All);
+
 void AVCCHUD::BeginPlay()
 {
     Super::BeginPlay();
@@ -144,7 +146,7 @@ void AVCCHUD::OnPauseActionTriggered()
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("PauseWidgetClass not set"));
+        UE_LOG(LogVCCHUD, Warning, TEXT("PauseWidgetClass not set"));
     }
 }
 
@@ -156,7 +158,7 @@ void AVCCHUD::OnToggleRecordingTriggered()
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("Recorder not found!"));
+        UE_LOG(LogVCCHUD, Warning, TEXT("Recorder not found!"));
     }
 }
 
@@ -187,7 +189,7 @@ void AVCCHUD::SetupWidgetsAndLS(const FVCCSimConfig& Config)
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to create widget instance"));
+        UE_LOG(LogVCCHUD, Error, TEXT("Failed to create widget instance"));
     }
 
     SetupEnhancedInput();
@@ -244,7 +246,7 @@ void AVCCHUD::SetupMainCharacter(const FVCCSimConfig& Config, TArray<AActor*> Fo
     
     if (!MainCharacter)
     {
-        UE_LOG(LogTemp, Warning, TEXT("AVCCHUD::SetupMainCharacter: "
+        UE_LOG(LogVCCHUD, Warning, TEXT("AVCCHUD::SetupMainCharacter: "
                                       "MainCharacter not found!"));
         return;
     }
@@ -263,7 +265,7 @@ void AVCCHUD::SetupMainCharacter(const FVCCSimConfig& Config, TArray<AActor*> Fo
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("AVCCHUD: SetManualControl function not found!"));
+        UE_LOG(LogVCCHUD, Warning, TEXT("AVCCHUD: SetManualControl function not found!"));
     }
 
     // Set the camera as the view target
@@ -274,7 +276,7 @@ void AVCCHUD::SetupMainCharacter(const FVCCSimConfig& Config, TArray<AActor*> Fo
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("PlayerController not found!"));
+        UE_LOG(LogVCCHUD, Error, TEXT("PlayerController not found!"));
     }
 
     if (PlayerController && MainCharacter)
@@ -286,12 +288,12 @@ void AVCCHUD::SetupMainCharacter(const FVCCSimConfig& Config, TArray<AActor*> Fo
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("AddMapContext not found!"));
+            UE_LOG(LogVCCHUD, Warning, TEXT("AddMapContext not found!"));
         }
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to possess MainCharacter!"));
+        UE_LOG(LogVCCHUD, Error, TEXT("Failed to possess MainCharacter!"));
     }
     
     for (const auto& Component : MainRobotConfig.ComponentConfigs)
@@ -307,7 +309,7 @@ void AVCCHUD::SetupMainCharacter(const FVCCSimConfig& Config, TArray<AActor*> Fo
             }
             else
             {
-                UE_LOG(LogTemp, Warning, TEXT("AVCCHUD: "
+                UE_LOG(LogVCCHUD, Warning, TEXT("AVCCHUD: "
                                               "DepthCamera component not found!"));
             }
         }
@@ -322,7 +324,7 @@ void AVCCHUD::SetupMainCharacter(const FVCCSimConfig& Config, TArray<AActor*> Fo
             }
             else
             {
-                UE_LOG(LogTemp, Warning, TEXT("AVCCHUD: "
+                UE_LOG(LogVCCHUD, Warning, TEXT("AVCCHUD: "
                                               "RGBCamera component not found!"));
             }
         }
@@ -337,7 +339,7 @@ void AVCCHUD::SetupMainCharacter(const FVCCSimConfig& Config, TArray<AActor*> Fo
             }
             else
             {
-                UE_LOG(LogTemp, Warning, TEXT("AVCCHUD: "
+                UE_LOG(LogVCCHUD, Warning, TEXT("AVCCHUD: "
                                               "RGBCamera component not found!"));
             }
         }
@@ -352,7 +354,7 @@ void AVCCHUD::SetupMainCharacter(const FVCCSimConfig& Config, TArray<AActor*> Fo
             }
             else
             {
-                UE_LOG(LogTemp, Warning, TEXT("AVCCHUD: "
+                UE_LOG(LogVCCHUD, Warning, TEXT("AVCCHUD: "
                                               "NormalCamera component not found!"));
             }
         }
@@ -372,12 +374,12 @@ FRobotGrpcMaps AVCCHUD::SetupActors(const FVCCSimConfig& Config)
             
         if (!RobotPawn)
         {
-            UE_LOG(LogTemp, Warning, TEXT("Robot %s not found! Creating a new one"),
+            UE_LOG(LogVCCHUD, Warning, TEXT("Robot %s not found! Creating a new one"),
                 *FString(UTF8_TO_TCHAR(Robot.UETag.c_str())));
             RobotPawn = CreatePawn(Config, Robot);
             if (!RobotPawn)
             {
-                UE_LOG(LogTemp, Error, TEXT("Failed to create Robot %s"),
+                UE_LOG(LogVCCHUD, Error, TEXT("Failed to create Robot %s"),
                     *FString(UTF8_TO_TCHAR(Robot.UETag.c_str())));
                 continue;
             }
@@ -397,7 +399,7 @@ FRobotGrpcMaps AVCCHUD::SetupActors(const FVCCSimConfig& Config)
         }
         else
         {
-            UE_LOG(LogTemp, Error, TEXT("AVCCHUD::SetupActors:"
+            UE_LOG(LogVCCHUD, Error, TEXT("AVCCHUD::SetupActors:"
                                         "Unknown pawn type!"));
         }
 
@@ -502,7 +504,7 @@ FRobotGrpcMaps AVCCHUD::SetupActors(const FVCCSimConfig& Config)
             }
             else
             {
-                UE_LOG(LogTemp, Warning, TEXT(
+                UE_LOG(LogVCCHUD, Warning, TEXT(
                     "AVCCHUD::SetupActors: Unknown component, %d"), Component.first);
             }
 
@@ -534,7 +536,7 @@ APawn* AVCCHUD::CreatePawn(const FVCCSimConfig& Config, const FRobot& Robot)
     UWorld* World = GetWorld();
     if (!World)
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to get World!"));
+        UE_LOG(LogVCCHUD, Error, TEXT("Failed to get World!"));
         return nullptr;
     }
     
@@ -562,7 +564,7 @@ APawn* AVCCHUD::CreatePawn(const FVCCSimConfig& Config, const FRobot& Robot)
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("Unknown pawn type!"));
+        UE_LOG(LogVCCHUD, Error, TEXT("Unknown pawn type!"));
         return nullptr;
     }
     
@@ -572,14 +574,14 @@ APawn* AVCCHUD::CreatePawn(const FVCCSimConfig& Config, const FRobot& Robot)
             FVector{0, 0, 10}, FRotator::ZeroRotator, SpawnParams);
         if (!RobotPawn)
         {
-            UE_LOG(LogTemp, Error, TEXT("Failed to create Pawn %s"),
+            UE_LOG(LogVCCHUD, Error, TEXT("Failed to create Pawn %s"),
                 *FString(Robot.UETag.c_str()));
             return nullptr;
         }
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to load Drone Blueprint class!"));
+        UE_LOG(LogVCCHUD, Error, TEXT("Failed to load Drone Blueprint class!"));
         return nullptr;
     }
     

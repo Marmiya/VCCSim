@@ -2,6 +2,8 @@
 * Copyright (C) 2025 Visual Computing Research Center, Shenzhen University
 */
 
+DEFINE_LOG_CATEGORY_STATIC(LogNPYUtils, Log, All);
+
 #include "IO/NPYUtils.h"
 #include "HAL/PlatformFilemanager.h"
 #include "Misc/FileHelper.h"
@@ -12,7 +14,7 @@ bool FNPYUtils::WriteFloat32Array2D(const FString& FilePath, const float* Data, 
 {
     if (!Data || NumRows <= 0 || NumCols <= 0)
     {
-        UE_LOG(LogTemp, Error, TEXT("NPYWriter: Invalid data parameters"));
+        UE_LOG(LogNPYUtils, Error, TEXT("NPYWriter: Invalid data parameters"));
         return false;
     }
     
@@ -66,7 +68,7 @@ bool FNPYUtils::WriteFloat32Array2D(const FString& FilePath, const float* Data, 
     // Write to file
     if (!FFileHelper::SaveArrayToFile(FileData, *FilePath))
     {
-        UE_LOG(LogTemp, Error, TEXT("NPYWriter: Failed to write file: %s"), *FilePath);
+        UE_LOG(LogNPYUtils, Error, TEXT("NPYWriter: Failed to write file: %s"), *FilePath);
         return false;
     }
     

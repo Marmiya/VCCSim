@@ -15,6 +15,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+DEFINE_LOG_CATEGORY_STATIC(LogGRPCCall, Log, All);
+
 #include "API/GRPCCall.h"
 #include "Sensors/LidarSensor.h"
 #include "Sensors/DepthCamera.h"
@@ -85,7 +87,7 @@ void LidarGetDataCall::ProcessRequest()
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("LidarGetDataCall: "
+        UE_LOG(LogGRPCCall, Warning, TEXT("LidarGetDataCall: "
                                       "Lidar component not found!"));
     }
 }
@@ -137,7 +139,7 @@ void LidarGetOdomCall::ProcessRequest()
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("LidarGetOdomCall: "
+        UE_LOG(LogGRPCCall, Warning, TEXT("LidarGetOdomCall: "
                                       "Lidar component not found!"));
     }
 }
@@ -195,7 +197,7 @@ void LidarGetDataAndOdomCall::ProcessRequest()
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("LidarGetDataAndOdomCall: "
+        UE_LOG(LogGRPCCall, Warning, TEXT("LidarGetDataAndOdomCall: "
                                       "Lidar component not found!"));
     }
 }
@@ -226,7 +228,7 @@ void DepthIndexedCameraPointDataCall::ProcessRequest()
 
     if (!RCMap_.contains(CameraName))
     {
-        UE_LOG(LogTemp, Warning, TEXT("DepthIndexedCameraPointDataCall: "
+        UE_LOG(LogGRPCCall, Warning, TEXT("DepthIndexedCameraPointDataCall: "
                                       "DepthCamera component not found!"));
         return;
     }
@@ -234,7 +236,7 @@ void DepthIndexedCameraPointDataCall::ProcessRequest()
     auto* DepthCamera = RCMap_[CameraName];
     if (!DepthCamera)
     {
-        UE_LOG(LogTemp, Warning, TEXT("DepthIndexedCameraPointDataCall: "
+        UE_LOG(LogGRPCCall, Warning, TEXT("DepthIndexedCameraPointDataCall: "
                                       "Invalid DepthCamera reference!"));
         return;
     }
@@ -250,7 +252,7 @@ void DepthIndexedCameraPointDataCall::ProcessRequest()
             const auto PointCloudData = DepthCamera->GeneratePointCloud();
             if (PointCloudData.Num() == 0)
             {
-                UE_LOG(LogTemp, Warning, TEXT("DepthIndexedCameraPointDataCall: "
+                UE_LOG(LogGRPCCall, Warning, TEXT("DepthIndexedCameraPointDataCall: "
                                               "No point cloud data available!"));
                 status_ = FINISH;
                 responder_.Finish(response_, grpc::Status::CANCELLED, this);
@@ -302,7 +304,7 @@ void DepthIndexedCameraImageSizeCall::ProcessRequest()
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("DepthIndexedCameraImageSizeCall: "
+        UE_LOG(LogGRPCCall, Warning, TEXT("DepthIndexedCameraImageSizeCall: "
                                       "DepthCamera component not found!"));
     }
 }
@@ -333,7 +335,7 @@ void DepthIndexedCameraImageDataCall::ProcessRequest()
 
     if (!RCMap_.contains(CameraName))
     {
-        UE_LOG(LogTemp, Warning, TEXT("DepthIndexedCameraImageDataCall: "
+        UE_LOG(LogGRPCCall, Warning, TEXT("DepthIndexedCameraImageDataCall: "
                                       "DepthCamera component not found!"));
         return;
     }
@@ -341,7 +343,7 @@ void DepthIndexedCameraImageDataCall::ProcessRequest()
     auto* DepthCamera = RCMap_[CameraName];
     if (!DepthCamera)
     {
-        UE_LOG(LogTemp, Warning, TEXT("DepthIndexedCameraImageDataCall: "
+        UE_LOG(LogGRPCCall, Warning, TEXT("DepthIndexedCameraImageDataCall: "
                                       "Invalid DepthCamera reference!"));
         return;
     }
@@ -414,7 +416,7 @@ void DepthCameraGetOdomCall::ProcessRequest()
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("DepthCameraGetOdomCall: "
+        UE_LOG(LogGRPCCall, Warning, TEXT("DepthCameraGetOdomCall: "
                                       "DepthCamera component not found!"));
     }
 }
@@ -467,7 +469,7 @@ void RGBCameraGetOdomCall::ProcessRequest()
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("RGBCameraGetOdomCall: "
+        UE_LOG(LogGRPCCall, Warning, TEXT("RGBCameraGetOdomCall: "
                                     "RGB Camera component not found!"));
     }
 }
@@ -504,7 +506,7 @@ void RGBIndexedCameraImageSizeCall::ProcessRequest()
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("RGBIndexedCameraImageSizeCall: "
+        UE_LOG(LogGRPCCall, Warning, TEXT("RGBIndexedCameraImageSizeCall: "
                                       "RGB Camera component not found!"));
     }
 }
@@ -538,7 +540,7 @@ void RGBIndexedCameraImageDataCall::ProcessRequest()
 
     if (!RCMap_.contains(CameraName))
     {
-        UE_LOG(LogTemp, Warning, TEXT("RGBCameraGetImageDataCall:"
+        UE_LOG(LogGRPCCall, Warning, TEXT("RGBCameraGetImageDataCall:"
                                       " RGB Camera component not found!"));
         return;
     }
@@ -546,7 +548,7 @@ void RGBIndexedCameraImageDataCall::ProcessRequest()
     auto* RGBCamera = RCMap_[CameraName];
     if (!RGBCamera)
     {
-        UE_LOG(LogTemp, Warning, TEXT("RGBCameraGetImageDataCall:"
+        UE_LOG(LogGRPCCall, Warning, TEXT("RGBCameraGetImageDataCall:"
                                       " Invalid RGB Camera reference!"));
         return;
     }
@@ -659,7 +661,7 @@ void SegmentCameraGetOdomCall::ProcessRequest()
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("SegmentCameraGetOdomCall: "
+        UE_LOG(LogGRPCCall, Warning, TEXT("SegmentCameraGetOdomCall: "
                                       "Segmentation Camera component not found!"));
     }
 }
@@ -705,7 +707,7 @@ void SendMeshCall::ProcessRequest()
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("SendMeshCall: "
+        UE_LOG(LogGRPCCall, Error, TEXT("SendMeshCall: "
                                     "Mesh component not found!"));
     }
     response_.set_status(true);
@@ -760,7 +762,7 @@ void SendGlobalMeshCall::ProcessRequest()
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("SendGlobalMeshCall: "
+        UE_LOG(LogGRPCCall, Error, TEXT("SendGlobalMeshCall: "
                                     "Mesh manager not found!"));
     }
 }
@@ -792,7 +794,7 @@ void RemoveGlobalMeshCall::ProcessRequest()
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("RemoveGlobalMeshCall: "
+        UE_LOG(LogGRPCCall, Error, TEXT("RemoveGlobalMeshCall: "
                                     "Mesh manager not found!"));
     }
 }
@@ -875,7 +877,7 @@ void GetDronePoseCall::ProcessRequest()
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("GetDroneOdomCall: "
+        UE_LOG(LogGRPCCall, Warning, TEXT("GetDroneOdomCall: "
                                       "Drone not found!"));
     }
 }
@@ -924,14 +926,14 @@ void SendDronePoseCall::ProcessRequest()
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("SendDronePoseCall: "
+            UE_LOG(LogGRPCCall, Warning, TEXT("SendDronePoseCall: "
                                           "AQuadcopterDrone not found!"));
             response_.set_status(false);
         }
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("SendDronePoseCall: "
+        UE_LOG(LogGRPCCall, Warning, TEXT("SendDronePoseCall: "
                                       "Drone not found!"));
         response_.set_status(false);
     }
@@ -975,14 +977,14 @@ void SendDronePathCall::ProcessRequest()
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("SendDronePathCall: "
+            UE_LOG(LogGRPCCall, Warning, TEXT("SendDronePathCall: "
                                           "AQuadcopterDrone not found!"));
             response_.set_status(false);
         }
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("SendDronePathCall: "
+        UE_LOG(LogGRPCCall, Warning, TEXT("SendDronePathCall: "
                                       "Drone not found!"));
         response_.set_status(false);
     }
@@ -1037,7 +1039,7 @@ void GetCarOdomCall::ProcessRequest()
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("GetCarOdomCall: "
+        UE_LOG(LogGRPCCall, Warning, TEXT("GetCarOdomCall: "
             "Car not found!"));
     }
 }
@@ -1084,14 +1086,14 @@ void SendCarPoseCall::ProcessRequest()
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("SendCarPoseCall: "
+            UE_LOG(LogGRPCCall, Warning, TEXT("SendCarPoseCall: "
                 "Car not found!"));
             response_.set_status(false);
         }
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("SendCarPoseCall: "
+        UE_LOG(LogGRPCCall, Warning, TEXT("SendCarPoseCall: "
             "Car not found!"));
         response_.set_status(false);
     }
@@ -1135,14 +1137,14 @@ void SendCarPathCall::ProcessRequest()
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("SendCarPathCall: "
+            UE_LOG(LogGRPCCall, Warning, TEXT("SendCarPathCall: "
                 "Car not found!"));
             response_.set_status(false);
         }
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("SendCarPathCall: "
+        UE_LOG(LogGRPCCall, Warning, TEXT("SendCarPathCall: "
             "Car not found!"));
         response_.set_status(false);
     }
@@ -1185,7 +1187,7 @@ void GetFlashPoseCall::ProcessRequest()
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("GetFlashPoseCall: "
+        UE_LOG(LogGRPCCall, Warning, TEXT("GetFlashPoseCall: "
                                       "Flash not found!"));
     }
 }
@@ -1231,14 +1233,14 @@ void SendFlashPoseCall::ProcessRequest()
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("SendFlashPoseCall: "
+            UE_LOG(LogGRPCCall, Warning, TEXT("SendFlashPoseCall: "
                                           "AFlashPawn* is invalid!"));
             response_.set_status(false);
         }
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("SendFlashPoseCall: "
+        UE_LOG(LogGRPCCall, Warning, TEXT("SendFlashPoseCall: "
                                       "Flash not found!"));
         response_.set_status(false);
     }
@@ -1282,14 +1284,14 @@ void SendFlashPathCall::ProcessRequest()
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("SendFlashPathCall: "
+            UE_LOG(LogGRPCCall, Warning, TEXT("SendFlashPathCall: "
                                           "AFlashPawn* is invalid!"));
             response_.set_status(false);
         }
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("SendFlashPathCall: "
+        UE_LOG(LogGRPCCall, Warning, TEXT("SendFlashPathCall: "
                                       "Flash not found!"));
         response_.set_status(false);
     }
@@ -1323,7 +1325,7 @@ void CheckFlashReadyCall::ProcessRequest()
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("CheckFlashReadyCall: "
+        UE_LOG(LogGRPCCall, Warning, TEXT("CheckFlashReadyCall: "
                                       "Flash not found!"));
         response_.set_status(false);
     }
@@ -1358,7 +1360,7 @@ void MoveToNextCall::ProcessRequest()
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("MoveToNextCall: "
+        UE_LOG(LogGRPCCall, Warning, TEXT("MoveToNextCall: "
                                       "Flash not found!"));
         response_.set_status(false);
     }

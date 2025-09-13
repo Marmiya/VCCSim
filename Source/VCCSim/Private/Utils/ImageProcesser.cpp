@@ -20,6 +20,8 @@
 #include "IImageWrapper.h"
 #include "IImageWrapperModule.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogImageProcesser, Log, All);
+
 void FAsyncImageSaveTask::DoWork()
 {
     TArray64<uint8> CompressedBitmap;
@@ -28,7 +30,7 @@ void FAsyncImageSaveTask::DoWork()
 
     if (!FFileHelper::SaveArrayToFile(CompressedBitmap, *FilePath))
     {
-       UE_LOG(LogTemp, Error, TEXT("Failed to save render target to file."));
+       UE_LOG(LogImageProcesser, Error, TEXT("Failed to save render target to file."));
     }
 }
 
@@ -84,19 +86,19 @@ void FAsyncDepth16SaveTask::DoWork()
             // Save to file
             if (!FFileHelper::SaveArrayToFile(CompressedData, *FilePath))
             {
-                UE_LOG(LogTemp, Error, TEXT("Failed to save 16-bit depth "
+                UE_LOG(LogImageProcesser, Error, TEXT("Failed to save 16-bit depth "
                                             "image to file: %s"), *FilePath);
             }
         }
         else
         {
-            UE_LOG(LogTemp, Error, TEXT("Failed to set raw data for 16-bit "
+            UE_LOG(LogImageProcesser, Error, TEXT("Failed to set raw data for 16-bit "
                                         "depth image: %s"), *FilePath);
         }
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to create PNG image wrapper "
+        UE_LOG(LogImageProcesser, Error, TEXT("Failed to create PNG image wrapper "
                                     "for 16-bit depth saving"));
     }
 }
@@ -105,7 +107,7 @@ void FAsyncPLYSaveTask::DoWork()
 {
     if (PointCloud.Num() == 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("FAsyncPLYSaveTask: "
+        UE_LOG(LogImageProcesser, Warning, TEXT("FAsyncPLYSaveTask: "
                                       "No points to save to %s"), *FilePath);
         return;
     }
@@ -142,11 +144,11 @@ void FAsyncPLYSaveTask::DoWork()
     // Save to file
     if (!FFileHelper::SaveStringToFile(PLYContent, *FilePath))
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to save PLY point cloud to file: %s"), *FilePath);
+        UE_LOG(LogImageProcesser, Error, TEXT("Failed to save PLY point cloud to file: %s"), *FilePath);
     }
     else
     {
-        UE_LOG(LogTemp, Log, TEXT("Successfully saved %d points to PLY file: %s"), 
+        UE_LOG(LogImageProcesser, Log, TEXT("Successfully saved %d points to PLY file: %s"), 
             PointCloud.Num(), *FilePath);
     }
 }
@@ -162,7 +164,7 @@ void FAsyncNormalEXRSaveTask::DoWork()
     
     if (ImageData.Num() != NormalPixels.Num())
     {
-        UE_LOG(LogTemp, Error, TEXT("Image data size mismatch: Expected %lld, got %d"), 
+        UE_LOG(LogImageProcesser, Error, TEXT("Image data size mismatch: Expected %lld, got %d"), 
             ImageData.Num(), NormalPixels.Num());
         return;
     }
@@ -191,15 +193,15 @@ void FAsyncNormalEXRSaveTask::DoWork()
         // Save to file
         if (!FFileHelper::SaveArrayToFile(CompressedData, *FilePath))
         {
-            UE_LOG(LogTemp, Error, TEXT("Failed to save EXR normal image to file: %s"), *FilePath);
+            UE_LOG(LogImageProcesser, Error, TEXT("Failed to save EXR normal image to file: %s"), *FilePath);
         }
         else
         {
-            UE_LOG(LogTemp, Log, TEXT("Successfully saved EXR normal image to: %s"), *FilePath);
+            UE_LOG(LogImageProcesser, Log, TEXT("Successfully saved EXR normal image to: %s"), *FilePath);
         }
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to compress normal image to EXR format"));
+        UE_LOG(LogImageProcesser, Error, TEXT("Failed to compress normal image to EXR format"));
     }
 }

@@ -1,6 +1,8 @@
 #include "Simulation/SafeZoneAnalyzer.h"
 #include "ProceduralMeshComponent.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogSafeZoneAnalyzer, Log, All);
+
 USafeZoneAnalyzer::USafeZoneAnalyzer()
 {
 	SafeZoneMaterial = nullptr;
@@ -29,7 +31,7 @@ void USafeZoneAnalyzer::InitializeSafeZoneVisualization()
         
         if (!SafeZoneMaterial)
         {
-            UE_LOG(LogTemp, Error, TEXT("InitializeSafeZoneVisualization: "
+            UE_LOG(LogSafeZoneAnalyzer, Error, TEXT("InitializeSafeZoneVisualization: "
                                         "Failed to load safe zone material."));
         }
     }
@@ -50,7 +52,7 @@ void USafeZoneAnalyzer::VisualizeSafeZone(bool Vis)
     // Check if we have safe zones
     if (MeshSafeZones.Num() == 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("VisualizeSafeZone: No safe zones "
+        UE_LOG(LogSafeZoneAnalyzer, Warning, TEXT("VisualizeSafeZone: No safe zones "
                                       "to visualize. Generate safe zones first."));
         return;
     }
@@ -61,7 +63,7 @@ void USafeZoneAnalyzer::VisualizeSafeZone(bool Vis)
     // If mesh component failed to initialize, return
     if (!SafeZoneVisualizationMesh)
     {
-        UE_LOG(LogTemp, Error, TEXT("VisualizeSafeZone: Safe zone mesh "
+        UE_LOG(LogSafeZoneAnalyzer, Error, TEXT("VisualizeSafeZone: Safe zone mesh "
                                     "component not initialized"));
         return;
     }
@@ -90,7 +92,7 @@ void USafeZoneAnalyzer::GenerateSafeZone(const float& SafeDistance)
 {
     if (MeshInfos->Num() == 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("GenerateSafeZone: "
+        UE_LOG(LogSafeZoneAnalyzer, Warning, TEXT("GenerateSafeZone: "
                                       "No valid World or no meshes in scene"));
         return;
     }
@@ -112,7 +114,7 @@ void USafeZoneAnalyzer::GenerateSafeZone(const float& SafeDistance)
         MeshSafeZones.Add(ExpandedMeshBounds);
     }
     
-    UE_LOG(LogTemp, Display, TEXT("Generated %d individual mesh safe "
+    UE_LOG(LogSafeZoneAnalyzer, Display, TEXT("Generated %d individual mesh safe "
                                   "zones with expansion distance %.2f"), 
            MeshSafeZones.Num(), SafeDistance);
 }
@@ -250,13 +252,13 @@ void USafeZoneAnalyzer::CreateSafeZoneMesh()
             SafeZoneVisualizationMesh->SetMaterial(0, SafeZoneMaterial);
         }
         
-        UE_LOG(LogTemp, Display, TEXT("Created safe zone visualization "
+        UE_LOG(LogSafeZoneAnalyzer, Display, TEXT("Created safe zone visualization "
                                       "with %d individual boxes, %d vertices, %d triangles"),
                MeshSafeZones.Num(), Vertices.Num(), Triangles.Num() / 3);
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("CreateSafeZoneMesh: "
+        UE_LOG(LogSafeZoneAnalyzer, Warning, TEXT("CreateSafeZoneMesh: "
                                       "No valid geometry to create mesh"));
     }
 }

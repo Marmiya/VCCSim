@@ -15,6 +15,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+DEFINE_LOG_CATEGORY_STATIC(LogSensorFactory, Log, All);
+
 #include "Sensors/SensorFactory.h"
 #include "Sensors/LidarSensor.h"
 #include "Sensors/DepthCamera.h"
@@ -25,7 +27,7 @@ UPrimitiveComponent* FSensorFactory::CreateSensor(
 {
 	if (!Owner)
 	{
-		UE_LOG(LogTemp, Error, TEXT("No owner found!"));
+		UE_LOG(LogSensorFactory, Error, TEXT("No owner found!"));
 		return nullptr;
 	}
 
@@ -39,7 +41,7 @@ UPrimitiveComponent* FSensorFactory::CreateSensor(
 				static_cast<const FLiDarConfig*>(&Config);
 			if (!LidarConfig)
 			{
-				UE_LOG(LogTemp, Error, TEXT("FSensorFactory::CreateSensor: "
+				UE_LOG(LogSensorFactory, Error, TEXT("FSensorFactory::CreateSensor: "
 								"Invalid config type for Lidar sensor!"));
 				return nullptr;
 			}
@@ -50,7 +52,7 @@ UPrimitiveComponent* FSensorFactory::CreateSensor(
 			}
 			else
 			{
-				UE_LOG(LogTemp, Error, TEXT("FSensorFactory::CreateSensor: "
+				UE_LOG(LogSensorFactory, Error, TEXT("FSensorFactory::CreateSensor: "
 								"Failed to create Lidar sensor!"));
 			}
 			break;
@@ -61,7 +63,7 @@ UPrimitiveComponent* FSensorFactory::CreateSensor(
 				static_cast<const FDepthCameraConfig*>(&Config);
 			if (!DepthConfig)
 			{
-				UE_LOG(LogTemp, Error, TEXT("FSensorFactory::CreateSensor: "
+				UE_LOG(LogSensorFactory, Error, TEXT("FSensorFactory::CreateSensor: "
 								"Invalid config type for Depth Camera sensor!"));
 				return nullptr;
 			}
@@ -72,7 +74,7 @@ UPrimitiveComponent* FSensorFactory::CreateSensor(
 			}
 			else
 			{
-				UE_LOG(LogTemp, Error, TEXT("FSensorFactory::CreateSensor: "
+				UE_LOG(LogSensorFactory, Error, TEXT("FSensorFactory::CreateSensor: "
 								"Failed to create Depth Camera sensor!"));
 			}
 			break;
@@ -83,7 +85,7 @@ UPrimitiveComponent* FSensorFactory::CreateSensor(
 				static_cast<const FRGBCameraConfig*>(&Config);
 			if (!CameraConfig)
 			{
-				UE_LOG(LogTemp, Error, TEXT("FSensorFactory::CreateSensor: "
+				UE_LOG(LogSensorFactory, Error, TEXT("FSensorFactory::CreateSensor: "
 								"Invalid config type for RGB Camera sensor!"));
 				return nullptr;
 			}
@@ -94,7 +96,7 @@ UPrimitiveComponent* FSensorFactory::CreateSensor(
 			}
 			else
 			{
-				UE_LOG(LogTemp, Error, TEXT("FSensorFactory::CreateSensor: "
+				UE_LOG(LogSensorFactory, Error, TEXT("FSensorFactory::CreateSensor: "
 								"Failed to create RGB Camera sensor!"));
 			}
 			
@@ -102,7 +104,7 @@ UPrimitiveComponent* FSensorFactory::CreateSensor(
 		}
 	default:
 		{
-			UE_LOG(LogTemp, Error, TEXT("FSensorFactory::CreateSensor: "
+			UE_LOG(LogSensorFactory, Error, TEXT("FSensorFactory::CreateSensor: "
 							"Invalid sensor type!"));
 		}
 	}

@@ -15,6 +15,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+DEFINE_LOG_CATEGORY_STATIC(LogNormalCamera, Log, All);
+
 #include "Sensors/NormalCamera.h"
 #include "Simulation/Recorder.h"
 #include "RenderingThread.h"
@@ -72,7 +74,7 @@ void UNormalCameraComponent::SetCaptureComponent() const
     }
     else 
     {
-        UE_LOG(LogTemp, Error, TEXT("Capture component not initialized!"));
+        UE_LOG(LogNormalCamera, Error, TEXT("Capture component not initialized!"));
     }
 }
 
@@ -148,7 +150,7 @@ bool UNormalCameraComponent::CheckComponentAndRenderTarget() const
 {
     if (!CaptureComponent || !NormalRenderTarget)
     {
-        UE_LOG(LogTemp, Error, TEXT("Capture component or "
+        UE_LOG(LogNormalCamera, Error, TEXT("Capture component or "
                                     "render target not initialized!"));
         return true;
     }
@@ -159,7 +161,7 @@ void UNormalCameraComponent::CaptureScene()
 {
     if (CheckComponentAndRenderTarget())
     {
-        UE_LOG(LogTemp, Error, TEXT("UNormalCameraComponent: "
+        UE_LOG(LogNormalCamera, Error, TEXT("UNormalCameraComponent: "
                                     "Capture component or render target not initialized!"));
         return;
     }
@@ -182,7 +184,7 @@ void UNormalCameraComponent::ProcessNormalTexture(
     
     if (!RenderTargetResource)
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to get render target resource!"));
+        UE_LOG(LogNormalCamera, Error, TEXT("Failed to get render target resource!"));
         return;
     }
 
@@ -230,7 +232,7 @@ TArray<FLinearColor> UNormalCameraComponent::GetNormalImage()
 {
     if (NormalData.Num() == 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("GetNormalImage: No normal data available!"));
+        UE_LOG(LogNormalCamera, Warning, TEXT("GetNormalImage: No normal data available!"));
         return TArray<FLinearColor>();
     }
     

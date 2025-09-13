@@ -25,6 +25,8 @@
 #include <filesystem>
 #include "CoreMinimal.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogConfigParser, Log, All);
+
 using namespace std::literals;
 
 
@@ -37,7 +39,7 @@ FVCCSimConfig ParseConfig()
     
     if (!std::filesystem::exists(Filename))
     {
-        UE_LOG(LogTemp, Warning, TEXT("ParseConfig: Using default config!"));
+        UE_LOG(LogConfigParser, Warning, TEXT("ParseConfig: Using default config!"));
         // Get the user's documents directory
         FString DocPath = FPlatformProcess::UserDir();
         Filename = TCHAR_TO_UTF8(*FPaths::Combine(
@@ -107,7 +109,7 @@ FVCCSimConfig ParseConfig()
             r.UETag = RobotDetails["UETag"].value_or("None"sv);
             if (r.UETag == "None")
             {
-                UE_LOG(LogTemp, Error, TEXT("ParseConfig: Robot name not found!"));
+                UE_LOG(LogConfigParser, Error, TEXT("ParseConfig: Robot name not found!"));
                 continue;
             }
 
@@ -125,7 +127,7 @@ FVCCSimConfig ParseConfig()
             }
             else
             {
-                UE_LOG(LogTemp, Warning, TEXT("ParseConfig: Robot type not found!"));
+                UE_LOG(LogConfigParser, Warning, TEXT("ParseConfig: Robot type not found!"));
                 continue;
             }
 
@@ -229,7 +231,7 @@ FVCCSimConfig ParseConfig()
                     }
                     else
                     {
-                        UE_LOG(LogTemp, Warning, TEXT("ParseConfig: Component %s not found!"),
+                        UE_LOG(LogConfigParser, Warning, TEXT("ParseConfig: Component %s not found!"),
                             *FString{UTF8_TO_TCHAR(std::string(comp_name).c_str())});
                     }
                 }

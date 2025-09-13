@@ -15,6 +15,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+DEFINE_LOG_CATEGORY_STATIC(LogLidarSensor, Log, All);
+
 #include "Sensors/LidarSensor.h"
 #include "Simulation/Recorder.h"
 #include "DrawDebugHelpers.h"
@@ -120,7 +122,7 @@ TArray<FVector3f> ULidarComponent::PerformLineTraces(FVCCSimOdom* Odom)
 {
     if (!GetWorld())
     {
-	    UE_LOG(LogTemp, Error, TEXT("No world found!"));
+	    UE_LOG(LogLidarSensor, Error, TEXT("No world found!"));
     	return{};
     }
 
@@ -193,13 +195,13 @@ void ULidarComponent::VisualizePointCloud()
 {
 	if (!GetWorld())
 	{
-		UE_LOG(LogTemp, Warning,
+		UE_LOG(LogLidarSensor, Warning,
 			TEXT("No world found!, cannot visualize point cloud"));
 	}
 
 	if (!MeshHolder)
 	{
-		UE_LOG(LogTemp, Warning,
+		UE_LOG(LogLidarSensor, Warning,
 			TEXT("MeshHolder not set, cannot visualize point cloud"));
 	}
 	else

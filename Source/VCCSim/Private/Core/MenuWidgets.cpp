@@ -23,18 +23,20 @@
 #include "Simulation/SceneAnalysisManager.h"
 #include "Engine/World.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogMenuWidgets, Log, All);
+
 void UMenuWidgets::NativeConstruct()
 {
     Super::NativeConstruct();
 
-    UE_LOG(LogTemp, Warning, TEXT("MenuWidgets: NativeConstruct called"));
+    UE_LOG(LogMenuWidgets, Warning, TEXT("MenuWidgets: NativeConstruct called"));
 
     // Initialize game instance first
     GameInstance = Cast<UVCCSimGameInstance>(GetGameInstance());
     
     if (!GameInstance)
     {
-        UE_LOG(LogTemp, Error, TEXT("MenuWidgets: Failed to get VCCSimGameInstance"));
+        UE_LOG(LogMenuWidgets, Error, TEXT("MenuWidgets: Failed to get VCCSimGameInstance"));
         if (StatusText)
         {
             StatusText->SetText(FText::FromString(TEXT("Error: Game instance not found")));
@@ -112,14 +114,14 @@ void UMenuWidgets::NativeConstruct()
         StatusText->SetText(FText::FromString(TEXT("Ready - Click a map to begin")));
     }
     
-    UE_LOG(LogTemp, Warning, TEXT("MenuWidgets: Initialization complete"));
+    UE_LOG(LogMenuWidgets, Warning, TEXT("MenuWidgets: Initialization complete"));
 }
 
 void UMenuWidgets::SetupMapButton(UButton* Button, int32 MapIndex, FLinearColor& OriginalColor, const FString& MapName)
 {
     if (!Button)
     {
-        UE_LOG(LogTemp, Warning, TEXT("MenuWidgets: Button for map index %d (%s) is null, skipping"), MapIndex, *MapName);
+        UE_LOG(LogMenuWidgets, Warning, TEXT("MenuWidgets: Button for map index %d (%s) is null, skipping"), MapIndex, *MapName);
         return;
     }
 
@@ -129,7 +131,7 @@ void UMenuWidgets::SetupMapButton(UButton* Button, int32 MapIndex, FLinearColor&
         // No map available for this button, hide it
         Button->SetVisibility(ESlateVisibility::Collapsed);
         Button->SetIsEnabled(false);
-        UE_LOG(LogTemp, Warning, TEXT("MenuWidgets: No map available for button index %d (%s), hiding button"), MapIndex, *MapName);
+        UE_LOG(LogMenuWidgets, Warning, TEXT("MenuWidgets: No map available for button index %d (%s), hiding button"), MapIndex, *MapName);
         return;
     }
 
@@ -140,20 +142,20 @@ void UMenuWidgets::SetupMapButton(UButton* Button, int32 MapIndex, FLinearColor&
     // Store original color
     OriginalColor = Button->GetColorAndOpacity();
     
-    UE_LOG(LogTemp, Log, TEXT("MenuWidgets: Successfully set up button for map index %d (%s)"), MapIndex, *MapName);
+    UE_LOG(LogMenuWidgets, Log, TEXT("MenuWidgets: Successfully set up button for map index %d (%s)"), MapIndex, *MapName);
 }
 
 void UMenuWidgets::LoadMapAtIndex(int32 MapIndex, const FString& LoadingText)
 {
     if (!GameInstance)
     {
-        UE_LOG(LogTemp, Error, TEXT("MenuWidgets: GameInstance is null"));
+        UE_LOG(LogMenuWidgets, Error, TEXT("MenuWidgets: GameInstance is null"));
         return;
     }
 
     if (MapIndex < 0 || MapIndex >= GameInstance->AvailableMaps.Num())
     {
-        UE_LOG(LogTemp, Error, TEXT("MenuWidgets: Invalid map index %d"), MapIndex);
+        UE_LOG(LogMenuWidgets, Error, TEXT("MenuWidgets: Invalid map index %d"), MapIndex);
         if (StatusText)
         {
             StatusText->SetText(FText::FromString(TEXT("Error: Map not available")));
@@ -184,31 +186,31 @@ void UMenuWidgets::LoadMapAtIndex(int32 MapIndex, const FString& LoadingText)
 // Map selection functions - now using the helper function
 void UMenuWidgets::OnMap1Selected()
 {
-    UE_LOG(LogTemp, Warning, TEXT("MenuWidgets: Map1 Button Clicked"));
+    UE_LOG(LogMenuWidgets, Warning, TEXT("MenuWidgets: Map1 Button Clicked"));
     LoadMapAtIndex(0, TEXT("Loading..."));
 }
 
 void UMenuWidgets::OnMap2Selected()
 {
-    UE_LOG(LogTemp, Warning, TEXT("MenuWidgets: Map2 Button Clicked"));
+    UE_LOG(LogMenuWidgets, Warning, TEXT("MenuWidgets: Map2 Button Clicked"));
     LoadMapAtIndex(1, TEXT("Loading..."));
 }
 
 void UMenuWidgets::OnMap3Selected()
 {
-    UE_LOG(LogTemp, Warning, TEXT("MenuWidgets: Map3 Button Clicked"));
+    UE_LOG(LogMenuWidgets, Warning, TEXT("MenuWidgets: Map3 Button Clicked"));
     LoadMapAtIndex(2, TEXT("Loading ..."));
 }
 
 void UMenuWidgets::OnMap4Selected()
 {
-    UE_LOG(LogTemp, Warning, TEXT("MenuWidgets: Map4 Button Clicked"));
+    UE_LOG(LogMenuWidgets, Warning, TEXT("MenuWidgets: Map4 Button Clicked"));
     LoadMapAtIndex(3, TEXT("Loading ..."));
 }
 
 void UMenuWidgets::OnMap5Selected()
 {
-    UE_LOG(LogTemp, Warning, TEXT("MenuWidgets: Map5 Button Clicked"));
+    UE_LOG(LogMenuWidgets, Warning, TEXT("MenuWidgets: Map5 Button Clicked"));
     LoadMapAtIndex(4, TEXT("Loading ..."));
 }
 
@@ -382,17 +384,17 @@ void UPauseMenuWidget::OnSemanticClicked()
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("Scene Analysis Manager not found!"));
+        UE_LOG(LogMenuWidgets, Error, TEXT("Scene Analysis Manager not found!"));
     }
 }
 
 void UPauseMenuWidget::OnReloadMapClicked()
 {
-    UE_LOG(LogTemp, Warning, TEXT("PauseMenuWidget: Reload Map Button Clicked"));
+    UE_LOG(LogMenuWidgets, Warning, TEXT("PauseMenuWidget: Reload Map Button Clicked"));
     
     if (!GameInstance)
     {
-        UE_LOG(LogTemp, Error, TEXT("PauseMenuWidget: GameInstance is null"));
+        UE_LOG(LogMenuWidgets, Error, TEXT("PauseMenuWidget: GameInstance is null"));
         return;
     }
 

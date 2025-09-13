@@ -2,6 +2,8 @@
 #include "NiagaraDataInterfaceArrayFunctionLibrary.h"
 #include "IO/PLYUtils.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogPLYPointCloudNiagaraActor, Log, All);
+
 APLYPointCloudNiagaraActor::APLYPointCloudNiagaraActor()
 {
     PrimaryActorTick.bCanEverTick = false;
@@ -20,7 +22,7 @@ bool APLYPointCloudNiagaraActor::LoadPly(TArray<FVector>& OutPositions, TArray<F
 {
     if (PlyFilePath.IsEmpty())
     {
-        UE_LOG(LogTemp, Error, TEXT("PLY file path is empty"));
+        UE_LOG(LogPLYPointCloudNiagaraActor, Error, TEXT("PLY file path is empty"));
         return false;
     }
 
@@ -29,7 +31,7 @@ bool APLYPointCloudNiagaraActor::LoadPly(TArray<FVector>& OutPositions, TArray<F
     
     if (!LoadResult.bSuccess || LoadResult.PointCount == 0)
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to load PLY file: %s"), *PlyFilePath);
+        UE_LOG(LogPLYPointCloudNiagaraActor, Error, TEXT("Failed to load PLY file: %s"), *PlyFilePath);
         return false;
     }
 
@@ -42,7 +44,7 @@ bool APLYPointCloudNiagaraActor::LoadPly(TArray<FVector>& OutPositions, TArray<F
     
     if (LoadResult.PointCount > MaxPointsLimit)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Point cloud has %d points, exceeding limit of %d. Downsampling..."), 
+        UE_LOG(LogPLYPointCloudNiagaraActor, Warning, TEXT("Point cloud has %d points, exceeding limit of %d. Downsampling..."), 
                LoadResult.PointCount, MaxPointsLimit);
         
         // Perform uniform downsampling
@@ -57,7 +59,7 @@ bool APLYPointCloudNiagaraActor::LoadPly(TArray<FVector>& OutPositions, TArray<F
         
         ProcessedPoints = MoveTemp(DownsampledPoints);
         
-        UE_LOG(LogTemp, Log, TEXT("Downsampled point cloud to %d points (%.1f%% reduction)"), 
+        UE_LOG(LogPLYPointCloudNiagaraActor, Log, TEXT("Downsampled point cloud to %d points (%.1f%% reduction)"), 
                ProcessedPoints.Num(),
                (1.0f - (float)ProcessedPoints.Num() / (float)LoadResult.PointCount) * 100.0f);
     }
@@ -72,7 +74,7 @@ bool APLYPointCloudNiagaraActor::LoadPly(TArray<FVector>& OutPositions, TArray<F
         OutColors.Add(Point.Color);
     }
 
-    UE_LOG(LogTemp, Log, TEXT("Final PLY data: %d points (Colors: %s)"), 
+    UE_LOG(LogPLYPointCloudNiagaraActor, Log, TEXT("Final PLY data: %d points (Colors: %s)"), 
            OutPositions.Num(),
            LoadResult.bHasColors ? TEXT("Yes") : TEXT("No"));
 
@@ -85,13 +87,13 @@ void APLYPointCloudNiagaraActor::BeginPlay()
     
     if (!NiagaraSystemAsset)
     {
-        UE_LOG(LogTemp, Error, TEXT("NiagaraSystemAsset is not set!"));
+        UE_LOG(LogPLYPointCloudNiagaraActor, Error, TEXT("NiagaraSystemAsset is not set!"));
         return;
     }
     
     if (!NiagaraComp)
     {
-        UE_LOG(LogTemp, Error, TEXT("NiagaraComp is not valid!"));
+        UE_LOG(LogPLYPointCloudNiagaraActor, Error, TEXT("NiagaraComp is not valid!"));
         return;
     }
     
@@ -109,7 +111,7 @@ void APLYPointCloudNiagaraActor::BeginPlay()
 
     if (Positions.Num() == 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("No points loaded from PLY file"));
+        UE_LOG(LogPLYPointCloudNiagaraActor, Warning, TEXT("No points loaded from PLY file"));
         return;
     }
 
@@ -139,8 +141,8 @@ void APLYPointCloudNiagaraActor::BeginPlay()
     
     if (BoundingBox.IsValid)
     {
-        UE_LOG(LogTemp, Log, TEXT("Point cloud bounds: %s"), *BoundingBox.ToString());
+        UE_LOG(LogPLYPointCloudNiagaraActor, Log, TEXT("Point cloud bounds: %s"), *BoundingBox.ToString());
     }
 
-    UE_LOG(LogTemp, Log, TEXT("Successfully initialized Niagara point cloud with %d points"), Positions.Num());
+    UE_LOG(LogPLYPointCloudNiagaraActor, Log, TEXT("Successfully initialized Niagara point cloud with %d points"), Positions.Num());
 }

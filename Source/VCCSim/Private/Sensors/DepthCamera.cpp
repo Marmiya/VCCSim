@@ -15,6 +15,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+DEFINE_LOG_CATEGORY_STATIC(LogDepthCamera, Log, All);
+
 #include "Sensors/DepthCamera.h"
 #include "Simulation/Recorder.h"
 #include "RenderingThread.h"
@@ -54,7 +56,7 @@ void UDepthCameraComponent::RConfigure(
         RecorderPtr = Recorder;
         RecordInterval = Config.RecordInterval;
         RecordState = Recorder->RecordState;
-        // UE_LOG(LogTemp, Display, TEXT("RecordState: %d"),RecordState);
+        // UE_LOG(LogDepthCamera, Display, TEXT("RecordState: %d"),RecordState);
         
         Recorder->OnRecordStateChanged.AddDynamic(this,
             &UDepthCameraComponent::SetRecordState);
@@ -82,7 +84,7 @@ void UDepthCameraComponent::SetCaptureComponent() const
     }
     else 
     {
-        UE_LOG(LogTemp, Error, TEXT("Capture component not initialized!"));
+        UE_LOG(LogDepthCamera, Error, TEXT("Capture component not initialized!"));
     }
 }
 
@@ -151,7 +153,7 @@ void UDepthCameraComponent::InitializeRenderTargets()
     
     if (CaptureComponent==nullptr)
     {
-        UE_LOG(LogTemp, Error, TEXT("Capture component not initialized!"));
+        UE_LOG(LogDepthCamera, Error, TEXT("Capture component not initialized!"));
     }
 }
 
@@ -159,7 +161,7 @@ bool UDepthCameraComponent::CheckComponentAndRenderTarget() const
 {
     if (!CaptureComponent || !DepthRenderTarget)
     {
-        UE_LOG(LogTemp, Error, TEXT("Capture component or "
+        UE_LOG(LogDepthCamera, Error, TEXT("Capture component or "
                    "render target not initialized!"));
         return true;
     }
@@ -170,7 +172,7 @@ void UDepthCameraComponent::CaptureDepthScene()
 {
     if (CheckComponentAndRenderTarget())
     {
-        UE_LOG(LogTemp, Error, TEXT("UDepthCameraComponent: "
+        UE_LOG(LogDepthCamera, Error, TEXT("UDepthCameraComponent: "
                                     "Capture component or render target not initialized!"));
         return;
     }
@@ -187,7 +189,7 @@ void UDepthCameraComponent::OnlyCaptureDepthScene()
 {
     if (CheckComponentAndRenderTarget())
     {
-        UE_LOG(LogTemp, Error, TEXT("UDepthCameraComponent: "
+        UE_LOG(LogDepthCamera, Error, TEXT("UDepthCameraComponent: "
                                     "Capture component or render target not initialized!"));
         return;
     }
@@ -212,7 +214,7 @@ void UDepthCameraComponent::ProcessDepthTexture(TFunction<void()> OnComplete)
     
     if (!RenderTargetResource)
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to get render target resource!"));
+        UE_LOG(LogDepthCamera, Error, TEXT("Failed to get render target resource!"));
         return;
     }
 
@@ -263,7 +265,7 @@ void UDepthCameraComponent::ProcessDepthTextureParam(
     
     if (!RenderTargetResource)
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to get render target resource!"));
+        UE_LOG(LogDepthCamera, Error, TEXT("Failed to get render target resource!"));
         return;
     }
 
@@ -311,7 +313,7 @@ TArray<FDCPoint> UDepthCameraComponent::GeneratePointCloud()
 {
     if (DepthData.Num() == 0) 
     {
-        UE_LOG(LogTemp, Error, TEXT("GeneratePointCloud: No depth data available!"));
+        UE_LOG(LogDepthCamera, Error, TEXT("GeneratePointCloud: No depth data available!"));
         return {};
     }
 
@@ -319,12 +321,12 @@ TArray<FDCPoint> UDepthCameraComponent::GeneratePointCloud()
 
     // Get camera transform
     const FTransform CameraTransform = GetComponentTransform();
-    UE_LOG(LogTemp, Log, TEXT("Camera Transform: %s"), *CameraTransform.ToString());
+    UE_LOG(LogDepthCamera, Log, TEXT("Camera Transform: %s"), *CameraTransform.ToString());
     const float AspectRatio = static_cast<float>(Width) / Height;
     
     // Get the actual FOV from the capture component
     float ActualFOV = CaptureComponent ? CaptureComponent->FOVAngle : FOV;
-    UE_LOG(LogTemp, Log, TEXT("Actual FOV: %f"), ActualFOV);
+    UE_LOG(LogDepthCamera, Log, TEXT("Actual FOV: %f"), ActualFOV);
     float HalfFOVRad = FMath::DegreesToRadians(ActualFOV * 0.5f);
 
     for (int32 Y = 0; Y < Height; ++Y)
@@ -391,7 +393,7 @@ TArray<float> UDepthCameraComponent::GetDepthImage()
     // Wait if depth data hasn't been processed yet
     if (DepthData.Num() == 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("GetDepthImage: No depth data available!"));
+        UE_LOG(LogDepthCamera, Warning, TEXT("GetDepthImage: No depth data available!"));
         return DepthImage;
     }
     
@@ -409,7 +411,7 @@ void UDepthCameraComponent::VisualizePointCloud()
     UWorld* World = GetWorld();
     if (!World)
     {
-        UE_LOG(LogTemp, Error, TEXT("VisualizePointCloud: World is null!"));
+        UE_LOG(LogDepthCamera, Error, TEXT("VisualizePointCloud: World is null!"));
         return;
     }
     int i = 0;

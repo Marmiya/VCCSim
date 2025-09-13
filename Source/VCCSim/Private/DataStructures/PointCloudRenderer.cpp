@@ -15,6 +15,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+DEFINE_LOG_CATEGORY_STATIC(LogPointCloudRenderer, Log, All);
+
 #include "DataStructures/PointCloudRenderer.h"
 #include "NiagaraFunctionLibrary.h"
 #include "NiagaraDataInterfaceArrayFunctionLibrary.h"
@@ -85,22 +87,22 @@ void UPointCloudRenderer::InitializeNiagaraSystem()
         PointCloudSystem = NiagaraSystemAsset.LoadSynchronous();
         if (PointCloudSystem)
         {
-            UE_LOG(LogTemp, Log, TEXT("Loaded Niagara system from property: %s"), *NiagaraSystemAsset.ToString());
+            UE_LOG(LogPointCloudRenderer, Log, TEXT("Loaded Niagara system from property: %s"), *NiagaraSystemAsset.ToString());
         }
     }
 
     // 2) Skip automatic Niagara system search - use user-defined system only
     if (!PointCloudSystem)
     {
-        UE_LOG(LogTemp, Log, TEXT("No Niagara system assigned in NiagaraSystemAsset property."));
-        UE_LOG(LogTemp, Log, TEXT("To use Niagara for point cloud rendering:"));
-        UE_LOG(LogTemp, Log, TEXT("1. Create a new Niagara System with GPU Emitter"));
-        UE_LOG(LogTemp, Log, TEXT("2. Add Array Data Interface with 'Points' (Vector) and 'Colors' (Vector) arrays"));
-        UE_LOG(LogTemp, Log, TEXT("3. Set Spawn Count = Points.GetNum()"));
-        UE_LOG(LogTemp, Log, TEXT("4. Set Particles.Position = Points.GetValue(Particles.ID)"));
-        UE_LOG(LogTemp, Log, TEXT("5. Set Particles.Color = Colors.GetValue(Particles.ID)"));
-        UE_LOG(LogTemp, Log, TEXT("6. Assign the system to NiagaraSystemAsset property"));
-        UE_LOG(LogTemp, Log, TEXT("Using optimized instanced mesh fallback instead."));
+        UE_LOG(LogPointCloudRenderer, Log, TEXT("No Niagara system assigned in NiagaraSystemAsset property."));
+        UE_LOG(LogPointCloudRenderer, Log, TEXT("To use Niagara for point cloud rendering:"));
+        UE_LOG(LogPointCloudRenderer, Log, TEXT("1. Create a new Niagara System with GPU Emitter"));
+        UE_LOG(LogPointCloudRenderer, Log, TEXT("2. Add Array Data Interface with 'Points' (Vector) and 'Colors' (Vector) arrays"));
+        UE_LOG(LogPointCloudRenderer, Log, TEXT("3. Set Spawn Count = Points.GetNum()"));
+        UE_LOG(LogPointCloudRenderer, Log, TEXT("4. Set Particles.Position = Points.GetValue(Particles.ID)"));
+        UE_LOG(LogPointCloudRenderer, Log, TEXT("5. Set Particles.Color = Colors.GetValue(Particles.ID)"));
+        UE_LOG(LogPointCloudRenderer, Log, TEXT("6. Assign the system to NiagaraSystemAsset property"));
+        UE_LOG(LogPointCloudRenderer, Log, TEXT("Using optimized instanced mesh fallback instead."));
     }
 
     if (PointCloudSystem)
@@ -109,11 +111,11 @@ void UPointCloudRenderer::InitializeNiagaraSystem()
         NiagaraComponent->SetAutoActivate(false);
         SetupPointCloudMaterial();
         bIsInitialized = true;
-        UE_LOG(LogTemp, Log, TEXT("Point cloud Niagara system initialized successfully"));
+        UE_LOG(LogPointCloudRenderer, Log, TEXT("Point cloud Niagara system initialized successfully"));
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("No Niagara systems found in project. Using optimized fallback system."));
+        UE_LOG(LogPointCloudRenderer, Warning, TEXT("No Niagara systems found in project. Using optimized fallback system."));
         CreateOptimizedFallbackSystem();
     }
 }
@@ -165,7 +167,7 @@ void UPointCloudRenderer::CreateOptimizedFallbackSystem()
 {
     if (!InstancedMeshComponent)
     {
-        UE_LOG(LogTemp, Error, TEXT("Instanced mesh component not available for fallback rendering"));
+        UE_LOG(LogPointCloudRenderer, Error, TEXT("Instanced mesh component not available for fallback rendering"));
         return;
     }
 
@@ -179,7 +181,7 @@ void UPointCloudRenderer::CreateOptimizedFallbackSystem()
         }
         else
         {
-            UE_LOG(LogTemp, Error, TEXT("Failed to load sphere mesh for main ISM"));
+            UE_LOG(LogPointCloudRenderer, Error, TEXT("Failed to load sphere mesh for main ISM"));
         }
     }
 
@@ -219,7 +221,7 @@ void UPointCloudRenderer::CreateOptimizedFallbackSystem()
             }
             else
             {
-                UE_LOG(LogTemp, Error, TEXT("Failed to load base material from /Engine/BasicShapes/BasicShapeMaterial"));
+                UE_LOG(LogPointCloudRenderer, Error, TEXT("Failed to load base material from /Engine/BasicShapes/BasicShapeMaterial"));
             }
         }
         
@@ -229,12 +231,12 @@ void UPointCloudRenderer::CreateOptimizedFallbackSystem()
         }
         else
         {
-            UE_LOG(LogTemp, Error, TEXT("Failed to set any material for main ISM - points may not be visible"));
+            UE_LOG(LogPointCloudRenderer, Error, TEXT("Failed to set any material for main ISM - points may not be visible"));
         }
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("No static mesh set for InstancedMeshComponent - cannot set material"));
+        UE_LOG(LogPointCloudRenderer, Error, TEXT("No static mesh set for InstancedMeshComponent - cannot set material"));
     }
 
     // Mark as initialized for fallback rendering
@@ -297,7 +299,7 @@ void UPointCloudRenderer::RenderPointCloud(const FPointCloudData& PointCloudData
                 // Hide any color ISMs created for fallback
                 ClearColorInstancedComponents();
                 
-                UE_LOG(LogTemp, Log, TEXT("Rendered %d points using Niagara system: %s"), 
+                UE_LOG(LogPointCloudRenderer, Log, TEXT("Rendered %d points using Niagara system: %s"), 
                        RenderedPointCount, 
                        *NiagaraComponent->GetAsset()->GetName());
                 return; // Successfully used Niagara, exit early
@@ -359,7 +361,7 @@ void UPointCloudRenderer::RenderPointCloudFallback(const FPointCloudData& PointC
         NiagaraComponent->SetVisibility(false);
     }
     
-    UE_LOG(LogTemp, Log, TEXT("Fallback rendered %d points using instanced meshes"), Points.Num());
+    UE_LOG(LogPointCloudRenderer, Log, TEXT("Fallback rendered %d points using instanced meshes"), Points.Num());
 }
 
 void UPointCloudRenderer::RenderPointCloudFallbackWithColors(const FPointCloudData& PointCloudData)
@@ -437,7 +439,7 @@ void UPointCloudRenderer::RenderPointCloudFallbackWithColors(const FPointCloudDa
         NiagaraComponent->SetVisibility(false);
     }
 
-    UE_LOG(LogTemp, Log, TEXT("Fallback rendered %d points using color-grouped instanced meshes (%d unique colors)"), Points.Num(), ColorToIndices.Num());
+    UE_LOG(LogPointCloudRenderer, Log, TEXT("Fallback rendered %d points using color-grouped instanced meshes (%d unique colors)"), Points.Num(), ColorToIndices.Num());
 }
 
 void UPointCloudRenderer::UpdateParticleData(const FPointCloudData& PointCloudData)
@@ -499,7 +501,7 @@ void UPointCloudRenderer::UpdateParticleData(const FPointCloudData& PointCloudDa
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("Niagara system '%s' doesn't appear to be designed for point cloud rendering. Using fallback."), *SystemName);
+            UE_LOG(LogPointCloudRenderer, Warning, TEXT("Niagara system '%s' doesn't appear to be designed for point cloud rendering. Using fallback."), *SystemName);
             
             // Deactivate the incompatible system and use fallback instead
             NiagaraComponent->Deactivate();
@@ -519,11 +521,11 @@ void UPointCloudRenderer::UpdateParticleData(const FPointCloudData& PointCloudDa
                 FName(TEXT("Points")), 
                 CachedPositions
             );
-            UE_LOG(LogTemp, Log, TEXT("Set position data using 'Points' array: %d positions"), CachedPositions.Num());
+            UE_LOG(LogPointCloudRenderer, Log, TEXT("Set position data using 'Points' array: %d positions"), CachedPositions.Num());
         }
         catch (...)
         {
-            UE_LOG(LogTemp, Warning, TEXT("Could not set position data - using fallback rendering"));
+            UE_LOG(LogPointCloudRenderer, Warning, TEXT("Could not set position data - using fallback rendering"));
             NiagaraComponent->Deactivate();
             NiagaraComponent->SetVisibility(false);
             return;
@@ -548,11 +550,11 @@ void UPointCloudRenderer::UpdateParticleData(const FPointCloudData& PointCloudDa
                 FName(TEXT("Colors")), 
                 ColorVectors
             );
-            UE_LOG(LogTemp, Log, TEXT("Set color data using 'Colors' array: %d colors"), CachedColors.Num());
+            UE_LOG(LogPointCloudRenderer, Log, TEXT("Set color data using 'Colors' array: %d colors"), CachedColors.Num());
         }
         catch (...)
         {
-            UE_LOG(LogTemp, Log, TEXT("Could not set color data - using default colors"));
+            UE_LOG(LogPointCloudRenderer, Log, TEXT("Could not set color data - using default colors"));
         }
     }
     
@@ -574,17 +576,17 @@ void UPointCloudRenderer::UpdateParticleData(const FPointCloudData& PointCloudDa
                 
                 if (BoundingBox.IsValid)
                 {
-                    UE_LOG(LogTemp, Log, TEXT("Point cloud bounds: %s"), *BoundingBox.ToString());
+                    UE_LOG(LogPointCloudRenderer, Log, TEXT("Point cloud bounds: %s"), *BoundingBox.ToString());
                 }
             }
         }
         catch (...)
         {
-            UE_LOG(LogTemp, Warning, TEXT("Could not set additional Niagara parameters"));
+            UE_LOG(LogPointCloudRenderer, Warning, TEXT("Could not set additional Niagara parameters"));
         }
     }
     
-    UE_LOG(LogTemp, Log, TEXT("Updated Niagara particle data: %d points"), Points.Num());
+    UE_LOG(LogPointCloudRenderer, Log, TEXT("Updated Niagara particle data: %d points"), Points.Num());
 }
 
 void UPointCloudRenderer::ClearPointCloud()
@@ -737,5 +739,5 @@ void UPointCloudRenderer::SetupPointCloudMaterial()
     // Try to set up material parameters for better point cloud visualization
     // This would typically involve setting up a material that supports per-particle colors
     
-    UE_LOG(LogTemp, Log, TEXT("Point cloud material setup completed"));
+    UE_LOG(LogPointCloudRenderer, Log, TEXT("Point cloud material setup completed"));
 }

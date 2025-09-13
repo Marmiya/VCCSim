@@ -15,6 +15,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+DEFINE_LOG_CATEGORY_STATIC(LogTriangleSplatting, Log, All);
+
 #include "Editor/Panels/VCCSimPanelTriangleSplatting.h"
 #include "Editor/Panels/VCCSimPanelSelection.h"
 #include "Utils/TriangleSplattingManager.h"
@@ -102,7 +104,7 @@ void FVCCSimPanelTriangleSplatting::Initialize(
     InitializeGSManager();
     InitializeColmapManager();
     LoadPaths();
-    UE_LOG(LogTemp, Log, TEXT("VCCSimPanelTriangleSplatting initialized"));
+    UE_LOG(LogTriangleSplatting, Log, TEXT("VCCSimPanelTriangleSplatting initialized"));
 }
 
 void FVCCSimPanelTriangleSplatting::Cleanup()
@@ -184,7 +186,7 @@ void FVCCSimPanelTriangleSplatting::InitializeColmapManager()
                 {
                     GSColmapDatasetTextBox->SetText(FText::FromString(GeneratedDatasetPath));
                 }
-                UE_LOG(LogTemp, Log, TEXT("Auto-filled COLMAP dataset "
+                UE_LOG(LogTriangleSplatting, Log, TEXT("Auto-filled COLMAP dataset "
                                           "path: %s"), *GeneratedDatasetPath);
                 // Persist the auto-filled dataset path
                 SavePaths();
@@ -333,7 +335,7 @@ FReply FVCCSimPanelTriangleSplatting::OnGSColmapTrainingClicked()
         }
     }
     
-    UE_LOG(LogTemp, Log, TEXT("Starting Triangle Splatting training with "
+    UE_LOG(LogTriangleSplatting, Log, TEXT("Starting Triangle Splatting training with "
                               "COLMAP dataset: %s"), *GSConfig.ColmapDatasetPath);
     
     // Start Triangle Splatting training directly with COLMAP dataset
@@ -354,7 +356,7 @@ void FVCCSimPanelTriangleSplatting::StartTriangleSplattingWithColmapData(const F
         return;
     }
     
-    UE_LOG(LogTemp, Log, TEXT("Using original Triangle Splatting script for comparison: %s"), *TrainingScript);
+    UE_LOG(LogTriangleSplatting, Log, TEXT("Using original Triangle Splatting script for comparison: %s"), *TrainingScript);
     
     // Create Triangle Splatting output directory with timestamp
     FString TSOutputParentDir = FPaths::Combine(GSConfig.OutputDirectory, TEXT("triangle_splatting_output"));
@@ -371,7 +373,7 @@ void FVCCSimPanelTriangleSplatting::StartTriangleSplattingWithColmapData(const F
         PlatformFile.CreateDirectoryTree(*TSOutputDir);
     }
     
-    UE_LOG(LogTemp, Log, TEXT("Triangle Splatting output directory: %s"), *TSOutputDir);
+    UE_LOG(LogTriangleSplatting, Log, TEXT("Triangle Splatting output directory: %s"), *TSOutputDir);
     
     // Build Triangle Splatting command with micromamba environment Python
     // Try to find micromamba triangle_splatting environment Python executable
@@ -381,13 +383,13 @@ void FVCCSimPanelTriangleSplatting::StartTriangleSplattingWithColmapData(const F
     if (FPaths::FileExists(MicromambaPython))
     {
         PythonCommand = MicromambaPython;
-        UE_LOG(LogTemp, Log, TEXT("Using micromamba triangle_splatting Python: %s"), *PythonCommand);
+        UE_LOG(LogTriangleSplatting, Log, TEXT("Using micromamba triangle_splatting Python: %s"), *PythonCommand);
     }
     else
     {
         // Fallback to system python
         PythonCommand = TEXT("python");
-        UE_LOG(LogTemp, Warning, TEXT("Micromamba triangle_splatting environment not found, using system python"));
+        UE_LOG(LogTriangleSplatting, Warning, TEXT("Micromamba triangle_splatting environment not found, using system python"));
     }
     
     FString Arguments = FString::Printf(TEXT("-u \"%s\" -s \"%s\" -m \"%s\" --eval"), 
@@ -397,7 +399,7 @@ void FVCCSimPanelTriangleSplatting::StartTriangleSplattingWithColmapData(const F
     // This could be enhanced with better outdoor detection logic
     Arguments += TEXT(" --outdoor");
     
-    UE_LOG(LogTemp, Log, TEXT("Starting Triangle Splatting training: %s %s"), *PythonCommand, *Arguments);
+    UE_LOG(LogTriangleSplatting, Log, TEXT("Starting Triangle Splatting training: %s %s"), *PythonCommand, *Arguments);
     
     // Start Triangle Splatting training process
     if (GSTrainingManager->StartColmapTraining(PythonCommand, Arguments, TSOutputDir))
@@ -726,7 +728,7 @@ void FVCCSimPanelTriangleSplatting::ExportCamerasToPLY(
     
     if (!bSuccess)
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to export cameras to PLY file: %s"), *OutputPath);
+        UE_LOG(LogTriangleSplatting, Error, TEXT("Failed to export cameras to PLY file: %s"), *OutputPath);
     }
 }
 
@@ -742,7 +744,7 @@ void FVCCSimPanelTriangleSplatting::SaveCameraInfoData(
     
     if (!bSuccess)
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to save CameraInfo data using utility function"));
+        UE_LOG(LogTriangleSplatting, Error, TEXT("Failed to save CameraInfo data using utility function"));
     }
 }
 
@@ -765,7 +767,7 @@ bool FVCCSimPanelTriangleSplatting::LoadCameraIntrinsicsFromColmap(const FString
 {
     if (!FPaths::FileExists(FilePath))
     {
-        UE_LOG(LogTemp, Error, TEXT("Camera intrinsics file does not exist: %s"), *FilePath);
+        UE_LOG(LogTriangleSplatting, Error, TEXT("Camera intrinsics file does not exist: %s"), *FilePath);
         return false;
     }
     
@@ -781,7 +783,7 @@ bool FVCCSimPanelTriangleSplatting::LoadCameraIntrinsicsFromColmap(const FString
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("Unsupported camera file format: %s"), *FileName);
+        UE_LOG(LogTriangleSplatting, Error, TEXT("Unsupported camera file format: %s"), *FileName);
         return false;
     }
 }
@@ -791,7 +793,7 @@ bool FVCCSimPanelTriangleSplatting::LoadCameraIntrinsicsFromColmapText(const FSt
     TArray<FString> Lines;
     if (!FFileHelper::LoadFileToStringArray(Lines, *FilePath))
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to read camera file: %s"), *FilePath);
+        UE_LOG(LogTriangleSplatting, Error, TEXT("Failed to read camera file: %s"), *FilePath);
         return false;
     }
     
@@ -843,7 +845,7 @@ bool FVCCSimPanelTriangleSplatting::LoadCameraIntrinsicsFromColmapText(const FSt
             GSFOVValue = FovDegrees;
             GSConfig.FOVDegrees = FovDegrees;
             
-            UE_LOG(LogTemp, Log, TEXT("Loaded PINHOLE camera: %dx%d, fx=%.2f, fy=%.2f, FOV=%.2f°"), 
+            UE_LOG(LogTriangleSplatting, Log, TEXT("Loaded PINHOLE camera: %dx%d, fx=%.2f, fy=%.2f, FOV=%.2f°"), 
                 Width, Height, fx, fy, FovDegrees);
             return true;
         }
@@ -866,13 +868,13 @@ bool FVCCSimPanelTriangleSplatting::LoadCameraIntrinsicsFromColmapText(const FSt
             GSFOVValue = FovDegrees;
             GSConfig.FOVDegrees = FovDegrees;
             
-            UE_LOG(LogTemp, Log, TEXT("Loaded SIMPLE_PINHOLE camera: %dx%d, f=%.2f, FOV=%.2f°"), 
+            UE_LOG(LogTriangleSplatting, Log, TEXT("Loaded SIMPLE_PINHOLE camera: %dx%d, f=%.2f, FOV=%.2f°"), 
                 Width, Height, f, FovDegrees);
             return true;
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("Unsupported camera model: %s"), *Model);
+            UE_LOG(LogTriangleSplatting, Warning, TEXT("Unsupported camera model: %s"), *Model);
         }
     }
     
@@ -884,13 +886,13 @@ bool FVCCSimPanelTriangleSplatting::LoadCameraIntrinsicsFromColmapBinary(const F
     TArray<uint8> FileData;
     if (!FFileHelper::LoadFileToArray(FileData, *FilePath))
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to read binary camera file: %s"), *FilePath);
+        UE_LOG(LogTriangleSplatting, Error, TEXT("Failed to read binary camera file: %s"), *FilePath);
         return false;
     }
     
     if (FileData.Num() < 8)
     {
-        UE_LOG(LogTemp, Error, TEXT("Camera file too small: %s"), *FilePath);
+        UE_LOG(LogTriangleSplatting, Error, TEXT("Camera file too small: %s"), *FilePath);
         return false;
     }
     
@@ -899,7 +901,7 @@ bool FVCCSimPanelTriangleSplatting::LoadCameraIntrinsicsFromColmapBinary(const F
     
     if (NumCameras == 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("No cameras found in file: %s"), *FilePath);
+        UE_LOG(LogTriangleSplatting, Warning, TEXT("No cameras found in file: %s"), *FilePath);
         return false;
     }
     
@@ -955,7 +957,7 @@ bool FVCCSimPanelTriangleSplatting::LoadCameraIntrinsicsFromColmapBinary(const F
             GSFOVValue = FovDegrees;
             GSConfig.FOVDegrees = FovDegrees;
             
-            UE_LOG(LogTemp, Log, TEXT("Loaded SIMPLE_PINHOLE camera from binary: %dx%d, f=%.2f, FOV=%.2f°"), 
+            UE_LOG(LogTriangleSplatting, Log, TEXT("Loaded SIMPLE_PINHOLE camera from binary: %dx%d, f=%.2f, FOV=%.2f°"), 
                 (int32)Width, (int32)Height, (float)f, FovDegrees);
             return true;
         }
@@ -981,13 +983,13 @@ bool FVCCSimPanelTriangleSplatting::LoadCameraIntrinsicsFromColmapBinary(const F
             GSFOVValue = FovDegrees;
             GSConfig.FOVDegrees = FovDegrees;
             
-            UE_LOG(LogTemp, Log, TEXT("Loaded PINHOLE camera from binary: %dx%d, fx=%.2f, fy=%.2f, FOV=%.2f°"), 
+            UE_LOG(LogTriangleSplatting, Log, TEXT("Loaded PINHOLE camera from binary: %dx%d, fx=%.2f, fy=%.2f, FOV=%.2f°"), 
                 (int32)Width, (int32)Height, (float)fx, (float)fy, FovDegrees);
             return true;
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("Unsupported camera model ID: %d"), ModelId);
+            UE_LOG(LogTriangleSplatting, Warning, TEXT("Unsupported camera model ID: %d"), ModelId);
             // Skip this camera and try the next one
             continue;
         }
@@ -1050,11 +1052,11 @@ void FVCCSimPanelTriangleSplatting::SavePathsToProjectFile()
     const FString FileContent = FString::Join(Lines, TEXT("\n"));
     if (FFileHelper::SaveStringToFile(FileContent, *ConfigFilePath))
     {
-        UE_LOG(LogTemp, Log, TEXT("Triangle Splatting paths saved to: %s"), *ConfigFilePath);
+        UE_LOG(LogTriangleSplatting, Log, TEXT("Triangle Splatting paths saved to: %s"), *ConfigFilePath);
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("Failed to save Triangle Splatting "
+        UE_LOG(LogTriangleSplatting, Warning, TEXT("Failed to save Triangle Splatting "
                                       "paths to: %s"), *ConfigFilePath);
     }
 }
@@ -1113,7 +1115,7 @@ bool FVCCSimPanelTriangleSplatting::LoadPathsFromProjectFile()
 
         if (bAnySetLocal)
         {
-            UE_LOG(LogTemp, Log, TEXT("Triangle Splatting paths loaded from: %s"), *FilePath);
+            UE_LOG(LogTriangleSplatting, Log, TEXT("Triangle Splatting paths loaded from: %s"), *FilePath);
         }
         return bAnySetLocal;
     };
@@ -1175,11 +1177,11 @@ void FVCCSimPanelTriangleSplatting::UpdateUIFromConfig()
     }
     
     // Silent update; avoid noisy logs during panel creation
-    UE_LOG(LogTemp, Log, TEXT("  ImageDirectory: %s"), *GSConfig.ImageDirectory);
-    UE_LOG(LogTemp, Log, TEXT("  CameraIntrinsicsFilePath1: %s"), *GSConfig.CameraIntrinsicsFilePath);
-    UE_LOG(LogTemp, Log, TEXT("  PoseFilePath: %s"), *GSConfig.PoseFilePath);
-    UE_LOG(LogTemp, Log, TEXT("  OutputDirectory: %s"), *GSConfig.OutputDirectory);
-    UE_LOG(LogTemp, Log, TEXT("  ColmapDatasetPath: %s"), *GSConfig.ColmapDatasetPath);
+    UE_LOG(LogTriangleSplatting, Log, TEXT("  ImageDirectory: %s"), *GSConfig.ImageDirectory);
+    UE_LOG(LogTriangleSplatting, Log, TEXT("  CameraIntrinsicsFilePath1: %s"), *GSConfig.CameraIntrinsicsFilePath);
+    UE_LOG(LogTriangleSplatting, Log, TEXT("  PoseFilePath: %s"), *GSConfig.PoseFilePath);
+    UE_LOG(LogTriangleSplatting, Log, TEXT("  OutputDirectory: %s"), *GSConfig.OutputDirectory);
+    UE_LOG(LogTriangleSplatting, Log, TEXT("  ColmapDatasetPath: %s"), *GSConfig.ColmapDatasetPath);
 }
 
 END_SLATE_FUNCTION_BUILD_OPTIMIZATION

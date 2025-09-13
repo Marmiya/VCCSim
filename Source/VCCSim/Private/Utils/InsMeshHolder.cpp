@@ -18,6 +18,8 @@
 #include "Utils/InsMeshHolder.h"
 #include "Components/InstancedStaticMeshComponent.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogInsMeshHolder, Log, All);
+
 UInsMeshHolder::UInsMeshHolder()
 {
 	PrimaryComponentTick.bCanEverTick = true;
@@ -33,7 +35,7 @@ void UInsMeshHolder::OnRegister()
 	InstancedMeshComponent = NewObject<UInstancedStaticMeshComponent>(this);
 	if (!InstancedMeshComponent)
 	{
-		UE_LOG(LogTemp, Error, TEXT("Failed to create InstancedMeshComponent"));
+		UE_LOG(LogInsMeshHolder, Error, TEXT("Failed to create InstancedMeshComponent"));
 		return;
 	}
 	InstancedMeshComponent->SetUsingAbsoluteLocation(true);
@@ -53,7 +55,7 @@ void UInsMeshHolder::OnRegister()
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("Failed to load MeshAsset"));
+		UE_LOG(LogInsMeshHolder, Error, TEXT("Failed to load MeshAsset"));
 	}
 
 	UMaterialInterface* MaterialAsset = Cast<UMaterialInterface>(StaticLoadObject(
@@ -77,7 +79,7 @@ void UInsMeshHolder::CreateStaticMeshes()
 	InstancedMeshComponentColor = NewObject<UInstancedStaticMeshComponent>(this);
 	if (!InstancedMeshComponentColor)
 	{
-		UE_LOG(LogTemp, Error,
+		UE_LOG(LogInsMeshHolder, Error,
 			TEXT("Failed to create InstancedMeshComponentColor"));
 		return;
 	}
@@ -115,13 +117,13 @@ void UInsMeshHolder::CreateStaticMeshes()
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error,
+			UE_LOG(LogInsMeshHolder, Error,
 				TEXT("Failed to create dynamic material instance"));
 		}
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("Failed to load MaterialAsset"));
+		UE_LOG(LogInsMeshHolder, Error, TEXT("Failed to load MaterialAsset"));
 	}
 
 	InstancedMeshComponentColor->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -143,20 +145,20 @@ void UInsMeshHolder::ClearAndAddNewInstancesWithColors(
 {
 	if (!InstancedMeshComponentColor || !ColorMaterialInstance)
 	{
-		UE_LOG(LogTemp, Error,
+		UE_LOG(LogInsMeshHolder, Error,
 			TEXT("InstancedMeshComponentColor or ColorMaterialInstance is null"));
 		return;
 	}
 
 	if (Transforms.Num() == 0)
 	{
-		UE_LOG(LogTemp, Error, TEXT("Transforms array must be non-empty"));
+		UE_LOG(LogInsMeshHolder, Error, TEXT("Transforms array must be non-empty"));
 		return;
 	}
 		
 	if (Transforms.Num() != Colors.Num())
 	{
-		UE_LOG(LogTemp, Error,
+		UE_LOG(LogInsMeshHolder, Error,
 			TEXT("Transforms and Colors arrays must have the same length"));
 		return;
 	}

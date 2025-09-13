@@ -15,6 +15,8 @@
 * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+DEFINE_LOG_CATEGORY_STATIC(LogCameraData, Log, All);
+
 #include "DataStructures/CameraData.h"
 #include "Misc/FileHelper.h"
 #include "HAL/PlatformFilemanager.h"
@@ -102,11 +104,11 @@ namespace FCameraInfoUtils
         // Write to file
         if (!FFileHelper::SaveStringToFile(OutputText, *FilePath))
         {
-            UE_LOG(LogTemp, Error, TEXT("Failed to save CameraInfo data to file: %s"), *FilePath);
+            UE_LOG(LogCameraData, Error, TEXT("Failed to save CameraInfo data to file: %s"), *FilePath);
             return false;
         }
         
-        UE_LOG(LogTemp, Log, TEXT("Successfully saved CameraInfo data to: %s"), *FilePath);
+        UE_LOG(LogCameraData, Log, TEXT("Successfully saved CameraInfo data to: %s"), *FilePath);
         return true;
     }
 
@@ -115,7 +117,7 @@ namespace FCameraInfoUtils
         FString FileContent;
         if (!FFileHelper::LoadFileToString(FileContent, *FilePath))
         {
-            UE_LOG(LogTemp, Error, TEXT("Failed to load CameraInfo file: %s"), *FilePath);
+            UE_LOG(LogCameraData, Error, TEXT("Failed to load CameraInfo file: %s"), *FilePath);
             return false;
         }
         
@@ -137,7 +139,7 @@ namespace FCameraInfoUtils
             
             if (Parts.Num() < 8)
             {
-                UE_LOG(LogTemp, Warning, TEXT("Invalid line in CameraInfo file: %s"), *TrimmedLine);
+                UE_LOG(LogCameraData, Warning, TEXT("Invalid line in CameraInfo file: %s"), *TrimmedLine);
                 continue;
             }
             
@@ -164,12 +166,12 @@ namespace FCameraInfoUtils
             }
             catch (...)
             {
-                UE_LOG(LogTemp, Warning, TEXT("Failed to parse CameraInfo line: %s"), *TrimmedLine);
+                UE_LOG(LogCameraData, Warning, TEXT("Failed to parse CameraInfo line: %s"), *TrimmedLine);
                 continue;
             }
         }
         
-        UE_LOG(LogTemp, Log, TEXT("Successfully loaded %d cameras from: %s"), OutCameraInfos.Num(), *FilePath);
+        UE_LOG(LogCameraData, Log, TEXT("Successfully loaded %d cameras from: %s"), OutCameraInfos.Num(), *FilePath);
         return OutCameraInfos.Num() > 0;
     }
 

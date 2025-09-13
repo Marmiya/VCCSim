@@ -3,6 +3,8 @@
 #include "UObject/ConstructorHelpers.h"
 #include "Materials/MaterialInterface.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogPointCloudRenderComponent, Log, All);
+
 UPointCloudRenderComponent::UPointCloudRenderComponent()
 {
     PrimaryComponentTick.bCanEverTick = false;
@@ -94,7 +96,7 @@ void UPointCloudRenderComponent::SetVisiblePoints(const TArray<FVector>& Points)
         VisiblePointsComponent->AddInstance(InstanceTransform);
     }
     
-    UE_LOG(LogTemp, Log, TEXT("PointCloudRenderComponent: Set %d visible points"), Points.Num());
+    UE_LOG(LogPointCloudRenderComponent, Log, TEXT("PointCloudRenderComponent: Set %d visible points"), Points.Num());
 }
 
 void UPointCloudRenderComponent::SetInvisiblePoints(const TArray<FVector>& Points)
@@ -118,7 +120,7 @@ void UPointCloudRenderComponent::SetInvisiblePoints(const TArray<FVector>& Point
         InvisiblePointsComponent->AddInstance(InstanceTransform);
     }
     
-    UE_LOG(LogTemp, Log, TEXT("PointCloudRenderComponent: Set %d invisible points"), Points.Num());
+    UE_LOG(LogPointCloudRenderComponent, Log, TEXT("PointCloudRenderComponent: Set %d invisible points"), Points.Num());
 }
 
 void UPointCloudRenderComponent::ClearPoints()
@@ -133,5 +135,5 @@ void UPointCloudRenderComponent::ClearPoints()
         InvisiblePointsComponent->ClearInstances();
     }
     
-    UE_LOG(LogTemp, Log, TEXT("PointCloudRenderComponent: Cleared all points"));
+    UE_LOG(LogPointCloudRenderComponent, Log, TEXT("PointCloudRenderComponent: Cleared all points"));
 }

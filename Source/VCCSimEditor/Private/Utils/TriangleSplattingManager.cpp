@@ -15,6 +15,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+DEFINE_LOG_CATEGORY_STATIC(LogTriangleSplattingManager, Log, All);
+
 #include "Utils/TriangleSplattingManager.h"
 #include "Editor/VCCSimPanel.h"
 #include "Utils/VCCSimDataConverter.h"
@@ -248,7 +250,7 @@ bool FTriangleSplattingManager::StartColmapTraining(const FString& PythonCommand
     LogFilePath = FPaths::Combine(OutputDirectory, TEXT("training.log"));
     PythonLogFilePath = FPaths::Combine(OutputDirectory, TEXT("python_training.log"));
     
-    UE_LOG(LogTemp, Log, TEXT("Starting COLMAP training: %s %s"), *PythonCommand, *Arguments);
+    UE_LOG(LogTriangleSplattingManager, Log, TEXT("Starting COLMAP training: %s %s"), *PythonCommand, *Arguments);
     
     // Clear previous output buffer
     PythonOutputBuffer.Empty();
@@ -358,7 +360,7 @@ void FTriangleSplattingManager::UpdateTrainingStatus()
             {
                 if (!Line.TrimStartAndEnd().IsEmpty())
                 {
-                    UE_LOG(LogTemp, Log, TEXT("Training: %s"), *Line.TrimStartAndEnd());
+                    UE_LOG(LogTriangleSplattingManager, Log, TEXT("Training: %s"), *Line.TrimStartAndEnd());
                 }
             }
         }
@@ -465,7 +467,7 @@ bool FTriangleSplattingManager::PrepareTrainingData(const FTriangleSplattingConf
     FString SessionDirName = FString::Printf(TEXT("session_%s"), *Timestamp);
     OutputDirectory = FPaths::Combine(TSTrainingDir, SessionDirName);
     
-    UE_LOG(LogTemp, Log, TEXT("Creating Triangle Splatting training session: %s"), *OutputDirectory);
+    UE_LOG(LogTriangleSplattingManager, Log, TEXT("Creating Triangle Splatting training session: %s"), *OutputDirectory);
     
     // Create main session directory
     if (!EnsureDirectoryExists(OutputDirectory))
@@ -528,7 +530,7 @@ bool FTriangleSplattingManager::PrepareTrainingData(const FTriangleSplattingConf
         if (Config.bUseMeshTriangles)
         {
             // Skip point cloud generation when using direct mesh triangles
-            UE_LOG(LogTemp, Log, TEXT("Using mesh triangles for initialization - skipping point cloud generation"));
+            UE_LOG(LogTriangleSplattingManager, Log, TEXT("Using mesh triangles for initialization - skipping point cloud generation"));
         }
         else
         {
@@ -960,7 +962,7 @@ FString FTriangleSplattingManager::ConfigToJsonString(const FTriangleSplattingCo
         MeshTrianglesPath = MeshTrianglesPath.Replace(TEXT("\\"), TEXT("/"));
         
         // Note: Actual triangle extraction is handled asynchronously in StartTraining
-        UE_LOG(LogTemp, Log, TEXT("Mesh triangles will be exported to: %s"), *MeshTrianglesPath);
+        UE_LOG(LogTriangleSplattingManager, Log, TEXT("Mesh triangles will be exported to: %s"), *MeshTrianglesPath);
     }
 
     return FString::Printf(TEXT(
@@ -1013,11 +1015,11 @@ void FTriangleSplattingManager::LogMessage(const FString& Message, bool bIsError
     // Log to UE
     if (bIsError)
     {
-        UE_LOG(LogTemp, Error, TEXT("TriangleSplattingManager: %s"), *Message);
+        UE_LOG(LogTriangleSplattingManager, Error, TEXT("TriangleSplattingManager: %s"), *Message);
     }
     else
     {
-        UE_LOG(LogTemp, Log, TEXT("TriangleSplattingManager: %s"), *Message);
+        UE_LOG(LogTriangleSplattingManager, Log, TEXT("TriangleSplattingManager: %s"), *Message);
     }
     
     // Also log to training log file if available
@@ -1055,13 +1057,13 @@ void FTriangleSplattingManager::StartAsyncTriangleExtraction(const FTriangleSpla
 {
     if (bTriangleExtractionInProgress)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Triangle extraction already in progress"));
+        UE_LOG(LogTriangleSplattingManager, Warning, TEXT("Triangle extraction already in progress"));
         return;
     }
     
     if (!Config.SelectedMesh.IsValid())
     {
-        UE_LOG(LogTemp, Error, TEXT("Cannot extract triangles: no mesh selected"));
+        UE_LOG(LogTriangleSplattingManager, Error, TEXT("Cannot extract triangles: no mesh selected"));
         return;
     }
     
@@ -1080,7 +1082,7 @@ void FTriangleSplattingManager::StartAsyncTriangleExtraction(const FTriangleSpla
     // Start the async task
     (*TaskPtr)->StartBackgroundTask();
     
-    UE_LOG(LogTemp, Log, TEXT("Extracting %d mesh triangles..."), Config.MaxMeshTriangles);
+    UE_LOG(LogTriangleSplattingManager, Log, TEXT("Extracting %d mesh triangles..."), Config.MaxMeshTriangles);
 }
 
 void FTriangleSplattingManager::OnTriangleExtractionComplete()
@@ -1102,7 +1104,7 @@ void FTriangleSplattingManager::OnTriangleExtractionComplete()
     
     if (Task.WasSuccessful())
     {
-        UE_LOG(LogTemp, Log, TEXT("Triangle extraction completed: %d triangles exported"), 
+        UE_LOG(LogTriangleSplattingManager, Log, TEXT("Triangle extraction completed: %d triangles exported"), 
             CurrentConfig->MaxMeshTriangles);
         StatusMessage = TEXT("Triangle extraction completed, starting training...");
         
@@ -1127,7 +1129,7 @@ void FTriangleSplattingManager::OnTriangleExtractionComplete()
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("Triangle extraction failed: %s"), *Task.GetErrorMessage());
+        UE_LOG(LogTriangleSplattingManager, Error, TEXT("Triangle extraction failed: %s"), *Task.GetErrorMessage());
         CurrentStatus = ETrainingStatus::Failed;
         StatusMessage = FString::Printf(TEXT("Triangle extraction failed: %s"), *Task.GetErrorMessage());
         OnTrainingCompleted.ExecuteIfBound(false, StatusMessage);

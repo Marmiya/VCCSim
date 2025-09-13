@@ -24,6 +24,8 @@
 #include "Engine/StaticMeshActor.h"
 #include "Components/MeshComponent.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogSemanticAnalyzer, Log, All);
+
 USemanticAnalyzer::USemanticAnalyzer()
 {
 	PrimaryComponentTick.bCanEverTick = true;
@@ -54,7 +56,7 @@ void USemanticAnalyzer::ShowSemanticAnalysis()
 {
     if (!CenterCharacter || !GetWorld())
     {
-        UE_LOG(LogTemp, Warning, TEXT("USemanticAnalyzer: CenterCharacter or World is null!"));
+        UE_LOG(LogSemanticAnalyzer, Warning, TEXT("USemanticAnalyzer: CenterCharacter or World is null!"));
         return;
     }
 
