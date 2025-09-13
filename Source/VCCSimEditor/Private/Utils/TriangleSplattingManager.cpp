@@ -984,7 +984,8 @@ FString FTriangleSplattingManager::ConfigToJsonString(const FTriangleSplattingCo
         "    \"use_mesh_triangles\": %s,\n"
         "    \"max_mesh_triangles\": %d,\n"
         "    \"mesh_triangle_method\": \"%s\",\n"
-        "    \"mesh_triangles_file\": \"%s\"\n"
+        "    \"mesh_triangles_file\": \"%s\",\n"
+        "    \"mesh_opacity\": %.3f\n"
         "  }\n"
         "}\n"
     ),
@@ -1002,7 +1003,8 @@ FString FTriangleSplattingManager::ConfigToJsonString(const FTriangleSplattingCo
         Config.bUseMeshTriangles ? TEXT("true") : TEXT("false"),
         Config.MaxMeshTriangles,
         *Config.MeshTriangleMethod,
-        *MeshTrianglesPath
+        *MeshTrianglesPath,
+        Config.MeshOpacity
     );
 }
 

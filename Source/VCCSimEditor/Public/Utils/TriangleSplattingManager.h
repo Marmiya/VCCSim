@@ -43,6 +43,7 @@ struct FTriangleSplattingConfig
     bool bUseMeshTriangles = false;
     int32 MaxMeshTriangles = 4000000;
     FString MeshTriangleMethod = TEXT("Random"); // Method for triangle selection
+    float MeshOpacity = 0.5f; // Opacity value for mesh triangle initialization (0.0 to 1.0)
     
     // Camera Parameters
     float FOVDegrees = 90.0f;
@@ -258,8 +259,6 @@ private:
      * @return Parsed progress (0.0 to 1.0)
      */
     float ParseTrainingProgress();
-    
-    
     
     /**
      * Read latest entries from training log file

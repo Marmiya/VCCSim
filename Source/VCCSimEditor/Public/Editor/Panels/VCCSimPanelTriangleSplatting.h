@@ -79,6 +79,7 @@ private:
     
     // NEW: Mesh triangle initialization UI controls
     TSharedPtr<SNumericEntryBox<int32>> GSMaxMeshTrianglesSpinBox;
+    TSharedPtr<SNumericEntryBox<float>> GSMeshOpacitySpinBox;
     
     // Training Control UI Controls
     TSharedPtr<SButton> GSTrainingToggleButton;
@@ -103,6 +104,7 @@ private:
     
     // NEW: Mesh triangle initialization values
     TOptional<int32> GSMaxMeshTrianglesValue;
+    TOptional<float> GSMeshOpacityValue;
     
     // Training state
     bool bGSTrainingInProgress = false;

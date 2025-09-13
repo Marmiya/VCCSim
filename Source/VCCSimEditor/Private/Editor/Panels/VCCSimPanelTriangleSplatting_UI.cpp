@@ -488,18 +488,42 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSTrainingParamsSection
         .AutoHeight()
         .Padding(2, 4)
         [
-            CreatePropertyRow(TEXT("Use Mesh Triangles"),
-                SNew(SCheckBox)
-                .IsChecked_Lambda([this]() 
-                { 
-                    return GSConfig.bUseMeshTriangles ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; 
-                })
-                .OnCheckStateChanged_Lambda([this](ECheckBoxState NewState)
-                {
-                    GSConfig.bUseMeshTriangles = (NewState == ECheckBoxState::Checked);
-                })
-                .ToolTipText(FText::FromString(TEXT("Use mesh triangles directly instead of generating from points")))
-            )
+            SNew(SHorizontalBox)
+            
+            // Use Mesh Triangles checkbox (left half)
+            + SHorizontalBox::Slot()
+            .FillWidth(0.5f)
+            .Padding(0, 0, 5, 0)
+            [
+                CreatePropertyRow(TEXT("Use Mesh Triangles"),
+                    SNew(SCheckBox)
+                    .IsChecked_Lambda([this]() 
+                    { 
+                        return GSConfig.bUseMeshTriangles ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; 
+                    })
+                    .OnCheckStateChanged_Lambda([this](ECheckBoxState NewState)
+                    {
+                        GSConfig.bUseMeshTriangles = (NewState == ECheckBoxState::Checked);
+                    })
+                    .ToolTipText(FText::FromString(TEXT("Use mesh triangles directly instead of generating from points")))
+                )
+            ]
+            
+            // Mesh Opacity (right half)
+            + SHorizontalBox::Slot()
+            .FillWidth(0.5f)
+            .Padding(5, 0, 0, 0)
+            [
+                CreateGSNumericPropertyRow<float>(
+                    TEXT("Mesh Opacity"),
+                    GSMeshOpacitySpinBox,
+                    GSMeshOpacityValue,
+                    0.0f, 1.0f, 0.05f,
+                    [this](float NewValue) { 
+                        GSConfig.MeshOpacity = NewValue; 
+                    }
+                )
+            ]
         ]
 
         // Triangle Selection Method and Max Count

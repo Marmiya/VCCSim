@@ -70,8 +70,6 @@ bool FNPYWriter::WriteFloat32Array2D(const FString& FilePath, const float* Data,
         return false;
     }
     
-    UE_LOG(LogTemp, Log, TEXT("NPYWriter: Successfully wrote NPY file: %s (%d x %d, %.1f MB)"), 
-        *FilePath, NumRows, NumCols, FileData.Num() / 1048576.0f);
     return true;
 }
 

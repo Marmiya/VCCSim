@@ -170,7 +170,6 @@ FVCCSimPoseData FVCCSimDataConverter::ParsePoseLine(
         return FVCCSimPoseData(); // Return zero data
     }
     
-    
     return PoseData;
 }
 
@@ -195,7 +194,6 @@ bool FVCCSimDataConverter::DeterminePoseFileFormat(const FString& PoseFilePath)
     
     return false; // Default to Panel format
 }
-
 
 // ============================================================================
 // COORDINATE SYSTEM CONVERSION

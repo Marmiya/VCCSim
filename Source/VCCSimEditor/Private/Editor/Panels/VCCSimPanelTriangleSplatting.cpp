@@ -69,6 +69,7 @@ FVCCSimPanelTriangleSplatting::FVCCSimPanelTriangleSplatting()
     
     // Initialize mesh triangle values
     GSMaxMeshTrianglesValue = GSConfig.MaxMeshTriangles;
+    GSMeshOpacityValue = GSConfig.MeshOpacity;
     
     // Initialize triangle selection methods
     TriangleSelectionMethods.Add(MakeShared<FString>(TEXT("Random")));
@@ -1145,6 +1146,7 @@ void FVCCSimPanelTriangleSplatting::UpdateUIFromConfig()
     GSMaxIterationsValue = GSConfig.MaxIterations;
     GSInitPointCountValue = GSConfig.InitPointCount;
     GSMaxMeshTrianglesValue = GSConfig.MaxMeshTriangles;
+    GSMeshOpacityValue = GSConfig.MeshOpacity;
     
     // Update text box contents if widgets exist
     if (GSImageDirectoryTextBox.IsValid())
