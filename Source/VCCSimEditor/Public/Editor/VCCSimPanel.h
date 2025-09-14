@@ -30,7 +30,7 @@ class FVCCSimPanelPointCloud;
 class FVCCSimPanelSelection;
 class FVCCSimPanelPathImageCapture;
 class FVCCSimPanelSceneAnalysis;
-class FVCCSimPanelTriangleSplatting;
+class FVCCSimPanelRatSplatting;
 
 
 class VCCSIMEDITOR_API SVCCSimPanel final : public SCompoundWidget
@@ -68,7 +68,7 @@ private:
     TSharedPtr<FVCCSimPanelSelection> SelectionManager;
     TSharedPtr<FVCCSimPanelPathImageCapture> PathImageCaptureManager;
     TSharedPtr<FVCCSimPanelSceneAnalysis> SceneAnalysisManager;
-    TSharedPtr<FVCCSimPanelTriangleSplatting> TriangleSplattingManager;
+    TSharedPtr<FVCCSimPanelRatSplatting> RatSplattingManager;
 
     // ============================================================================
     // INITIALIZATION AND CLEANUP
@@ -85,7 +85,7 @@ private:
     TSharedRef<SWidget> CreateLogoPanel();
     TSharedRef<SWidget> CreateSceneAnalysisPanel();
     TSharedRef<SWidget> CreatePointCloudPanel();
-    TSharedRef<SWidget> CreateTriangleSplattingPanel();
+    TSharedRef<SWidget> CreateRatSplattingPanel();
     
     // Style and layout helpers (now using FVCCSimUIHelpers)
     

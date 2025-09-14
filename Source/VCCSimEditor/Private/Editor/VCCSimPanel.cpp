@@ -21,7 +21,7 @@
 #include "Editor/Panels/VCCSimPanelSelection.h"
 #include "Editor/Panels/VCCSimPanelPathImageCapture.h"
 #include "Editor/Panels/VCCSimPanelSceneAnalysis.h"
-#include "Editor/Panels/VCCSimPanelTriangleSplatting.h"
+#include "Editor/Panels/VCCSimPanelRatSplatting.h"
 #include "Editor/UnrealEd/Public/Selection.h"
 
 // ============================================================================
@@ -50,11 +50,11 @@ SVCCSimPanel::~SVCCSimPanel()
         SceneAnalysisManager.Reset();
     }
 
-    // Clean up Triangle Splatting manager
-    if (TriangleSplattingManager.IsValid())
+    // Clean up RatSplatting manager
+    if (RatSplattingManager.IsValid())
     {
-        TriangleSplattingManager->Cleanup();
-        TriangleSplattingManager.Reset();
+        RatSplattingManager->Cleanup();
+        RatSplattingManager.Reset();
     }
 
     // Clean up Point Cloud manager
@@ -107,9 +107,9 @@ void SVCCSimPanel::Construct(const FArguments& InArgs)
     SceneAnalysisManager = MakeShared<FVCCSimPanelSceneAnalysis>();
     SceneAnalysisManager->Initialize(SelectionManager);
     
-    // Initialize Triangle Splatting manager
-    TriangleSplattingManager = MakeShared<FVCCSimPanelTriangleSplatting>();
-    TriangleSplattingManager->Initialize();
+    // Initialize RatSplatting manager
+    RatSplattingManager = MakeShared<FVCCSimPanelRatSplatting>();
+    RatSplattingManager->Initialize();
     
     // Create the main widget layout
     CreateMainLayout();
@@ -219,11 +219,11 @@ void SVCCSimPanel::CreateMainLayout()
                     CreatePointCloudPanel()
                 ]
 
-                // Triangle Splatting panel
+                // RatSplatting panel
                 +SVerticalBox::Slot()
                 .AutoHeight()
                 [
-                    CreateTriangleSplattingPanel()
+                    CreateRatSplattingPanel()
                 ]
             ]
         ]
@@ -306,16 +306,16 @@ TSharedRef<SWidget> SVCCSimPanel::CreatePointCloudPanel()
     }
 }
 
-TSharedRef<SWidget> SVCCSimPanel::CreateTriangleSplattingPanel()
+TSharedRef<SWidget> SVCCSimPanel::CreateRatSplattingPanel()
 {
-    if (TriangleSplattingManager.IsValid())
+    if (RatSplattingManager.IsValid())
     {
-        return TriangleSplattingManager->CreateTriangleSplattingPanel();
+        return RatSplattingManager->CreateRatSplattingPanel();
     }
     else
     {
         return SNew(STextBlock)
-            .Text(FText::FromString("Triangle Splatting Manager not initialized"));
+            .Text(FText::FromString("RatSplatting Manager not initialized"));
     }
 }
 

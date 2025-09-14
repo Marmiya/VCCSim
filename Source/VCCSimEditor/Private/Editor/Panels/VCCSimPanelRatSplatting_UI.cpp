@@ -1,39 +1,39 @@
 /*
 * Copyright (C) 2025 Visual Computing Research Center, Shenzhen University
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published
- * by the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*
+* This program is free software: you can redistribute it and/or modify
+* it under the terms of the GNU Affero General Public License as published
+* by the Free Software Foundation, either version 3 of the License, or
+* (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU Affero General Public License for more details.
+*
+* You should have received a copy of the GNU Affero General Public License
+* along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-DEFINE_LOG_CATEGORY_STATIC(LogTriangleSplattingUI, Log, All);
 
-#include "Editor/Panels/VCCSimPanelTriangleSplatting.h"
+DEFINE_LOG_CATEGORY_STATIC(LogRatSplattingUI, Log, All);
+
+#include "Editor/Panels/VCCSimPanelRatSplatting.h"
+#include "Utils/ColmapManager.h"
 #include "Utils/TriangleSplattingManager.h"
 #include "Utils/VCCSimUIHelpers.h"
-#include "Utils/ColmapManager.h"
 #include "PropertyCustomizationHelpers.h"
-#include "DesktopPlatformModule.h"
 #include "ThumbnailRendering/ThumbnailManager.h"
 
 // ============================================================================
-// TRIANGLE SPLATTING UI CONSTRUCTION
+// RATSPLATTING UI CONSTRUCTION
 // ============================================================================
 
-TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateTriangleSplattingPanel()
+TSharedRef<SWidget> FVCCSimPanelRatSplatting::CreateRatSplattingPanel()
 {
-    TSharedRef<SWidget> Panel = FVCCSimUIHelpers::CreateCollapsibleSection(TEXT("Triangle Splatting"), 
+    TSharedRef<SWidget> Panel = FVCCSimUIHelpers::CreateCollapsibleSection(TEXT("RatSplatting"),
         SNew(SVerticalBox)
-        
+
         // Data Input Section
         + SVerticalBox::Slot()
         .AutoHeight()
@@ -41,13 +41,13 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateTriangleSplattingPanel(
         [
             CreateGSDataInputSection()
         ]
-        
+
         + SVerticalBox::Slot()
         .MaxHeight(1)
         [
             FVCCSimUIHelpers::CreateSeparator()
         ]
-        
+
         // Camera Parameters Section
         + SVerticalBox::Slot()
         .AutoHeight()
@@ -55,13 +55,13 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateTriangleSplattingPanel(
         [
             CreateGSCameraParamsSection()
         ]
-        
+
         + SVerticalBox::Slot()
         .MaxHeight(1)
         [
             FVCCSimUIHelpers::CreateSeparator()
         ]
-        
+
         // Training Parameters Section
         + SVerticalBox::Slot()
         .AutoHeight()
@@ -69,13 +69,13 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateTriangleSplattingPanel(
         [
             CreateGSTrainingParamsSection()
         ]
-        
+
         + SVerticalBox::Slot()
         .MaxHeight(1)
         [
             FVCCSimUIHelpers::CreateSeparator()
         ]
-        
+
         // Training Control Section
         + SVerticalBox::Slot()
         .AutoHeight()
@@ -83,16 +83,16 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateTriangleSplattingPanel(
         [
             CreateGSTrainingControlSection()
         ],
-        bTriangleSplattingSectionExpanded
+        bRatSplattingSectionExpanded
     );
 
     return Panel;
 }
 
-TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSDataInputSection()
+TSharedRef<SWidget> FVCCSimPanelRatSplatting::CreateGSDataInputSection()
 {
     return SNew(SVerticalBox)
-        
+
         // Section header
         + SVerticalBox::Slot()
         .AutoHeight()
@@ -100,7 +100,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSDataInputSection()
         [
             FVCCSimUIHelpers::CreateSectionHeader(TEXT("Data Input"))
         ]
-        
+
         // Image Directory
         + SVerticalBox::Slot()
         .AutoHeight()
@@ -131,7 +131,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSDataInputSection()
                 ]
             )
         ]
-        
+
         // Camera Intrinsics
         + SVerticalBox::Slot()
         .AutoHeight()
@@ -164,7 +164,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSDataInputSection()
                 ]
             )
         ]
-        
+
         // Pose File
         + SVerticalBox::Slot()
         .AutoHeight()
@@ -195,7 +195,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSDataInputSection()
                 ]
             )
         ]
-        
+
         // Output Directory
         + SVerticalBox::Slot()
         .AutoHeight()
@@ -226,8 +226,8 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSDataInputSection()
                 ]
             )
         ]
-        
-        // COLMAP Dataset Path
+
+        // COLMAP Dataset Directory
         + SVerticalBox::Slot()
         .AutoHeight()
         .Padding(0, 2)
@@ -244,7 +244,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSDataInputSection()
                         GSConfig.ColmapDatasetPath = Text.ToString();
                         SavePaths(); // Save when manually typed
                     })
-                    .HintText(FText::FromString(TEXT("Select COLMAP dataset folder (containing sparse/ images/ folders)")))
+                    .HintText(FText::FromString(TEXT("Path to COLMAP dataset with sparse/ and images/ folders")))
                 ]
                 + SHorizontalBox::Slot()
                 .AutoWidth()
@@ -258,48 +258,40 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSDataInputSection()
                 ]
             )
         ]
-        
-        // Mesh Selection with UE-style asset picker
+
+        // StaticMesh Selector
         + SVerticalBox::Slot()
         .AutoHeight()
         .Padding(0, 2)
         [
-            FVCCSimUIHelpers::CreatePropertyRow(TEXT("Mesh Selection"),
+            FVCCSimUIHelpers::CreatePropertyRow(TEXT("Initialization Mesh"),
                 SNew(SObjectPropertyEntryBox)
-                .AllowedClass(UStaticMesh::StaticClass())
-                .ObjectPath_Lambda([this]()
+                .ObjectPath_Lambda([this]() -> FString
                 {
-                    return GSConfig.SelectedMesh.IsValid() ? 
-                        GSConfig.SelectedMesh->GetPathName() : FString();
+                    return GSConfig.SelectedMesh.IsValid() ? GSConfig.SelectedMesh.Get()->GetPathName() : FString();
                 })
+                .AllowedClass(UStaticMesh::StaticClass())
                 .OnObjectChanged_Lambda([this](const FAssetData& AssetData)
                 {
-                    if (AssetData.IsValid())
+                    if (UStaticMesh* SelectedMesh = Cast<UStaticMesh>(AssetData.GetAsset()))
                     {
-                        if (UStaticMesh* NewMesh = Cast<UStaticMesh>(AssetData.GetAsset()))
-                        {
-                            GSConfig.SelectedMesh = NewMesh;
-                            UE_LOG(LogTriangleSplattingUI, Log, TEXT("Selected mesh via asset picker: %s"), *NewMesh->GetName());
-                            SavePaths(); // Save immediately after mesh selection
-                        }
+                        GSConfig.SelectedMesh = SelectedMesh;
+                        SavePaths(); // Persist mesh selection
+                        UE_LOG(LogRatSplattingUI, Log, TEXT("Selected mesh for initialization: %s"), *SelectedMesh->GetName());
                     }
                     else
                     {
                         GSConfig.SelectedMesh.Reset();
-                        UE_LOG(LogTriangleSplattingUI, Log, TEXT("Cleared mesh selection"));
-                        SavePaths(); // Save immediately after mesh cleared
+                        SavePaths(); // Persist the reset
                     }
                 })
-                .AllowClear(true)
-                .DisplayUseSelected(true)
-                .DisplayBrowse(true)
                 .DisplayThumbnail(true)
                 .ThumbnailPool(UThumbnailManager::Get().GetSharedThumbnailPool())
             )
         ];
 }
 
-TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSCameraParamsSection()
+TSharedRef<SWidget> FVCCSimPanelRatSplatting::CreateGSCameraParamsSection()
 {
     return SNew(SVerticalBox)
         
@@ -406,7 +398,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSCameraParamsSection()
         ];
 }
 
-TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSTrainingParamsSection()
+TSharedRef<SWidget> FVCCSimPanelRatSplatting::CreateGSTrainingParamsSection()
 {
     return SNew(SVerticalBox)
         
@@ -477,13 +469,15 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSTrainingParamsSection
                     SNew(SCheckBox)
                     .IsChecked_Lambda([this]() 
                     { 
-                        return GSConfig.bUseMeshTriangles ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; 
+                        return GSConfig.bUseMeshTriangles ?
+                        ECheckBoxState::Checked : ECheckBoxState::Unchecked; 
                     })
                     .OnCheckStateChanged_Lambda([this](ECheckBoxState NewState)
                     {
                         GSConfig.bUseMeshTriangles = (NewState == ECheckBoxState::Checked);
                     })
-                    .ToolTipText(FText::FromString(TEXT("Use mesh triangles directly instead of generating from points")))
+                    .ToolTipText(FText::FromString(TEXT("Use mesh triangles directly "
+                                                        "instead of generating from points")))
                 )
             ]
             
@@ -519,7 +513,8 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSTrainingParamsSection
                 FVCCSimUIHelpers::CreatePropertyRow(TEXT("Triangle Method"),
                     SNew(STextBlock)
                     .Text(FText::FromString(TEXT("Random")))
-                    .ToolTipText(FText::FromString(TEXT("Method for selecting triangles from mesh (Random only for now)")))
+                    .ToolTipText(FText::FromString(TEXT("Method for selecting triangles "
+                                                        "from mesh (Random only for now)")))
                 )
             ]
             
@@ -541,7 +536,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSTrainingParamsSection
         ];
 }
 
-TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSTrainingControlSection()
+TSharedRef<SWidget> FVCCSimPanelRatSplatting::CreateGSTrainingControlSection()
 {
     return SNew(SVerticalBox)
         
@@ -635,7 +630,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSTrainingControlSectio
                 {
                     return bGSTrainingInProgress ? 
                         FText::FromString(TEXT("Stop")) : 
-                        FText::FromString(TEXT("Train VCCSim"));
+                        FText::FromString(TEXT("Train RatSplatting"));
                 })
                 .VAlign(VAlign_Center)
                 .HAlign(HAlign_Center)
@@ -650,21 +645,19 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSTrainingControlSectio
                         return OnGSStartTrainingClicked();
                     }
                 })
-                .ToolTipText(FText::FromString(TEXT("Train with VCCSim custom algorithm (train_vccsim.py)")))
             ]
             
             + SHorizontalBox::Slot()
             .MaxWidth(150)
             [
                 SAssignNew(GSColmapTrainingButton, SButton)
-                .Text(FText::FromString(TEXT("Train Original")))
+                .Text(FText::FromString(TEXT("Train Tri-Splatting")))
                 .VAlign(VAlign_Center)
                 .HAlign(HAlign_Center)
                 .IsEnabled_Lambda([this]() { return !bGSTrainingInProgress && !bColmapPipelineInProgress; })
                 .OnClicked_Lambda([this]() {
                     return OnGSColmapTrainingClicked();
                 })
-                .ToolTipText(FText::FromString(TEXT("Train with original Triangle Splatting (train.py) for comparison")))
             ]
         ]
         
@@ -728,204 +721,5 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSTrainingControlSectio
                     return FLinearColor::White;
                 })
             )
-        ]
-        
-        ;
-}
-
-
-// ============================================================================
-// TRIANGLE SPLATTING EVENT HANDLERS
-// ============================================================================
-
-void* FVCCSimPanelTriangleSplatting::GetParentWindowHandle()
-{
-    void* ParentWindowHandle = nullptr;
-    
-    // Use the active top level window for the panel
-    TSharedPtr<SWindow> ActiveTopLevelWindow = FSlateApplication::Get().GetActiveTopLevelWindow();
-    if (ActiveTopLevelWindow.IsValid())
-    {
-        ParentWindowHandle = ActiveTopLevelWindow->GetNativeWindow()->GetOSWindowHandle();
-    }
-    
-    return ParentWindowHandle;
-}
-
-FReply FVCCSimPanelTriangleSplatting::OnGSBrowseImageDirectoryClicked()
-{
-    IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
-    if (DesktopPlatform)
-    {
-        FString SelectedDirectory;
-        const bool bFolderSelected = DesktopPlatform->OpenDirectoryDialog(
-            GetParentWindowHandle(),
-            TEXT("Select Image Directory"),
-            GSConfig.ImageDirectory.IsEmpty() ? FPaths::ProjectContentDir() : GSConfig.ImageDirectory,
-            SelectedDirectory
-        );
-
-        if (bFolderSelected && !SelectedDirectory.IsEmpty())
-        {
-            GSConfig.ImageDirectory = SelectedDirectory;
-            GSImageDirectoryTextBox->SetText(FText::FromString(SelectedDirectory));
-            SavePaths(); // Save immediately after path change
-        }
-    }
-    
-    return FReply::Handled();
-}
-
-FReply FVCCSimPanelTriangleSplatting::OnGSBrowseCameraIntrinsicsFileClicked()
-{
-    IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
-    if (DesktopPlatform)
-    {
-        TArray<FString> SelectedFiles;
-        const bool bFileSelected = DesktopPlatform->OpenFileDialog(
-            GetParentWindowHandle(),
-            TEXT("Select Camera Intrinsics File"),
-            GSConfig.CameraIntrinsicsFilePath.IsEmpty() ? FPaths::ProjectSavedDir() : FPaths::GetPath(GSConfig.CameraIntrinsicsFilePath),
-            TEXT("cameras.txt"),
-            TEXT("COLMAP Camera Files|cameras.txt;cameras.bin|Text Files (*.txt)|*.txt|Binary Files (*.bin)|*.bin|All Files (*.*)|*.*"),
-            EFileDialogFlags::None,
-            SelectedFiles
-        );
-
-        if (bFileSelected && SelectedFiles.Num() > 0)
-        {
-            GSConfig.CameraIntrinsicsFilePath = SelectedFiles[0];
-            GSCameraIntrinsicsFileTextBox->SetText(FText::FromString(SelectedFiles[0]));
-            OnGSCameraIntrinsicsLoaded();
-            SavePaths(); // Save immediately after path change
-        }
-    }
-    
-    return FReply::Handled();
-}
-
-FReply FVCCSimPanelTriangleSplatting::OnGSBrowsePoseFileClicked()
-{
-    IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
-    if (DesktopPlatform)
-    {
-        TArray<FString> SelectedFiles;
-        const bool bFileSelected = DesktopPlatform->OpenFileDialog(
-            GetParentWindowHandle(),
-            TEXT("Select Pose File"),
-            GSConfig.PoseFilePath.IsEmpty() ? FPaths::ProjectSavedDir() : FPaths::GetPath(GSConfig.PoseFilePath),
-            TEXT("poses.txt"),
-            TEXT("Text Files (*.txt)|*.txt|All Files (*.*)|*.*"),
-            EFileDialogFlags::None,
-            SelectedFiles
-        );
-
-        if (bFileSelected && SelectedFiles.Num() > 0)
-        {
-            GSConfig.PoseFilePath = SelectedFiles[0];
-            GSPoseFileTextBox->SetText(FText::FromString(SelectedFiles[0]));
-            SavePaths(); // Save immediately after path change
-        }
-    }
-    
-    return FReply::Handled();
-}
-
-FReply FVCCSimPanelTriangleSplatting::OnGSBrowseOutputDirectoryClicked()
-{
-    IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
-    if (DesktopPlatform)
-    {
-        FString SelectedDirectory;
-        const bool bFolderSelected = DesktopPlatform->OpenDirectoryDialog(
-            GetParentWindowHandle(),
-            TEXT("Select Output Directory"),
-            GSConfig.OutputDirectory.IsEmpty() ? FPaths::ProjectSavedDir() : GSConfig.OutputDirectory,
-            SelectedDirectory
-        );
-
-        if (bFolderSelected && !SelectedDirectory.IsEmpty())
-        {
-            GSConfig.OutputDirectory = SelectedDirectory;
-            GSOutputDirectoryTextBox->SetText(FText::FromString(SelectedDirectory));
-            SavePaths(); // Save immediately after path change
-        }
-    }
-    
-    return FReply::Handled();
-}
-
-FReply FVCCSimPanelTriangleSplatting::OnGSBrowseColmapDatasetClicked()
-{
-    IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
-    if (DesktopPlatform)
-    {
-        FString SelectedDirectory;
-        const bool bFolderSelected = DesktopPlatform->OpenDirectoryDialog(
-            GetParentWindowHandle(),
-            TEXT("Select COLMAP Dataset Directory"),
-            GSConfig.ColmapDatasetPath.IsEmpty() ? GSConfig.OutputDirectory : GSConfig.ColmapDatasetPath,
-            SelectedDirectory
-        );
-
-        if (bFolderSelected && !SelectedDirectory.IsEmpty())
-        {
-            // Update path regardless - validation will happen when training starts
-            GSConfig.ColmapDatasetPath = SelectedDirectory;
-            
-            // Optionally validate and show feedback
-            FString SparseDir = FPaths::Combine(SelectedDirectory, TEXT("sparse"));
-            FString ImagesDir = FPaths::Combine(SelectedDirectory, TEXT("images"));
-            
-            if (FPaths::DirectoryExists(SparseDir) && FPaths::DirectoryExists(ImagesDir))
-            {
-                FVCCSimUIHelpers::ShowNotification(TEXT("COLMAP dataset path selected"), false);
-            }
-            else
-            {
-                FVCCSimUIHelpers::ShowNotification(TEXT("Warning: Directory doesn't look like "
-                                        "a COLMAP dataset (missing sparse/ or images/)"), false);
-            }
-            
-            UE_LOG(LogTriangleSplattingUI, Log, TEXT("Selected COLMAP dataset path: %s"), *SelectedDirectory);
-            SavePaths(); // Save immediately after path change
-        }
-    }
-    
-    return FReply::Handled();
-}
-
-void FVCCSimPanelTriangleSplatting::OnGSFOVChanged(float NewValue)
-{
-    GSConfig.FOVDegrees = NewValue;
-}
-
-void FVCCSimPanelTriangleSplatting::OnGSImageWidthChanged(int32 NewValue)
-{
-    GSConfig.ImageWidth = NewValue;
-}
-
-void FVCCSimPanelTriangleSplatting::OnGSImageHeightChanged(int32 NewValue)
-{
-    GSConfig.ImageHeight = NewValue;
-}
-
-void FVCCSimPanelTriangleSplatting::OnGSFocalLengthXChanged(float NewValue)
-{
-    GSConfig.FocalLengthX = NewValue;
-}
-
-void FVCCSimPanelTriangleSplatting::OnGSFocalLengthYChanged(float NewValue)
-{
-    GSConfig.FocalLengthY = NewValue;
-}
-
-void FVCCSimPanelTriangleSplatting::OnGSMaxIterationsChanged(int32 NewValue)
-{
-    GSConfig.MaxIterations = NewValue;
-}
-
-void FVCCSimPanelTriangleSplatting::OnGSInitPointCountChanged(int32 NewValue)
-{
-    GSConfig.InitPointCount = NewValue;
+        ];
 }
