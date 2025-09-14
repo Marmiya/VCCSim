@@ -19,23 +19,9 @@ DEFINE_LOG_CATEGORY_STATIC(LogSelection, Log, All);
 
 #include "Editor/Panels/VCCSimPanelSelection.h"
 #include "Utils/VCCSimUIHelpers.h"
-
-// UE Core
 #include "Engine/World.h"
 #include "Engine/Engine.h"
 #include "EngineUtils.h"
-
-// Slate UI
-#include "Widgets/Input/SButton.h"
-#include "Widgets/Text/STextBlock.h"
-#include "Widgets/Input/SCheckBox.h"
-#include "Widgets/SBoxPanel.h"
-#include "Widgets/Layout/SBorder.h"
-#include "Widgets/Layout/SExpandableArea.h"
-#include "Styling/AppStyle.h"
-#include "SlateOptMacros.h"
-
-// VCCSim Components
 #include "Pawns/FlashPawn.h"
 #include "Sensors/CameraSensor.h"
 #include "Sensors/DepthCamera.h"

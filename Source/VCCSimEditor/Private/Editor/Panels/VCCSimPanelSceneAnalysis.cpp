@@ -21,21 +21,9 @@
 #include "Simulation/SceneAnalysisManager.h"
 #include "Sensors/CameraSensor.h"
 #include "Pawns/FlashPawn.h"
-
-#include "Widgets/SBoxPanel.h"
-#include "Widgets/Layout/SBorder.h"
-#include "Widgets/Layout/SExpandableArea.h"
-#include "Widgets/Layout/SSpacer.h"
-#include "Widgets/Input/SButton.h"
-#include "Widgets/Input/SCheckBox.h"
-#include "Widgets/Input/SNumericEntryBox.h"
-#include "Widgets/Text/STextBlock.h"
-#include "Framework/Application/SlateApplication.h"
-#include "Styling/AppStyle.h"
 #include "Engine/World.h"
 #include "Editor.h"
 #include "EngineUtils.h"
-#include "Misc/Paths.h"
 
 FVCCSimPanelSceneAnalysis::FVCCSimPanelSceneAnalysis()
 {

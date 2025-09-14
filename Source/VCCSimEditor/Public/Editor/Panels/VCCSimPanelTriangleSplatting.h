@@ -18,12 +18,10 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Widgets/SCompoundWidget.h"
 #include "Utils/TriangleSplattingManager.h"
 
 class FTriangleSplattingManager;
 class FColmapManager;
-class FVCCSimPanelSelection;
 class SEditableTextBox;
 class SButton;
 class STextBlock;
@@ -42,7 +40,7 @@ public:
     FVCCSimPanelTriangleSplatting();
     ~FVCCSimPanelTriangleSplatting();
     
-    void Initialize(TSharedPtr<FVCCSimPanelSelection> InSelectionManager);
+    void Initialize();
     void Cleanup();
     TSharedRef<SWidget> CreateTriangleSplattingPanel();
     
@@ -101,8 +99,6 @@ private:
     TOptional<float> GSFocalLengthYValue;
     TOptional<int32> GSMaxIterationsValue;
     TOptional<int32> GSInitPointCountValue;
-    
-    // NEW: Mesh triangle initialization values
     TOptional<int32> GSMaxMeshTrianglesValue;
     TOptional<float> GSMeshOpacityValue;
     
@@ -115,8 +111,6 @@ private:
     TSharedPtr<FTriangleSplattingManager> GSTrainingManager;
     TSharedPtr<FColmapManager> ColmapManager;
     
-    // Dependencies
-    TWeakPtr<FVCCSimPanelSelection> SelectionManager;
     
     // Triangle selection method options
     TArray<TSharedPtr<FString>> TriangleSelectionMethods;
@@ -132,24 +126,10 @@ private:
     // UI CONSTRUCTION METHODS
     // ============================================================================
     
-    // Main UI section creators
     TSharedRef<SWidget> CreateGSDataInputSection();
     TSharedRef<SWidget> CreateGSCameraParamsSection();
     TSharedRef<SWidget> CreateGSTrainingParamsSection();
     TSharedRef<SWidget> CreateGSTrainingControlSection();
-    
-    // Style and layout helpers (now using FVCCSimUIHelpers)
-    
-    // Numeric property row creators
-    template<typename T>
-    TSharedRef<SWidget> CreateGSNumericPropertyRow(
-        const FString& Label,
-        TSharedPtr<SNumericEntryBox<T>>& SpinBox,
-        TOptional<T>& Value,
-        T MinValue,
-        T MaxValue,
-        T DeltaValue,
-        TFunction<void(T)> OnValueChanged);
     
     // ============================================================================
     // EVENT HANDLERS

@@ -22,28 +22,7 @@
 #include "Editor/Panels/VCCSimPanelPathImageCapture.h"
 #include "Editor/Panels/VCCSimPanelSceneAnalysis.h"
 #include "Editor/Panels/VCCSimPanelTriangleSplatting.h"
-#include "Components/StaticMeshComponent.h"
-#include "Engine/StaticMesh.h"
-#include "Widgets/Input/SButton.h"
-#include "Widgets/Input/SNumericEntryBox.h"
-#include "Widgets/Layout/SBox.h"
-#include "Widgets/Layout/SBorder.h"
-#include "Widgets/Layout/SExpandableArea.h"
-#include "Widgets/Layout/SScrollBox.h"
-#include "Widgets/Layout/SSpacer.h"
-#include "Widgets/Text/STextBlock.h"
-#include "Widgets/Images/SImage.h"
-#include "Misc/DateTime.h"
-#include "HAL/FileManager.h"
-#include "Misc/Paths.h"
-#include "Misc/FileHelper.h"
-#include "DrawDebugHelpers.h"
-#include "Framework/Docking/TabManager.h"
-#include "Widgets/Docking/SDockTab.h"
-#include "Internationalization/Internationalization.h"
-#include "Editor/UnrealEd/Public/Editor.h"
 #include "Editor/UnrealEd/Public/Selection.h"
-#include "MaterialDomain.h"
 
 // ============================================================================
 // CONSTRUCTOR & DESTRUCTOR
@@ -130,7 +109,7 @@ void SVCCSimPanel::Construct(const FArguments& InArgs)
     
     // Initialize Triangle Splatting manager
     TriangleSplattingManager = MakeShared<FVCCSimPanelTriangleSplatting>();
-    TriangleSplattingManager->Initialize(SelectionManager);
+    TriangleSplattingManager->Initialize();
     
     // Create the main widget layout
     CreateMainLayout();

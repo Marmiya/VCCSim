@@ -21,34 +21,9 @@ DEFINE_LOG_CATEGORY_STATIC(LogTriangleSplattingUI, Log, All);
 #include "Utils/TriangleSplattingManager.h"
 #include "Utils/VCCSimUIHelpers.h"
 #include "Utils/ColmapManager.h"
-#include "HAL/PlatformFileManager.h"
-#include "Widgets/Layout/SBox.h"
-#include "Widgets/Layout/SScrollBox.h"
-#include "Widgets/Layout/SSeparator.h"
-#include "Widgets/Layout/SBorder.h"
-#include "Widgets/Layout/SExpandableArea.h"
-#include "Widgets/Layout/SSpacer.h"
-#include "Widgets/Input/SCheckBox.h"
-#include "Widgets/Input/SNumericEntryBox.h"
-#include "Widgets/Input/SEditableTextBox.h"
-#include "Widgets/Input/SButton.h"
-#include "Widgets/Text/STextBlock.h"
-#include "Widgets/SBoxPanel.h"
 #include "PropertyCustomizationHelpers.h"
-#include "SlateOptMacros.h"
 #include "DesktopPlatformModule.h"
-#include "IDesktopPlatform.h"
-#include "Misc/FileHelper.h"
-#include "Misc/Paths.h"
-#include "HAL/PlatformProcess.h"
-#include "Engine/StaticMesh.h"
-#include "Editor/UnrealEd/Public/Editor.h"
-#include "Engine/Engine.h"
-#include "UObject/ConstructorHelpers.h"
 #include "ThumbnailRendering/ThumbnailManager.h"
-#include "Widgets/Images/SImage.h"
-#include "Framework/Application/SlateApplication.h"
-#include "Misc/ConfigCacheIni.h"
 
 // ============================================================================
 // TRIANGLE SPLATTING UI CONSTRUCTION
@@ -346,7 +321,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSCameraParamsSection()
             .FillWidth(1.0f)
             .Padding(2, 0)
             [
-                CreateGSNumericPropertyRow<int32>(
+                FVCCSimUIHelpers::CreateNumericPropertyRow<int32>(
                     TEXT("Width"),
                     GSImageWidthSpinBox,
                     GSImageWidthValue,
@@ -359,7 +334,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSCameraParamsSection()
             .FillWidth(1.0f)
             .Padding(2, 0)
             [
-                CreateGSNumericPropertyRow<int32>(
+                FVCCSimUIHelpers::CreateNumericPropertyRow<int32>(
                     TEXT("Height"),
                     GSImageHeightSpinBox,
                     GSImageHeightValue,
@@ -380,7 +355,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSCameraParamsSection()
             .FillWidth(1.0f)
             .Padding(2, 0)
             [
-                CreateGSNumericPropertyRow<float>(
+                FVCCSimUIHelpers::CreateNumericPropertyRow<float>(
                     TEXT("Focal Length X"),
                     GSFocalLengthXSpinBox,
                     GSFocalLengthXValue,
@@ -393,7 +368,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSCameraParamsSection()
             .FillWidth(1.0f)
             .Padding(2, 0)
             [
-                CreateGSNumericPropertyRow<float>(
+                FVCCSimUIHelpers::CreateNumericPropertyRow<float>(
                     TEXT("Focal Length Y"),
                     GSFocalLengthYSpinBox,
                     GSFocalLengthYValue,
@@ -413,7 +388,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSCameraParamsSection()
             .FillWidth(0.5f)
             .Padding(2, 0)
             [
-                CreateGSNumericPropertyRow<float>(
+                FVCCSimUIHelpers::CreateNumericPropertyRow<float>(
                     TEXT("FOV (°)"),
                     GSFOVSpinBox,
                     GSFOVValue,
@@ -455,7 +430,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSTrainingParamsSection
             .FillWidth(0.5f)
             .Padding(0, 0, 5, 0)
             [
-                CreateGSNumericPropertyRow<int32>(
+                FVCCSimUIHelpers::CreateNumericPropertyRow<int32>(
                     TEXT("Max Iterations"),
                     GSMaxIterationsSpinBox,
                     GSMaxIterationsValue,
@@ -469,7 +444,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSTrainingParamsSection
             .FillWidth(0.5f)
             .Padding(5, 0, 0, 0)
             [
-                CreateGSNumericPropertyRow<int32>(
+                FVCCSimUIHelpers::CreateNumericPropertyRow<int32>(
                     TEXT("Init Point Count"),
                     GSInitPointCountSpinBox,
                     GSInitPointCountValue,
@@ -517,7 +492,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSTrainingParamsSection
             .FillWidth(0.5f)
             .Padding(5, 0, 0, 0)
             [
-                CreateGSNumericPropertyRow<float>(
+                FVCCSimUIHelpers::CreateNumericPropertyRow<float>(
                     TEXT("Mesh Opacity"),
                     GSMeshOpacitySpinBox,
                     GSMeshOpacityValue,
@@ -553,7 +528,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSTrainingParamsSection
             .FillWidth(0.5f)
             .Padding(5, 0, 0, 0)
             [
-                CreateGSNumericPropertyRow<int32>(
+                FVCCSimUIHelpers::CreateNumericPropertyRow<int32>(
                     TEXT("Max Mesh Triangles"),
                     GSMaxMeshTrianglesSpinBox,
                     GSMaxMeshTrianglesValue,
@@ -758,43 +733,6 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSTrainingControlSectio
         ;
 }
 
-// ============================================================================
-// TRIANGLE SPLATTING UI HELPER FUNCTIONS
-// ============================================================================
-
-template<typename T>
-TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSNumericPropertyRow(
-    const FString& Label,
-    TSharedPtr<SNumericEntryBox<T>>& SpinBox,
-    TOptional<T>& Value,
-    T MinValue,
-    T MaxValue,
-    T DeltaValue,
-    TFunction<void(T)> OnValueChanged)
-{
-    return FVCCSimUIHelpers::CreatePropertyRow(Label,
-        SNew(SBorder)
-        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
-        .BorderBackgroundColor(FColor(5, 5, 5, 255))
-        .Padding(4, 0)
-        [
-            SAssignNew(SpinBox, SNumericEntryBox<T>)
-            .Value_Lambda([&Value]() { return Value; })
-            .MinValue(MinValue)
-            .MaxValue(MaxValue)
-            .Delta(DeltaValue)
-            .AllowSpin(true)
-            .OnValueChanged_Lambda([&Value, OnValueChanged](T NewValue)
-            {
-                Value = NewValue;
-                if (OnValueChanged)
-                {
-                    OnValueChanged(NewValue);
-                }
-            })
-        ]
-    );
-}
 
 // ============================================================================
 // TRIANGLE SPLATTING EVENT HANDLERS

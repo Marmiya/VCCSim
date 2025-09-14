@@ -18,36 +18,12 @@
 DEFINE_LOG_CATEGORY_STATIC(LogTriangleSplatting, Log, All);
 
 #include "Editor/Panels/VCCSimPanelTriangleSplatting.h"
-#include "Editor/Panels/VCCSimPanelSelection.h"
 #include "Utils/TriangleSplattingManager.h"
 #include "Utils/ColmapManager.h"
 #include "Utils/VCCSimDataConverter.h"
 #include "IO/PLYUtils.h"
-#include "HAL/PlatformFileManager.h"
-#include "Widgets/Layout/SBox.h"
-#include "Widgets/Layout/SScrollBox.h"
-#include "Widgets/Layout/SSeparator.h"
-#include "Widgets/Layout/SBorder.h"
-#include "Widgets/Layout/SExpandableArea.h"
-#include "Widgets/Layout/SSpacer.h"
-#include "Widgets/Input/SCheckBox.h"
-#include "Widgets/Input/SEditableTextBox.h"
-#include "Widgets/Input/SButton.h"
-#include "Widgets/Text/STextBlock.h"
-#include "Widgets/SBoxPanel.h"
-#include "SlateOptMacros.h"
-#include "Misc/FileHelper.h"
-#include "Misc/Paths.h"
-#include "HAL/PlatformProcess.h"
 #include "Framework/Notifications/NotificationManager.h"
 #include "Widgets/Notifications/SNotificationList.h"
-#include "Engine/StaticMesh.h"
-#include "Editor/UnrealEd/Public/Editor.h"
-#include "Engine/Engine.h"
-#include "UObject/ConstructorHelpers.h"
-#include "Widgets/Images/SImage.h"
-#include "Framework/Application/SlateApplication.h"
-#include "Misc/ConfigCacheIni.h"
 
 BEGIN_SLATE_FUNCTION_BUILD_OPTIMIZATION
 
@@ -76,8 +52,6 @@ FVCCSimPanelTriangleSplatting::FVCCSimPanelTriangleSplatting()
     // Initialize triangle selection methods
     TriangleSelectionMethods.Add(MakeShared<FString>(TEXT("Random")));
     // Future: Add more methods like "Uniform", "ImportanceBased", etc.
-    
-    // Defer loading of saved paths to Initialize() to avoid duplicate loads
 }
 
 FVCCSimPanelTriangleSplatting::~FVCCSimPanelTriangleSplatting()
@@ -96,11 +70,8 @@ FVCCSimPanelTriangleSplatting::~FVCCSimPanelTriangleSplatting()
     }
 }
 
-void FVCCSimPanelTriangleSplatting::Initialize(
-    TSharedPtr<FVCCSimPanelSelection> InSelectionManager)
+void FVCCSimPanelTriangleSplatting::Initialize()
 {
-    SelectionManager = InSelectionManager;
-    
     InitializeGSManager();
     InitializeColmapManager();
     LoadPaths();
@@ -132,7 +103,6 @@ void FVCCSimPanelTriangleSplatting::Cleanup()
         GSStatusUpdateTimerHandle.Invalidate();
     }
     
-    SelectionManager.Reset();
 }
 
 // ============================================================================

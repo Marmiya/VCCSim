@@ -19,35 +19,15 @@ DEFINE_LOG_CATEGORY_STATIC(LogPointCloud, Log, All);
 
 #include "Editor/Panels/VCCSimPanelPointCloud.h"
 #include "Utils/VCCSimUIHelpers.h"
-
-// UE Core
 #include "Engine/World.h"
 #include "Engine/Engine.h"
-#include "UObject/UObjectGlobals.h"
 #include "EngineUtils.h"
-#include "Framework/Application/SlateApplication.h"
-#include "IDesktopPlatform.h"
 #include "DesktopPlatformModule.h"
-#include "Framework/Notifications/NotificationManager.h"
-#include "Widgets/Notifications/SNotificationList.h"
-
-// Slate UI
-#include "Widgets/Input/SButton.h"
-#include "Widgets/Text/STextBlock.h"
-#include "Widgets/Input/SCheckBox.h"
-#include "Widgets/SBoxPanel.h"
-#include "Widgets/Layout/SBorder.h"
-#include "Styling/AppStyle.h"
-#include "SlateOptMacros.h"
-
-// Engine Components
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/SceneComponent.h"
 #include "ProceduralMeshComponent.h"
-#include "Engine/StaticMesh.h"
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceDynamic.h"
-
 #include "DataStructures/PointCloudRenderer.h"
 #include "IO/PLYUtils.h"
 
@@ -313,7 +293,6 @@ TSharedRef<SWidget> FVCCSimPanelPointCloud::CreatePointCloudNormalControls()
             .OnCheckStateChanged_Lambda([this](ECheckBoxState NewState) { OnShowNormalsChanged(NewState); })
         ];
 }
-
 
 // ============================================================================
 // EVENT HANDLERS
