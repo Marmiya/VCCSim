@@ -22,6 +22,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogRatSplatting, Log, All);
 #include "Utils/ColmapManager.h"
 #include "Utils/VCCSimUIHelpers.h"
 #include "Utils/VCCSimDataConverter.h"
+#include "Utils/VCCSimConfigManager.h"
 #include "IO/PLYUtils.h"
 #include "DesktopPlatformModule.h"
 
@@ -76,7 +77,6 @@ void FVCCSimPanelRatSplatting::Initialize()
 {
     InitializeGSManager();
     InitializeColmapManager();
-    LoadPaths();
     UE_LOG(LogRatSplatting, Log, TEXT("VCCSimPanelRatSplatting initialized"));
 }
 
@@ -988,12 +988,25 @@ FReply FVCCSimPanelRatSplatting::OnGSExportColmapClicked()
 
 void FVCCSimPanelRatSplatting::SavePaths()
 {
-    // Save to both project's Saved folder and editor config for better persistence
-    SavePathsToProjectFile();
+    // Update configuration manager with current RatSplatting settings
+    FVCCSimConfigManager::FRatSplattingConfig NewConfig;
+    NewConfig.ImageDirectory = GSConfig.ImageDirectory;
+    NewConfig.CameraIntrinsicsFilePath = GSConfig.CameraIntrinsicsFilePath;
+    NewConfig.PoseFilePath = GSConfig.PoseFilePath;
+    NewConfig.OutputDirectory = GSConfig.OutputDirectory;
+    NewConfig.ColmapDatasetPath = GSConfig.ColmapDatasetPath;
+    NewConfig.SelectedMesh = GSConfig.SelectedMesh;
+
+    FVCCSimConfigManager::Get().SetRatSplattingConfig(NewConfig);
+    FVCCSimConfigManager::Get().SavePanelConfiguration();
 }
 
 void FVCCSimPanelRatSplatting::LoadPaths()
 {
+    // Note: Loading is now handled by main panel in SVCCSimPanel::LoadPanelState()
+    // This method is kept for backward compatibility but should not be called directly
+    // The LoadFromCentralizedConfig method will be called instead
+
     if (LoadPathsFromProjectFile())
     {
         // Update UI values to reflect loaded configuration
@@ -1119,6 +1132,95 @@ FString FVCCSimPanelRatSplatting::GetPathConfigFilePath() const
     const FString ProjectSavedDir = FPaths::ProjectSavedDir();
     const FString ConfigDir = FPaths::Combine(ProjectSavedDir, TEXT("Config"));
     return FPaths::Combine(ConfigDir, TEXT("VCCSimRatSplatting.txt"));
+}
+
+void FVCCSimPanelRatSplatting::LoadFromCentralizedConfig(
+    const FString& ImageDirectory,
+    const FString& CameraIntrinsicsFilePath,
+    const FString& PoseFilePath,
+    const FString& OutputDirectory,
+    const FString& ColmapDatasetPath,
+    const FString& SelectedMeshPath)
+{
+    bool bAnyConfigUpdated = false;
+
+    auto TrySet = [&bAnyConfigUpdated](FString& Target, const FString& Value)
+    {
+        if (!Value.IsEmpty() && Target != Value)
+        {
+            Target = Value;
+            bAnyConfigUpdated = true;
+        }
+    };
+
+    TrySet(GSConfig.ImageDirectory, ImageDirectory);
+    TrySet(GSConfig.CameraIntrinsicsFilePath, CameraIntrinsicsFilePath);
+    TrySet(GSConfig.PoseFilePath, PoseFilePath);
+    TrySet(GSConfig.OutputDirectory, OutputDirectory);
+    TrySet(GSConfig.ColmapDatasetPath, ColmapDatasetPath);
+
+    if (!SelectedMeshPath.IsEmpty())
+    {
+        if (UStaticMesh* LoadedMesh = LoadObject<UStaticMesh>(nullptr, *SelectedMeshPath))
+        {
+            GSConfig.SelectedMesh = LoadedMesh;
+            bAnyConfigUpdated = true;
+        }
+    }
+
+    if (bAnyConfigUpdated)
+    {
+        UpdateUIFromConfig();
+
+        if (!GSConfig.CameraIntrinsicsFilePath.IsEmpty() &&
+            FPaths::FileExists(GSConfig.CameraIntrinsicsFilePath))
+        {
+            OnGSCameraIntrinsicsLoaded();
+        }
+
+        UE_LOG(LogRatSplatting, Log, TEXT("RatSplatting configuration loaded from centralized config manager"));
+    }
+}
+
+void FVCCSimPanelRatSplatting::LoadFromConfigManager()
+{
+    const auto& Config = FVCCSimConfigManager::Get().GetRatSplattingConfig();
+
+    bool bAnyConfigUpdated = false;
+
+    auto TrySet = [&bAnyConfigUpdated](FString& Target, const FString& Value)
+    {
+        if (!Value.IsEmpty() && Target != Value)
+        {
+            Target = Value;
+            bAnyConfigUpdated = true;
+        }
+    };
+
+    TrySet(GSConfig.ImageDirectory, Config.ImageDirectory);
+    TrySet(GSConfig.CameraIntrinsicsFilePath, Config.CameraIntrinsicsFilePath);
+    TrySet(GSConfig.PoseFilePath, Config.PoseFilePath);
+    TrySet(GSConfig.OutputDirectory, Config.OutputDirectory);
+    TrySet(GSConfig.ColmapDatasetPath, Config.ColmapDatasetPath);
+
+    if (Config.SelectedMesh.IsValid())
+    {
+        GSConfig.SelectedMesh = Config.SelectedMesh.Get();
+        bAnyConfigUpdated = true;
+    }
+
+    if (bAnyConfigUpdated)
+    {
+        UpdateUIFromConfig();
+
+        if (!GSConfig.CameraIntrinsicsFilePath.IsEmpty() &&
+            FPaths::FileExists(GSConfig.CameraIntrinsicsFilePath))
+        {
+            OnGSCameraIntrinsicsLoaded();
+        }
+
+        UE_LOG(LogRatSplatting, Log, TEXT("RatSplatting configuration loaded from config manager"));
+    }
 }
 
 void FVCCSimPanelRatSplatting::UpdateUIFromConfig()

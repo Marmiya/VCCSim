@@ -49,6 +49,10 @@ public:
     bool IsAutoCaptureInProgress() const { return bAutoCaptureInProgress; }
     bool IsPathVisualized() const { return bPathVisualized; }
     void UpdatePathNeedsUpdate(bool bNeedsUpdate) { bPathNeedsUpdate = bNeedsUpdate; }
+
+    // UI state access for persistence
+    bool IsPathImageCaptureSectionExpanded() const { return bPathImageCaptureSectionExpanded; }
+    void SetPathImageCaptureSectionExpanded(bool bExpanded) { bPathImageCaptureSectionExpanded = bExpanded; }
     
 private:
     // ============================================================================

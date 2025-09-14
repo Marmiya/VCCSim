@@ -49,7 +49,10 @@ public class VCCSimEditor : ModuleRules
                 "AssetTools",
                 "AssetRegistry",
                 "ContentBrowser",
-                
+
+                // JSON support for panel state persistence
+                "Json",
+
                 // Rendering
                 "RenderCore",
                 "RHI"

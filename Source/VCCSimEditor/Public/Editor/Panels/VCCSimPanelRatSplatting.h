@@ -43,6 +43,21 @@ public:
     void SetRatSplattingSectionExpanded(bool bExpanded) { bRatSplattingSectionExpanded = bExpanded; }
     bool IsTrainingInProgress() const { return bGSTrainingInProgress; }
 
+    // Configuration access for centralized persistence
+    const FSplattingConfig& GetConfiguration() const { return GSConfig; }
+    void LoadFromCentralizedConfig(
+        const FString& ImageDirectory,
+        const FString& CameraIntrinsicsFilePath,
+        const FString& PoseFilePath,
+        const FString& OutputDirectory,
+        const FString& ColmapDatasetPath,
+        const FString& SelectedMeshPath
+    );
+
+    // Load configuration from centralized config manager
+    void LoadFromConfigManager();
+
+
 private:
     // ============================================================================
     // UI ELEMENTS
@@ -103,9 +118,10 @@ private:
     // Managers
     TSharedPtr<FSplattingManager> GSTrainingManager;
     TSharedPtr<FColmapManager> ColmapManager;
-    
+
     // Triangle selection method options
     TArray<TSharedPtr<FString>> TriangleSelectionMethods;
+
 
     // ============================================================================
     // INITIALIZATION AND MANAGER OPERATIONS

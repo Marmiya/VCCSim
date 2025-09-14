@@ -57,6 +57,10 @@ public:
     
     /** Handle actor selection from viewport */
     void HandleActorSelection(AActor* Actor);
+
+    // UI state access for persistence
+    bool IsFlashPawnSectionExpanded() const { return bFlashPawnSectionExpanded; }
+    void SetFlashPawnSectionExpanded(bool bExpanded) { bFlashPawnSectionExpanded = bExpanded; }
     
     /** Auto-select first available FlashPawn in the scene */
     void AutoSelectFlashPawn();

@@ -46,6 +46,13 @@ public:
     // Update signature to match UE's selection event
     void OnSelectionChanged(UObject* Object);
 
+    // ============================================================================
+    // PANEL STATE PERSISTENCE
+    // ============================================================================
+
+    void SavePanelState();
+    void LoadPanelState();
+
 private:
     // ============================================================================
     // UI ELEMENTS
@@ -97,6 +104,13 @@ private:
         TOptional<T>& Value,
         T MinValue,
         T DeltaValue);
+
+    // ============================================================================
+    // PANEL STATE PERSISTENCE (PRIVATE)
+    // ============================================================================
+
+    void UpdateSubPanelsFromState();
+    void GatherSubPanelStates();
 
     // ============================================================================
     // UTILITY FUNCTIONS

@@ -23,6 +23,9 @@
 #include "Editor/Panels/VCCSimPanelSceneAnalysis.h"
 #include "Editor/Panels/VCCSimPanelRatSplatting.h"
 #include "Editor/UnrealEd/Public/Selection.h"
+#include "Utils/VCCSimConfigManager.h"
+
+DEFINE_LOG_CATEGORY_STATIC(LogVCCSimEditor, Log, All);
 
 // ============================================================================
 // CONSTRUCTOR & DESTRUCTOR
@@ -30,6 +33,9 @@
 
 SVCCSimPanel::~SVCCSimPanel()
 {
+    // Save panel state before cleanup
+    SavePanelState();
+
     // Unregister from selection events
     if (GEditor && GEditor->GetSelectedActors())
     {
@@ -110,10 +116,13 @@ void SVCCSimPanel::Construct(const FArguments& InArgs)
     // Initialize RatSplatting manager
     RatSplattingManager = MakeShared<FVCCSimPanelRatSplatting>();
     RatSplattingManager->Initialize();
-    
+
+    // Load panel state BEFORE creating UI widgets
+    LoadPanelState();
+
     // Create the main widget layout
     CreateMainLayout();
-    
+
     // Auto-select FlashPawn if available in the scene (after UI is created)
     if (SelectionManager.IsValid())
     {
@@ -349,6 +358,90 @@ TSharedRef<SWidget> SVCCSimPanel::CreateNumericPropertyRow(
             })
         ]
     );
+}
+
+// ============================================================================
+// PANEL STATE PERSISTENCE IMPLEMENTATION
+// ============================================================================
+
+void SVCCSimPanel::SavePanelState()
+{
+    GatherSubPanelStates();
+    FVCCSimConfigManager::Get().SavePanelConfiguration();
+}
+
+void SVCCSimPanel::LoadPanelState()
+{
+    if (FVCCSimConfigManager::Get().LoadPanelConfiguration())
+    {
+        UpdateSubPanelsFromState();
+    }
+}
+
+void SVCCSimPanel::UpdateSubPanelsFromState()
+{
+    const auto& States = FVCCSimConfigManager::Get().GetPanelStates();
+
+    if (SelectionManager.IsValid())
+    {
+        SelectionManager->SetFlashPawnSectionExpanded(States.bFlashPawnSectionExpanded);
+    }
+
+    if (PathImageCaptureManager.IsValid())
+    {
+        PathImageCaptureManager->SetPathImageCaptureSectionExpanded(States.bPathImageCaptureSectionExpanded);
+    }
+
+    if (SceneAnalysisManager.IsValid())
+    {
+        SceneAnalysisManager->SetSceneAnalysisSectionExpanded(States.bSceneAnalysisSectionExpanded);
+    }
+
+    if (PointCloudManager.IsValid())
+    {
+        PointCloudManager->SetPointCloudSectionExpanded(States.bPointCloudSectionExpanded);
+    }
+
+    if (RatSplattingManager.IsValid())
+    {
+        RatSplattingManager->SetRatSplattingSectionExpanded(States.bRatSplattingSectionExpanded);
+        RatSplattingManager->LoadFromConfigManager();
+    }
+
+    UE_LOG(LogVCCSimEditor, Log, TEXT("Sub-panel states updated from centralized configuration"));
+}
+
+void SVCCSimPanel::GatherSubPanelStates()
+{
+    FVCCSimConfigManager::FPanelStates States;
+
+    if (SelectionManager.IsValid())
+    {
+        States.bFlashPawnSectionExpanded = SelectionManager->IsFlashPawnSectionExpanded();
+    }
+
+    if (PathImageCaptureManager.IsValid())
+    {
+        States.bPathImageCaptureSectionExpanded = PathImageCaptureManager->IsPathImageCaptureSectionExpanded();
+    }
+
+    if (SceneAnalysisManager.IsValid())
+    {
+        States.bSceneAnalysisSectionExpanded = SceneAnalysisManager->IsSceneAnalysisSectionExpanded();
+    }
+
+    if (PointCloudManager.IsValid())
+    {
+        States.bPointCloudSectionExpanded = PointCloudManager->IsPointCloudSectionExpanded();
+    }
+
+    if (RatSplattingManager.IsValid())
+    {
+        States.bRatSplattingSectionExpanded = RatSplattingManager->IsRatSplattingSectionExpanded();
+    }
+
+    FVCCSimConfigManager::Get().SetPanelStates(States);
+    UE_LOG(LogVCCSimEditor, VeryVerbose, TEXT("Sub-panel states gathered for centralized persistence"));
 }
 
 FString SVCCSimPanel::GetTimestampedFilename()

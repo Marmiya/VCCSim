@@ -63,6 +63,10 @@ public:
     /** Check if point cloud is visualized */
     bool IsPointCloudVisualized() const { return bPointCloudVisualized; }
 
+    // UI state access for persistence
+    bool IsPointCloudSectionExpanded() const { return bPointCloudSectionExpanded; }
+    void SetPointCloudSectionExpanded(bool bExpanded) { bPointCloudSectionExpanded = bExpanded; }
+
 private:
     // ============================================================================
     // UI CREATION
