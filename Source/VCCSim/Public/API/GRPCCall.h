@@ -105,7 +105,7 @@ class AsyncCallTemplateM : public AsyncCall
 {
 public:
     AsyncCallTemplateM(ServiceType* service,
-        grpc::ServerCompletionQueue* cq, RobotComponentMap RCMap);
+        grpc::ServerCompletionQueue* cq, const RobotComponentMap& RCMap);
 
     virtual void Proceed(bool ok) override final;
     virtual void Shutdown() override final;
@@ -136,7 +136,7 @@ class AsyncCallTemplateImage : public AsyncCall
 {
 public:
     AsyncCallTemplateImage(ServiceType* service,
-        grpc::ServerCompletionQueue* cq, RobotComponentMap RCMap);
+        grpc::ServerCompletionQueue* cq, const RobotComponentMap& RCMap);
 
     virtual void Proceed(bool ok) override final;
     virtual void Shutdown() override final;
@@ -187,7 +187,7 @@ public:
     LidarGetDataCall(
         VCCSim::LidarService::AsyncService* service,
         grpc::ServerCompletionQueue* cq,
-        std::map<std::string, ULidarComponent*> RLMap);
+        const std::map<std::string, ULidarComponent*>& RLMap);
 
 protected:
     virtual void PrepareNextCall() override final;
@@ -204,7 +204,7 @@ public:
     LidarGetOdomCall(
         VCCSim::LidarService::AsyncService* service,
         grpc::ServerCompletionQueue* cq,
-        std::map<std::string, ULidarComponent*> RLMap);
+        const std::map<std::string, ULidarComponent*>& RLMap);
 
 protected:
     virtual void PrepareNextCall() override final;
@@ -221,7 +221,7 @@ public:
     LidarGetDataAndOdomCall(
         VCCSim::LidarService::AsyncService* service,
         grpc::ServerCompletionQueue* cq,
-        std::map<std::string, ULidarComponent*> rcmap);
+        const std::map<std::string, ULidarComponent*>& rcmap);
 
 protected:
     virtual void PrepareNextCall() override final;
@@ -237,7 +237,7 @@ public:
     DepthCameraGetOdomCall(
         VCCSim::DepthCameraService::AsyncService* service,
         grpc::ServerCompletionQueue* cq,
-        std::map<std::string, UDepthCameraComponent*> rdcmap);
+        const std::map<std::string, UDepthCameraComponent*>& rdcmap);
 protected:
     virtual void PrepareNextCall() override final;
     virtual void InitializeRequest() override final;
@@ -252,7 +252,7 @@ public:
     DepthIndexedCameraPointDataCall(
         VCCSim::DepthCameraService::AsyncService* service,
         grpc::ServerCompletionQueue* cq,
-        std::map<std::string, UDepthCameraComponent*> rdcmap);
+        const std::map<std::string, UDepthCameraComponent*>& rdcmap);
 protected:
     virtual void PrepareNextCall() override final;
     virtual void InitializeRequest() override final;
@@ -268,7 +268,7 @@ public:
     DepthIndexedCameraImageSizeCall(
         VCCSim::DepthCameraService::AsyncService* service,
         grpc::ServerCompletionQueue* cq,
-        std::map<std::string, UDepthCameraComponent*> rdcmap);
+        const std::map<std::string, UDepthCameraComponent*>& rdcmap);
 protected:
     virtual void PrepareNextCall() override final;
     virtual void InitializeRequest() override final;
@@ -284,7 +284,7 @@ public:
     DepthIndexedCameraImageDataCall(
         VCCSim::DepthCameraService::AsyncService* service,
         grpc::ServerCompletionQueue* cq,
-        std::map<std::string, UDepthCameraComponent*> rdcmap);
+        const std::map<std::string, UDepthCameraComponent*>& rdcmap);
 protected:
     virtual void PrepareNextCall() override final;
     virtual void InitializeRequest() override final;
@@ -302,7 +302,7 @@ public:
     RGBCameraGetOdomCall(
         VCCSim::RGBCameraService::AsyncService* service,
         grpc::ServerCompletionQueue* cq,
-        std::map<std::string, URGBCameraComponent*> rrgbcmap);
+        const std::map<std::string, URGBCameraComponent*>& rrgbcmap);
 protected:
     virtual void PrepareNextCall() override final;
     virtual void InitializeRequest() override final;
@@ -317,7 +317,7 @@ public:
     RGBIndexedCameraImageSizeCall(
         VCCSim::RGBCameraService::AsyncService* service,
         grpc::ServerCompletionQueue* cq,
-        std::map<std::string, URGBCameraComponent*> rrgbcmap);
+        const std::map<std::string, URGBCameraComponent*>& rrgbcmap);
 protected:
     virtual void PrepareNextCall() override final;
     virtual void InitializeRequest() override final;
@@ -333,7 +333,7 @@ public:
     RGBIndexedCameraImageDataCall(
         VCCSim::RGBCameraService::AsyncService* service,
         grpc::ServerCompletionQueue* cq,
-        std::map<std::string, URGBCameraComponent*> rrgbcmap);
+        const std::map<std::string, URGBCameraComponent*>& rrgbcmap);
 
     static void InitializeImageModule()
     {
@@ -443,7 +443,7 @@ public:
     SegmentCameraGetOdomCall(
         VCCSim::SegmentationCameraService::AsyncService* service,
         grpc::ServerCompletionQueue* cq,
-        std::map<std::string, USegmentationCameraComponent*> rscmap);
+        const std::map<std::string, USegmentationCameraComponent*>& rscmap);
 protected:
     virtual void PrepareNextCall() override final;
     virtual void InitializeRequest() override final;
@@ -515,7 +515,7 @@ class GetDronePoseCall final: public AsyncCallTemplateM<VCCSim::RobotName,
 public:
     GetDronePoseCall(VCCSim::DroneService::AsyncService* service,
         grpc::ServerCompletionQueue* cq,
-        std::map<std::string, ADronePawn*> rcmap);
+        const std::map<std::string, ADronePawn*>& rcmap);
 protected:
     virtual void PrepareNextCall() override final;
     virtual void InitializeRequest() override final;
@@ -529,7 +529,7 @@ class SendDronePoseCall : public AsyncCallTemplateM<VCCSim::DronePose,
 public:
     SendDronePoseCall(VCCSim::DroneService::AsyncService* service,
         grpc::ServerCompletionQueue* cq,
-        std::map<std::string, ADronePawn*> rcmap);
+        const std::map<std::string, ADronePawn*>& rcmap);
 protected:
     virtual void PrepareNextCall() override final;
     virtual void InitializeRequest() override final;
@@ -543,7 +543,7 @@ class SendDronePathCall : public AsyncCallTemplateM<VCCSim::DronePath,
 public:
     SendDronePathCall(VCCSim::DroneService::AsyncService* service,
         grpc::ServerCompletionQueue* cq,
-        std::map<std::string, ADronePawn*> rcmap);
+        const std::map<std::string, ADronePawn*>& rcmap);
 protected:
     virtual void PrepareNextCall() override final;
     virtual void InitializeRequest() override final;
@@ -558,7 +558,7 @@ class GetCarOdomCall final : public AsyncCallTemplateM<VCCSim::RobotName,
 public:
     GetCarOdomCall(VCCSim::CarService::AsyncService* service,
         grpc::ServerCompletionQueue* cq,
-        std::map<std::string, ACarPawn*> rcmap);
+        const std::map<std::string, ACarPawn*>& rcmap);
 protected:
     virtual void PrepareNextCall() override final;
     virtual void InitializeRequest() override final;
@@ -572,7 +572,7 @@ class SendCarPoseCall : public AsyncCallTemplateM<VCCSim::CarPose,
 public:
     SendCarPoseCall(VCCSim::CarService::AsyncService* service,
         grpc::ServerCompletionQueue* cq,
-        std::map<std::string, ACarPawn*> rcmap);
+        const std::map<std::string, ACarPawn*>& rcmap);
 protected:
     virtual void PrepareNextCall() override final;
     virtual void InitializeRequest() override final;
@@ -586,7 +586,7 @@ class SendCarPathCall : public AsyncCallTemplateM<VCCSim::CarPath,
 public:
     SendCarPathCall(VCCSim::CarService::AsyncService* service,
         grpc::ServerCompletionQueue* cq,
-        std::map<std::string, ACarPawn*> rcmap);
+        const std::map<std::string, ACarPawn*>& rcmap);
 protected:
     virtual void PrepareNextCall() override final;
     virtual void InitializeRequest() override final;
@@ -602,7 +602,7 @@ class GetFlashPoseCall final: public AsyncCallTemplateM<VCCSim::RobotName,
 public:
     GetFlashPoseCall(VCCSim::FlashService::AsyncService* service,
         grpc::ServerCompletionQueue* cq,
-        std::map<std::string, AFlashPawn*> rcmap);
+        const std::map<std::string, AFlashPawn*>& rcmap);
 protected:
     virtual void PrepareNextCall() override final;
     virtual void InitializeRequest() override final;
@@ -616,7 +616,7 @@ class SendFlashPoseCall : public AsyncCallTemplateM<VCCSim::FlashPose,
 public:
     SendFlashPoseCall(VCCSim::FlashService::AsyncService* service,
         grpc::ServerCompletionQueue* cq,
-        std::map<std::string, AFlashPawn*> rcmap);
+        const std::map<std::string, AFlashPawn*>& rcmap);
 protected:
     virtual void PrepareNextCall() override final;
     virtual void InitializeRequest() override final;
@@ -630,7 +630,7 @@ class SendFlashPathCall : public AsyncCallTemplateM<VCCSim::FlashPath,
 public:
     SendFlashPathCall(VCCSim::FlashService::AsyncService* service,
         grpc::ServerCompletionQueue* cq,
-        std::map<std::string, AFlashPawn*> rcmap);
+        const std::map<std::string, AFlashPawn*>& rcmap);
 protected:
     virtual void PrepareNextCall() override final;
     virtual void InitializeRequest() override final;
@@ -644,7 +644,7 @@ class CheckFlashReadyCall : public AsyncCallTemplateM<VCCSim::RobotName,
 public:
     CheckFlashReadyCall(VCCSim::FlashService::AsyncService* service,
         grpc::ServerCompletionQueue* cq,
-        std::map<std::string, AFlashPawn*> rcmap);
+        const std::map<std::string, AFlashPawn*>& rcmap);
 protected:
     virtual void PrepareNextCall() override final;
     virtual void InitializeRequest() override final;
@@ -658,7 +658,7 @@ class MoveToNextCall : public AsyncCallTemplateM<VCCSim::RobotName,
 public:
     MoveToNextCall(VCCSim::FlashService::AsyncService* service,
         grpc::ServerCompletionQueue* cq,
-        std::map<std::string, AFlashPawn*> rcmap);
+        const std::map<std::string, AFlashPawn*>& rcmap);
 protected:
     virtual void PrepareNextCall() override final;
     virtual void InitializeRequest() override final;
@@ -742,7 +742,7 @@ template <typename RequestType, typename ResponseType, typename ServiceType,
     typename RobotComponentMap>
 AsyncCallTemplateM<RequestType, ResponseType, ServiceType, RobotComponentMap>::
 AsyncCallTemplateM(ServiceType* service, grpc::ServerCompletionQueue* cq,
-    RobotComponentMap RCMap)
+    const RobotComponentMap& RCMap)
     : responder_(&ctx_), status_(CREATE), service_(service),
       cq_(cq), RCMap_(RCMap) {}
 
@@ -780,7 +780,7 @@ template <typename RequestType, typename ResponseType, typename ServiceType,
     typename RobotComponentMap>
 AsyncCallTemplateImage<RequestType, ResponseType, ServiceType, RobotComponentMap>::
 AsyncCallTemplateImage(ServiceType* service, grpc::ServerCompletionQueue* cq,
-    RobotComponentMap RCMap)
+    const RobotComponentMap& RCMap)
     : responder_(&ctx_), status_(CREATE), service_(service),
       cq_(cq), RCMap_(RCMap) {}
 

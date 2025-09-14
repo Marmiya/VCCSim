@@ -246,7 +246,7 @@ void AVCCHUD::SetupMainCharacter(const FVCCSimConfig& Config, TArray<AActor*> Fo
     
     if (!MainCharacter)
     {
-        UE_LOG(LogVCCHUD, Warning, TEXT("AVCCHUD::SetupMainCharacter: "
+        UE_LOG(LogVCCHUD, Warning, TEXT("SetupMainCharacter: "
                                       "MainCharacter not found!"));
         return;
     }

@@ -55,7 +55,7 @@ struct FRobotGrpcMaps
 
 extern FAsyncTask<FGrpcServerTask>* Server_Task;
 
-void RunServer(const FVCCSimConfig& Config, AActor* Holder,
+void RunServer(const FVCCSimConfig& Config, const AActor* Holder,
 	const FRobotGrpcMaps& RGrpcMaps, UFMeshManager* MeshManager,
 	ARecorder* Recorder);
 

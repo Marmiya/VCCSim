@@ -57,7 +57,7 @@ void SimRecording::ProcessRequest()
 LidarGetDataCall::LidarGetDataCall(
     VCCSim::LidarService::AsyncService* service,
     grpc::ServerCompletionQueue* cq,
-    std::map<std::string, ULidarComponent*> RLMap)
+    const std::map<std::string, ULidarComponent*>& RLMap)
     : AsyncCallTemplateM(service, cq, RLMap)
 {
     Proceed(true);
@@ -95,7 +95,7 @@ void LidarGetDataCall::ProcessRequest()
 LidarGetOdomCall::LidarGetOdomCall(
         VCCSim::LidarService::AsyncService* service,
         grpc::ServerCompletionQueue* cq,
-        std::map<std::string, ULidarComponent*> RLMap)
+        const std::map<std::string, ULidarComponent*>& RLMap)
     : AsyncCallTemplateM(service, cq, RLMap)
 {
     Proceed(true);
@@ -147,7 +147,7 @@ void LidarGetOdomCall::ProcessRequest()
 LidarGetDataAndOdomCall::LidarGetDataAndOdomCall(
     VCCSim::LidarService::AsyncService* service,
     grpc::ServerCompletionQueue* cq,
-    std::map<std::string, ULidarComponent*> rcmap)
+    const std::map<std::string, ULidarComponent*>& rcmap)
     : AsyncCallTemplateM(service, cq, rcmap)
 {
     Proceed(true);
@@ -205,7 +205,7 @@ void LidarGetDataAndOdomCall::ProcessRequest()
 DepthIndexedCameraPointDataCall::DepthIndexedCameraPointDataCall(
     VCCSim::DepthCameraService::AsyncService* service,
     grpc::ServerCompletionQueue* cq,
-    std::map<std::string, UDepthCameraComponent*> rdcmap)
+    const std::map<std::string, UDepthCameraComponent*>& rdcmap)
         : AsyncCallTemplateImage(service, cq, rdcmap)
 {
     Proceed(true);
@@ -275,8 +275,8 @@ void DepthIndexedCameraPointDataCall::ProcessRequest()
 
 DepthIndexedCameraImageSizeCall::DepthIndexedCameraImageSizeCall(
     VCCSim::DepthCameraService::AsyncService* service,
-    grpc::ServerCompletionQueue* cq, std::map<std::string,
-    UDepthCameraComponent*> rdcmap)
+    grpc::ServerCompletionQueue* cq, const std::map<std::string,
+    UDepthCameraComponent*>& rdcmap)
         : AsyncCallTemplateM(service, cq, rdcmap)
 {
     Proceed(true);
@@ -312,7 +312,7 @@ void DepthIndexedCameraImageSizeCall::ProcessRequest()
 DepthIndexedCameraImageDataCall::DepthIndexedCameraImageDataCall(
     VCCSim::DepthCameraService::AsyncService* service,
     grpc::ServerCompletionQueue* cq,
-    std::map<std::string, UDepthCameraComponent*> rdcmap)
+    const std::map<std::string, UDepthCameraComponent*>& rdcmap)
         : AsyncCallTemplateImage(service, cq, rdcmap)
 {
     Proceed(true);
@@ -371,7 +371,7 @@ void DepthIndexedCameraImageDataCall::ProcessRequest()
 DepthCameraGetOdomCall::DepthCameraGetOdomCall(
     VCCSim::DepthCameraService::AsyncService* service,
     grpc::ServerCompletionQueue* cq,
-    std::map<std::string, UDepthCameraComponent*> rdcmap)
+    const std::map<std::string, UDepthCameraComponent*>& rdcmap)
         : AsyncCallTemplateM(service, cq, rdcmap)
 {
     Proceed(true);
@@ -424,7 +424,7 @@ void DepthCameraGetOdomCall::ProcessRequest()
 RGBCameraGetOdomCall::RGBCameraGetOdomCall(
     VCCSim::RGBCameraService::AsyncService* service,
     grpc::ServerCompletionQueue* cq,
-    std::map<std::string, URGBCameraComponent*> rrgbcmap)
+    const std::map<std::string, URGBCameraComponent*>& rrgbcmap)
         : AsyncCallTemplateM(service, cq, rrgbcmap)
 {
     Proceed(true);
@@ -476,8 +476,8 @@ void RGBCameraGetOdomCall::ProcessRequest()
 
 RGBIndexedCameraImageSizeCall::RGBIndexedCameraImageSizeCall(
     VCCSim::RGBCameraService::AsyncService* service,
-    grpc::ServerCompletionQueue* cq, std::map<std::string,
-    URGBCameraComponent*> rrgbcmap)
+    grpc::ServerCompletionQueue* cq, const std::map<std::string,
+    URGBCameraComponent*>& rrgbcmap)
         : AsyncCallTemplateM(service, cq, rrgbcmap)
 {
     Proceed(true);
@@ -516,7 +516,7 @@ IImageWrapperModule* RGBIndexedCameraImageDataCall::ImageWrapperModule = nullptr
 RGBIndexedCameraImageDataCall::RGBIndexedCameraImageDataCall(
     VCCSim::RGBCameraService::AsyncService* service,
     grpc::ServerCompletionQueue* cq,
-    std::map<std::string, URGBCameraComponent*> rrgbcmap)
+    const std::map<std::string, URGBCameraComponent*>& rrgbcmap)
         : AsyncCallTemplateImage(service, cq, rrgbcmap)
 {
     Proceed(true);
@@ -616,7 +616,7 @@ void RGBIndexedCameraImageDataCall::ProcessRequest()
 SegmentCameraGetOdomCall::SegmentCameraGetOdomCall(
     VCCSim::SegmentationCameraService::AsyncService* service,
     grpc::ServerCompletionQueue* cq,
-    std::map<std::string, USegmentationCameraComponent*> rscmap)
+    const std::map<std::string, USegmentationCameraComponent*>& rscmap)
         : AsyncCallTemplateM(service, cq, rscmap)
 {
     Proceed(true);
@@ -843,7 +843,7 @@ void SendPointCloudWithColorCall::ProcessRequest()
 GetDronePoseCall::GetDronePoseCall(
     VCCSim::DroneService::AsyncService* service,
     grpc::ServerCompletionQueue* cq,
-    std::map<std::string, ADronePawn*> rcmap)
+    const std::map<std::string, ADronePawn*>& rcmap)
         : AsyncCallTemplateM(service, cq, rcmap)
 {
     Proceed(true);
@@ -885,7 +885,7 @@ void GetDronePoseCall::ProcessRequest()
 SendDronePoseCall::SendDronePoseCall(
     VCCSim::DroneService::AsyncService* service,
     grpc::ServerCompletionQueue* cq,
-    std::map<std::string, ADronePawn*> rcmap)
+    const std::map<std::string, ADronePawn*>& rcmap)
         : AsyncCallTemplateM(service, cq, rcmap)
 {
     Proceed(true);
@@ -942,7 +942,7 @@ void SendDronePoseCall::ProcessRequest()
 SendDronePathCall::SendDronePathCall(
     VCCSim::DroneService::AsyncService* service,
     grpc::ServerCompletionQueue* cq,
-    std::map<std::string, ADronePawn*> rcmap)
+    const std::map<std::string, ADronePawn*>& rcmap)
         : AsyncCallTemplateM(service, cq, rcmap)
 {
     Proceed(true);
@@ -993,7 +993,7 @@ void SendDronePathCall::ProcessRequest()
 GetCarOdomCall::GetCarOdomCall(
     VCCSim::CarService::AsyncService* service,
     grpc::ServerCompletionQueue* cq,
-    std::map<std::string, ACarPawn*> rcmap)
+    const std::map<std::string, ACarPawn*>& rcmap)
     : AsyncCallTemplateM(service, cq, rcmap)
 {
     Proceed(true);
@@ -1048,7 +1048,7 @@ void GetCarOdomCall::ProcessRequest()
 SendCarPoseCall::SendCarPoseCall(
     VCCSim::CarService::AsyncService* service,
     grpc::ServerCompletionQueue* cq,
-    std::map<std::string, ACarPawn*> rcmap)
+    const std::map<std::string, ACarPawn*>& rcmap)
     : AsyncCallTemplateM(service, cq, rcmap)
 {
     Proceed(true);
@@ -1102,7 +1102,7 @@ void SendCarPoseCall::ProcessRequest()
 SendCarPathCall::SendCarPathCall(
     VCCSim::CarService::AsyncService* service,
     grpc::ServerCompletionQueue* cq,
-    std::map<std::string, ACarPawn*> rcmap)
+    const std::map<std::string, ACarPawn*>& rcmap)
     : AsyncCallTemplateM(service, cq, rcmap)
 {
     Proceed(true);
@@ -1153,7 +1153,7 @@ void SendCarPathCall::ProcessRequest()
 GetFlashPoseCall::GetFlashPoseCall(
     VCCSim::FlashService::AsyncService* service,
     grpc::ServerCompletionQueue* cq,
-    std::map<std::string, AFlashPawn*> rcmap)
+    const std::map<std::string, AFlashPawn*>& rcmap)
         : AsyncCallTemplateM(service, cq, rcmap)
 {
     Proceed(true);
@@ -1195,7 +1195,7 @@ void GetFlashPoseCall::ProcessRequest()
 SendFlashPoseCall::SendFlashPoseCall(
     VCCSim::FlashService::AsyncService* service,
     grpc::ServerCompletionQueue* cq,
-    std::map<std::string, AFlashPawn*> rcmap)
+    const std::map<std::string, AFlashPawn*>& rcmap)
         : AsyncCallTemplateM(service, cq, rcmap)
 {
     Proceed(true);
@@ -1249,7 +1249,7 @@ void SendFlashPoseCall::ProcessRequest()
 SendFlashPathCall::SendFlashPathCall(
     VCCSim::FlashService::AsyncService* service,
     grpc::ServerCompletionQueue* cq,
-    std::map<std::string, AFlashPawn*> rcmap)
+    const std::map<std::string, AFlashPawn*>& rcmap)
         : AsyncCallTemplateM(service, cq, rcmap)
 {
     Proceed(true);
@@ -1300,7 +1300,7 @@ void SendFlashPathCall::ProcessRequest()
 CheckFlashReadyCall::CheckFlashReadyCall(
     VCCSim::FlashService::AsyncService* service,
     grpc::ServerCompletionQueue* cq,
-    std::map<std::string, AFlashPawn*> rcmap)
+    const std::map<std::string, AFlashPawn*>& rcmap)
         : AsyncCallTemplateM(service, cq, rcmap)
 {
     Proceed(true);
@@ -1334,7 +1334,7 @@ void CheckFlashReadyCall::ProcessRequest()
 MoveToNextCall::MoveToNextCall(
     VCCSim::FlashService::AsyncService* service,
     grpc::ServerCompletionQueue* cq,
-    std::map<std::string, AFlashPawn*> rcmap)
+    const std::map<std::string, AFlashPawn*>& rcmap)
         : AsyncCallTemplateM(service, cq, rcmap)
 {
     Proceed(true);

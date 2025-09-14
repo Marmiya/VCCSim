@@ -20,7 +20,6 @@ DEFINE_LOG_CATEGORY_STATIC(LogRpcServer, Log, All);
 #include "API/RpcServer.h"
 #include "API/GRPCCall.h"
 #include "Sensors/LidarSensor.h"
-#include "Sensors/DepthCamera.h"
 #include "Pawns/DronePawn.h"
 #include "Pawns/CarPawn.h"
 #include "Pawns/FlashPawn.h"
@@ -47,12 +46,12 @@ public:
     FGrpcServerTask(
     	const FVCCSimConfig& Config, UMeshHandlerComponent* MeshComponent,
     	UInsMeshHolder* InstancedMeshHolder, UFMeshManager* MeshManager,
-    	FRobotGrpcMaps RobotGrpcMap, ARecorder* ARecorder)
+    	const FRobotGrpcMaps& RobotGrpcMap, ARecorder* ARecorder)
         : Config(Config), MeshComponent(MeshComponent),
 		  InstancedMeshHolder(InstancedMeshHolder), MeshManager(MeshManager),
 		  RGrpcMaps(RobotGrpcMap), Recorder(ARecorder) {}
 
-    FORCEINLINE TStatId GetStatId() const
+    static FORCEINLINE TStatId GetStatId()
     {
         RETURN_QUICK_DECLARE_CYCLE_STAT(FGrpcServerTask, STATGROUP_ThreadPoolAsyncTasks);
     }
@@ -114,7 +113,6 @@ public:
             // Spawn initial asynchronous calls
         	if (!RGrpcMaps.RMaps.DroneMap.empty())
         	{
-        		std::map<std::string, ADronePawn*> DroneMap;
         		for (const auto& Pair : RGrpcMaps.RMaps.DroneMap)
         		{
         			DroneMap[Pair.first] = Cast<ADronePawn>(Pair.second);
@@ -126,7 +124,6 @@ public:
 
             if (!RGrpcMaps.RMaps.CarMap.empty())
             {
-                std::map<std::string, ACarPawn*> CarMap;
                 for (const auto& Pair : RGrpcMaps.RMaps.CarMap)
                 {
                     CarMap[Pair.first] = Cast<ACarPawn>(Pair.second);
@@ -138,7 +135,6 @@ public:
 
         	if (!RGrpcMaps.RMaps.FlashMap.empty())
 			{
-				std::map<std::string, AFlashPawn*> FlashMap;
 				for (const auto& Pair : RGrpcMaps.RMaps.FlashMap)
 				{
 					FlashMap[Pair.first] = Cast<AFlashPawn>(Pair.second);
@@ -249,12 +245,16 @@ private:
     FRobotGrpcMaps RGrpcMaps;
 	ARecorder* Recorder = nullptr;
 	
+	std::map<std::string, ADronePawn*> DroneMap;
+	std::map<std::string, ACarPawn*> CarMap;
+	std::map<std::string, AFlashPawn*> FlashMap;
+	
     std::unique_ptr<grpc::ServerCompletionQueue> CompletionQueue;
     std::unique_ptr<grpc::Server> Server;
     std::thread CompletionQueueThread;
 };
 
-void RunServer(const FVCCSimConfig& Config, AActor* Holder,
+void RunServer(const FVCCSimConfig& Config, const AActor* Holder,
 	const FRobotGrpcMaps& RGrpcMaps, UFMeshManager* MeshManager, ARecorder* Recorder)
 {
 	if (ShutdownRequested.load())
