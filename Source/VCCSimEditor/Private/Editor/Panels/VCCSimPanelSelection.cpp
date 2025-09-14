@@ -18,6 +18,7 @@
 DEFINE_LOG_CATEGORY_STATIC(LogSelection, Log, All);
 
 #include "Editor/Panels/VCCSimPanelSelection.h"
+#include "Utils/VCCSimUIHelpers.h"
 
 // UE Core
 #include "Engine/World.h"
@@ -114,7 +115,7 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateSelectionPanel()
                 .AutoHeight()
                 .Padding(FMargin(0, 6, 0, 6))
                 [
-                    CreateSeparator()
+                    FVCCSimUIHelpers::CreateSeparator()
                 ]
                 
                 // Camera Selection
@@ -129,7 +130,7 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateSelectionPanel()
                 .AutoHeight()
                 .Padding(FMargin(0, 6, 0, 6))
                 [
-                    CreateSeparator()
+                    FVCCSimUIHelpers::CreateSeparator()
                 ]
                 
                 // Target Object Selection
@@ -570,13 +571,6 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateCameraStatusBox(
         ];
 }
 
-TSharedRef<SWidget> FVCCSimPanelSelection::CreateSeparator()
-{
-    return SNew(SBorder)
-        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryTop"))
-        .BorderBackgroundColor(FColor(48, 48, 48))
-        .Padding(FMargin(0, 1));
-}
 
 // ============================================================================
 // EVENT HANDLERS

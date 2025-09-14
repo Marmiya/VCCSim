@@ -141,21 +141,5 @@ private:
     TSharedRef<SWidget> CreateCoverageButtons();
     TSharedRef<SWidget> CreateComplexityButtons();
     
-    // Style and layout helpers
-    TSharedRef<SWidget> CreateCollapsibleSection(
-        const FString& Title, TSharedRef<SWidget> Content, bool& bExpanded);
-    TSharedRef<SWidget> CreateSectionHeader(const FString& Title);
-    TSharedRef<SWidget> CreateSectionContent(TSharedRef<SWidget> Content);
-    TSharedRef<SWidget> CreatePropertyRow(
-        const FString& Label, TSharedRef<SWidget> Content);
-    TSharedRef<SWidget> CreateSeparator();
-    
-    // Numeric property row creators
-    TSharedRef<SWidget> CreateNumericPropertyRowFloat(
-        const FString& Label,
-        TSharedPtr<SNumericEntryBox<float>>& SpinBox,
-        TOptional<float>& Value,
-        float& ActualVariable,
-        float MinValue,
-        float DeltaValue);
+    // Style and layout helpers (now using FVCCSimUIHelpers)
 };

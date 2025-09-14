@@ -19,6 +19,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogTriangleSplattingUI, Log, All);
 
 #include "Editor/Panels/VCCSimPanelTriangleSplatting.h"
 #include "Utils/TriangleSplattingManager.h"
+#include "Utils/VCCSimUIHelpers.h"
 #include "Utils/ColmapManager.h"
 #include "HAL/PlatformFileManager.h"
 #include "Widgets/Layout/SBox.h"
@@ -55,7 +56,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogTriangleSplattingUI, Log, All);
 
 TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateTriangleSplattingPanel()
 {
-    TSharedRef<SWidget> Panel = CreateCollapsibleSection(TEXT("Triangle Splatting"), 
+    TSharedRef<SWidget> Panel = FVCCSimUIHelpers::CreateCollapsibleSection(TEXT("Triangle Splatting"), 
         SNew(SVerticalBox)
         
         // Data Input Section
@@ -69,7 +70,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateTriangleSplattingPanel(
         + SVerticalBox::Slot()
         .MaxHeight(1)
         [
-            CreateSeparator()
+            FVCCSimUIHelpers::CreateSeparator()
         ]
         
         // Camera Parameters Section
@@ -83,7 +84,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateTriangleSplattingPanel(
         + SVerticalBox::Slot()
         .MaxHeight(1)
         [
-            CreateSeparator()
+            FVCCSimUIHelpers::CreateSeparator()
         ]
         
         // Training Parameters Section
@@ -97,7 +98,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateTriangleSplattingPanel(
         + SVerticalBox::Slot()
         .MaxHeight(1)
         [
-            CreateSeparator()
+            FVCCSimUIHelpers::CreateSeparator()
         ]
         
         // Training Control Section
@@ -122,7 +123,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSDataInputSection()
         .AutoHeight()
         .Padding(0, 2, 0, 8)
         [
-            CreateSectionHeader(TEXT("Data Input"))
+            FVCCSimUIHelpers::CreateSectionHeader(TEXT("Data Input"))
         ]
         
         // Image Directory
@@ -130,7 +131,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSDataInputSection()
         .AutoHeight()
         .Padding(0, 2)
         [
-            CreatePropertyRow(TEXT("Image Directory"),
+            FVCCSimUIHelpers::CreatePropertyRow(TEXT("Image Directory"),
                 SNew(SHorizontalBox)
                 + SHorizontalBox::Slot()
                 .FillWidth(1.0f)
@@ -161,7 +162,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSDataInputSection()
         .AutoHeight()
         .Padding(0, 2)
         [
-            CreatePropertyRow(TEXT("Camera Intrinsics"),
+            FVCCSimUIHelpers::CreatePropertyRow(TEXT("Camera Intrinsics"),
                 SNew(SHorizontalBox)
                 + SHorizontalBox::Slot()
                 .FillWidth(1.0f)
@@ -194,7 +195,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSDataInputSection()
         .AutoHeight()
         .Padding(0, 2)
         [
-            CreatePropertyRow(TEXT("Pose File"),
+            FVCCSimUIHelpers::CreatePropertyRow(TEXT("Pose File"),
                 SNew(SHorizontalBox)
                 + SHorizontalBox::Slot()
                 .FillWidth(1.0f)
@@ -225,7 +226,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSDataInputSection()
         .AutoHeight()
         .Padding(0, 2)
         [
-            CreatePropertyRow(TEXT("Output Directory"),
+            FVCCSimUIHelpers::CreatePropertyRow(TEXT("Output Directory"),
                 SNew(SHorizontalBox)
                 + SHorizontalBox::Slot()
                 .FillWidth(1.0f)
@@ -256,7 +257,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSDataInputSection()
         .AutoHeight()
         .Padding(0, 2)
         [
-            CreatePropertyRow(TEXT("COLMAP Dataset"),
+            FVCCSimUIHelpers::CreatePropertyRow(TEXT("COLMAP Dataset"),
                 SNew(SHorizontalBox)
                 + SHorizontalBox::Slot()
                 .FillWidth(1.0f)
@@ -288,7 +289,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSDataInputSection()
         .AutoHeight()
         .Padding(0, 2)
         [
-            CreatePropertyRow(TEXT("Mesh Selection"),
+            FVCCSimUIHelpers::CreatePropertyRow(TEXT("Mesh Selection"),
                 SNew(SObjectPropertyEntryBox)
                 .AllowedClass(UStaticMesh::StaticClass())
                 .ObjectPath_Lambda([this]()
@@ -332,7 +333,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSCameraParamsSection()
         .AutoHeight()
         .Padding(0, 2, 0, 4)
         [
-            CreateSectionHeader(TEXT("Camera Parameters"))
+            FVCCSimUIHelpers::CreateSectionHeader(TEXT("Camera Parameters"))
         ]
         
         + SVerticalBox::Slot()
@@ -439,7 +440,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSTrainingParamsSection
         .AutoHeight()
         .Padding(0, 2, 0, 4)
         [
-            CreateSectionHeader(TEXT("Training Parameters"))
+            FVCCSimUIHelpers::CreateSectionHeader(TEXT("Training Parameters"))
         ]
         
         // Max Iterations and Init Point Count (same row)
@@ -482,7 +483,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSTrainingParamsSection
         .AutoHeight()
         .Padding(0, 4, 0, 2)
         [
-            CreateSeparator()
+            FVCCSimUIHelpers::CreateSeparator()
         ]
         
         // Mesh Triangle Initialization Options
@@ -497,7 +498,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSTrainingParamsSection
             .FillWidth(0.5f)
             .Padding(0, 0, 5, 0)
             [
-                CreatePropertyRow(TEXT("Use Mesh Triangles"),
+                FVCCSimUIHelpers::CreatePropertyRow(TEXT("Use Mesh Triangles"),
                     SNew(SCheckBox)
                     .IsChecked_Lambda([this]() 
                     { 
@@ -540,7 +541,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSTrainingParamsSection
             .FillWidth(0.5f)
             .Padding(0, 0, 5, 0)
             [
-                CreatePropertyRow(TEXT("Triangle Method"),
+                FVCCSimUIHelpers::CreatePropertyRow(TEXT("Triangle Method"),
                     SNew(STextBlock)
                     .Text(FText::FromString(TEXT("Random")))
                     .ToolTipText(FText::FromString(TEXT("Method for selecting triangles from mesh (Random only for now)")))
@@ -574,7 +575,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSTrainingControlSectio
         .AutoHeight()
         .Padding(0, 2, 0, 4)
         [
-            CreateSectionHeader(TEXT("Training Control"))
+            FVCCSimUIHelpers::CreateSectionHeader(TEXT("Training Control"))
         ]
         
         // Control buttons - first row
@@ -697,7 +698,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSTrainingControlSectio
         .AutoHeight()
         .Padding(5, 4)
         [
-            CreatePropertyRow(TEXT("Training Status"),
+            FVCCSimUIHelpers::CreatePropertyRow(TEXT("Training Status"),
                 SAssignNew(GSTrainingStatusText, STextBlock)
                 .Text_Lambda([this]()
                 {
@@ -722,7 +723,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSTrainingControlSectio
         .AutoHeight()
         .Padding(5, 4)
         [
-            CreatePropertyRow(TEXT("COLMAP Status"),
+            FVCCSimUIHelpers::CreatePropertyRow(TEXT("COLMAP Status"),
                 SNew(STextBlock)
                 .Text_Lambda([this]()
                 {
@@ -771,7 +772,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSNumericPropertyRow(
     T DeltaValue,
     TFunction<void(T)> OnValueChanged)
 {
-    return CreatePropertyRow(Label,
+    return FVCCSimUIHelpers::CreatePropertyRow(Label,
         SNew(SBorder)
         .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
         .BorderBackgroundColor(FColor(5, 5, 5, 255))
@@ -793,100 +794,6 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSNumericPropertyRow(
             })
         ]
     );
-}
-
-// ============================================================================
-// UI STYLING HELPERS
-// ============================================================================
-
-TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateCollapsibleSection(
-    const FString& Title, TSharedRef<SWidget> Content, bool& bExpanded)
-{
-    return SNew(SExpandableArea)
-        .InitiallyCollapsed(!bExpanded)
-        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryTop"))
-        .BorderBackgroundColor(FColor(48, 48, 48))
-        .OnAreaExpansionChanged_Lambda([&bExpanded](bool bIsExpanded) {
-            bExpanded = bIsExpanded;
-        })
-        .HeaderContent()
-        [
-            SNew(STextBlock)
-            .Text(FText::FromString(Title))
-            .Font(FAppStyle::GetFontStyle("PropertyWindow.BoldFont"))
-            .ColorAndOpacity(FColor(233, 233, 233))
-            .TransformPolicy(ETextTransformPolicy::ToUpper)
-        ]
-        .BodyContent()
-        [
-            SNew(SBorder)
-            .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
-            .BorderBackgroundColor(FColor(5, 5, 5, 255))
-            .Padding(FMargin(15, 6))
-            [
-                Content
-            ]
-        ];
-}
-
-TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateSectionHeader(const FString& Title)
-{
-    return SNew(SBorder)
-        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryTop"))
-        .Padding(FMargin(10, 7))
-        [
-            SNew(STextBlock)
-            .Text(FText::FromString(Title))
-            .Font(FAppStyle::GetFontStyle("PropertyWindow.BoldFont"))
-            .ColorAndOpacity(FColor(233, 233, 233))
-            .TransformPolicy(ETextTransformPolicy::ToUpper)
-        ];
-}
-
-TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateSectionContent(TSharedRef<SWidget> Content)
-{
-    return SNew(SBorder)
-        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
-        .BorderBackgroundColor(FColor(5, 5, 5, 255))
-        .Padding(FMargin(15, 6))
-        [
-            Content
-        ];
-}
-
-TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreatePropertyRow(
-    const FString& Label, TSharedRef<SWidget> Content)
-{
-    return SNew(SHorizontalBox)
-    +SHorizontalBox::Slot()
-    .AutoWidth()
-    .VAlign(VAlign_Center)
-    .Padding(FMargin(0, 0, 8, 0))
-    [
-        SNew(STextBlock)
-        .Text(FText::FromString(Label))
-        .MinDesiredWidth(80)
-        .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
-        .ColorAndOpacity(FColor(233, 233, 233)) 
-    ]
-    +SHorizontalBox::Slot()
-    .FillWidth(1.0f)
-    [
-        Content
-    ];
-}
-
-TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateSeparator()
-{
-    return SNew(SBorder)
-        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
-        .BorderBackgroundColor(FColor(2, 2, 2))
-        .Padding(0)
-        .Content()
-        [
-            SNew(SBox)
-            .HeightOverride(1.0f)
-        ];
 }
 
 // ============================================================================

@@ -18,6 +18,7 @@
 DEFINE_LOG_CATEGORY_STATIC(LogPointCloud, Log, All);
 
 #include "Editor/Panels/VCCSimPanelPointCloud.h"
+#include "Utils/VCCSimUIHelpers.h"
 
 // UE Core
 #include "Engine/World.h"
@@ -169,7 +170,7 @@ TSharedRef<SWidget> FVCCSimPanelPointCloud::CreatePointCloudPanel()
             + SVerticalBox::Slot()
             .MaxHeight(1)
             [
-                CreateSeparator()
+                FVCCSimUIHelpers::CreateSeparator()
             ]
 
             // Control buttons
@@ -184,7 +185,7 @@ TSharedRef<SWidget> FVCCSimPanelPointCloud::CreatePointCloudPanel()
             + SVerticalBox::Slot()
             .MaxHeight(1)
             [
-                CreateSeparator()
+                FVCCSimUIHelpers::CreateSeparator()
             ]
 
             // Normal and color controls
@@ -313,18 +314,6 @@ TSharedRef<SWidget> FVCCSimPanelPointCloud::CreatePointCloudNormalControls()
         ];
 }
 
-TSharedRef<SWidget> FVCCSimPanelPointCloud::CreateSeparator()
-{
-    return SNew(SBorder)
-        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
-        .BorderBackgroundColor(FColor(2, 2, 2))
-        .Padding(0)
-        .Content()
-        [
-            SNew(SBox)
-            .HeightOverride(1.0f)
-        ];
-}
 
 // ============================================================================
 // EVENT HANDLERS

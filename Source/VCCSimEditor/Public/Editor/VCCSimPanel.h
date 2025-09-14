@@ -93,14 +93,7 @@ private:
     TSharedRef<SWidget> CreatePointCloudPanel();
     TSharedRef<SWidget> CreateTriangleSplattingPanel();
     
-    // Style and layout helpers
-    TSharedRef<SWidget> CreateCollapsibleSection(
-        const FString& Title, TSharedRef<SWidget> Content, bool& bExpanded);
-    TSharedRef<SWidget> CreateSectionHeader(const FString& Title);
-    TSharedRef<SWidget> CreateSectionContent(TSharedRef<SWidget> Content);
-    TSharedRef<SWidget> CreatePropertyRow(
-        const FString& Label, TSharedRef<SWidget> Content);
-    TSharedRef<SWidget> CreateSeparator();
+    // Style and layout helpers (now using FVCCSimUIHelpers)
     
 
     template<typename T>

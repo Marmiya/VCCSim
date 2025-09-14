@@ -16,6 +16,7 @@
 */
 
 #include "Editor/VCCSimPanel.h"
+#include "Utils/VCCSimUIHelpers.h"
 #include "Editor/Panels/VCCSimPanelPointCloud.h"
 #include "Editor/Panels/VCCSimPanelSelection.h"
 #include "Editor/Panels/VCCSimPanelPathImageCapture.h"
@@ -254,86 +255,10 @@ void SVCCSimPanel::CreateMainLayout()
 // UI STYLING HELPERS
 // ============================================================================
 
-TSharedRef<SWidget> SVCCSimPanel::CreateSectionHeader(const FString& Title)
-{
-    return SNew(SBorder)
-        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryTop"))
-        .Padding(FMargin(10, 7))
-        [
-            SNew(STextBlock)
-            .Text(FText::FromString(Title))
-            .Font(FAppStyle::GetFontStyle("PropertyWindow.BoldFont"))
-            .ColorAndOpacity(FColor(233, 233, 233))
-            .TransformPolicy(ETextTransformPolicy::ToUpper)
-        ];
-}
-
-TSharedRef<SWidget> SVCCSimPanel::CreateSectionContent(TSharedRef<SWidget> Content)
-{
-    return SNew(SBorder)
-        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
-        .BorderBackgroundColor(FColor(5,5, 5, 255))
-        .Padding(FMargin(15, 6))
-        [
-            Content
-        ];
-}
-
-TSharedRef<SWidget> SVCCSimPanel::CreateCollapsibleSection(
-    const FString& Title, TSharedRef<SWidget> Content, bool& bExpanded)
-{
-    return SNew(SExpandableArea)
-        .InitiallyCollapsed(!bExpanded)
-        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryTop"))
-        .BorderBackgroundColor(FColor(48, 48, 48))
-        .OnAreaExpansionChanged_Lambda([&bExpanded](bool bIsExpanded) {
-            bExpanded = bIsExpanded;
-        })
-        .HeaderContent()
-        [
-            SNew(STextBlock)
-            .Text(FText::FromString(Title))
-            .Font(FAppStyle::GetFontStyle("PropertyWindow.BoldFont"))
-            .ColorAndOpacity(FColor(233, 233, 233))
-            .TransformPolicy(ETextTransformPolicy::ToUpper)
-        ]
-        .BodyContent()
-        [
-            SNew(SBorder)
-            .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
-            .BorderBackgroundColor(FColor(5, 5, 5, 255))
-            .Padding(FMargin(15, 6))
-            [
-                Content
-            ]
-        ];
-}
-
-TSharedRef<SWidget> SVCCSimPanel::CreatePropertyRow(
-    const FString& Label, TSharedRef<SWidget> Content)
-{
-    return SNew(SHorizontalBox)
-    +SHorizontalBox::Slot()
-    .AutoWidth()
-    .VAlign(VAlign_Center)
-    .Padding(FMargin(0, 0, 8, 0))
-    [
-        SNew(STextBlock)
-        .Text(FText::FromString(Label))
-        .MinDesiredWidth(80)
-        .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
-        .ColorAndOpacity(FColor(233, 233, 233)) 
-    ]
-    +SHorizontalBox::Slot()
-    .FillWidth(1.0f)
-    [
-        Content
-    ];
-}
 
 TSharedRef<SWidget> SVCCSimPanel::CreateLogoPanel()
 {
-    return CreateSectionContent(
+    return FVCCSimUIHelpers::CreateSectionContent(
         SNew(SHorizontalBox)
         
         // VCC Logo (left)
@@ -419,18 +344,6 @@ TSharedRef<SWidget> SVCCSimPanel::CreateTriangleSplattingPanel()
 // UI HELPER WIDGETS
 // ============================================================================
 
-TSharedRef<SWidget> SVCCSimPanel::CreateSeparator()
-{
-    return SNew(SBorder)
-        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
-        .BorderBackgroundColor(FColor(2, 2, 2))
-        .Padding(0)
-        .Content()
-        [
-            SNew(SBox)
-            .HeightOverride(1.0f)
-        ];
-}
 
 template<typename T>
 TSharedRef<SWidget> SVCCSimPanel::CreateNumericPropertyRow(
@@ -440,7 +353,7 @@ TSharedRef<SWidget> SVCCSimPanel::CreateNumericPropertyRow(
     T MinValue,
     T DeltaValue)
 {
-    return CreatePropertyRow(
+    return FVCCSimUIHelpers::CreatePropertyRow(
         Label,
         SNew(SBorder)
         .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))

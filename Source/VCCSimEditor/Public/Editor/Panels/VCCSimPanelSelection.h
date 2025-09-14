@@ -124,8 +124,6 @@ private:
         TFunction<void(ECheckBoxState)> OnStateChangedFunc
     );
     
-    /** Create a visual separator for UI sections */
-    TSharedRef<SWidget> CreateSeparator();
     
     // ============================================================================
     // EVENT HANDLERS

@@ -19,6 +19,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogPathImageCapture, Log, All);
 
 #include "Editor/Panels/VCCSimPanelPathImageCapture.h"
 #include "Editor/Panels/VCCSimPanelSelection.h"
+#include "Utils/VCCSimUIHelpers.h"
 #include "Pawns/FlashPawn.h"
 #include "Sensors/CameraSensor.h"
 #include "Sensors/DepthCamera.h"
@@ -30,7 +31,6 @@ DEFINE_LOG_CATEGORY_STATIC(LogPathImageCapture, Log, All);
 #include "Utils/TrajectoryViewer.h"
 #include "DataStructures/Mesh.h"
 #include "Widgets/Input/SButton.h"
-#include "Widgets/Input/SNumericEntryBox.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Layout/SExpandableArea.h"
@@ -127,7 +127,7 @@ void FVCCSimPanelPathImageCapture::SetSelectionManager(TSharedPtr<FVCCSimPanelSe
 
 TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreatePathImageCapturePanel()
 {
-    return CreateCollapsibleSection(
+    return FVCCSimUIHelpers::CreateCollapsibleSection(
         "Path Configuration & Image Capture", 
         SNew(SVerticalBox)
         
@@ -142,7 +142,7 @@ TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreatePathImageCapturePanel()
         .MaxHeight(1)
         .Padding(FMargin(0, 8, 0, 8))
         [
-            CreateSeparator()
+           FVCCSimUIHelpers::CreateSeparator()
         ]
         
         // Image Capture Section
@@ -170,12 +170,12 @@ TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreatePathConfigSection()
         .FillWidth(1.0f)
         .Padding(FMargin(0, 0, 8, 0))
         [
-            CreateNumericPropertyRowInt32("Pose Count", NumPosesSpinBox, NumPosesValue, NumPoses, 1, 1)
+            FVCCSimUIHelpers::CreateNumericPropertyRowInt32("Pose Count", NumPosesSpinBox, NumPosesValue, NumPoses, 1, 1)
         ]
         +SHorizontalBox::Slot()
         .FillWidth(1.0f)
         [
-            CreateNumericPropertyRowFloat("Vertical Gap", VerticalGapSpinBox, VerticalGapValue, VerticalGap, 0.0f, 5.0f)
+            FVCCSimUIHelpers::CreateNumericPropertyRowFloat("Vertical Gap", VerticalGapSpinBox, VerticalGapValue, VerticalGap, 0.0f, 5.0f)
         ]
     ]
     
@@ -183,7 +183,7 @@ TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreatePathConfigSection()
     .MaxHeight(1)
     .Padding(FMargin(0, 0, 0, 0))
     [
-        CreateSeparator()
+        FVCCSimUIHelpers::CreateSeparator()
     ]
     
     // Radius and Height Offset row
@@ -196,19 +196,19 @@ TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreatePathConfigSection()
         .FillWidth(1.0f)
         .Padding(FMargin(0, 0, 8, 0))
         [
-            CreateNumericPropertyRowFloat("Radius", RadiusSpinBox, RadiusValue, Radius, 100.0f, 10.0f)
+            FVCCSimUIHelpers::CreateNumericPropertyRowFloat("Radius", RadiusSpinBox, RadiusValue, Radius, 100.0f, 10.0f)
         ]
         +SHorizontalBox::Slot()
         .FillWidth(1.0f)
         [
-            CreateNumericPropertyRowFloat("Height Offset", HeightOffsetSpinBox, HeightOffsetValue, HeightOffset, 0.0f, 10.0f)
+            FVCCSimUIHelpers::CreateNumericPropertyRowFloat("Height Offset", HeightOffsetSpinBox, HeightOffsetValue, HeightOffset, 0.0f, 10.0f)
         ]
     ]
     
     +SVerticalBox::Slot()
     .MaxHeight(1)
     [
-        CreateSeparator()
+        FVCCSimUIHelpers::CreateSeparator()
     ]
     
     // Load/Save Pose buttons
@@ -222,7 +222,7 @@ TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreatePathConfigSection()
     +SVerticalBox::Slot()
     .MaxHeight(1)
     [
-        CreateSeparator()
+        FVCCSimUIHelpers::CreateSeparator()
     ]
     
     // Action buttons
@@ -248,7 +248,7 @@ TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreateImageCaptureSection()
     +SVerticalBox::Slot()
     .MaxHeight(1)
     [
-        CreateSeparator()
+        FVCCSimUIHelpers::CreateSeparator()
     ]
     
     +SVerticalBox::Slot()
@@ -1314,129 +1314,6 @@ TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreateCaptureButtons()
                    (SelectionManagerPin->IsUsingNormalCamera() && SelectionManagerPin->HasNormalCamera());
         })
     ];
-}
-
-// ============================================================================
-// UTILITY HELPERS
-// ============================================================================
-
-TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreatePropertyRow(const FString& Label, TSharedRef<SWidget> Content)
-{
-    return SNew(SHorizontalBox)
-    +SHorizontalBox::Slot()
-    .AutoWidth()
-    .VAlign(VAlign_Center)
-    .Padding(FMargin(0, 0, 8, 0))
-    [
-        SNew(STextBlock)
-        .Text(FText::FromString(Label))
-        .MinDesiredWidth(80)
-        .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
-        .ColorAndOpacity(FColor(233, 233, 233)) 
-    ]
-    +SHorizontalBox::Slot()
-    .FillWidth(1.0f)
-    [
-        Content
-    ];
-}
-
-TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreateSeparator()
-{
-    return SNew(SBorder)
-        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
-        .BorderBackgroundColor(FColor(2, 2, 2))
-        .Padding(0)
-        .Content()
-        [
-            SNew(SBox)
-            .HeightOverride(1.0f)
-        ];
-}
-
-TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreateCollapsibleSection(const FString& Title, TSharedRef<SWidget> Content, bool& bExpanded)
-{
-    return SNew(SExpandableArea)
-        .InitiallyCollapsed(!bExpanded)
-        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryTop"))
-        .BorderBackgroundColor(FColor(48, 48, 48))
-        .OnAreaExpansionChanged_Lambda([&bExpanded](bool bIsExpanded) {
-            bExpanded = bIsExpanded;
-        })
-        .HeaderContent()
-        [
-            SNew(STextBlock)
-            .Text(FText::FromString(Title))
-            .Font(FAppStyle::GetFontStyle("PropertyWindow.BoldFont"))
-            .ColorAndOpacity(FColor(233, 233, 233))
-            .TransformPolicy(ETextTransformPolicy::ToUpper)
-        ]
-        .BodyContent()
-        [
-            SNew(SBorder)
-            .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
-            .BorderBackgroundColor(FColor(5, 5, 5, 255))
-            .Padding(FMargin(15, 6))
-            [
-                Content
-            ]
-        ];
-}
-
-TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreateNumericPropertyRowInt32(
-    const FString& Label,
-    TSharedPtr<SNumericEntryBox<int32>>& SpinBox,
-    TOptional<int32>& Value,
-    int32& ActualVariable,
-    int32 MinValue,
-    int32 DeltaValue)
-{
-    return CreatePropertyRow(
-        Label,
-        SNew(SBorder)
-        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
-        .BorderBackgroundColor(FColor(5,5, 5, 255))
-        .Padding(4, 0)
-        [
-            SAssignNew(SpinBox, SNumericEntryBox<int32>)
-            .Value_Lambda([&Value]() { return Value; })
-            .MinValue(MinValue)
-            .Delta(DeltaValue)
-            .AllowSpin(true)
-            .OnValueChanged_Lambda([&Value, &ActualVariable](int32 NewValue) {
-                Value = NewValue;
-                ActualVariable = NewValue;
-            })
-        ]
-    );
-}
-
-TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreateNumericPropertyRowFloat(
-    const FString& Label,
-    TSharedPtr<SNumericEntryBox<float>>& SpinBox,
-    TOptional<float>& Value,
-    float& ActualVariable,
-    float MinValue,
-    float DeltaValue)
-{
-    return CreatePropertyRow(
-        Label,
-        SNew(SBorder)
-        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
-        .BorderBackgroundColor(FColor(5,5, 5, 255))
-        .Padding(4, 0)
-        [
-            SAssignNew(SpinBox, SNumericEntryBox<float>)
-            .Value_Lambda([&Value]() { return Value; })
-            .MinValue(MinValue)
-            .Delta(DeltaValue)
-            .AllowSpin(true)
-            .OnValueChanged_Lambda([&Value, &ActualVariable](float NewValue) {
-                Value = NewValue;
-                ActualVariable = NewValue;
-            })
-        ]
-    );
 }
 
 FString FVCCSimPanelPathImageCapture::GetTimestampedFilename()

@@ -77,8 +77,6 @@ private:
     /** Create point cloud normal/color controls */
     TSharedRef<SWidget> CreatePointCloudNormalControls();
     
-    /** Create a visual separator for UI sections */
-    TSharedRef<SWidget> CreateSeparator();
     
     // ============================================================================
     // EVENT HANDLERS

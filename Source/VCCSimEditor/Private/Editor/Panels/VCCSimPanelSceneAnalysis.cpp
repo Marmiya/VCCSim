@@ -17,6 +17,7 @@
 
 #include "Editor/Panels/VCCSimPanelSceneAnalysis.h"
 #include "Editor/Panels/VCCSimPanelSelection.h"
+#include "Utils/VCCSimUIHelpers.h"
 #include "Simulation/SceneAnalysisManager.h"
 #include "Sensors/CameraSensor.h"
 #include "Pawns/FlashPawn.h"
@@ -89,7 +90,7 @@ void FVCCSimPanelSceneAnalysis::InitializeSceneAnalysisManager()
 
 TSharedRef<SWidget> FVCCSimPanelSceneAnalysis::CreateSceneAnalysisPanel()
 {
-    return CreateCollapsibleSection(
+    return FVCCSimUIHelpers::CreateCollapsibleSection(
         "Scene Analysis",
         SNew(SVerticalBox)
     
@@ -103,7 +104,7 @@ TSharedRef<SWidget> FVCCSimPanelSceneAnalysis::CreateSceneAnalysisPanel()
     +SVerticalBox::Slot()
     .MaxHeight(1)
     [
-        CreateSeparator()
+       FVCCSimUIHelpers::CreateSeparator()
     ]
     
     // Safe distance controls
@@ -116,19 +117,19 @@ TSharedRef<SWidget> FVCCSimPanelSceneAnalysis::CreateSceneAnalysisPanel()
         .FillWidth(1.0f)
         .Padding(FMargin(0, 0, 8, 0))
         [
-            CreateNumericPropertyRowFloat("Safe Distance", SafeDistanceSpinBox, SafeDistanceValue, SafeDistance, 0.0f, 10.0f)
+            FVCCSimUIHelpers::CreateNumericPropertyRowFloat("Safe Distance", SafeDistanceSpinBox, SafeDistanceValue, SafeDistance, 0.0f, 10.0f)
         ]
         +SHorizontalBox::Slot()
         .FillWidth(1.0f)
         [
-            CreateNumericPropertyRowFloat("Safe Height", SafeHeightSpinBox, SafeHeightValue, SafeHeight, 0.0f, 5.0f)
+            FVCCSimUIHelpers::CreateNumericPropertyRowFloat("Safe Height", SafeHeightSpinBox, SafeHeightValue, SafeHeight, 0.0f, 5.0f)
         ]
     ]
     
     +SVerticalBox::Slot()
     .MaxHeight(1)
     [
-        CreateSeparator()
+        FVCCSimUIHelpers::CreateSeparator()
     ]
 
     // Scene operations
@@ -142,7 +143,7 @@ TSharedRef<SWidget> FVCCSimPanelSceneAnalysis::CreateSceneAnalysisPanel()
     +SVerticalBox::Slot()
     .MaxHeight(1)
     [
-        CreateSeparator()
+        FVCCSimUIHelpers::CreateSeparator()
     ]
         
     // Safe zone operations
@@ -156,7 +157,7 @@ TSharedRef<SWidget> FVCCSimPanelSceneAnalysis::CreateSceneAnalysisPanel()
     +SVerticalBox::Slot()
     .MaxHeight(1)
     [
-        CreateSeparator()
+        FVCCSimUIHelpers::CreateSeparator()
     ]
     
     // Coverage operations
@@ -170,7 +171,7 @@ TSharedRef<SWidget> FVCCSimPanelSceneAnalysis::CreateSceneAnalysisPanel()
     +SVerticalBox::Slot()
     .MaxHeight(1)
     [
-        CreateSeparator()
+        FVCCSimUIHelpers::CreateSeparator()
     ]
 
     // Complexity operations
@@ -266,7 +267,7 @@ TSharedRef<SWidget> FVCCSimPanelSceneAnalysis::CreateLimitedRegionControls()
         .FillWidth(1.0f)
         .Padding(FMargin(0, 0, 8, 0))
         [
-            CreatePropertyRow(
+            FVCCSimUIHelpers::CreatePropertyRow(
                 "Limited MinX",
                 SNew(SBorder)
                 .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
@@ -286,7 +287,7 @@ TSharedRef<SWidget> FVCCSimPanelSceneAnalysis::CreateLimitedRegionControls()
         +SHorizontalBox::Slot()
         .FillWidth(1.0f)
         [
-            CreatePropertyRow(
+            FVCCSimUIHelpers::CreatePropertyRow(
                 "Limited MaxX",
                 SNew(SBorder)
                 .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
@@ -308,7 +309,7 @@ TSharedRef<SWidget> FVCCSimPanelSceneAnalysis::CreateLimitedRegionControls()
     +SVerticalBox::Slot()
     .MaxHeight(1)
     [
-        CreateSeparator()
+        FVCCSimUIHelpers::CreateSeparator()
     ]
     
     // Y Range Controls  
@@ -321,7 +322,7 @@ TSharedRef<SWidget> FVCCSimPanelSceneAnalysis::CreateLimitedRegionControls()
         .FillWidth(1.0f)
         .Padding(FMargin(0, 0, 8, 0))
         [
-            CreatePropertyRow(
+            FVCCSimUIHelpers::CreatePropertyRow(
                 "Limited MinY",
                 SNew(SBorder)
                 .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
@@ -341,7 +342,7 @@ TSharedRef<SWidget> FVCCSimPanelSceneAnalysis::CreateLimitedRegionControls()
         +SHorizontalBox::Slot()
         .FillWidth(1.0f)
         [
-            CreatePropertyRow(
+            FVCCSimUIHelpers::CreatePropertyRow(
                 "Limited MaxY",
                 SNew(SBorder)
                 .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
@@ -363,7 +364,7 @@ TSharedRef<SWidget> FVCCSimPanelSceneAnalysis::CreateLimitedRegionControls()
     +SVerticalBox::Slot()
     .MaxHeight(1)
     [
-        CreateSeparator()
+        FVCCSimUIHelpers::CreateSeparator()
     ]
 
     // Z Range Controls
@@ -376,7 +377,7 @@ TSharedRef<SWidget> FVCCSimPanelSceneAnalysis::CreateLimitedRegionControls()
         .FillWidth(1.0f)
         .Padding(FMargin(0, 0, 8, 0))
         [
-            CreatePropertyRow(
+            FVCCSimUIHelpers::CreatePropertyRow(
                 "Limited MinZ",
                 SNew(SBorder)
                 .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
@@ -396,7 +397,7 @@ TSharedRef<SWidget> FVCCSimPanelSceneAnalysis::CreateLimitedRegionControls()
         +SHorizontalBox::Slot()
         .FillWidth(1.0f)
         [
-            CreatePropertyRow(
+            FVCCSimUIHelpers::CreatePropertyRow(
                 "Limited MaxZ",
                 SNew(SBorder)
                 .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
@@ -736,113 +737,4 @@ TSharedRef<SWidget> FVCCSimPanelSceneAnalysis::CreateComplexityButtons()
             return SceneAnalysisManager.IsValid() && !bAnalyzeComplexity;
         })
     ];
-}
-
-// ============================================================================
-// UI STYLE AND LAYOUT HELPERS
-// ============================================================================
-
-TSharedRef<SWidget> FVCCSimPanelSceneAnalysis::CreateCollapsibleSection(
-    const FString& Title, TSharedRef<SWidget> Content, bool& bExpanded)
-{
-    return SNew(SExpandableArea)
-        .InitiallyCollapsed(!bExpanded)
-        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryTop"))
-        .BorderBackgroundColor(FColor(48, 48, 48))
-        .OnAreaExpansionChanged_Lambda([&bExpanded](bool bIsExpanded) {
-            bExpanded = bIsExpanded;
-        })
-        .HeaderContent()
-        [
-            CreateSectionHeader(Title)
-        ]
-        .BodyContent()
-        [
-            CreateSectionContent(Content)
-        ];
-}
-
-TSharedRef<SWidget> FVCCSimPanelSceneAnalysis::CreateSectionHeader(const FString& Title)
-{
-    return SNew(STextBlock)
-        .Text(FText::FromString(Title))
-        .Font(FAppStyle::GetFontStyle("PropertyWindow.BoldFont"))
-        .ColorAndOpacity(FColor(233, 233, 233))
-        .TransformPolicy(ETextTransformPolicy::ToUpper);
-}
-
-TSharedRef<SWidget> FVCCSimPanelSceneAnalysis::CreateSectionContent(TSharedRef<SWidget> Content)
-{
-    return SNew(SBorder)
-        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
-        .BorderBackgroundColor(FColor(5, 5, 5, 255))
-        .Padding(FMargin(15, 6))
-        [
-            Content
-        ];
-}
-
-TSharedRef<SWidget> FVCCSimPanelSceneAnalysis::CreatePropertyRow(
-    const FString& Label, TSharedRef<SWidget> Content)
-{
-    return SNew(SHorizontalBox)
-        +SHorizontalBox::Slot()
-        .AutoWidth()
-        .VAlign(VAlign_Center)
-        .Padding(FMargin(0, 0, 8, 0))
-        [
-            SNew(STextBlock)
-            .Text(FText::FromString(Label))
-            .MinDesiredWidth(80)
-            .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
-            .ColorAndOpacity(FColor(233, 233, 233))
-        ]
-        +SHorizontalBox::Slot()
-        .FillWidth(1.0f)
-        [
-            Content
-        ];
-}
-
-TSharedRef<SWidget> FVCCSimPanelSceneAnalysis::CreateSeparator()
-{
-    return SNew(SBorder)
-        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
-        .BorderBackgroundColor(FColor(2, 2, 2))
-        .Padding(0)
-        .Content()
-        [
-            SNew(SBorder)
-            .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryTop"))
-            .BorderBackgroundColor(FColor(48, 48, 48))
-            .Padding(FMargin(0, 1))
-        ];
-}
-
-TSharedRef<SWidget> FVCCSimPanelSceneAnalysis::CreateNumericPropertyRowFloat(
-    const FString& Label,
-    TSharedPtr<SNumericEntryBox<float>>& SpinBox,
-    TOptional<float>& Value,
-    float& ActualVariable,
-    float MinValue,
-    float DeltaValue)
-{
-    return CreatePropertyRow(
-        Label,
-        SNew(SBorder)
-        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
-        .BorderBackgroundColor(FColor(5, 5, 5, 255))
-        .Padding(4, 0)
-        [
-            SAssignNew(SpinBox, SNumericEntryBox<float>)
-            .Value_Lambda([&Value]() { return Value; })
-            .MinValue(MinValue)
-            .Delta(DeltaValue)
-            .AllowSpin(true)
-            .OnValueChanged_Lambda([&Value, &ActualVariable](float NewValue) {
-                Value = NewValue;
-                ActualVariable = NewValue;
-            })
-        ]
-    );
 }

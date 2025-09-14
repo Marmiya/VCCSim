@@ -146,30 +146,6 @@ private:
     TSharedRef<SWidget> CreateMovementButtons();
     TSharedRef<SWidget> CreateCaptureButtons();
     
-    // ============================================================================
-    // UTILITY HELPERS
-    // ============================================================================
-    
-    TSharedRef<SWidget> CreatePropertyRow(const FString& Label, TSharedRef<SWidget> Content);
-    TSharedRef<SWidget> CreateSeparator();
-    TSharedRef<SWidget> CreateCollapsibleSection(const FString& Title, TSharedRef<SWidget> Content, bool& bExpanded);
-    
-    TSharedRef<SWidget> CreateNumericPropertyRowInt32(
-        const FString& Label,
-        TSharedPtr<SNumericEntryBox<int32>>& SpinBox,
-        TOptional<int32>& Value,
-        int32& ActualVariable,
-        int32 MinValue,
-        int32 DeltaValue);
-        
-    TSharedRef<SWidget> CreateNumericPropertyRowFloat(
-        const FString& Label,
-        TSharedPtr<SNumericEntryBox<float>>& SpinBox,
-        TOptional<float>& Value,
-        float& ActualVariable,
-        float MinValue,
-        float DeltaValue);
-    
     // Utility functions
     static FString GetTimestampedFilename();
 };
