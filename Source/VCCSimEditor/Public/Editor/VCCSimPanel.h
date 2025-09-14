@@ -25,18 +25,12 @@
 #include "Misc/Paths.h"
 #include "AssetRegistry/AssetData.h"
 
-class AFlashPawn;
-class AVCCSimPath;
-class USplineMeshComponent;
-class ASceneAnalysisManager;
-class UStaticMeshComponent;
 class FColmapManager;
 class FVCCSimPanelPointCloud;
 class FVCCSimPanelSelection;
 class FVCCSimPanelPathImageCapture;
 class FVCCSimPanelSceneAnalysis;
 class FVCCSimPanelTriangleSplatting;
-struct FCameraInfo;
 
 
 class VCCSIMEDITOR_API SVCCSimPanel final : public SCompoundWidget

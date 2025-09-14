@@ -23,10 +23,6 @@
 class ASceneAnalysisManager;
 class FVCCSimPanelSelection;
 class URGBCameraComponent;
-class SCheckBox;
-class SButton;
-template<typename NumericType> class SNumericEntryBox;
-class SWidget;
 
 /**
  * Scene Analysis Panel - Modular panel for scene analysis functionality

@@ -23,9 +23,6 @@
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
 
-class SButton;
-class STextBlock;
-class SCheckBox;
 class AFlashPawn;
 class URGBCameraComponent;
 class UDepthCameraComponent;

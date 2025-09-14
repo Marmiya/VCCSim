@@ -23,9 +23,6 @@
 #include "DataStructures/PointCloud.h"
 #include "Engine/World.h"
 
-class SButton;
-class STextBlock;
-class SCheckBox;
 class UInstancedStaticMeshComponent;
 class UProceduralMeshComponent;
 class UPointCloudRenderer;
