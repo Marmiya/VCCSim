@@ -22,6 +22,9 @@
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SExpandableArea.h"
 #include "Styling/AppStyle.h"
+#include "Framework/Notifications/NotificationManager.h"
+#include "Widgets/Notifications/SNotificationList.h"
+#include "Styling/CoreStyle.h"
 
 // ============================================================================
 // STYLING CONSTANTS
@@ -117,6 +120,29 @@ TSharedRef<SWidget> FVCCSimUIHelpers::CreateSectionContent(TSharedRef<SWidget> C
         [
             Content
         ];
+}
+
+// ============================================================================
+// NOTIFICATION HELPER FUNCTIONS
+// ============================================================================
+
+void FVCCSimUIHelpers::ShowNotification(const FString& Message, bool bIsError)
+{
+    FNotificationInfo NotificationInfo(FText::FromString(Message));
+    NotificationInfo.bFireAndForget = true;
+    NotificationInfo.FadeOutDuration = 3.0f;
+    NotificationInfo.ExpireDuration = 5.0f;
+    
+    if (bIsError)
+    {
+        NotificationInfo.Image = FCoreStyle::Get().GetBrush(TEXT("MessageLog.Error"));
+    }
+    else
+    {
+        NotificationInfo.Image = FAppStyle::GetBrush(TEXT("Icons.Info"));
+    }
+    
+    FSlateNotificationManager::Get().AddNotification(NotificationInfo);
 }
 
 // ============================================================================

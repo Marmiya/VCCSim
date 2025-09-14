@@ -598,7 +598,7 @@ TSharedRef<SWidget> FVCCSimPanelTriangleSplatting::CreateGSTrainingControlSectio
                         {
                             ColmapManager->StopColmapPipeline();
                             bColmapPipelineInProgress = false;
-                            ShowGSNotification(TEXT("COLMAP pipeline stopped"));
+                            FVCCSimUIHelpers::ShowNotification(TEXT("COLMAP pipeline stopped"));
                         }
                     }
                     else
@@ -879,11 +879,11 @@ FReply FVCCSimPanelTriangleSplatting::OnGSBrowseColmapDatasetClicked()
             
             if (FPaths::DirectoryExists(SparseDir) && FPaths::DirectoryExists(ImagesDir))
             {
-                ShowGSNotification(TEXT("COLMAP dataset path selected"), false);
+                FVCCSimUIHelpers::ShowNotification(TEXT("COLMAP dataset path selected"), false);
             }
             else
             {
-                ShowGSNotification(TEXT("Warning: Directory doesn't look like "
+                FVCCSimUIHelpers::ShowNotification(TEXT("Warning: Directory doesn't look like "
                                         "a COLMAP dataset (missing sparse/ or images/)"), false);
             }
             

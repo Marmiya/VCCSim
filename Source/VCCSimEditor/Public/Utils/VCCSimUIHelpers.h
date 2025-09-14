@@ -133,6 +133,17 @@ public:
         TFunction<void(T)> OnValueChanged = nullptr);
     
     // ============================================================================
+    // NOTIFICATION HELPER FUNCTIONS
+    // ============================================================================
+    
+    /**
+     * Shows a notification message to the user
+     * @param Message - The message text to display
+     * @param bIsError - Whether this is an error notification (changes icon and styling)
+     */
+    static void ShowNotification(const FString& Message, bool bIsError = false);
+    
+    // ============================================================================
     // STYLING CONSTANTS
     // ============================================================================
     

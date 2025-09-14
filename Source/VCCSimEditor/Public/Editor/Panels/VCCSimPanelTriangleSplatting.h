@@ -22,12 +22,6 @@
 
 class FTriangleSplattingManager;
 class FColmapManager;
-class SEditableTextBox;
-class SButton;
-class STextBlock;
-template<typename NumericType> class SNumericEntryBox;
-class SWidget;
-class UStaticMesh;
 struct FTriangleSplattingConfig;
 
 /**
@@ -173,7 +167,6 @@ private:
     
     void StartTriangleSplattingWithColmapData(const FString& ColmapDatasetPath);
     bool ValidateGSConfiguration();
-    void ShowGSNotification(const FString& Message, bool bIsError = false);
     
     // ============================================================================
     // PATH PERSISTENCE

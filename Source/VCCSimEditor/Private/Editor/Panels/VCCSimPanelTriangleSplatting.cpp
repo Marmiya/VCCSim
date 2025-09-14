@@ -21,9 +21,8 @@ DEFINE_LOG_CATEGORY_STATIC(LogTriangleSplatting, Log, All);
 #include "Utils/TriangleSplattingManager.h"
 #include "Utils/ColmapManager.h"
 #include "Utils/VCCSimDataConverter.h"
+#include "Utils/VCCSimUIHelpers.h"
 #include "IO/PLYUtils.h"
-#include "Framework/Notifications/NotificationManager.h"
-#include "Widgets/Notifications/SNotificationList.h"
 
 BEGIN_SLATE_FUNCTION_BUILD_OPTIMIZATION
 
@@ -126,7 +125,7 @@ void FVCCSimPanelTriangleSplatting::InitializeGSManager()
             GSStatusUpdateTimerHandle.Invalidate();
         }
         
-        ShowGSNotification(ResultMessage, !bSuccessful);
+        FVCCSimUIHelpers::ShowNotification(ResultMessage, !bSuccessful);
     });
 }
 
@@ -160,18 +159,18 @@ void FVCCSimPanelTriangleSplatting::InitializeColmapManager()
                                           "path: %s"), *GeneratedDatasetPath);
                 // Persist the auto-filled dataset path
                 SavePaths();
-                ShowGSNotification(FString::Printf(
+                FVCCSimUIHelpers::ShowNotification(FString::Printf(
                     TEXT("COLMAP completed! Dataset path auto-filled: %s"), 
                     *FPaths::GetCleanFilename(GeneratedDatasetPath)));
             }
             else
             {
-                ShowGSNotification(ResultMessage, false);
+                FVCCSimUIHelpers::ShowNotification(ResultMessage, false);
             }
         }
         else
         {
-            ShowGSNotification(ResultMessage, true);
+            FVCCSimUIHelpers::ShowNotification(ResultMessage, true);
         }
     });
 }
@@ -207,11 +206,11 @@ FReply FVCCSimPanelTriangleSplatting::OnGSStartTrainingClicked()
                 );
             }
             
-            ShowGSNotification(TEXT("Triangle Splatting training started"));
+            FVCCSimUIHelpers::ShowNotification(TEXT("Triangle Splatting training started"));
         }
         else
         {
-            ShowGSNotification(TEXT("Failed to start training process"), true);
+            FVCCSimUIHelpers::ShowNotification(TEXT("Failed to start training process"), true);
         }
     }
     
@@ -234,7 +233,7 @@ FReply FVCCSimPanelTriangleSplatting::OnGSStopTrainingClicked()
         GSStatusUpdateTimerHandle.Invalidate();
     }
     
-    ShowGSNotification(TEXT("Training stopped"));
+    FVCCSimUIHelpers::ShowNotification(TEXT("Training stopped"));
     
     return FReply::Handled();
 }
@@ -244,7 +243,7 @@ FReply FVCCSimPanelTriangleSplatting::OnGSColmapTrainingClicked()
     // Validate COLMAP dataset path
     if (GSConfig.ColmapDatasetPath.IsEmpty() || !FPaths::DirectoryExists(GSConfig.ColmapDatasetPath))
     {
-        ShowGSNotification(TEXT("Please specify a valid COLMAP dataset path"), true);
+        FVCCSimUIHelpers::ShowNotification(TEXT("Please specify a valid COLMAP dataset path"), true);
         return FReply::Handled();
     }
     
@@ -254,13 +253,13 @@ FReply FVCCSimPanelTriangleSplatting::OnGSColmapTrainingClicked()
     
     if (!FPaths::DirectoryExists(SparseDir))
     {
-        ShowGSNotification(TEXT("Invalid COLMAP dataset - missing sparse/ folder"), true);
+        FVCCSimUIHelpers::ShowNotification(TEXT("Invalid COLMAP dataset - missing sparse/ folder"), true);
         return FReply::Handled();
     }
     
     if (!FPaths::DirectoryExists(ImagesDir))
     {
-        ShowGSNotification(TEXT("Invalid COLMAP dataset - missing images/ folder"), true);
+        FVCCSimUIHelpers::ShowNotification(TEXT("Invalid COLMAP dataset - missing images/ folder"), true);
         return FReply::Handled();
     }
     
@@ -284,13 +283,13 @@ FReply FVCCSimPanelTriangleSplatting::OnGSColmapTrainingClicked()
     
     if (!bHasCameras || !bHasImages || !bHasPoints3D)
     {
-        ShowGSNotification(TEXT("Invalid COLMAP dataset - missing cameras, images or points3D files (txt or bin format) in sparse/0/ folder"), true);
+        FVCCSimUIHelpers::ShowNotification(TEXT("Invalid COLMAP dataset - missing cameras, images or points3D files (txt or bin format) in sparse/0/ folder"), true);
         return FReply::Handled();
     }
     
     if (GSConfig.OutputDirectory.IsEmpty())
     {
-        ShowGSNotification(TEXT("Please specify an output directory"), true);
+        FVCCSimUIHelpers::ShowNotification(TEXT("Please specify an output directory"), true);
         return FReply::Handled();
     }
     
@@ -300,7 +299,7 @@ FReply FVCCSimPanelTriangleSplatting::OnGSColmapTrainingClicked()
     {
         if (!PlatformFile.CreateDirectoryTree(*GSConfig.OutputDirectory))
         {
-            ShowGSNotification(TEXT("Failed to create output directory"), true);
+            FVCCSimUIHelpers::ShowNotification(TEXT("Failed to create output directory"), true);
             return FReply::Handled();
         }
     }
@@ -322,7 +321,7 @@ void FVCCSimPanelTriangleSplatting::StartTriangleSplattingWithColmapData(const F
     
     if (!FPaths::FileExists(TrainingScript))
     {
-        ShowGSNotification(TEXT("Original Triangle Splatting train.py script not found"), true);
+        FVCCSimUIHelpers::ShowNotification(TEXT("Original Triangle Splatting train.py script not found"), true);
         return;
     }
     
@@ -397,11 +396,11 @@ void FVCCSimPanelTriangleSplatting::StartTriangleSplattingWithColmapData(const F
             );
         }
         
-        ShowGSNotification(TEXT("Triangle Splatting training with COLMAP data started"));
+        FVCCSimUIHelpers::ShowNotification(TEXT("Triangle Splatting training with COLMAP data started"));
     }
     else
     {
-        ShowGSNotification(TEXT("Failed to start Triangle Splatting training process"), true);
+        FVCCSimUIHelpers::ShowNotification(TEXT("Failed to start Triangle Splatting training process"), true);
     }
 }
 
@@ -410,7 +409,7 @@ FReply FVCCSimPanelTriangleSplatting::OnGSTestTransformationClicked()
     // Validate basic configuration first
     if (GSConfig.OutputDirectory.IsEmpty())
     {
-        ShowGSNotification(TEXT("Please specify an output directory first"), true);
+        FVCCSimUIHelpers::ShowNotification(TEXT("Please specify an output directory first"), true);
         return FReply::Handled();
     }
     
@@ -421,7 +420,7 @@ FReply FVCCSimPanelTriangleSplatting::OnGSTestTransformationClicked()
     {
         if (!PlatformFile.CreateDirectoryTree(*TestTransformOutputDir))
         {
-            ShowGSNotification(TEXT("Failed to create Test Transform directory"), true);
+            FVCCSimUIHelpers::ShowNotification(TEXT("Failed to create Test Transform directory"), true);
             return FReply::Handled();
         }
     }
@@ -542,11 +541,11 @@ FReply FVCCSimPanelTriangleSplatting::OnGSTestTransformationClicked()
     if (bExportedAny)
     {
         StatusMessage += TEXT("\nOpen the PLY files to verify coordinate transformation!");
-        ShowGSNotification(StatusMessage);
+        FVCCSimUIHelpers::ShowNotification(StatusMessage);
     }
     else
     {
-        ShowGSNotification(TEXT("No data was exported. Please check "
+        FVCCSimUIHelpers::ShowNotification(TEXT("No data was exported. Please check "
                                 "mesh selection and pose file."), true);
     }
     
@@ -558,19 +557,19 @@ FReply FVCCSimPanelTriangleSplatting::OnGSExportColmapClicked()
     // Validate basic configuration first
     if (GSConfig.OutputDirectory.IsEmpty())
     {
-        ShowGSNotification(TEXT("Please specify an output directory first"), true);
+        FVCCSimUIHelpers::ShowNotification(TEXT("Please specify an output directory first"), true);
         return FReply::Handled();
     }
     
     if (GSConfig.PoseFilePath.IsEmpty() || !FPaths::FileExists(GSConfig.PoseFilePath))
     {
-        ShowGSNotification(TEXT("Please specify a valid pose file"), true);
+        FVCCSimUIHelpers::ShowNotification(TEXT("Please specify a valid pose file"), true);
         return FReply::Handled();
     }
     
     if (GSConfig.ImageDirectory.IsEmpty() || !FPaths::DirectoryExists(GSConfig.ImageDirectory))
     {
-        ShowGSNotification(TEXT("Please specify a valid image directory"), true);
+        FVCCSimUIHelpers::ShowNotification(TEXT("Please specify a valid image directory"), true);
         return FReply::Handled();
     }
     
@@ -586,17 +585,17 @@ FReply FVCCSimPanelTriangleSplatting::OnGSExportColmapClicked()
             ColmapOutputDir, ColmapExecutablePath))
         {
             bColmapPipelineInProgress = true;
-            ShowGSNotification(TEXT("COLMAP pipeline started in background\n\n"));
+            FVCCSimUIHelpers::ShowNotification(TEXT("COLMAP pipeline started in background\n\n"));
         }
         else
         {
-            ShowGSNotification(TEXT("Failed to start COLMAP pipeline\n\n")
+            FVCCSimUIHelpers::ShowNotification(TEXT("Failed to start COLMAP pipeline\n\n")
                               TEXT("Pipeline may already be running"), true);
         }
     }
     catch (...)
     {
-        ShowGSNotification(TEXT("Unexpected error during COLMAP pipeline execution\n\n")
+        FVCCSimUIHelpers::ShowNotification(TEXT("Unexpected error during COLMAP pipeline execution\n\n")
                           TEXT("Check UE log for detailed error information"), true);
     }
     
@@ -659,30 +658,11 @@ bool FVCCSimPanelTriangleSplatting::ValidateGSConfiguration()
     if (ErrorMessages.Num() > 0)
     {
         FString CombinedError = FString::Join(ErrorMessages, TEXT("\n"));
-        ShowGSNotification(CombinedError, true);
+        FVCCSimUIHelpers::ShowNotification(CombinedError, true);
         return false;
     }
     
     return true;
-}
-
-void FVCCSimPanelTriangleSplatting::ShowGSNotification(const FString& Message, bool bIsError)
-{
-    FNotificationInfo NotificationInfo(FText::FromString(Message));
-    NotificationInfo.bFireAndForget = true;
-    NotificationInfo.FadeOutDuration = 3.0f;
-    NotificationInfo.ExpireDuration = 5.0f;
-    
-    if (bIsError)
-    {
-        NotificationInfo.Image = FCoreStyle::Get().GetBrush(TEXT("MessageLog.Error"));
-    }
-    else
-    {
-        NotificationInfo.Image = FAppStyle::GetBrush(TEXT("Icons.Info"));
-    }
-    
-    FSlateNotificationManager::Get().AddNotification(NotificationInfo);
 }
 
 void FVCCSimPanelTriangleSplatting::ExportCamerasToPLY(
@@ -724,11 +704,11 @@ void FVCCSimPanelTriangleSplatting::OnGSCameraIntrinsicsLoaded()
     {
         if (LoadCameraIntrinsicsFromColmap(GSConfig.CameraIntrinsicsFilePath))
         {
-            ShowGSNotification(TEXT("Camera intrinsics loaded successfully"), false);
+            FVCCSimUIHelpers::ShowNotification(TEXT("Camera intrinsics loaded successfully"), false);
         }
         else
         {
-            ShowGSNotification(TEXT("Failed to load camera intrinsics"), true);
+            FVCCSimUIHelpers::ShowNotification(TEXT("Failed to load camera intrinsics"), true);
         }
     }
 }
