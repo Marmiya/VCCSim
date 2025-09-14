@@ -20,7 +20,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogRatSplattingUI, Log, All);
 
 #include "Editor/Panels/VCCSimPanelRatSplatting.h"
 #include "Utils/ColmapManager.h"
-#include "Utils/TriangleSplattingManager.h"
+#include "Utils/SplattingManager.h"
 #include "Utils/VCCSimUIHelpers.h"
 #include "PropertyCustomizationHelpers.h"
 #include "ThumbnailRendering/ThumbnailManager.h"
@@ -659,67 +659,5 @@ TSharedRef<SWidget> FVCCSimPanelRatSplatting::CreateGSTrainingControlSection()
                     return OnGSColmapTrainingClicked();
                 })
             ]
-        ]
-        
-        // Training Status text
-        + SVerticalBox::Slot()
-        .AutoHeight()
-        .Padding(5, 4)
-        [
-            FVCCSimUIHelpers::CreatePropertyRow(TEXT("Training Status"),
-                SAssignNew(GSTrainingStatusText, STextBlock)
-                .Text_Lambda([this]()
-                {
-                    if (GSTrainingManager.IsValid())
-                    {
-                        FString StatusText = GSTrainingManager->GetStatusMessage();
-                        if (bGSTrainingInProgress)
-                        {
-                            float Progress = GSTrainingManager->GetTrainingProgress();
-                            StatusText += FString::Printf(TEXT(" (%.1f%%)"), Progress * 100.0f);
-                        }
-                        return FText::FromString(StatusText);
-                    }
-                    return FText::FromString(TEXT("Ready"));
-                })
-                .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
-            )
-        ]
-        
-        // COLMAP Status text
-        + SVerticalBox::Slot()
-        .AutoHeight()
-        .Padding(5, 4)
-        [
-            FVCCSimUIHelpers::CreatePropertyRow(TEXT("COLMAP Status"),
-                SNew(STextBlock)
-                .Text_Lambda([this]()
-                {
-                    if (ColmapManager.IsValid())
-                    {
-                        FString StatusText = ColmapManager->GetStatusMessage();
-                        if (bColmapPipelineInProgress)
-                        {
-                            float Progress = ColmapManager->GetProgress();
-                            StatusText += FString::Printf(TEXT(" (%.1f%%)"), Progress * 100.0f);
-                        }
-                        return FText::FromString(StatusText);
-                    }
-                    return FText::FromString(TEXT("Ready"));
-                })
-                .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
-                .ColorAndOpacity_Lambda([this]()
-                {
-                    if (bColmapPipelineInProgress)
-                    {
-                        return FLinearColor::Green;
-                    }
-                    else if (ColmapManager.IsValid() && ColmapManager->GetProgress() >= 1.0f)
-                    {
-                        return FLinearColor::Blue;
-                    }
-                    return FLinearColor::White;
-                })
-            )
         ];
 }

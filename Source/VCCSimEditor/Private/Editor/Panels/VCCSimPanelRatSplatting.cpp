@@ -18,7 +18,7 @@
 DEFINE_LOG_CATEGORY_STATIC(LogRatSplatting, Log, All);
 
 #include "Editor/Panels/VCCSimPanelRatSplatting.h"
-#include "Utils/TriangleSplattingManager.h"
+#include "Utils/SplattingManager.h"
 #include "Utils/ColmapManager.h"
 #include "Utils/VCCSimUIHelpers.h"
 #include "Utils/VCCSimDataConverter.h"
@@ -113,22 +113,8 @@ void FVCCSimPanelRatSplatting::Cleanup()
 void FVCCSimPanelRatSplatting::InitializeGSManager()
 {
     // Create training manager
-    GSTrainingManager = MakeShared<FTriangleSplattingManager>();
+    GSTrainingManager = MakeShared<FSplattingManager>();
 
-    GSTrainingManager->OnTrainingCompleted.BindLambda(
-        [this](bool bSuccessful, FString ResultMessage)
-    {
-        bGSTrainingInProgress = false;
-
-        // Stop status update timer
-        if (GEditor && GSStatusUpdateTimerHandle.IsValid())
-        {
-            GEditor->GetTimerManager()->ClearTimer(GSStatusUpdateTimerHandle);
-            GSStatusUpdateTimerHandle.Invalidate();
-        }
-
-        FVCCSimUIHelpers::ShowNotification(ResultMessage, !bSuccessful);
-    });
 }
 
 void FVCCSimPanelRatSplatting::InitializeColmapManager()
@@ -547,6 +533,30 @@ FReply FVCCSimPanelRatSplatting::OnGSStartTrainingClicked()
                         if (GSTrainingManager.IsValid())
                         {
                             GSTrainingManager->UpdateTrainingStatus();
+
+                            // Check for training completion
+                            if (bGSTrainingInProgress && !GSTrainingManager->IsTrainingInProgress())
+                            {
+                                bGSTrainingInProgress = false;
+
+                                // Stop status update timer
+                                if (GEditor && GSStatusUpdateTimerHandle.IsValid())
+                                {
+                                    GEditor->GetTimerManager()->ClearTimer(GSStatusUpdateTimerHandle);
+                                    GSStatusUpdateTimerHandle.Invalidate();
+                                }
+
+                                // Determine completion message based on status
+                                ETrainingStatus Status = GSTrainingManager->GetTrainingStatus();
+                                if (Status == ETrainingStatus::Completed)
+                                {
+                                    FVCCSimUIHelpers::ShowNotification(TEXT("RatSplatting training completed successfully"));
+                                }
+                                else
+                                {
+                                    FVCCSimUIHelpers::ShowNotification(FString::Printf(TEXT("RatSplatting training finished: %s"), *GSTrainingManager->GetStatusMessage()), true);
+                                }
+                            }
                         }
                     }),
                     1.0f, // Update every second
@@ -736,7 +746,29 @@ void FVCCSimPanelRatSplatting::StartTriangleSplattingWithColmapData(const FStrin
                     {
                         GSTrainingManager->UpdateTrainingStatus();
 
-                        // Update training status
+                        // Check for training completion
+                        if (bGSTrainingInProgress && !GSTrainingManager->IsTrainingInProgress())
+                        {
+                            bGSTrainingInProgress = false;
+
+                            // Stop status update timer
+                            if (GEditor && GSStatusUpdateTimerHandle.IsValid())
+                            {
+                                GEditor->GetTimerManager()->ClearTimer(GSStatusUpdateTimerHandle);
+                                GSStatusUpdateTimerHandle.Invalidate();
+                            }
+
+                            // Determine completion message based on status
+                            ETrainingStatus Status = GSTrainingManager->GetTrainingStatus();
+                            if (Status == ETrainingStatus::Completed)
+                            {
+                                FVCCSimUIHelpers::ShowNotification(TEXT("Triangle Splatting training completed successfully"));
+                            }
+                            else
+                            {
+                                FVCCSimUIHelpers::ShowNotification(FString::Printf(TEXT("Triangle Splatting training finished: %s"), *GSTrainingManager->GetStatusMessage()), true);
+                            }
+                        }
                     }
                 }),
                 1.0f, // Update every second

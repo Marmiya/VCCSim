@@ -17,7 +17,7 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogTriangleSplattingManager, Log, All);
 
-#include "Utils/TriangleSplattingManager.h"
+#include "Utils/SplattingManager.h"
 #include "Editor/VCCSimPanel.h"
 #include "Utils/VCCSimDataConverter.h"
 #include "Misc/FileHelper.h"
@@ -36,7 +36,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogTriangleSplattingManager, Log, All);
 class FTriangleExtractionTask : public FNonAbandonableTask
 {
 public:
-    FTriangleExtractionTask(const FTriangleSplattingConfig& InConfig, const FString& InOutputPath, FTriangleSplattingManager* InManager)
+    FTriangleExtractionTask(const FSplattingConfig& InConfig, const FString& InOutputPath, FSplattingManager* InManager)
         : Config(InConfig)
         , OutputPath(InOutputPath)
         , Manager(InManager)
@@ -101,9 +101,9 @@ public:
     FString GetResultMessage() const { return ResultMessage; }
 
 private:
-    FTriangleSplattingConfig Config;
+    FSplattingConfig Config;
     FString OutputPath;
-    FTriangleSplattingManager* Manager;
+    FSplattingManager* Manager;
     
     bool bSucceeded;
     FString ErrorMessage;
@@ -117,7 +117,7 @@ typedef TSharedPtr<FAsyncTask<FTriangleExtractionTask>> FTriangleExtractionTaskP
 // CONSTRUCTION / DESTRUCTION
 // ============================================================================
 
-FTriangleSplattingManager::FTriangleSplattingManager()
+FSplattingManager::FSplattingManager()
     : ReadPipe(nullptr)
     , WritePipe(nullptr)
     , CurrentStatus(ETrainingStatus::Idle)
@@ -135,7 +135,7 @@ FTriangleSplattingManager::FTriangleSplattingManager()
 {
 }
 
-FTriangleSplattingManager::~FTriangleSplattingManager()
+FSplattingManager::~FSplattingManager()
 {
     StopTraining();
     
@@ -152,7 +152,7 @@ FTriangleSplattingManager::~FTriangleSplattingManager()
 // TRAINING CONTROL
 // ============================================================================
 
-bool FTriangleSplattingManager::StartTraining(const FTriangleSplattingConfig& Config)
+bool FSplattingManager::StartTraining(const FSplattingConfig& Config)
 {
     if (IsTrainingInProgress())
     {
@@ -160,7 +160,7 @@ bool FTriangleSplattingManager::StartTraining(const FTriangleSplattingConfig& Co
         return false;
     }
     
-    CurrentConfig = MakeShared<FTriangleSplattingConfig>(Config);
+    CurrentConfig = MakeShared<FSplattingConfig>(Config);
     CurrentStatus = ETrainingStatus::Preparing;
     TrainingProgress = 0.0f;
     StatusMessage = TEXT("Preparing training...");
@@ -215,7 +215,7 @@ bool FTriangleSplattingManager::StartTraining(const FTriangleSplattingConfig& Co
     return true;
 }
 
-bool FTriangleSplattingManager::StartColmapTraining(const FString& PythonCommand, const FString& Arguments, const FString& OutputDir)
+bool FSplattingManager::StartColmapTraining(const FString& PythonCommand, const FString& Arguments, const FString& OutputDir)
 {
     if (IsTrainingInProgress())
     {
@@ -286,7 +286,7 @@ bool FTriangleSplattingManager::StartColmapTraining(const FString& PythonCommand
     return true;
 }
 
-void FTriangleSplattingManager::StopTraining()
+void FSplattingManager::StopTraining()
 {
     if (IsTrainingInProgress())
     {
@@ -305,7 +305,6 @@ void FTriangleSplattingManager::StopTraining()
         
         CleanupTraining();
         
-        OnTrainingCompleted.ExecuteIfBound(false, TEXT("Training was cancelled"));
     }
 }
 
@@ -313,7 +312,7 @@ void FTriangleSplattingManager::StopTraining()
 // MONITORING
 // ============================================================================
 
-void FTriangleSplattingManager::UpdateTrainingStatus()
+void FSplattingManager::UpdateTrainingStatus()
 {
     // Check for triangle extraction completion first
     if (bTriangleExtractionInProgress)
@@ -397,7 +396,7 @@ void FTriangleSplattingManager::UpdateTrainingStatus()
     
 }
 
-void FTriangleSplattingManager::RefreshStatus()
+void FSplattingManager::RefreshStatus()
 {
     LastUpdateTime = FDateTime::MinValue(); // Force update on next call
     UpdateTrainingStatus();
@@ -407,7 +406,7 @@ void FTriangleSplattingManager::RefreshStatus()
 // INTERNAL VALIDATION AND PREPARATION
 // ============================================================================
 
-bool FTriangleSplattingManager::ValidateConfiguration(const FTriangleSplattingConfig& Config)
+bool FSplattingManager::ValidateConfiguration(const FSplattingConfig& Config)
 {
     TArray<FString> ErrorMessages;
     
@@ -455,7 +454,7 @@ bool FTriangleSplattingManager::ValidateConfiguration(const FTriangleSplattingCo
     return true;
 }
 
-bool FTriangleSplattingManager::PrepareTrainingData(const FTriangleSplattingConfig& Config)
+bool FSplattingManager::PrepareTrainingData(const FSplattingConfig& Config)
 {
     // Create organized directory structure for Triangle Splatting training sessions
     // Config.OutputDirectory is already: ProjectSavedDir()/TriangleSplatting
@@ -551,7 +550,7 @@ bool FTriangleSplattingManager::PrepareTrainingData(const FTriangleSplattingConf
     return true;
 }
 
-FString FTriangleSplattingManager::CreateConfigurationFile(const FTriangleSplattingConfig& Config)
+FString FSplattingManager::CreateConfigurationFile(const FSplattingConfig& Config)
 {
     FString ConfigPath = FPaths::Combine(OutputDirectory, TEXT("config"), TEXT("vccsim_training_config.json"));
     
@@ -569,7 +568,7 @@ FString FTriangleSplattingManager::CreateConfigurationFile(const FTriangleSplatt
 // PYTHON PROCESS MANAGEMENT
 // ============================================================================
 
-bool FTriangleSplattingManager::LaunchTrainingProcess()
+bool FSplattingManager::LaunchTrainingProcess()
 {
     FString PythonPath = GetPythonExecutablePath();
     FString ScriptPath = GetTrainingScriptPath();
@@ -643,7 +642,7 @@ bool FTriangleSplattingManager::LaunchTrainingProcess()
     return true;
 }
 
-bool FTriangleSplattingManager::CheckPythonEnvironment()
+bool FSplattingManager::CheckPythonEnvironment()
 {
     FString PythonPath = GetPythonExecutablePath();
     
@@ -677,7 +676,7 @@ bool FTriangleSplattingManager::CheckPythonEnvironment()
     return true;
 }
 
-FString FTriangleSplattingManager::GetPythonExecutablePath()
+FString FSplattingManager::GetPythonExecutablePath()
 {
     // Try common Python executable names and locations
     TArray<FString> PossiblePaths = {
@@ -718,7 +717,7 @@ FString FTriangleSplattingManager::GetPythonExecutablePath()
     return FString();
 }
 
-FString FTriangleSplattingManager::GetTrainingScriptPath()
+FString FSplattingManager::GetTrainingScriptPath()
 {
     // Path to the VCCSim-specific Triangle Splatting training script
     FString PluginDir = FPaths::ProjectPluginsDir() / TEXT("VCCSim");
@@ -752,7 +751,7 @@ FString FTriangleSplattingManager::GetTrainingScriptPath()
 // LOG PARSING AND MONITORING
 // ============================================================================
 
-float FTriangleSplattingManager::ParseTrainingProgress()
+float FSplattingManager::ParseTrainingProgress()
 {
     // Check Python log file first, then fallback to manager log file
     FString LogFileToCheck = PythonLogFilePath;
@@ -817,7 +816,7 @@ float FTriangleSplattingManager::ParseTrainingProgress()
     return TrainingProgress; // Return current progress if no new progress found
 }
 
-TArray<FString> FTriangleSplattingManager::ReadRecentLogLines(int32 MaxLines, const FString& SpecificLogFilePath)
+TArray<FString> FSplattingManager::ReadRecentLogLines(int32 MaxLines, const FString& SpecificLogFilePath)
 {
     TArray<FString> Lines;
     
@@ -845,7 +844,7 @@ TArray<FString> FTriangleSplattingManager::ReadRecentLogLines(int32 MaxLines, co
 // PROCESS STATUS CHECKING
 // ============================================================================
 
-bool FTriangleSplattingManager::IsProcessRunning()
+bool FSplattingManager::IsProcessRunning()
 {
     if (!TrainingProcessHandle.IsValid())
     {
@@ -855,7 +854,7 @@ bool FTriangleSplattingManager::IsProcessRunning()
     return FPlatformProcess::IsProcRunning(TrainingProcessHandle);
 }
 
-bool FTriangleSplattingManager::GetProcessExitCode(int32& OutExitCode)
+bool FSplattingManager::GetProcessExitCode(int32& OutExitCode)
 {
     if (!TrainingProcessHandle.IsValid())
     {
@@ -865,7 +864,7 @@ bool FTriangleSplattingManager::GetProcessExitCode(int32& OutExitCode)
     return FPlatformProcess::GetProcReturnCode(TrainingProcessHandle, &OutExitCode);
 }
 
-void FTriangleSplattingManager::HandleTrainingCompletion(bool bSuccessful, const FString& ResultMessage)
+void FSplattingManager::HandleTrainingCompletion(bool bSuccessful, const FString& ResultMessage)
 {
     if (bSuccessful)
     {
@@ -881,10 +880,9 @@ void FTriangleSplattingManager::HandleTrainingCompletion(bool bSuccessful, const
     
     CleanupTraining();
     
-    OnTrainingCompleted.ExecuteIfBound(bSuccessful, ResultMessage);
 }
 
-void FTriangleSplattingManager::CleanupTraining()
+void FSplattingManager::CleanupTraining()
 {
     if (TrainingProcessHandle.IsValid())
     {
@@ -907,21 +905,19 @@ void FTriangleSplattingManager::CleanupTraining()
 // STATUS UPDATES
 // ============================================================================
 
-void FTriangleSplattingManager::UpdateStatusMessage(const FString& NewMessage)
+void FSplattingManager::UpdateStatusMessage(const FString& NewMessage)
 {
     if (StatusMessage != NewMessage)
     {
         StatusMessage = NewMessage;
-        OnTrainingProgressUpdated.ExecuteIfBound(TrainingProgress, StatusMessage);
     }
 }
 
-void FTriangleSplattingManager::UpdateProgress(float NewProgress)
+void FSplattingManager::UpdateProgress(float NewProgress)
 {
     if (FMath::Abs(TrainingProgress - NewProgress) > 0.01f) // Only update if significant change
     {
         TrainingProgress = FMath::Clamp(NewProgress, 0.0f, 1.0f);
-        OnTrainingProgressUpdated.ExecuteIfBound(TrainingProgress, StatusMessage);
     }
 }
 
@@ -929,7 +925,7 @@ void FTriangleSplattingManager::UpdateProgress(float NewProgress)
 // UTILITY FUNCTIONS
 // ============================================================================
 
-bool FTriangleSplattingManager::EnsureDirectoryExists(const FString& DirectoryPath)
+bool FSplattingManager::EnsureDirectoryExists(const FString& DirectoryPath)
 {
     IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
     
@@ -945,13 +941,13 @@ bool FTriangleSplattingManager::EnsureDirectoryExists(const FString& DirectoryPa
     return true;
 }
 
-FString FTriangleSplattingManager::GenerateTimestampedFilename(const FString& BaseName, const FString& Extension)
+FString FSplattingManager::GenerateTimestampedFilename(const FString& BaseName, const FString& Extension)
 {
     FString Timestamp = FDateTime::Now().ToString(TEXT("%Y%m%d_%H%M%S"));
     return FString::Printf(TEXT("%s_%s.%s"), *BaseName, *Timestamp, *Extension);
 }
 
-FString FTriangleSplattingManager::ConfigToJsonString(const FTriangleSplattingConfig& Config)
+FString FSplattingManager::ConfigToJsonString(const FSplattingConfig& Config)
 {
     // Handle mesh triangle data export path - actual extraction will be done asynchronously
     FString MeshTrianglesPath;
@@ -1000,7 +996,7 @@ FString FTriangleSplattingManager::ConfigToJsonString(const FTriangleSplattingCo
         Config.FocalLengthX,
         Config.FocalLengthY,
         Config.MaxIterations,
-        Config.bUseMeshInitialization ? TEXT("true") : TEXT("false"),
+        Config.SelectedMesh.IsValid() ? TEXT("true") : TEXT("false"),
         Config.SelectedMesh.IsValid() ? *Config.SelectedMesh->GetPathName() : TEXT(""),
         Config.bUseMeshTriangles ? TEXT("true") : TEXT("false"),
         Config.MaxMeshTriangles,
@@ -1010,7 +1006,7 @@ FString FTriangleSplattingManager::ConfigToJsonString(const FTriangleSplattingCo
     );
 }
 
-void FTriangleSplattingManager::LogMessage(const FString& Message, bool bIsError)
+void FSplattingManager::LogMessage(const FString& Message, bool bIsError)
 {
     // Log to UE
     if (bIsError)
@@ -1034,7 +1030,7 @@ void FTriangleSplattingManager::LogMessage(const FString& Message, bool bIsError
     }
 }
 
-FString FTriangleSplattingManager::GetTrainingOutput()
+FString FSplattingManager::GetTrainingOutput()
 {
     // Read from Python process pipe if available
     if (ReadPipe != nullptr)
@@ -1053,7 +1049,7 @@ FString FTriangleSplattingManager::GetTrainingOutput()
 // ASYNC TRIANGLE EXTRACTION
 // ============================================================================
 
-void FTriangleSplattingManager::StartAsyncTriangleExtraction(const FTriangleSplattingConfig& Config)
+void FSplattingManager::StartAsyncTriangleExtraction(const FSplattingConfig& Config)
 {
     if (bTriangleExtractionInProgress)
     {
@@ -1085,7 +1081,7 @@ void FTriangleSplattingManager::StartAsyncTriangleExtraction(const FTriangleSpla
     UE_LOG(LogTriangleSplattingManager, Log, TEXT("Extracting %d mesh triangles..."), Config.MaxMeshTriangles);
 }
 
-void FTriangleSplattingManager::OnTriangleExtractionComplete()
+void FSplattingManager::OnTriangleExtractionComplete()
 {
     if (!TriangleExtractionTask)
     {
@@ -1117,7 +1113,6 @@ void FTriangleSplattingManager::OnTriangleExtractionComplete()
                 CurrentStatus = ETrainingStatus::Failed;
                 StatusMessage = TEXT("Failed to launch training process");
                 LogMessage(StatusMessage, true);
-                OnTrainingCompleted.ExecuteIfBound(false, StatusMessage);
             }
             else
             {
@@ -1132,7 +1127,6 @@ void FTriangleSplattingManager::OnTriangleExtractionComplete()
         UE_LOG(LogTriangleSplattingManager, Error, TEXT("Triangle extraction failed: %s"), *Task.GetErrorMessage());
         CurrentStatus = ETrainingStatus::Failed;
         StatusMessage = FString::Printf(TEXT("Triangle extraction failed: %s"), *Task.GetErrorMessage());
-        OnTrainingCompleted.ExecuteIfBound(false, StatusMessage);
     }
     
     // Clean up the task

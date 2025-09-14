@@ -18,11 +18,11 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Utils/TriangleSplattingManager.h"
+#include "Utils/SplattingManager.h"
 
-class FTriangleSplattingManager;
+class FSplattingManager;
 class FColmapManager;
-struct FTriangleSplattingConfig;
+struct FSplattingConfig;
 
 /**
  * RatSplatting Panel - Modular panel for RatSplatting neural rendering functionality
@@ -76,14 +76,13 @@ private:
     // Training Control UI Controls
     TSharedPtr<SButton> GSTrainingToggleButton;
     TSharedPtr<SButton> GSColmapTrainingButton;
-    TSharedPtr<STextBlock> GSTrainingStatusText;
 
     // ============================================================================
     // STATE VARIABLES
     // ============================================================================
 
     // Configuration
-    FTriangleSplattingConfig GSConfig;
+    FSplattingConfig GSConfig;
 
     // TOptional values for SpinBoxes
     TOptional<float> GSFOVValue;
@@ -102,10 +101,9 @@ private:
     FTimerHandle GSStatusUpdateTimerHandle;
 
     // Managers
-    TSharedPtr<FTriangleSplattingManager> GSTrainingManager;
+    TSharedPtr<FSplattingManager> GSTrainingManager;
     TSharedPtr<FColmapManager> ColmapManager;
-
-
+    
     // Triangle selection method options
     TArray<TSharedPtr<FString>> TriangleSelectionMethods;
 

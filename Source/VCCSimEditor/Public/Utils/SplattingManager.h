@@ -26,7 +26,7 @@
 /**
  * Triangle Splatting Configuration Structure
  */
-struct FTriangleSplattingConfig
+struct FSplattingConfig
 {
     // Data Input
     FString ImageDirectory;
@@ -57,9 +57,6 @@ struct FTriangleSplattingConfig
     int32 InitPointCount = 100000;
 };
 
-DECLARE_DELEGATE_TwoParams(FOnTrainingProgressUpdated, float /* Progress */, FString /* StatusMessage */);
-DECLARE_DELEGATE_TwoParams(FOnTrainingCompleted, bool /* bSuccessful */, FString /* ResultMessage */);
-
 /**
  * Training status enumeration
  */
@@ -78,15 +75,15 @@ enum class ETrainingStatus : uint8
  * Triangle Splatting Training Manager
  * Handles Python process execution and monitoring for Triangle Splatting training
  */
-class VCCSIMEDITOR_API FTriangleSplattingManager
+class VCCSIMEDITOR_API FSplattingManager
 {
 public:
     // ============================================================================
     // CONSTRUCTION / DESTRUCTION
     // ============================================================================
     
-    FTriangleSplattingManager();
-    ~FTriangleSplattingManager();
+    FSplattingManager();
+    ~FSplattingManager();
 
     // ============================================================================
     // TRAINING CONTROL
@@ -97,7 +94,7 @@ public:
      * @param Config Training configuration
      * @return True if training started successfully
      */
-    bool StartTraining(const FTriangleSplattingConfig& Config);
+    bool StartTraining(const FSplattingConfig& Config);
     
     /**
      * Start training process with pre-built COLMAP data using direct command
@@ -138,16 +135,6 @@ public:
     FString GetStatusMessage() const { return StatusMessage; }
 
     // ============================================================================
-    // DELEGATES
-    // ============================================================================
-    
-    /** Delegate fired when training progress is updated */
-    FOnTrainingProgressUpdated OnTrainingProgressUpdated;
-    
-    /** Delegate fired when training completes (success or failure) */
-    FOnTrainingCompleted OnTrainingCompleted;
-
-    // ============================================================================
     // MONITORING
     // ============================================================================
     
@@ -181,7 +168,7 @@ private:
     // ============================================================================
     
     // Current training configuration (using pointer to avoid circular dependency)
-    TSharedPtr<FTriangleSplattingConfig> CurrentConfig;
+    TSharedPtr<FSplattingConfig> CurrentConfig;
     
     // Process management
     FProcHandle TrainingProcessHandle;
@@ -220,21 +207,21 @@ private:
      * @param Config Configuration to validate
      * @return True if configuration is valid
      */
-    bool ValidateConfiguration(const FTriangleSplattingConfig& Config);
+    bool ValidateConfiguration(const FSplattingConfig& Config);
     
     /**
      * Prepare data and create configuration files for training
      * @param Config Training configuration
      * @return True if preparation succeeded
      */
-    bool PrepareTrainingData(const FTriangleSplattingConfig& Config);
+    bool PrepareTrainingData(const FSplattingConfig& Config);
     
     /**
      * Create JSON configuration file for Python training script
      * @param Config Training configuration
      * @return Path to created config file, or empty string if failed
      */
-    FString CreateConfigurationFile(const FTriangleSplattingConfig& Config);
+    FString CreateConfigurationFile(const FSplattingConfig& Config);
     
     /**
      * Launch Python training process
@@ -329,7 +316,7 @@ private:
      * @param Config Configuration to convert
      * @return JSON string representation
      */
-    FString ConfigToJsonString(const FTriangleSplattingConfig& Config);
+    FString ConfigToJsonString(const FSplattingConfig& Config);
     
     /**
      * Log message to both UE log and training log file
@@ -346,7 +333,7 @@ private:
      * Start asynchronous triangle extraction from mesh
      * @param Config Training configuration
      */
-    void StartAsyncTriangleExtraction(const FTriangleSplattingConfig& Config);
+    void StartAsyncTriangleExtraction(const FSplattingConfig& Config);
     
     /**
      * Handle completion of async triangle extraction
