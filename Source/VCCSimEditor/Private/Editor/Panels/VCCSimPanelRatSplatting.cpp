@@ -550,11 +550,14 @@ FReply FVCCSimPanelRatSplatting::OnGSStartTrainingClicked()
                                 ETrainingStatus Status = GSTrainingManager->GetTrainingStatus();
                                 if (Status == ETrainingStatus::Completed)
                                 {
-                                    FVCCSimUIHelpers::ShowNotification(TEXT("RatSplatting training completed successfully"));
+                                    FVCCSimUIHelpers::ShowNotification(
+                                        TEXT("RatSplatting training completed successfully"));
                                 }
                                 else
                                 {
-                                    FVCCSimUIHelpers::ShowNotification(FString::Printf(TEXT("RatSplatting training finished: %s"), *GSTrainingManager->GetStatusMessage()), true);
+                                    FVCCSimUIHelpers::ShowNotification(FString::Printf(
+                                        TEXT("RatSplatting training finished: %s"),
+                                        *GSTrainingManager->GetStatusMessage()), true);
                                 }
                             }
                         }
