@@ -158,27 +158,27 @@ void FAsyncNormalEXRSaveTask::DoWork()
     // Use modern UE image API with FImage
     FImage Image;
     Image.Init(Size.X, Size.Y, ERawImageFormat::RGBA32F);
-    
+
     // Convert FLinearColor to FImage data
     TArrayView64<FLinearColor> ImageData = Image.AsRGBA32F();
-    
+
     if (ImageData.Num() != NormalPixels.Num())
     {
-        UE_LOG(LogImageProcesser, Error, TEXT("Image data size mismatch: Expected %lld, got %d"), 
+        UE_LOG(LogImageProcesser, Error, TEXT("Image data size mismatch: Expected %lld, got %d"),
             ImageData.Num(), NormalPixels.Num());
         return;
     }
-    
+
     // Copy normal data to image
     for (int32 i = 0; i < NormalPixels.Num(); ++i)
     {
         ImageData[i] = NormalPixels[i];
     }
-    
+
     // Get image wrapper module
     IImageWrapperModule& ImageWrapperModule =
         FModuleManager::LoadModuleChecked<IImageWrapperModule>(FName("ImageWrapper"));
-    
+
     // Compress image using modern API
     TArray64<uint8> CompressedData;
     bool bSuccess = ImageWrapperModule.CompressImage(
@@ -187,7 +187,7 @@ void FAsyncNormalEXRSaveTask::DoWork()
         Image,
         100
     );
-    
+
     if (bSuccess && CompressedData.Num() > 0)
     {
         // Save to file
@@ -195,13 +195,88 @@ void FAsyncNormalEXRSaveTask::DoWork()
         {
             UE_LOG(LogImageProcesser, Error, TEXT("Failed to save EXR normal image to file: %s"), *FilePath);
         }
-        else
-        {
-            UE_LOG(LogImageProcesser, Log, TEXT("Successfully saved EXR normal image to: %s"), *FilePath);
-        }
     }
     else
     {
         UE_LOG(LogImageProcesser, Error, TEXT("Failed to compress normal image to EXR format"));
+    }
+}
+
+void FAsyncDepthVisualSaveTask::DoWork()
+{
+    if (DepthData.Num() == 0)
+    {
+        UE_LOG(LogImageProcesser, Warning, TEXT("No depth data to save"));
+        return;
+    }
+
+    // Create visual-friendly depth image with proper depth range mapping
+    TArray<FColor> VisualPixels;
+    VisualPixels.Reserve(DepthData.Num());
+
+    // Apply range clamping and invert for visual appeal (closer = darker, farther = lighter)
+    for (float Depth : DepthData)
+    {
+        // Clamp depth to the specified range
+        float ClampedDepth = FMath::Clamp(Depth, MinRange, MaxRange);
+
+        // Normalize to [0,1] range, then invert (1-x) for visual appeal
+        float NormalizedDepth = (ClampedDepth - MinRange) / (MaxRange - MinRange);
+        float InvertedDepth = 1.0f - NormalizedDepth;
+
+        // Apply gamma correction for better visual distribution
+        float GammaCorrected = FMath::Pow(InvertedDepth, 0.5f);
+
+        // Convert to 8-bit grayscale
+        uint8 GrayValue = FMath::RoundToInt(GammaCorrected * 255.0f);
+        VisualPixels.Add(FColor(GrayValue, GrayValue, GrayValue, 255));
+    }
+
+    // Save using existing PNG compression
+    TArray64<uint8> CompressedBitmap;
+    FImageUtils::PNGCompressImageArray(Size.X, Size.Y, VisualPixels, CompressedBitmap);
+
+    if (!FFileHelper::SaveArrayToFile(CompressedBitmap, *FilePath))
+    {
+        UE_LOG(LogImageProcesser, Error, TEXT("Failed to save visual depth image to file: %s"), *FilePath);
+    }
+}
+
+void FAsyncNormalVisualSaveTask::DoWork()
+{
+    if (NormalPixels.Num() == 0)
+    {
+        UE_LOG(LogImageProcesser, Warning, TEXT("No normal data to save"));
+        return;
+    }
+
+    // Convert normal vectors to visual RGB representation
+    TArray<FColor> VisualPixels;
+    VisualPixels.Reserve(NormalPixels.Num());
+
+    for (const FLinearColor& Normal : NormalPixels)
+    {
+        // Convert from [-1,1] normal space to [0,255] RGB space
+        // Normal vectors are typically in world space, so we need to handle the mapping carefully
+        FVector NormalVec(Normal.R, Normal.G, Normal.B);
+
+        // Normalize the vector to ensure it's a unit vector
+        NormalVec.Normalize();
+
+        // Map from [-1,1] to [0,255]
+        uint8 R = FMath::RoundToInt((NormalVec.X + 1.0f) * 127.5f);
+        uint8 G = FMath::RoundToInt((NormalVec.Y + 1.0f) * 127.5f);
+        uint8 B = FMath::RoundToInt((NormalVec.Z + 1.0f) * 127.5f);
+
+        VisualPixels.Add(FColor(R, G, B, 255));
+    }
+
+    // Save using existing PNG compression
+    TArray64<uint8> CompressedBitmap;
+    FImageUtils::PNGCompressImageArray(Size.X, Size.Y, VisualPixels, CompressedBitmap);
+
+    if (!FFileHelper::SaveArrayToFile(CompressedBitmap, *FilePath))
+    {
+        UE_LOG(LogImageProcesser, Error, TEXT("Failed to save visual normal image to file: %s"), *FilePath);
     }
 }

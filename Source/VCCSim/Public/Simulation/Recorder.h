@@ -120,8 +120,12 @@ struct FNormalCameraData final : public FSensorData
 class FBufferPool
 {
 public:
+    FBufferPool() = default;
+    ~FBufferPool();
+
     TArray<uint8>* AcquireBuffer(int32 Size);
     void ReleaseBuffer(TArray<uint8>* Buffer);
+    void Cleanup();
 
 private:
     FCriticalSection PoolLock;
@@ -252,6 +256,8 @@ struct FPawnBuffers
     TRingBuffer<FLidarData> Lidar;
     TRingBuffer<FDepthCameraData> DepthC;
     TRingBuffer<FRGBCameraData> RGBC;
+    TRingBuffer<FNormalCameraData> NormalC;
+    TRingBuffer<FSegmentationCameraData> SegmentationC;
     FString PawnDirectory;
 
     FPawnBuffers()
@@ -259,13 +265,17 @@ struct FPawnBuffers
         , Lidar(DefaultSize)
         , DepthC(DefaultSize)
         , RGBC(DefaultSize)
+        , NormalC(DefaultSize)
+        , SegmentationC(DefaultSize)
     {}
 
-    explicit FPawnBuffers(int32 Size, const FString& InPawnDirectory = TEXT("")) 
+    explicit FPawnBuffers(int32 Size, const FString& InPawnDirectory = TEXT(""))
         : Pose(Size)
         , Lidar(Size)
         , DepthC(Size)
         , RGBC(Size)
+        , NormalC(Size)
+        , SegmentationC(Size)
         , PawnDirectory(InPawnDirectory)
     {}
 
@@ -279,7 +289,9 @@ struct FPawnBuffers
         , Lidar(MoveTemp(Other.Lidar))
         , DepthC(MoveTemp(Other.DepthC))
         , RGBC(MoveTemp(Other.RGBC))
-        , PawnDirectory(MoveTemp(Other.PawnDirectory))  // Add this line
+        , NormalC(MoveTemp(Other.NormalC))
+        , SegmentationC(MoveTemp(Other.SegmentationC))
+        , PawnDirectory(MoveTemp(Other.PawnDirectory))
     {}
 
     FPawnBuffers& operator=(FPawnBuffers&& Other) noexcept
@@ -290,7 +302,9 @@ struct FPawnBuffers
             Lidar = MoveTemp(Other.Lidar);
             DepthC = MoveTemp(Other.DepthC);
             RGBC = MoveTemp(Other.RGBC);
-            PawnDirectory = MoveTemp(Other.PawnDirectory);  // Add this line
+            NormalC = MoveTemp(Other.NormalC);
+            SegmentationC = MoveTemp(Other.SegmentationC);
+            PawnDirectory = MoveTemp(Other.PawnDirectory);
         }
         return *this;
     }
@@ -328,10 +342,10 @@ struct FSubmissionData
 };
 
 // Worker thread for data processing
-class FRecorderWorker final : public FRunnable 
+class FRecorderWorker final : public FRunnable
 {
 public:
-    FRecorderWorker(const FString& InBasePath, int32 InBufferSize);
+    FRecorderWorker(const FString& InBasePath, int32 InBufferSize, bool bInBetterVisualsRecording = false, ARecorder* InRecorder = nullptr);
     virtual ~FRecorderWorker() override;
 
     // FRunnable interface
@@ -346,6 +360,8 @@ public:
 private:
     FString BasePath;
     int32 BufferSize;
+    bool bBetterVisualsRecording;
+    ARecorder* RecorderRef;
 
     FRunnableThread* Thread;
 
@@ -363,6 +379,8 @@ private:
     bool SaveLidarData(const FLidarData& LidarData, const FString& Directory);
     bool SaveDepthData(const FDepthCameraData& DepthData, const FString& Directory);
     bool SaveRGBData(const FRGBCameraData& RGBData, const FString& Directory);
+    bool SaveNormalData(const FNormalCameraData& NormalData, const FString& Directory);
+    bool SaveSegmentationData(const FSegmentationCameraData& SegmentationData, const FString& Directory);
 };
 
 // Async task for data submission
@@ -388,12 +406,16 @@ UCLASS()
 class VCCSIM_API ARecorder : public AActor
 {
     GENERATED_BODY()
-    
+
     friend class FAsyncSubmitTask;
 
 public:
     ARecorder();
     virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+
+    void SetBetterVisualsRecording(bool bEnable) { bBetterVisualsRecording = bEnable; }
+    void IncrementAsyncTasks() { ++PendingAsyncTasks; }
+    void DecrementAsyncTasks() { --PendingAsyncTasks; }
 
     // Recording control
     void StartRecording();
@@ -423,8 +445,10 @@ public:
 
 private:
     bool bRecording = false; // Recording state of the recorder
-    
+    bool bBetterVisualsRecording = false; // Whether to use visual-friendly formats
+
     TAtomic<int32> PendingTasks;
+    TAtomic<int32> PendingAsyncTasks;
 
     TMap<AActor*, FPawnDirectoryInfo> PawnDirectories;
     TMap<AActor*, FPawnBuffers> ActiveBuffers;

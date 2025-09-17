@@ -102,7 +102,7 @@ class VCCSIM_API FAsyncNormalEXRSaveTask : public FNonAbandonableTask
 public:
     FAsyncNormalEXRSaveTask(
         const TArray<FLinearColor>& InNormalPixels,
-        FIntPoint InSize, 
+        FIntPoint InSize,
         const FString& InFilePath)
         : NormalPixels(InNormalPixels)
         , Size(InSize)
@@ -114,6 +114,64 @@ public:
     FORCEINLINE TStatId GetStatId() const
     {
         RETURN_QUICK_DECLARE_CYCLE_STAT(FAsyncNormalEXRSaveTask,
+           STATGROUP_ThreadPoolAsyncTasks);
+    }
+
+private:
+    TArray<FLinearColor> NormalPixels;
+    FIntPoint Size;
+    FString FilePath;
+};
+
+class VCCSIM_API FAsyncDepthVisualSaveTask : public FNonAbandonableTask
+{
+public:
+    FAsyncDepthVisualSaveTask(
+        const TArray<float>& InDepthData,
+        FIntPoint InSize,
+        const FString& InFilePath,
+        float InMinRange = 0.0f,
+        float InMaxRange = 10000.0f)
+        : DepthData(InDepthData)
+        , Size(InSize)
+        , FilePath(InFilePath)
+        , MinRange(InMinRange)
+        , MaxRange(InMaxRange)
+    {}
+
+    void DoWork();
+
+    FORCEINLINE TStatId GetStatId() const
+    {
+        RETURN_QUICK_DECLARE_CYCLE_STAT(FAsyncDepthVisualSaveTask,
+           STATGROUP_ThreadPoolAsyncTasks);
+    }
+
+private:
+    TArray<float> DepthData;
+    FIntPoint Size;
+    FString FilePath;
+    float MinRange;
+    float MaxRange;
+};
+
+class VCCSIM_API FAsyncNormalVisualSaveTask : public FNonAbandonableTask
+{
+public:
+    FAsyncNormalVisualSaveTask(
+        const TArray<FLinearColor>& InNormalPixels,
+        FIntPoint InSize,
+        const FString& InFilePath)
+        : NormalPixels(InNormalPixels)
+        , Size(InSize)
+        , FilePath(InFilePath)
+    {}
+
+    void DoWork();
+
+    FORCEINLINE TStatId GetStatId() const
+    {
+        RETURN_QUICK_DECLARE_CYCLE_STAT(FAsyncNormalVisualSaveTask,
            STATGROUP_ThreadPoolAsyncTasks);
     }
 

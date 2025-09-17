@@ -63,6 +63,7 @@ FVCCSimConfig ParseConfig()
         Config.VCCSim.DefaultFlashPawn = (*VCCSim)["DefaultFlashPawn"].value_or("");
         Config.VCCSim.BufferSize = (*VCCSim)["BufferSize"].value_or(100);
         Config.VCCSim.StartWithRecording = (*VCCSim)["StartWithRecording"].value_or(false);
+        Config.VCCSim.BetterVisualsRecording = (*VCCSim)["BetterVisualsRecording"].value_or(false);
         Config.VCCSim.UseMeshManager = (*VCCSim)["UseMeshManager"].value_or(false);
         Config.VCCSim.MeshMaterial = (*VCCSim)["MeshMaterial"].value_or("None"sv);
         

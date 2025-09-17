@@ -26,6 +26,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogRecorder, Log, All);
 #include "Modules/ModuleManager.h"
 #include "Containers/StringConv.h"
 #include "HAL/PlatformFileManager.h"
+#include "Utils/ImageProcesser.h"
 
 
 IImageWrapper* FImageWrapperCache::GetPNGWrapper()
@@ -44,6 +45,11 @@ IImageWrapper* FImageWrapperCache::GetPNGWrapper()
 }
 
 // BufferPool implementation
+FBufferPool::~FBufferPool()
+{
+    Cleanup();
+}
+
 TArray<uint8>* FBufferPool::AcquireBuffer(int32 Size)
 {
     FScopeLock Lock(&PoolLock);
@@ -71,6 +77,16 @@ void FBufferPool::ReleaseBuffer(TArray<uint8>* Buffer)
     }
 }
 
+void FBufferPool::Cleanup()
+{
+    FScopeLock Lock(&PoolLock);
+    for (auto* Buffer : Buffers)
+    {
+        delete Buffer;
+    }
+    Buffers.Empty();
+}
+
 // AdaptiveSleeper implementation
 void FAdaptiveSleeper::Sleep()
 {
@@ -95,9 +111,11 @@ void FAdaptiveSleeper::Reset()
 }
 
 // RecorderWorker implementation
-FRecorderWorker::FRecorderWorker(const FString& InBasePath, int32 InBufferSize)
+FRecorderWorker::FRecorderWorker(const FString& InBasePath, int32 InBufferSize, bool bInBetterVisualsRecording, ARecorder* InRecorder)
     : BasePath(InBasePath)
     , BufferSize(InBufferSize)
+    , bBetterVisualsRecording(bInBetterVisualsRecording)
+    , RecorderRef(InRecorder)
     , Thread(nullptr)
     , bStopRequested(false)
 {
@@ -119,6 +137,9 @@ FRecorderWorker::~FRecorderWorker()
         delete Thread;
         Thread = nullptr;
     }
+
+    // Cleanup buffer pool
+    BufferPool.Cleanup();
 }
 
 bool FRecorderWorker::Init()
@@ -243,6 +264,24 @@ void FRecorderWorker::ProcessBuffer(FPawnBuffers& Buffer)
             SaveRGBData(RGBData, Buffer.PawnDirectory);
         }
     }
+
+    // Process Normal data
+    {
+        FNormalCameraData NormalData;
+        while (Buffer.NormalC.Dequeue(NormalData))
+        {
+            SaveNormalData(NormalData, Buffer.PawnDirectory);
+        }
+    }
+
+    // Process Segmentation data
+    {
+        FSegmentationCameraData SegmentationData;
+        while (Buffer.SegmentationC.Dequeue(SegmentationData))
+        {
+            SaveSegmentationData(SegmentationData, Buffer.PawnDirectory);
+        }
+    }
 }
 
 bool FRecorderWorker::SaveLidarData(const FLidarData& LidarData, const FString& Directory)
@@ -287,60 +326,79 @@ bool FRecorderWorker::SaveLidarData(const FLidarData& LidarData, const FString& 
 
 bool FRecorderWorker::SaveDepthData(const FDepthCameraData& DepthData, const FString& Directory)
 {
-    if (DepthData.Data.Num() > 0)
+    if (DepthData.Data.Num() == 0 || DepthData.Width <= 0 || DepthData.Height <= 0)
     {
-        const FString Filename = FString::Printf(
+        UE_LOG(LogRecorder, Warning, TEXT("Invalid depth data: W=%d H=%d DataSize=%d"),
+            DepthData.Width, DepthData.Height, DepthData.Data.Num());
+        return false;
+    }
+
+    const FString Filename = FString::Printf(
         TEXT("%s_%d.png"),
         *FString::Printf(TEXT("%.9f"), DepthData.Timestamp),
         DepthData.SensorIndex
-        );
+    );
 
-        const FString FilePath = FPaths::Combine(Directory, TEXT("Depth"), Filename);
+    const FString FilePath = FPaths::Combine(Directory, TEXT("Depth"), Filename);
 
-        auto* ImageBuffer =
-            BufferPool.AcquireBuffer(DepthData.Width * DepthData.Height);
-        if (!ImageBuffer) return false;
-
-        // Find depth range and convert to grayscale in single pass
-        float MinDepth = FLT_MAX;
-        float MaxDepth = -FLT_MAX;
+    if (bBetterVisualsRecording)
+    {
+        // Use visual-friendly depth format (inverted, gamma corrected)
+        if (RecorderRef)
+        {
+            RecorderRef->IncrementAsyncTasks();
+        }
+        AsyncTask(ENamedThreads::AnyBackgroundThreadNormalTask, [this, DepthData, FilePath]() {
+            FAsyncDepthVisualSaveTask Task(
+                DepthData.Data,
+                FIntPoint(DepthData.Width, DepthData.Height),
+                FilePath,
+                0.0f,       // MinRange
+                5000.0f    // MaxRange
+            );
+            Task.DoWork();
+            if (RecorderRef)
+            {
+                RecorderRef->DecrementAsyncTasks();
+            }
+        });
+    }
+    else
+    {
+        // Use accurate 16-bit format
+        TArray<FFloat16Color> DepthPixels;
+        DepthPixels.Reserve(DepthData.Data.Num());
 
         for (float Depth : DepthData.Data)
         {
-            MinDepth = FMath::Min(MinDepth, Depth);
-            MaxDepth = FMath::Max(MaxDepth, Depth);
+            FFloat16Color DepthPixel;
+            DepthPixel.R = FFloat16(Depth);
+            DepthPixel.G = FFloat16(0.0f);
+            DepthPixel.B = FFloat16(0.0f);
+            DepthPixel.A = FFloat16(1.0f);
+            DepthPixels.Add(DepthPixel);
         }
 
-        const float Range = MaxDepth - MinDepth;
-        const float Scale = Range > 0.0f ? 255.0f / Range : 0.0f;
-
-        ImageBuffer->SetNum(DepthData.Data.Num());
-
-        // Vectorizable loop
-        for (int32 i = 0; i < DepthData.Data.Num(); ++i)
+        if (RecorderRef)
         {
-            (*ImageBuffer)[i] = FMath::RoundToInt((DepthData.Data[i] - MinDepth) * Scale);
+            RecorderRef->IncrementAsyncTasks();
         }
-
-        // Use cached wrapper
-        bool bSuccess = false;
-        auto* PNGWrapper = FImageWrapperCache::Get().GetPNGWrapper();
-
-        if (PNGWrapper && PNGWrapper->SetRaw(
-            ImageBuffer->GetData(),
-            ImageBuffer->Num(),
-            DepthData.Width,
-            DepthData.Height,
-            ERGBFormat::Gray,
-            8))
-        {
-            const TArray64<uint8>& PNGData = PNGWrapper->GetCompressed();
-            bSuccess = FFileHelper::SaveArrayToFile(PNGData, *FilePath);
-        }
-        BufferPool.ReleaseBuffer(ImageBuffer);
-        return bSuccess;
+        AsyncTask(ENamedThreads::AnyBackgroundThreadNormalTask, [this, DepthPixels = MoveTemp(DepthPixels), FilePath, DepthData]() {
+            FAsyncDepth16SaveTask Task(
+                DepthPixels,
+                FIntPoint(DepthData.Width, DepthData.Height),
+                FilePath,
+                1.0f  // Depth scale
+            );
+            Task.DoWork();
+            if (RecorderRef)
+            {
+                RecorderRef->DecrementAsyncTasks();
+            }
+        });
     }
-    return false;
+
+    return true;
 }
 
 bool FRecorderWorker::SaveRGBData(
@@ -464,6 +522,14 @@ void FAsyncSubmitTask::DoWork()
         EnqueueDataWithRetry(PawnBuffers.RGBC,
             *static_cast<FRGBCameraData*>(SubmissionData.Data.Get()));
         break;
+    case EDataType::NormalC:
+        EnqueueDataWithRetry(PawnBuffers.NormalC,
+            *static_cast<FNormalCameraData*>(SubmissionData.Data.Get()));
+        break;
+    case EDataType::SegmentationC:
+        EnqueueDataWithRetry(PawnBuffers.SegmentationC,
+            *static_cast<FSegmentationCameraData*>(SubmissionData.Data.Get()));
+        break;
     }
 
     --Recorder->PendingTasks;
@@ -472,6 +538,7 @@ void FAsyncSubmitTask::DoWork()
 // ARecorder implementation
 ARecorder::ARecorder()
     : PendingTasks(0)
+    , PendingAsyncTasks(0)
 {
     PrimaryActorTick.bCanEverTick = false;
     
@@ -486,6 +553,23 @@ ARecorder::ARecorder()
 void ARecorder::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
     StopRecording();
+
+    // Force cleanup all remaining resources
+    if (RecorderWorker)
+    {
+        RecorderWorker.Reset();
+    }
+
+    // Force cleanup buffer pools
+    BufferPool.Cleanup();
+
+    // Clear all maps to ensure memory is released
+    PawnDirectories.Empty();
+    {
+        FScopeLock Lock(&BufferLock);
+        ActiveBuffers.Empty();
+        ProcessingBuffers.Empty();
+    }
 
     Super::EndPlay(EndPlayReason);
 }
@@ -521,8 +605,8 @@ void ARecorder::StartRecording()
         }
     }
 
-    // Initialize worker with validated BufferSize
-    RecorderWorker = MakeUnique<FRecorderWorker>(RecordingPath, BufferSize);
+    // Initialize worker with validated BufferSize and visual settings
+    RecorderWorker = MakeUnique<FRecorderWorker>(RecordingPath, BufferSize, bBetterVisualsRecording, this);
     bRecording = true;
 }
 
@@ -534,15 +618,15 @@ void ARecorder::StopRecording()
 
     // Wait for pending tasks with timeout
     const double StartTime = FPlatformTime::Seconds();
-    constexpr double TimeoutSeconds = 5.0;
+    constexpr double TimeoutSeconds = 10.0; // Increased timeout for async image tasks
 
-    while (PendingTasks > 0)
+    while (PendingTasks > 0 || PendingAsyncTasks > 0)
     {
         FPlatformProcess::Sleep(0.01f);
         if (FPlatformTime::Seconds() - StartTime > TimeoutSeconds)
         {
-            UE_LOG(LogRecorder, Warning, TEXT("Timeout waiting for pending tasks. Remaining: %d"),
-                PendingTasks.Load());
+            UE_LOG(LogRecorder, Warning, TEXT("Timeout waiting for tasks. Pending: %d, AsyncTasks: %d"),
+                PendingTasks.Load(), PendingAsyncTasks.Load());
             break;
         }
     }
@@ -566,12 +650,15 @@ void ARecorder::StopRecording()
         RecorderWorker.Reset();
     }
 
-    // Clear buffers
+    // Clear buffers and cleanup buffer pool
     {
         FScopeLock Lock(&BufferLock);
         ActiveBuffers.Empty();
         ProcessingBuffers.Empty();
     }
+
+    // Cleanup buffer pool to release all allocated memory
+    BufferPool.Cleanup();
 }
 
 void ARecorder::ToggleRecording()
@@ -754,7 +841,11 @@ void ARecorder::SubmitData(AActor* Pawn, T&& Data, EDataType Type)
     SubmissionData.Pawn = Pawn;
     SubmissionData.Data = MakeShared<T>(MoveTemp(Data));
 
-    (new FAsyncTask<FAsyncSubmitTask>(this, MoveTemp(SubmissionData)))->StartBackgroundTask();
+    // Use AsyncTask to avoid memory leaks
+    AsyncTask(ENamedThreads::GameThread, [this, SubmissionData = MoveTemp(SubmissionData)]() mutable {
+        FAsyncSubmitTask Task(this, MoveTemp(SubmissionData));
+        Task.DoWork();
+    });
 }
 
 void ARecorder::SubmitPoseData(AActor* Pawn, FPoseData&& Data)
@@ -800,4 +891,110 @@ void ARecorder::SubmitRGBData(AActor* Pawn, FRGBCameraData&& Data)
 void ARecorder::SubmitSegmentationData(AActor* Pawn, FSegmentationCameraData&& Data)
 {
     SubmitData<FSegmentationCameraData>(Pawn, MoveTemp(Data), EDataType::SegmentationC);
+}
+
+bool FRecorderWorker::SaveNormalData(const FNormalCameraData& NormalData, const FString& Directory)
+{
+    if (NormalData.Data.Num() == 0 || NormalData.Width <= 0 || NormalData.Height <= 0)
+    {
+        UE_LOG(LogRecorder, Warning, TEXT("Invalid normal data: W=%d H=%d DataSize=%d"),
+            NormalData.Width, NormalData.Height, NormalData.Data.Num());
+        return false;
+    }
+
+    if (bBetterVisualsRecording)
+    {
+        // Use visual-friendly PNG format
+        const FString Filename = FString::Printf(
+            TEXT("%s_%d.png"),
+            *FString::Printf(TEXT("%.9f"), NormalData.Timestamp),
+            NormalData.SensorIndex
+        );
+
+        const FString FilePath = FPaths::Combine(Directory, TEXT("Normal"), Filename);
+
+        if (RecorderRef)
+        {
+            RecorderRef->IncrementAsyncTasks();
+        }
+        AsyncTask(ENamedThreads::AnyBackgroundThreadNormalTask, [this, NormalData, FilePath]() {
+            FAsyncNormalVisualSaveTask Task(
+                NormalData.Data,
+                FIntPoint(NormalData.Width, NormalData.Height),
+                FilePath
+            );
+            Task.DoWork();
+            if (RecorderRef)
+            {
+                RecorderRef->DecrementAsyncTasks();
+            }
+        });
+    }
+    else
+    {
+        // Use accurate EXR format
+        const FString Filename = FString::Printf(
+            TEXT("%s_%d.exr"),
+            *FString::Printf(TEXT("%.9f"), NormalData.Timestamp),
+            NormalData.SensorIndex
+        );
+
+        const FString FilePath = FPaths::Combine(Directory, TEXT("Normal"), Filename);
+
+        if (RecorderRef)
+        {
+            RecorderRef->IncrementAsyncTasks();
+        }
+        AsyncTask(ENamedThreads::AnyBackgroundThreadNormalTask, [this, NormalData, FilePath]() {
+            FAsyncNormalEXRSaveTask Task(
+                NormalData.Data,
+                FIntPoint(NormalData.Width, NormalData.Height),
+                FilePath
+            );
+            Task.DoWork();
+            if (RecorderRef)
+            {
+                RecorderRef->DecrementAsyncTasks();
+            }
+        });
+    }
+
+    return true;
+}
+
+bool FRecorderWorker::SaveSegmentationData(const FSegmentationCameraData& SegmentationData, const FString& Directory)
+{
+    if (SegmentationData.Data.Num() == 0 || SegmentationData.Width <= 0 || SegmentationData.Height <= 0)
+    {
+        UE_LOG(LogRecorder, Warning, TEXT("Invalid segmentation data: W=%d H=%d DataSize=%d"),
+            SegmentationData.Width, SegmentationData.Height, SegmentationData.Data.Num());
+        return false;
+    }
+
+    const FString Filename = FString::Printf(
+        TEXT("%s.png"),
+        *FString::Printf(TEXT("%.9f"), SegmentationData.Timestamp)
+    );
+
+    const FString FilePath = FPaths::Combine(Directory, TEXT("Segmentation"), Filename);
+
+    // Use AsyncTask to avoid memory leaks
+    if (RecorderRef)
+    {
+        RecorderRef->IncrementAsyncTasks();
+    }
+    AsyncTask(ENamedThreads::AnyBackgroundThreadNormalTask, [this, SegmentationData, FilePath]() {
+        FAsyncImageSaveTask Task(
+            SegmentationData.Data,
+            FIntPoint(SegmentationData.Width, SegmentationData.Height),
+            FilePath
+        );
+        Task.DoWork();
+        if (RecorderRef)
+        {
+            RecorderRef->DecrementAsyncTasks();
+        }
+    });
+
+    return true;
 }

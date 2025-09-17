@@ -103,3 +103,6 @@ Source/Tools/DGE/data_o/*
 Source/VCCSim/CLAUDE.md
 Source/VCCSim/TriangleSplatting_Integration_Design.md
 Source/CLAUDE.md
+Content/GameMenu/TestScene_C.umap
+Content/GameMenu/TestScene.umap
+Source/VCCSim/RSConfig.toml

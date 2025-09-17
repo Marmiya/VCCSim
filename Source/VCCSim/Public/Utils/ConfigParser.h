@@ -43,6 +43,7 @@ struct FVCCSimPresets
 	std::vector<float> SubWindowsOpacities;
 	int LS_StartOffset;
 	bool StartWithRecording;
+	bool BetterVisualsRecording;
 	bool UseMeshManager;
 	std::string MeshMaterial;
 	std::string LogSavePath;
