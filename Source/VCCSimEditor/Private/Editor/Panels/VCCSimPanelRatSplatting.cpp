@@ -25,6 +25,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogRatSplatting, Log, All);
 #include "Utils/VCCSimConfigManager.h"
 #include "IO/PLYUtils.h"
 #include "DesktopPlatformModule.h"
+#include "Framework/Application/SlateApplication.h"
 
 BEGIN_SLATE_FUNCTION_BUILD_OPTIMIZATION
 
@@ -1500,9 +1501,13 @@ FReply FVCCSimPanelRatSplatting::OnGSBrowseColmapDatasetClicked()
 
 void* FVCCSimPanelRatSplatting::GetParentWindowHandle()
 {
-    if (GEngine && GEngine->GameViewport)
+    if (FSlateApplication::IsInitialized())
     {
-        return GEngine->GameViewport->GetWindow()->GetNativeWindow()->GetOSWindowHandle();
+        TSharedPtr<SWindow> RootWindow = FSlateApplication::Get().GetActiveTopLevelWindow();
+        if (RootWindow.IsValid())
+        {
+            return RootWindow->GetNativeWindow()->GetOSWindowHandle();
+        }
     }
     return nullptr;
 }

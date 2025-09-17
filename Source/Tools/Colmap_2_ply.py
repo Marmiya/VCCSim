@@ -24,8 +24,11 @@ import numpy as np
 # Modify your configuration here, no need to use command line parameters
 
 # Input and output paths
-COLMAP_DIR = r'D:\Data\360_v2\garden\mesh\rc_scale_aligned'          # COLMAP sparse reconstruction file directory
-OUTPUT_DIR = r'C:\UEProjects\VCCSimDev\Saved'           # Output directory
+# COLMAP_DIR = r'D:\Data\360_v2\garden\mesh\rc_scale_aligned'          # COLMAP sparse reconstruction file directory
+# OUTPUT_DIR = r'C:\UEProjects\VCCSimDev\Saved'           # Output directory
+
+COLMAP_DIR = r"E:\BaoAn\rc_colmap_refine"
+OUTPUT_DIR = r"E:\BaoAn\rc_colmap_refine\ply"
 
 # Camera point colors (RGB)
 CAMERA_COLOR = [255, 0, 0]        # COLMAP camera point color (red)

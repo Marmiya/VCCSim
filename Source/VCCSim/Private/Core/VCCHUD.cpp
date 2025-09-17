@@ -170,7 +170,7 @@ void AVCCHUD::SetupRecorder(FVCCSimConfig& Config)
     Config.VCCSim.LogSavePath = TCHAR_TO_UTF8(*Recorder->RecordingPath);
     Recorder->BufferSize = Config.VCCSim.BufferSize;
     Recorder->RecordState = Config.VCCSim.StartWithRecording;
-    // Recorder->StartRecording();
+    Recorder->StartRecording();
 }
 
 void AVCCHUD::SetupWidgetsAndLS(const FVCCSimConfig& Config)

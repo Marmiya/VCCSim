@@ -20,8 +20,8 @@ import struct
 # ================================
 # CONFIG - Modify these parameters
 # ================================
-INPUT_DIR = r"D:\Data\360_v2\garden\mesh\rc_scale_aligned"
-OUTPUT_DIR = r"D:\Data\360_v2\garden\mesh\rc_colmap_refine"
+INPUT_DIR = r"E:\BaoAn\rc_colmap"
+OUTPUT_DIR = r"E:\BaoAn\rc_colmap_refine"
 
 # Optional: Set target resolution (None for automatic)
 TARGET_WIDTH = None   # e.g., 1920 or None
