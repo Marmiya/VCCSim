@@ -51,8 +51,6 @@ TArray<FCameraInfo> FVCCSimDataConverter::ConvertPoseFile(
         return CameraInfos;
     }
     
-    // Determine file format
-    bool bIsRecorderFormat = DeterminePoseFileFormat(PoseFilePath);
     
     // Get valid image files
     TArray<FString> ImageFiles = ValidateImageDirectory(ImageDirectory);
@@ -76,8 +74,7 @@ TArray<FCameraInfo> FVCCSimDataConverter::ConvertPoseFile(
         }
         
         // Parse pose line
-        bool bIsRecorderFormatLocal = bIsRecorderFormat;
-        FVCCSimPoseData PoseData = ParsePoseLine(Line, bIsRecorderFormatLocal);
+        FVCCSimPoseData PoseData = ParsePoseLine(Line);
         
         if (PoseData.Location.IsZero() && PoseData.Quaternion.IsIdentity())
         {
@@ -131,18 +128,15 @@ TArray<FCameraInfo> FVCCSimDataConverter::ConvertPoseFile(
     return CameraInfos;
 }
 
-FVCCSimPoseData FVCCSimDataConverter::ParsePoseLine(
-    const FString& Line, bool& bIsRecorderFormat)
+FVCCSimPoseData FVCCSimDataConverter::ParsePoseLine(const FString& Line)
 {
     FVCCSimPoseData PoseData;
-    
+
     TArray<FString> Values;
     Line.ParseIntoArray(Values, TEXT(" "), true);
-    
+
     if (Values.Num() == 8)
     {
-        // Recorder format: Timestamp X Y Z Qx Qy Qz Qw
-        bIsRecorderFormat = true;
         PoseData.Timestamp = FCString::Atod(*Values[0]);
         PoseData.Location.X = FCString::Atof(*Values[1]);
         PoseData.Location.Y = FCString::Atof(*Values[2]);
@@ -152,50 +146,16 @@ FVCCSimPoseData FVCCSimDataConverter::ParsePoseLine(
         PoseData.Quaternion.Z = FCString::Atof(*Values[6]);
         PoseData.Quaternion.W = FCString::Atof(*Values[7]);
     }
-    else if (Values.Num() == 7)
-    {
-        // Panel format: X Y Z Qx Qy Qz Qw
-        bIsRecorderFormat = false;
-        PoseData.Timestamp = 0.0; // No timestamp in panel format
-        PoseData.Location.X = FCString::Atof(*Values[0]);
-        PoseData.Location.Y = FCString::Atof(*Values[1]);
-        PoseData.Location.Z = FCString::Atof(*Values[2]);
-        PoseData.Quaternion.X = FCString::Atof(*Values[3]);
-        PoseData.Quaternion.Y = FCString::Atof(*Values[4]);
-        PoseData.Quaternion.Z = FCString::Atof(*Values[5]);
-        PoseData.Quaternion.W = FCString::Atof(*Values[6]);
-    }
     else
     {
-        // Invalid format
-        UE_LOG(LogDataConverter, Warning, TEXT("Invalid pose line format: %s"), *Line);
-        return FVCCSimPoseData(); // Return zero data
+        UE_LOG(LogDataConverter, Warning, TEXT("Invalid pose line format (expected 8 values, got %d): %s"),
+            Values.Num(), *Line);
+        return FVCCSimPoseData();
     }
-    
+
     return PoseData;
 }
 
-bool FVCCSimDataConverter::DeterminePoseFileFormat(const FString& PoseFilePath)
-{
-    TArray<FString> FileLines;
-    if (!FFileHelper::LoadFileToStringArray(FileLines, *PoseFilePath))
-    {
-        return false;
-    }
-    
-    // Check first non-comment line
-    for (const FString& Line : FileLines)
-    {
-        if (!Line.IsEmpty() && !Line.StartsWith(TEXT("#")))
-        {
-            TArray<FString> Values;
-            Line.ParseIntoArray(Values, TEXT(" "), true);
-            return Values.Num() == 8;
-        }
-    }
-    
-    return false; // Default to Panel format
-}
 
 // ============================================================================
 // COORDINATE SYSTEM CONVERSION

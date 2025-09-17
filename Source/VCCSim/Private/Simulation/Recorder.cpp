@@ -230,7 +230,7 @@ void FRecorderWorker::ProcessBuffer(FPawnBuffers& Buffer)
         
             FFileHelper::SaveStringToFile(
                 PoseContent,
-                *FPaths::Combine(Buffer.PawnDirectory, TEXT("pose.txt")),
+                *FPaths::Combine(Buffer.PawnDirectory, TEXT("poses.txt")),
                 FFileHelper::EEncodingOptions::AutoDetect,
                 &IFileManager::Get(),
                 FILEWRITE_Append
@@ -744,9 +744,9 @@ bool ARecorder::CreatePawnDirectories(
     }
 
     // Create and initialize pose file
-    const FString PoseFilePath = FPaths::Combine(PawnDirectory, TEXT("pose.txt"));
+    const FString PoseFilePath = FPaths::Combine(PawnDirectory, TEXT("poses.txt"));
     if (!FFileHelper::SaveStringToFile(
-        TEXT("# Timestamp X Y Z Roll Pitch Yaw\n"),
+        TEXT("# Format: Timestamp X Y Z Qx Qy Qz Qw\n"),
         *PoseFilePath,
         FFileHelper::EEncodingOptions::AutoDetect))
     {

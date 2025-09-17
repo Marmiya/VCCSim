@@ -368,29 +368,32 @@ void FVCCSimPanelPathImageCapture::LoadPredefinedPose()
                 {
                     if (Line.IsEmpty() || Line.StartsWith(TEXT("#")))
                     {
-                        continue; // Skip comments and empty lines
+                        continue;
                     }
-                    
-                    // Parse line - Expected format: X Y Z Qx Qy Qz Qw
+
                     TArray<FString> Values;
                     Line.ParseIntoArray(Values, TEXT(" "), true);
-                    
-                    if (Values.Num() >= 7)
+
+                    if (Values.Num() == 8)
                     {
-                        float X = FCString::Atof(*Values[0]);
-                        float Y = FCString::Atof(*Values[1]);
-                        float Z = FCString::Atof(*Values[2]);
-                        float Qx = FCString::Atof(*Values[3]);
-                        float Qy = FCString::Atof(*Values[4]);
-                        float Qz = FCString::Atof(*Values[5]);
-                        float Qw = FCString::Atof(*Values[6]);
-                        
+                        float X = FCString::Atof(*Values[1]);
+                        float Y = FCString::Atof(*Values[2]);
+                        float Z = FCString::Atof(*Values[3]);
+                        float Qx = FCString::Atof(*Values[4]);
+                        float Qy = FCString::Atof(*Values[5]);
+                        float Qz = FCString::Atof(*Values[6]);
+                        float Qw = FCString::Atof(*Values[7]);
+
                         Positions.Add(FVector(X, Y, Z));
 
                         FQuat Quaternion(Qx, Qy, Qz, Qw);
                         Quaternion.Normalize();
                         FRotator Rotation = Quaternion.Rotator();
                         Rotations.Add(Rotation);
+                    }
+                    else
+                    {
+                        UE_LOG(LogPathImageCapture, Warning, TEXT("Invalid pose line format (expected 8 values): %s"), *Line);
                     }
                 }
                 
@@ -481,24 +484,25 @@ void FVCCSimPanelPathImageCapture::SaveGeneratedPose()
             TArray<FRotator> Rotations;
             SelectedFlashPawn->GetCurrentPath(Positions, Rotations);
             
-            // Build file content with header comments
             FString FileContent;
             FileContent += TEXT("# UE coordinate system poses (left-handed, cm)\n");
             FileContent += TEXT("# Coordinate axes: +X forward, +Y right, +Z up\n");
-            FileContent += TEXT("# Format: X Y Z Qx Qy Qz Qw\n");
+            FileContent += TEXT("# Format: Timestamp X Y Z Qx Qy Qz Qw\n");
             FileContent += TEXT("# Quaternion order: [x, y, z, w] (UE format, scalar last)\n");
-            
+            FileContent += TEXT("# Timestamp: Sequential pseudo timestamps for pose ordering\n");
+
             for (int32 i = 0; i < Positions.Num(); ++i)
             {
                 const FVector& Pos = Positions[i];
                 const FRotator& Rot = Rotations[i];
-                
+
                 // Convert rotator to quaternion
                 FQuat Quat = Rot.Quaternion();
-                
-                // Format: X Y Z Qx Qy Qz Qw
+
+                double PseudoTimestamp = static_cast<double>(i);
                 FileContent += FString::Printf(
-                    TEXT("%.6f %.6f %.6f %.6f %.6f %.6f %.6f\n"),
+                    TEXT("%.1f %.6f %.6f %.6f %.6f %.6f %.6f %.6f\n"),
+                    PseudoTimestamp,
                     Pos.X, Pos.Y, Pos.Z,
                     Quat.X, Quat.Y, Quat.Z, Quat.W
                 );

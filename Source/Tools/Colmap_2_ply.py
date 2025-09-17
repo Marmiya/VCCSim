@@ -24,11 +24,9 @@ import numpy as np
 # Modify your configuration here, no need to use command line parameters
 
 # Input and output paths
-# COLMAP_DIR = r'D:\Data\360_v2\garden\mesh\rc_scale_aligned'          # COLMAP sparse reconstruction file directory
-# OUTPUT_DIR = r'C:\UEProjects\VCCSimDev\Saved'           # Output directory
+COLMAP_DIR = r'D:\Data\360_v2\garden\mesh\rc_scale_aligned'          # COLMAP sparse reconstruction file directory
+OUTPUT_DIR = r'C:\UEProjects\VCCSimDev\Saved'           # Output directory
 
-COLMAP_DIR = r"E:\BaoAn\rc_colmap_refine"
-OUTPUT_DIR = r"E:\BaoAn\rc_colmap_refine\ply"
 
 # Camera point colors (RGB)
 CAMERA_COLOR = [255, 0, 0]        # COLMAP camera point color (red)
@@ -568,7 +566,7 @@ def main():
     with open(pose_ue_out, 'w', encoding='utf-8') as f:
         f.write("# UE coordinate system poses (left-handed, cm)\n")
         f.write("# UE coordinate axes: +X forward, +Y right, +Z up\n")
-        f.write("# Format: X Y Z Qx Qy Qz Qw\n")
+        f.write("# Format: Timestamp X Y Z Qx Qy Qz Qw\n")
         f.write("# Quaternion order: [x, y, z, w] (UE format, scalar last)\n")
         for i, cam in enumerate(cameras):
             # Get UE position
@@ -590,7 +588,9 @@ def main():
             # Extract UE quaternion [x, y, z, w] from camera-to-world rotation
             ue_quat = rotation_matrix_to_ue_quaternion(R_c2w_ue)
             
-            f.write(f"{ue_pos[0]:.6f} {ue_pos[1]:.6f} {ue_pos[2]:.6f} {ue_quat[0]:.6f} {ue_quat[1]:.6f} {ue_quat[2]:.6f} {ue_quat[3]:.6f}\n")
+            # Add pseudo timestamp (1 decimal place like in UE code)
+            pseudo_timestamp = float(i)
+            f.write(f"{pseudo_timestamp:.1f} {ue_pos[0]:.6f} {ue_pos[1]:.6f} {ue_pos[2]:.6f} {ue_quat[0]:.6f} {ue_quat[1]:.6f} {ue_quat[2]:.6f} {ue_quat[3]:.6f}\n")
 
     if VERBOSE:
         print("[done] Outputs:")

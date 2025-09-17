@@ -46,17 +46,10 @@ public:
     /**
      * Parse individual pose line from VCCSim format
      * @param Line Text line from pose file
-     * @param bIsRecorderFormat True if using Recorder format (8 values), false for Panel format (7 values)
      * @return Parsed pose data, or invalid data if parsing failed
      */
-    static FVCCSimPoseData ParsePoseLine(const FString& Line, bool& bIsRecorderFormat);
+    static FVCCSimPoseData ParsePoseLine(const FString& Line);
     
-    /**
-     * Determine pose file format by analyzing content
-     * @param PoseFilePath Path to pose file
-     * @return True if Recorder format (8 values), false if Panel format (7 values)
-     */
-    static bool DeterminePoseFileFormat(const FString& PoseFilePath);
 
     // ============================================================================
     // COORDINATE SYSTEM CONVERSION

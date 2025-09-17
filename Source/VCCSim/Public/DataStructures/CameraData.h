@@ -136,8 +136,7 @@ public:
 
 /**
  * Pose data structure matching VCCSim format
- * New Panel format: 7 values (X Y Z Qx Qy Qz Qw)
- * Recorder format: 8 values (Timestamp X Y Z Qx Qy Qz Qw)
+ * Format: Timestamp X Y Z Qx Qy Qz Qw (8 values)
  */
 USTRUCT(BlueprintType)
 struct VCCSIM_API FVCCSimPoseData
