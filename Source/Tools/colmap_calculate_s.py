@@ -3,7 +3,6 @@ import os
 import random
 from typing import List, Dict, Tuple
 import matplotlib.pyplot as plt
-from scipy.spatial.distance import pdist, squareform
 import itertools
 
 # Configuration paths

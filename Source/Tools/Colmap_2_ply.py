@@ -24,8 +24,8 @@ import numpy as np
 # Modify your configuration here, no need to use command line parameters
 
 # Input and output paths
-COLMAP_DIR = r'E:\BaoAn\rc_colmap_refine'          # COLMAP sparse reconstruction file directory
-OUTPUT_DIR = r'E:\BaoAn\rc_colmap_refine\ply'           # Output directory
+COLMAP_DIR = r'E:\BaoAn\aligned_colmap'          # COLMAP sparse reconstruction file directory
+OUTPUT_DIR = r'E:\BaoAn\aligned_colmap\ply'           # Output directory
 
 
 # Camera point colors (RGB)
@@ -35,8 +35,8 @@ CAMERA_UE_COLOR = [0, 255, 0]     # UE camera point color (green)
 # Processing options
 SANITIZE = False                  # Whether to remove NaN/Inf vertices
 FILTER_OUTLIERS = True           # Whether to filter outliers (remove farthest points as noise)
-FILTER_RATIO = 0.25               # Ratio of farthest points to remove (default 5%)
-FILTER_LOW_HEIGHT = True         # Whether to remove points below a certain height
+FILTER_RATIO = 0.05               # Ratio of farthest points to remove (default 5%)
+FILTER_LOW_HEIGHT = False         # Whether to remove points below a certain height
 MIN_HEIGHT_THRESHOLD = -25.0       # Minimum height (Z coordinate) in meters to keep points (COLMAP coordinates)
 VERBOSE = True                    # Whether to enable verbose output
 
