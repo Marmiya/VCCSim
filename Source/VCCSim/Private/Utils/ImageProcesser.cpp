@@ -202,6 +202,51 @@ void FAsyncNormalEXRSaveTask::DoWork()
     }
 }
 
+void FAsyncDepthVisualSaveTask::CalculateDynamicRange(float& OutMinRange, float& OutMaxRange) const
+{
+    if (DepthData.Num() == 0)
+    {
+        OutMinRange = 0.0f;
+        OutMaxRange = 1.0f;
+        return;
+    }
+
+    // Copy and sort data for percentile calculation
+    TArray<float> SortedDepths = DepthData;
+    SortedDepths.Sort();
+
+    // Filter out invalid values (negative, infinite, or NaN)
+    SortedDepths.RemoveAll([](float Depth) {
+        return Depth < 0.0f || !FMath::IsFinite(Depth);
+    });
+
+    if (SortedDepths.Num() == 0)
+    {
+        OutMinRange = 0.0f;
+        OutMaxRange = 1.0f;
+        return;
+    }
+
+    // Use 2nd and 98th percentiles to exclude outliers
+    int32 LowIndex = FMath::FloorToInt(SortedDepths.Num() * 0.02f);
+    int32 HighIndex = FMath::FloorToInt(SortedDepths.Num() * 0.98f);
+
+    LowIndex = FMath::Clamp(LowIndex, 0, SortedDepths.Num() - 1);
+    HighIndex = FMath::Clamp(HighIndex, LowIndex, SortedDepths.Num() - 1);
+
+    OutMinRange = SortedDepths[LowIndex];
+    OutMaxRange = SortedDepths[HighIndex];
+
+    // Ensure we have a valid range
+    if (OutMaxRange <= OutMinRange)
+    {
+        OutMaxRange = OutMinRange + 1.0f;
+    }
+
+    UE_LOG(LogImageProcesser, Log, TEXT("Dynamic depth range: [%.2f, %.2f] from %d valid samples"),
+        OutMinRange, OutMaxRange, SortedDepths.Num());
+}
+
 void FAsyncDepthVisualSaveTask::DoWork()
 {
     if (DepthData.Num() == 0)
@@ -210,18 +255,22 @@ void FAsyncDepthVisualSaveTask::DoWork()
         return;
     }
 
-    // Create visual-friendly depth image with proper depth range mapping
+    // Calculate dynamic range based on actual depth distribution
+    float DynamicMinRange, DynamicMaxRange;
+    CalculateDynamicRange(DynamicMinRange, DynamicMaxRange);
+
+    // Create visual-friendly depth image with dynamic range mapping
     TArray<FColor> VisualPixels;
     VisualPixels.Reserve(DepthData.Num());
 
     // Apply range clamping and invert for visual appeal (closer = darker, farther = lighter)
     for (float Depth : DepthData)
     {
-        // Clamp depth to the specified range
-        float ClampedDepth = FMath::Clamp(Depth, MinRange, MaxRange);
+        // Clamp depth to the dynamically calculated range
+        float ClampedDepth = FMath::Clamp(Depth, DynamicMinRange, DynamicMaxRange);
 
         // Normalize to [0,1] range, then invert (1-x) for visual appeal
-        float NormalizedDepth = (ClampedDepth - MinRange) / (MaxRange - MinRange);
+        float NormalizedDepth = (ClampedDepth - DynamicMinRange) / (DynamicMaxRange - DynamicMinRange);
         float InvertedDepth = 1.0f - NormalizedDepth;
 
         // Apply gamma correction for better visual distribution

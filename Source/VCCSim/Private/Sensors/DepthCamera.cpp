@@ -121,6 +121,7 @@ void UDepthCameraComponent::TickComponent(float DeltaTime, ELevelTick TickType,
         TimeSinceLastCapture += DeltaTime;
         if (TimeSinceLastCapture >= RecordInterval)
         {
+            double CaptureStartTime = FPlatformTime::Seconds();
             TimeSinceLastCapture = 0.0f;
             CaptureDepthScene();
             if (RecorderPtr)
@@ -130,13 +131,24 @@ void UDepthCameraComponent::TickComponent(float DeltaTime, ELevelTick TickType,
                 DepthCameraData.SensorIndex = CameraIndex;
                 DepthCameraData.Width = Width;
                 DepthCameraData.Height = Height;
+
+                double WaitStartTime = FPlatformTime::Seconds();
                 while(!Dirty)
                 {
                     FPlatformProcess::Sleep(0.01f);
                 }
+                double WaitEndTime = FPlatformTime::Seconds();
+
                 DepthCameraData.Data = GetDepthImage();
                 Dirty = false;
                 RecorderPtr->SubmitDepthData(ParentActor, MoveTemp(DepthCameraData));
+
+                double CaptureEndTime = FPlatformTime::Seconds();
+                double TotalCaptureTime = CaptureEndTime - CaptureStartTime;
+                double WaitTime = WaitEndTime - WaitStartTime;
+
+                UE_LOG(LogDepthCamera, Log, TEXT("Depth capture - RecordInterval: %.6f, Total time: %.6f, Wait time: %.6f, Actual FPS: %.2f"),
+                    RecordInterval, TotalCaptureTime, WaitTime, 1.0 / TotalCaptureTime);
             }
         }
     }

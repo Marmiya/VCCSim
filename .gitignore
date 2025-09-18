@@ -96,6 +96,11 @@ Client/ros_client/log/
 Client/ros_client/install/
 Client/ros_client/share/
 
+
+Content/GameMenu/TestScene_C.umap
+Content/GameMenu/TestScene.umap
+Source/VCCSim/RSConfig.toml
+
 Source/.claude/*
 Source/grpc/*
 Source/Tools/DGE/data/*
@@ -103,6 +108,4 @@ Source/Tools/DGE/data_o/*
 Source/VCCSim/CLAUDE.md
 Source/VCCSim/TriangleSplatting_Integration_Design.md
 Source/CLAUDE.md
-Content/GameMenu/TestScene_C.umap
-Content/GameMenu/TestScene.umap
-Source/VCCSim/RSConfig.toml
+Source/Tools/__pycache__/*

@@ -352,9 +352,7 @@ bool FRecorderWorker::SaveDepthData(const FDepthCameraData& DepthData, const FSt
             FAsyncDepthVisualSaveTask Task(
                 DepthData.Data,
                 FIntPoint(DepthData.Width, DepthData.Height),
-                FilePath,
-                0.0f,       // MinRange
-                5000.0f    // MaxRange
+                FilePath
             );
             Task.DoWork();
             if (RecorderRef)

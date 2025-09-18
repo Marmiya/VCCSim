@@ -129,14 +129,10 @@ public:
     FAsyncDepthVisualSaveTask(
         const TArray<float>& InDepthData,
         FIntPoint InSize,
-        const FString& InFilePath,
-        float InMinRange = 0.0f,
-        float InMaxRange = 10000.0f)
+        const FString& InFilePath)
         : DepthData(InDepthData)
         , Size(InSize)
         , FilePath(InFilePath)
-        , MinRange(InMinRange)
-        , MaxRange(InMaxRange)
     {}
 
     void DoWork();
@@ -148,11 +144,11 @@ public:
     }
 
 private:
+    void CalculateDynamicRange(float& OutMinRange, float& OutMaxRange) const;
+
     TArray<float> DepthData;
     FIntPoint Size;
     FString FilePath;
-    float MinRange;
-    float MaxRange;
 };
 
 class VCCSIM_API FAsyncNormalVisualSaveTask : public FNonAbandonableTask

@@ -1,6 +1,6 @@
 import os
 
-folder_path = r"C:\UEProjects\VCCSimDev\Saved\RuntimeLogs\20250917_193721\BP_PreciseDrone_1C_1D_L_FP_C_2\Depth"
+folder_path = r"C:\UEProjects\VCCSimDev\Saved\RuntimeLogs\20250918_002016\BP_PreciseDrone_1C_1D_L_FP_C_2\Normal"
 
 png_files = [f for f in os.listdir(folder_path) if f.endswith('.png')]
 

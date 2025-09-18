@@ -4,9 +4,15 @@ COLMAP Pinhole Converter
 Converts Reality Capture COLMAP datasets with multiple non-pinhole cameras 
 to a single pinhole camera model for 3D Gaussian Splatting compatibility.
 
+Features:
+- Convert multiple camera models to unified PINHOLE model
+- Resize images to target resolution
+- Limit POINTS2D per image to reduce file size
+- Filter cameras by distance from reference point (NEW)
+
 Usage:
     Modify the parameters in the CONFIG section below and run:
-    python Colmap_pinhole.py
+    python colmap_refine.py
 """
 
 import os
@@ -26,6 +32,15 @@ OUTPUT_DIR = r"E:\BaoAn\rc_colmap_refine"
 # Optional: Set target resolution (None for automatic)
 TARGET_WIDTH = None   # e.g., 1920 or None
 TARGET_HEIGHT = None  # e.g., 1080 or None
+
+# Optional: Limit number of POINTS2D per image to reduce file size
+# Set to None to keep all points, or a number (e.g., 100) to limit
+MAX_POINTS2D_PER_IMAGE = 10  # e.g., 100 or None
+
+# Optional: Filter cameras too far from reference point
+FILTER_FAR_CAMERAS = True      # Enable/disable camera position filtering
+CAMERA_FILTER_RATIO = 0.7      # Ratio of farthest cameras to remove (0.2 = 20%)
+REFERENCE_POINT = [0.0, 0.0, 0.0]  # Reference point for distance calculation (default: origin)
 
 # ================================
 
@@ -127,21 +142,34 @@ def write_cameras_txt(filepath: str, cameras: Dict[int, Camera]):
             f.write(f"{camera.id} {camera.model} {camera.width} {camera.height} {params_str}\n")
 
 
-def write_images_txt(filepath: str, images: Dict[int, Image]):
-    """Write images.txt file"""
+def write_images_txt(filepath: str, images: Dict[int, Image], max_points2d: int = None):
+    """Write images.txt file with optional limit on POINTS2D per image"""
     with open(filepath, 'w') as f:
         f.write("# Image list with two lines of data per image:\n")
         f.write("#   IMAGE_ID, QW, QX, QY, QZ, TX, TY, TZ, CAMERA_ID, NAME\n")
         f.write("#   POINTS2D[] as (X, Y, POINT3D_ID)\n")
-        f.write("# Number of images: {}, mean observations per image: {:.2f}\n".format(
-            len(images), np.mean([len(img.points2d) for img in images.values()]) if images else 0))
+        
+        # Calculate statistics
+        total_points = sum(len(img.points2d) for img in images.values())
+        if max_points2d is not None:
+            limited_points = sum(min(len(img.points2d), max_points2d) for img in images.values())
+            mean_obs = limited_points / len(images) if images else 0
+            f.write(f"# Number of images: {len(images)}, mean observations per image: {mean_obs:.2f} (limited to {max_points2d} per image)\n")
+        else:
+            mean_obs = total_points / len(images) if images else 0
+            f.write(f"# Number of images: {len(images)}, mean observations per image: {mean_obs:.2f}\n")
         
         for image in images.values():
             f.write(f"{image.id} {image.qw} {image.qx} {image.qy} {image.qz} "
                    f"{image.tx} {image.ty} {image.tz} {image.camera_id} {image.name}\n")
             
-            if image.points2d:
-                points_str = ' '.join([f"{x} {y} {pid}" for x, y, pid in image.points2d])
+            # Limit points2d if specified
+            points2d_to_write = image.points2d
+            if max_points2d is not None and len(points2d_to_write) > max_points2d:
+                points2d_to_write = points2d_to_write[:max_points2d]
+            
+            if points2d_to_write:
+                points_str = ' '.join([f"{x} {y} {pid}" for x, y, pid in points2d_to_write])
                 f.write(f"{points_str}\n")
             else:
                 f.write("\n")
@@ -218,7 +246,7 @@ def calculate_average_focal_length(cameras: Dict[int, Camera]) -> Tuple[float, f
     return avg_fx, avg_fy
 
 
-def convert_dataset(input_dir: str, output_dir: str, target_resolution: Tuple[int, int] = None):
+def convert_dataset(input_dir: str, output_dir: str, target_resolution: Tuple[int, int] = None, max_points2d: int = None):
     """Convert COLMAP dataset to single pinhole camera model"""
     input_path = Path(input_dir)
     output_path = Path(output_dir)
@@ -266,6 +294,14 @@ def convert_dataset(input_dir: str, output_dir: str, target_resolution: Tuple[in
     if name_mapping:
         changed_count = sum(1 for orig, actual in name_mapping.items() if orig != actual)
         print(f"Found {len(name_mapping)} images, {changed_count} names will be corrected")
+    
+    # Optional: Filter cameras by distance from reference point
+    if FILTER_FAR_CAMERAS and CAMERA_FILTER_RATIO > 0:
+        print(f"Filtering cameras: removing {CAMERA_FILTER_RATIO*100:.1f}% farthest cameras from reference point {REFERENCE_POINT}")
+        images, n_removed_cameras = filter_far_cameras(images, CAMERA_FILTER_RATIO, REFERENCE_POINT)
+        print(f"Camera filtering: removed {n_removed_cameras} cameras, kept {len(images)} cameras")
+    else:
+        print("Camera filtering disabled")
     
     # Calculate unified resolution and focal length
     if target_resolution:
@@ -332,8 +368,15 @@ def convert_dataset(input_dir: str, output_dir: str, target_resolution: Tuple[in
     # Write converted files
     print(f"Writing converted dataset to: {output_dir}")
     
+    # Show POINTS2D statistics if limiting
+    if max_points2d is not None:
+        total_original_points = sum(len(img.points2d) for img in updated_images.values())
+        total_limited_points = sum(min(len(img.points2d), max_points2d) for img in updated_images.values())
+        reduction_percentage = ((total_original_points - total_limited_points) / total_original_points * 100) if total_original_points > 0 else 0
+        print(f"POINTS2D reduction: {total_original_points} -> {total_limited_points} ({reduction_percentage:.1f}% reduction)")
+    
     write_cameras_txt(str(output_path / "cameras.txt"), {1: unified_camera})
-    write_images_txt(str(output_path / "images.txt"), updated_images)
+    write_images_txt(str(output_path / "images.txt"), updated_images, max_points2d)
     
     # Copy points3D.txt if it exists
     if points3d_txt.exists():
@@ -390,6 +433,79 @@ def find_actual_image_files(images_dir: str, image_names: List[str]) -> Dict[str
     return name_mapping
 
 
+def qvec2rotmat(qvec: List[float]) -> np.ndarray:
+    """Convert quaternion vector to rotation matrix (from colmap_2_ply.py)"""
+    qw, qx, qy, qz = qvec
+    return np.array([
+        [1 - 2*(qy*qy + qz*qz),     2*(qx*qy - qz*qw),     2*(qx*qz + qy*qw)],
+        [    2*(qx*qy + qz*qw), 1 - 2*(qx*qx + qz*qz),     2*(qy*qz - qx*qw)],
+        [    2*(qx*qz - qy*qw),     2*(qy*qz + qx*qw), 1 - 2*(qx*qx + qy*qy)]
+    ], dtype=float)
+
+
+def calculate_camera_world_positions(images: Dict[int, Image]) -> Dict[int, np.ndarray]:
+    """Calculate camera world positions from COLMAP images data"""
+    camera_positions = {}
+    
+    for image_id, image in images.items():
+        # Convert quaternion to rotation matrix (world -> camera)
+        qvec = [image.qw, image.qx, image.qy, image.qz]
+        R = qvec2rotmat(qvec)
+        
+        # Calculate camera center in world coordinates
+        # R is world-to-camera, so camera-to-world is R.T
+        t = np.array([image.tx, image.ty, image.tz])
+        camera_center = -R.T @ t
+        
+        camera_positions[image_id] = camera_center
+    
+    return camera_positions
+
+
+def filter_far_cameras(images: Dict[int, Image], filter_ratio: float = 0.2, 
+                      reference_point: List[float] = [0.0, 0.0, 0.0]) -> Tuple[Dict[int, Image], int]:
+    """Remove cameras that are farthest from the reference point
+    
+    Args:
+        images: Dictionary of images with camera poses
+        filter_ratio: Ratio of farthest cameras to remove (0.2 = 20%)
+        reference_point: Reference point for distance calculation [x, y, z]
+    
+    Returns:
+        Filtered images dictionary and number of removed cameras
+    """
+    if not images or filter_ratio <= 0:
+        return images, 0
+    
+    # Calculate camera world positions
+    camera_positions = calculate_camera_world_positions(images)
+    
+    # Calculate distances from reference point
+    ref_point = np.array(reference_point)
+    distances = {}
+    
+    for image_id, camera_pos in camera_positions.items():
+        distance = np.linalg.norm(camera_pos - ref_point)
+        distances[image_id] = distance
+    
+    # Sort by distance and determine which cameras to keep
+    sorted_cameras = sorted(distances.items(), key=lambda x: x[1])
+    n_total = len(sorted_cameras)
+    n_to_remove = max(1, int(n_total * filter_ratio))
+    n_to_keep = n_total - n_to_remove
+    
+    # Keep the closest cameras
+    cameras_to_keep = set(image_id for image_id, _ in sorted_cameras[:n_to_keep])
+    
+    # Filter images
+    filtered_images = {image_id: image for image_id, image in images.items() 
+                      if image_id in cameras_to_keep}
+    
+    n_removed = n_total - len(filtered_images)
+    
+    return filtered_images, n_removed
+
+
 def main():
     """Main function"""
     # Use parameters from CONFIG section
@@ -408,8 +524,20 @@ def main():
     else:
         print("Using automatic resolution detection")
     
+    # Set POINTS2D limit if specified
+    if MAX_POINTS2D_PER_IMAGE is not None:
+        print(f"Limiting POINTS2D to {MAX_POINTS2D_PER_IMAGE} per image")
+    else:
+        print("Keeping all POINTS2D entries")
+    
+    # Show camera filtering settings
+    if FILTER_FAR_CAMERAS and CAMERA_FILTER_RATIO > 0:
+        print(f"Camera filtering enabled: removing {CAMERA_FILTER_RATIO*100:.1f}% farthest cameras from reference point {REFERENCE_POINT}")
+    else:
+        print("Camera filtering disabled")
+    
     try:
-        convert_dataset(input_dir, output_dir, target_resolution)
+        convert_dataset(input_dir, output_dir, target_resolution, MAX_POINTS2D_PER_IMAGE)
     except Exception as e:
         print(f"Error: {e}")
         return 1

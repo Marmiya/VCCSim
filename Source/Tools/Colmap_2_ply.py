@@ -24,8 +24,8 @@ import numpy as np
 # Modify your configuration here, no need to use command line parameters
 
 # Input and output paths
-COLMAP_DIR = r'D:\Data\360_v2\garden\mesh\rc_scale_aligned'          # COLMAP sparse reconstruction file directory
-OUTPUT_DIR = r'C:\UEProjects\VCCSimDev\Saved'           # Output directory
+COLMAP_DIR = r'E:\BaoAn\rc_colmap_refine'          # COLMAP sparse reconstruction file directory
+OUTPUT_DIR = r'E:\BaoAn\rc_colmap_refine\ply'           # Output directory
 
 
 # Camera point colors (RGB)
@@ -35,7 +35,9 @@ CAMERA_UE_COLOR = [0, 255, 0]     # UE camera point color (green)
 # Processing options
 SANITIZE = False                  # Whether to remove NaN/Inf vertices
 FILTER_OUTLIERS = True           # Whether to filter outliers (remove farthest points as noise)
-FILTER_RATIO = 0.05               # Ratio of farthest points to remove (default 5%)
+FILTER_RATIO = 0.25               # Ratio of farthest points to remove (default 5%)
+FILTER_LOW_HEIGHT = True         # Whether to remove points below a certain height
+MIN_HEIGHT_THRESHOLD = -25.0       # Minimum height (Z coordinate) in meters to keep points (COLMAP coordinates)
 VERBOSE = True                    # Whether to enable verbose output
 
 
@@ -97,6 +99,30 @@ def filter_outlier_points(xyz: np.ndarray, rgb: np.ndarray, filter_ratio: float 
     xyz_filtered = xyz[keep_mask]
     rgb_filtered = rgb[keep_mask]
     n_removed = n_total - len(xyz_filtered)
+    
+    return xyz_filtered, rgb_filtered, n_removed
+
+
+def filter_low_height_points(xyz: np.ndarray, rgb: np.ndarray, min_height: float) -> Tuple[np.ndarray, np.ndarray, int]:
+    """Remove points below a certain height (Z coordinate) threshold.
+    
+    Args:
+        xyz: Point coordinates (N, 3) in COLMAP coordinate system
+        rgb: Point colors (N, 3)
+        min_height: Minimum height (Z coordinate) threshold in meters
+    
+    Returns:
+        Filtered xyz, rgb arrays and number of removed points
+    """
+    if xyz.size == 0:
+        return xyz, rgb, 0
+    
+    # Filter points based on Z coordinate (height in COLMAP coordinates)
+    height_mask = xyz[:, 2] >= min_height
+    
+    xyz_filtered = xyz[height_mask]
+    rgb_filtered = rgb[height_mask]
+    n_removed = len(xyz) - len(xyz_filtered)
     
     return xyz_filtered, rgb_filtered, n_removed
 
@@ -506,6 +532,19 @@ def main():
     # Transform point cloud directly to UE coordinates (left-handed, centimeters)
     pts_ue_xyz, _ = colmap_to_ue_transform(xyz_pts, None)
     pts_ue_rgb = rgb_pts
+
+    # Optional height filtering - remove points below minimum height threshold
+    if FILTER_LOW_HEIGHT and len(xyz_pts) > 0:
+        if VERBOSE:
+            print(f"[info] Height filtering: removing points below {MIN_HEIGHT_THRESHOLD}m (Z coordinate in COLMAP)")
+        xyz_pts, rgb_pts, n_removed = filter_low_height_points(xyz_pts, rgb_pts, MIN_HEIGHT_THRESHOLD)
+        # Recompute UE coordinates after height filtering
+        pts_ue_xyz, _ = colmap_to_ue_transform(xyz_pts, None)
+        pts_ue_rgb = rgb_pts
+        if VERBOSE:
+            print(f"[info] Height filtering: removed {n_removed} points, kept {len(xyz_pts)} points")
+    elif VERBOSE and len(xyz_pts) > 0:
+        print(f"[info] Height filtering disabled, keeping all {len(xyz_pts)} points")
 
     # Optional outlier filtering - remove farthest points as noise (enabled by default)
     if FILTER_OUTLIERS and len(xyz_pts) > 0:
