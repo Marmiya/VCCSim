@@ -2,11 +2,19 @@
 COLMAP Model Alignment Tool
 ===========================
 
-Aligns two COLMAP reconstructions of the same scene using camera poses.
-Uses robust Procrustes analysis with RANSAC for 7-DOF similarity transformation:
-- 3D rotation (3 DOF)
-- 3D translation (3 DOF)
-- Uniform scaling (1 DOF)
+Advanced COLMAP reconstruction alignment tool using robust geometric algorithms.
+Aligns two COLMAP reconstructions of the same scene using camera poses with:
+- Robust Procrustes analysis with RANSAC for 7-DOF similarity transformation
+- 3D rotation (3 DOF) + 3D translation (3 DOF) + Uniform scaling (1 DOF)
+- Comprehensive outlier detection and statistical validation
+- Automatic format detection and conversion
+- Detailed alignment verification and error analysis
+
+Usage:
+    python colmap_align_models.py --source SOURCE_DIR --target TARGET_DIR --output OUTPUT_DIR [options]
+
+Example:
+    python colmap_align_models.py --source ./model1 --target ./model2 --output ./aligned
 
 Author: VCCSim Project
 Based on: Classical Procrustes analysis and RANSAC algorithms
@@ -14,229 +22,16 @@ Based on: Classical Procrustes analysis and RANSAC algorithms
 
 import numpy as np
 import os
-import random
 import shutil
-from typing import List, Dict, Tuple, Optional
-import matplotlib.pyplot as plt
-import itertools
-from pathlib import Path
 import argparse
-
-# =============================================================================
-# CONFIGURATION
-# =============================================================================
-
-# Source COLMAP model (to be transformed)
-SOURCE_MODEL_PATH = r"E:\BaoAn\BaoAnColmap\sparse\0"
-
-# Target COLMAP model (reference coordinate system)
-TARGET_MODEL_PATH = r"E:\BaoAn\rc_colmap_refine"
-
-# Output directory for aligned model
-OUTPUT_MODEL_PATH = r"E:\BaoAn\aligned_colmap"
-
-# Algorithm parameters
-RANSAC_ITERATIONS = 1000  # Number of RANSAC iterations
-MIN_INLIERS = 10  # Minimum number of inliers for valid transformation
-INLIER_THRESHOLD = 0.1  # Distance threshold for inliers (in target coordinate units)
-MIN_CAMERAS_FOR_ALIGNMENT = 6  # Minimum cameras needed for robust alignment
-
-# =============================================================================
-# COLMAP DATA STRUCTURES AND I/O
-# =============================================================================
-
-class ColmapCamera:
-    """COLMAP camera representation"""
-    def __init__(self, camera_id: int, model: str, width: int, height: int, params: List[float]):
-        self.camera_id = camera_id
-        self.model = model
-        self.width = width
-        self.height = height
-        self.params = params
-
-class ColmapImage:
-    """COLMAP image representation with pose"""
-    def __init__(self, image_id: int, qvec: np.ndarray, tvec: np.ndarray,
-                 camera_id: int, name: str, points2d: List):
-        self.image_id = image_id
-        self.qvec = qvec  # Quaternion [qw, qx, qy, qz]
-        self.tvec = tvec  # Translation vector [tx, ty, tz]
-        self.camera_id = camera_id
-        self.name = name
-        self.points2d = points2d
-
-    @property
-    def rotation_matrix(self) -> np.ndarray:
-        """Convert quaternion to rotation matrix"""
-        return quaternion_to_rotation_matrix(self.qvec)
-
-    @property
-    def camera_center(self) -> np.ndarray:
-        """Calculate camera center in world coordinates: C = -R^T * t"""
-        R = self.rotation_matrix
-        return -R.T @ self.tvec
-
-class ColmapPoint3D:
-    """COLMAP 3D point representation"""
-    def __init__(self, point3d_id: int, xyz: np.ndarray, rgb: np.ndarray,
-                 error: float, track: List):
-        self.point3d_id = point3d_id
-        self.xyz = xyz
-        self.rgb = rgb
-        self.error = error
-        self.track = track
-
-def quaternion_to_rotation_matrix(q: np.ndarray) -> np.ndarray:
-    """Convert quaternion [qw, qx, qy, qz] to 3x3 rotation matrix"""
-    qw, qx, qy, qz = q / np.linalg.norm(q)
-    return np.array([
-        [1-2*(qy*qy+qz*qz), 2*(qx*qy-qz*qw), 2*(qx*qz+qy*qw)],
-        [2*(qx*qy+qz*qw), 1-2*(qx*qx+qz*qz), 2*(qy*qz-qx*qw)],
-        [2*(qx*qz-qy*qw), 2*(qy*qz+qx*qw), 1-2*(qx*qx+qy*qy)]
-    ], dtype=np.float64)
-
-def rotation_matrix_to_quaternion(R: np.ndarray) -> np.ndarray:
-    """Convert 3x3 rotation matrix to quaternion [qw, qx, qy, qz]"""
-    trace = np.trace(R)
-
-    if trace > 0:
-        s = np.sqrt(trace + 1.0) * 2  # s = 4 * qw
-        qw = 0.25 * s
-        qx = (R[2, 1] - R[1, 2]) / s
-        qy = (R[0, 2] - R[2, 0]) / s
-        qz = (R[1, 0] - R[0, 1]) / s
-    elif R[0, 0] > R[1, 1] and R[0, 0] > R[2, 2]:
-        s = np.sqrt(1.0 + R[0, 0] - R[1, 1] - R[2, 2]) * 2  # s = 4 * qx
-        qw = (R[2, 1] - R[1, 2]) / s
-        qx = 0.25 * s
-        qy = (R[0, 1] + R[1, 0]) / s
-        qz = (R[0, 2] + R[2, 0]) / s
-    elif R[1, 1] > R[2, 2]:
-        s = np.sqrt(1.0 + R[1, 1] - R[0, 0] - R[2, 2]) * 2  # s = 4 * qy
-        qw = (R[0, 2] - R[2, 0]) / s
-        qx = (R[0, 1] + R[1, 0]) / s
-        qy = 0.25 * s
-        qz = (R[1, 2] + R[2, 1]) / s
-    else:
-        s = np.sqrt(1.0 + R[2, 2] - R[0, 0] - R[1, 1]) * 2  # s = 4 * qz
-        qw = (R[1, 0] - R[0, 1]) / s
-        qx = (R[0, 2] + R[2, 0]) / s
-        qy = (R[1, 2] + R[2, 1]) / s
-        qz = 0.25 * s
-
-    return np.array([qw, qx, qy, qz])
-
-def read_cameras_txt(file_path: str) -> Dict[int, ColmapCamera]:
-    """Read cameras.txt file"""
-    cameras = {}
-
-    with open(file_path, 'r') as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith('#'):
-                continue
-
-            parts = line.split()
-            camera_id = int(parts[0])
-            model = parts[1]
-            width = int(parts[2])
-            height = int(parts[3])
-            params = [float(p) for p in parts[4:]]
-
-            cameras[camera_id] = ColmapCamera(camera_id, model, width, height, params)
-
-    return cameras
-
-def read_images_txt(file_path: str) -> Dict[int, ColmapImage]:
-    """Read images.txt file"""
-    images = {}
-
-    with open(file_path, 'r') as f:
-        lines = f.readlines()
-
-    i = 0
-    while i < len(lines):
-        line = lines[i].strip()
-        if not line or line.startswith('#'):
-            i += 1
-            continue
-
-        # Parse image line
-        parts = line.split()
-        image_id = int(parts[0])
-        qvec = np.array([float(parts[j]) for j in range(1, 5)])  # [qw, qx, qy, qz]
-        tvec = np.array([float(parts[j]) for j in range(5, 8)])  # [tx, ty, tz]
-        camera_id = int(parts[8])
-        name = parts[9]
-
-        # Parse points2D line (skip for now)
-        i += 1
-        points2d = []
-        if i < len(lines):
-            points_line = lines[i].strip()
-            if points_line and not points_line.startswith('#'):
-                # Parse 2D points if needed
-                pass
-
-        images[image_id] = ColmapImage(image_id, qvec, tvec, camera_id, name, points2d)
-        i += 1
-
-    return images
-
-def read_points3d_txt(file_path: str) -> Dict[int, ColmapPoint3D]:
-    """Read points3D.txt file"""
-    points3d = {}
-
-    if not os.path.exists(file_path):
-        return points3d
-
-    with open(file_path, 'r') as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith('#'):
-                continue
-
-            parts = line.split()
-            point3d_id = int(parts[0])
-            xyz = np.array([float(parts[j]) for j in range(1, 4)])
-            rgb = np.array([int(parts[j]) for j in range(4, 7)])
-            error = float(parts[7])
-
-            # Parse track (image_id, point2d_idx pairs)
-            track = []
-            for j in range(8, len(parts), 2):
-                if j + 1 < len(parts):
-                    image_id = int(parts[j])
-                    point2d_idx = int(parts[j + 1])
-                    track.append((image_id, point2d_idx))
-
-            points3d[point3d_id] = ColmapPoint3D(point3d_id, xyz, rgb, error, track)
-
-    return points3d
-
-def ensure_txt_format(model_dir: str) -> str:
-    """Ensure COLMAP model is in TXT format, convert if necessary"""
-    images_txt = os.path.join(model_dir, 'images.txt')
-
-    if os.path.exists(images_txt):
-        return model_dir
-
-    # Check for binary format
-    images_bin = os.path.join(model_dir, 'images.bin')
-    if os.path.exists(images_bin):
-        print(f"Converting {model_dir} from binary to TXT format...")
-        txt_dir = model_dir + "_txt"
-        os.makedirs(txt_dir, exist_ok=True)
-
-        cmd = f'colmap model_converter --input_path "{model_dir}" --output_path "{txt_dir}" --output_type TXT'
-        result = os.system(cmd)
-
-        if result == 0:
-            return txt_dir
-        else:
-            raise RuntimeError(f"Failed to convert COLMAP model to TXT format: {model_dir}")
-
-    raise FileNotFoundError(f"No valid COLMAP model found in {model_dir}")
+from typing import List, Dict, Tuple
+import matplotlib.pyplot as plt
+from colmap_utils import (
+    ColmapImage, read_images_txt, read_points3d_txt,
+    qvec2rotmat, rotation_matrix_to_quaternion, calculate_camera_center,
+    ensure_txt_format, find_common_images,
+    validate_colmap_directory, extract_camera_centers
+)
 
 # =============================================================================
 # SIMILARITY TRANSFORMATION ALGORITHMS
@@ -266,8 +61,8 @@ class SimilarityTransformation:
         3. Convert back to COLMAP convention
         """
         # Convert COLMAP pose to camera-to-world transformation
-        R_cam2world = quaternion_to_rotation_matrix(qvec).T  # Transpose for cam2world
-        t_world = -quaternion_to_rotation_matrix(qvec).T @ tvec  # Camera center in world
+        R_cam2world = qvec2rotmat(qvec).T  # Transpose for cam2world
+        t_world = -qvec2rotmat(qvec).T @ tvec  # Camera center in world
 
         # Apply similarity transformation to camera center
         t_world_new = self.scale * (self.rotation @ t_world) + self.translation
@@ -441,29 +236,6 @@ def ransac_procrustes(source_points: np.ndarray, target_points: np.ndarray,
 # MODEL ALIGNMENT PIPELINE
 # =============================================================================
 
-def find_common_images(source_images: Dict[int, ColmapImage],
-                      target_images: Dict[int, ColmapImage]) -> Tuple[List[str], List[int], List[int]]:
-    """Find common images between two COLMAP models"""
-    source_names = {img.name: img_id for img_id, img in source_images.items()}
-    target_names = {img.name: img_id for img_id, img in target_images.items()}
-
-    common_names = set(source_names.keys()) & set(target_names.keys())
-
-    if len(common_names) < MIN_CAMERAS_FOR_ALIGNMENT:
-        raise ValueError(f"Insufficient common images: {len(common_names)} < {MIN_CAMERAS_FOR_ALIGNMENT}")
-
-    common_names = sorted(list(common_names))
-    source_ids = [source_names[name] for name in common_names]
-    target_ids = [target_names[name] for name in common_names]
-
-    return common_names, source_ids, target_ids
-
-def extract_camera_centers(images: Dict[int, ColmapImage], image_ids: List[int]) -> np.ndarray:
-    """Extract camera centers for given image IDs"""
-    centers = []
-    for img_id in image_ids:
-        centers.append(images[img_id].camera_center)
-    return np.array(centers)
 
 def apply_transformation_to_model(source_model_dir: str, output_model_dir: str,
                                 transformation: SimilarityTransformation):
@@ -548,7 +320,9 @@ def visualize_alignment_results(source_centers: np.ndarray, target_centers: np.n
 
     ax3.hist(errors[inliers], bins=30, alpha=0.7, label=f'Inliers ({np.sum(inliers)})', color='green')
     ax3.hist(errors[~inliers], bins=30, alpha=0.7, label=f'Outliers ({np.sum(~inliers)})', color='red')
-    ax3.axvline(INLIER_THRESHOLD, color='black', linestyle='--', label=f'Threshold ({INLIER_THRESHOLD})')
+    # Get threshold from visualization function attribute or use default
+    threshold = getattr(visualize_alignment_results, '_threshold', DEFAULT_INLIER_THRESHOLD)
+    ax3.axvline(threshold, color='black', linestyle='--', label=f'Threshold ({threshold})')
     ax3.set_xlabel('Alignment Error')
     ax3.set_ylabel('Frequency')
     ax3.set_title('Error Distribution')
@@ -593,11 +367,11 @@ def verify_transformation(source_images: Dict[int, ColmapImage], target_images: 
         qvec_new, tvec_new = transformation.transform_pose(source_img.qvec, source_img.tvec)
 
         # Compute transformed camera center using consistent method
-        R_new = quaternion_to_rotation_matrix(qvec_new)
+        R_new = qvec2rotmat(qvec_new)
         C_transformed = -R_new.T @ tvec_new
 
         # Compare with target camera center
-        C_target = target_img.camera_center
+        C_target = calculate_camera_center(target_img.qvec, target_img.tvec)
         pose_error = np.linalg.norm(C_transformed - C_target)
         pose_errors.append(pose_error)
 
@@ -617,17 +391,17 @@ def verify_transformation(source_images: Dict[int, ColmapImage], target_images: 
 # MAIN PIPELINE
 # =============================================================================
 
-def main():
+def main(args):
     print("=== COLMAP Model Alignment Tool ===")
-    print(f"Source model: {SOURCE_MODEL_PATH}")
-    print(f"Target model: {TARGET_MODEL_PATH}")
-    print(f"Output model: {OUTPUT_MODEL_PATH}")
+    print(f"Source model: {args.source}")
+    print(f"Target model: {args.target}")
+    print(f"Output model: {args.output}")
     print()
 
     # Ensure TXT format
     print("Ensuring TXT format...")
-    source_dir = ensure_txt_format(SOURCE_MODEL_PATH)
-    target_dir = ensure_txt_format(TARGET_MODEL_PATH)
+    source_dir = ensure_txt_format(args.source)
+    target_dir = ensure_txt_format(args.target)
 
     # Read COLMAP models
     print("Reading COLMAP models...")
@@ -642,6 +416,9 @@ def main():
     common_names, source_ids, target_ids = find_common_images(source_images, target_images)
     print(f"Found {len(common_names)} common images")
 
+    if len(common_names) < args.min_cameras:
+        raise ValueError(f"Insufficient common images: {len(common_names)} < {args.min_cameras}")
+
     # Extract camera centers
     print("Extracting camera centers...")
     source_centers = extract_camera_centers(source_images, source_ids)
@@ -649,13 +426,13 @@ def main():
 
     # Compute transformation using RANSAC
     print("Computing similarity transformation using RANSAC...")
-    print(f"RANSAC parameters: max_iter={RANSAC_ITERATIONS}, threshold={INLIER_THRESHOLD}, min_inliers={MIN_INLIERS}")
+    print(f"RANSAC parameters: max_iter={args.iterations}, threshold={args.threshold}, min_inliers={args.min_inliers}")
 
     transformation, inliers, stats = ransac_procrustes(
         source_centers, target_centers,
-        max_iterations=RANSAC_ITERATIONS,
-        inlier_threshold=INLIER_THRESHOLD,
-        min_inliers=MIN_INLIERS
+        max_iterations=args.iterations,
+        inlier_threshold=args.threshold,
+        min_inliers=args.min_inliers
     )
 
     # Print results
@@ -688,29 +465,31 @@ def main():
 
     # Apply transformation to model
     print("\nApplying transformation to source model...")
-    apply_transformation_to_model(source_dir, OUTPUT_MODEL_PATH, transformation)
+    apply_transformation_to_model(source_dir, args.output, transformation)
 
     # Convert to binary format
     print("Converting to binary format...")
-    binary_output = OUTPUT_MODEL_PATH + "_bin"
+    binary_output = args.output + "_bin"
     os.makedirs(binary_output, exist_ok=True)  # Ensure binary output directory exists
-    cmd = f'colmap model_converter --input_path "{OUTPUT_MODEL_PATH}" --output_path "{binary_output}" --output_type BIN'
+    cmd = f'colmap model_converter --input_path "{args.output}" --output_path "{binary_output}" --output_type BIN'
     result = os.system(cmd)
     if result != 0:
         print(f"Warning: Binary conversion failed (exit code {result}), but TXT format is available")
 
     # Generate visualization
-    print("Generating alignment visualization...")
-    viz_output = os.path.join(os.path.dirname(OUTPUT_MODEL_PATH), "alignment_visualization.png")
-    visualize_alignment_results(source_centers, target_centers, transformation, inliers, viz_output)
+    if not args.no_visualization:
+        print("Generating alignment visualization...")
+        viz_output = os.path.join(os.path.dirname(args.output), "alignment_visualization.png")
+        setup_visualization_threshold(args.threshold)
+        visualize_alignment_results(source_centers, target_centers, transformation, inliers, viz_output)
+        print(f"Visualization: {viz_output}")
 
     print("\n=== Alignment Complete ===")
-    print(f"Aligned model (TXT): {OUTPUT_MODEL_PATH}")
+    print(f"Aligned model (TXT): {args.output}")
     print(f"Aligned model (BIN): {binary_output}")
-    print(f"Visualization: {viz_output}")
 
     # Save transformation parameters
-    transform_file = os.path.join(OUTPUT_MODEL_PATH, "transformation.txt")
+    transform_file = os.path.join(args.output, "transformation.txt")
     with open(transform_file, 'w') as f:
         f.write("# Similarity transformation from source to target coordinate system\n")
         f.write(f"# Scale: {transformation.scale:.8f}\n")
@@ -724,32 +503,63 @@ def main():
 
     print(f"Transformation parameters saved to: {transform_file}")
 
+def setup_visualization_threshold(threshold):
+    """Helper to pass threshold to visualization function"""
+    visualize_alignment_results._threshold = threshold
+
+# ============================ Main ============================
+
+# Default algorithm parameters
+DEFAULT_RANSAC_ITERATIONS = 1000
+DEFAULT_MIN_INLIERS = 10
+DEFAULT_INLIER_THRESHOLD = 0.1
+DEFAULT_MIN_CAMERAS = 6
+
 if __name__ == "__main__":
-    # Parse command line arguments (optional)
-    parser = argparse.ArgumentParser(description="Align two COLMAP reconstructions")
-    parser.add_argument("--source", type=str, help="Source COLMAP model path")
-    parser.add_argument("--target", type=str, help="Target COLMAP model path")
-    parser.add_argument("--output", type=str, help="Output aligned model path")
-    parser.add_argument("--threshold", type=float, default=INLIER_THRESHOLD, help="RANSAC inlier threshold")
-    parser.add_argument("--iterations", type=int, default=RANSAC_ITERATIONS, help="RANSAC iterations")
+    parser = argparse.ArgumentParser(
+        description="Align two COLMAP reconstructions using robust Procrustes analysis",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+
+    # Required arguments
+    parser.add_argument("--source", "-s", type=str, default=r"D:\Data\BaoAn\colmap\colmap",
+                       help="Source COLMAP model directory path")
+    parser.add_argument("--target", "-t", type=str, default=r"D:\Data\BaoAn\colmap\rc_colmap_refine",
+                       help="Target COLMAP model directory path")
+    parser.add_argument("--output", "-o", type=str, default=r"D:\Data\BaoAn\colmap\aligned_colmap",
+                       help="Output aligned model directory path")
+
+    # Algorithm parameters
+    parser.add_argument("--threshold", type=float, default=DEFAULT_INLIER_THRESHOLD,
+                       help="RANSAC inlier threshold for alignment")
+    parser.add_argument("--iterations", type=int, default=DEFAULT_RANSAC_ITERATIONS,
+                       help="Maximum RANSAC iterations")
+    parser.add_argument("--min-inliers", type=int, default=DEFAULT_MIN_INLIERS,
+                       help="Minimum number of inliers required")
+    parser.add_argument("--min-cameras", type=int, default=DEFAULT_MIN_CAMERAS,
+                       help="Minimum number of common cameras required")
+
+    # Output options
+    parser.add_argument("--no-visualization", action="store_true",
+                       help="Skip generating alignment visualization")
+    parser.add_argument("--verbose", "-v", action="store_true", default=True,
+                       help="Enable verbose output")
 
     args = parser.parse_args()
 
-    # Override defaults if provided
-    if args.source:
-        SOURCE_MODEL_PATH = args.source
-    if args.target:
-        TARGET_MODEL_PATH = args.target
-    if args.output:
-        OUTPUT_MODEL_PATH = args.output
-    if args.threshold:
-        INLIER_THRESHOLD = args.threshold
-    if args.iterations:
-        RANSAC_ITERATIONS = args.iterations
+    # Validate input directories
+    try:
+        validate_colmap_directory(args.source)
+        validate_colmap_directory(args.target)
+    except ValueError as e:
+        print(f"Error: {e}")
+        exit(1)
 
     try:
-        main()
+        main(args)
     except Exception as e:
         print(f"Error: {e}")
-        import traceback
-        traceback.print_exc()
+        if args.verbose:
+            import traceback
+            traceback.print_exc()
+        exit(1)
