@@ -21,97 +21,55 @@
 #include "GameFramework/Actor.h"
 #include "SensorBase.h"
 #include "Engine/TextureRenderTarget2D.h"
-#include "Components/SceneCaptureComponent2D.h"
-#include "Engine/SceneCapture2D.h"
 #include "Materials/MaterialInterface.h"
 #include "RHIResources.h"
 #include "NormalCamera.generated.h"
 
 class ARecorder;
 
-class FNormalCameraConfig: public FSensorConfig
+class FNormalCameraConfig: public FCameraConfig
 {
 public:
-    float FOV = 90.0f;
-    int32 Width = 1920;
-    int32 Height = 1080;
+    FNormalCameraConfig()
+    {
+        Width = 1920;
+        Height = 1080;
+    }
 };
 
-UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
-class VCCSIM_API UNormalCameraComponent : public UPrimitiveComponent
+UCLASS(ClassGroup = (VCCSIM), meta = (BlueprintSpawnableComponent))
+class VCCSIM_API UNormalCameraComponent : public UCameraBaseComponent
 {
     GENERATED_BODY()
 
 public:
     UNormalCameraComponent();
     void RConfigure(const FNormalCameraConfig& Config, ARecorder* Recorder);
-    bool IsConfigured() const { return bBPConfigured; }
-    
-    UFUNCTION()
-    void SetRecordState(bool RState){ RecordState = RState; }
-    
-    int32 GetCameraIndex() const { return CameraIndex; }
 
-    void InitializeRenderTargets();
-    void SetCaptureComponent() const;
+    virtual ESensorType GetSensorType() const override { return ESensorType::NormalCamera; }
+    int32 GetCameraIndex() const { return GetSensorIndex(); }
 
     UFUNCTION(BlueprintCallable, Category = "NormalCamera")
     void CaptureScene();
 
     // High precision normal data access
     void AsyncGetNormalImageData(TFunction<void(const TArray<FLinearColor>&)> Callback);
-    
-    std::pair<int32, int32> GetImageSize() const { return {Width, Height}; }
-    
+
 protected:
-    virtual void BeginPlay() override;
-    virtual void OnComponentCreated() override;
-    virtual void TickComponent(float DeltaTime, ELevelTick TickType,
-        FActorComponentTickFunction* ThisTickFunction) override;
-    
+    virtual void InitializeRenderTargets() override;
+    virtual UTextureRenderTarget2D* GetRenderTarget() const override { return NormalRenderTarget; }
+    virtual void SetCaptureComponent() const override;
+    virtual void OnRecordTick() override;
+
     void ProcessNormalTexture(TFunction<void(const TArray<FLinearColor>&)> OnComplete);
     TArray<FLinearColor> GetNormalImage();
-    
+
 public:
-    // Configuration Properties
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NormalCamera|Config")
-    float FOV;
-    
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NormalCamera|Config")
-    int32 Width;
-    
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NormalCamera|Config")
-    int32 Height;
-    
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NormalCamera|Config")
-    bool bBPConfigured = false;
-    
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NormalCamera|Config")
-    int32 CameraIndex = 0;
-
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "NormalCamera|Debug")
-    bool bRecorded = false;
-
     UPROPERTY()
     UTextureRenderTarget2D* NormalRenderTarget = nullptr;
-    
+
 private:
-    bool CheckComponentAndRenderTarget() const;
-    
-    UPROPERTY()
-    USceneCaptureComponent2D* CaptureComponent = nullptr;
-    
     // Store high precision normal data
     TArray<FLinearColor> NormalData;
-    
-    UPROPERTY()
-    AActor* ParentActor = nullptr;
-    
-    UPROPERTY()
-    ARecorder* RecorderPtr = nullptr;
-    
-    float RecordInterval = -1.f;
-    bool RecordState = false;
-    float TimeSinceLastCapture;
     bool Dirty = false;
 };

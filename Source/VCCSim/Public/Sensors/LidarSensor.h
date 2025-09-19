@@ -40,16 +40,16 @@ public:
 };
 
 UCLASS(ClassGroup = (VCCSIM), meta = (BlueprintSpawnableComponent))
-class VCCSIM_API ULidarComponent : public UPrimitiveComponent
+class VCCSIM_API ULidarComponent : public USensorBaseComponent
 {
     GENERATED_BODY()
 
 public:
-    
+
     ULidarComponent();
     void RConfigure(const FLiDarConfig& Config, ARecorder* Recorder);
-    UFUNCTION()
-    void SetRecordState(bool RState){ RecordState = RState; }
+
+    virtual ESensorType GetSensorType() const override { return ESensorType::Lidar; }
 
     UFUNCTION(BlueprintCallable, Category = "Lidar")
     void FirstCall();
@@ -63,11 +63,10 @@ public:
     TPair<TArray<FVector3f>, FVCCSimOdom> GetPointCloudDataAndOdom();
 
 protected:
-    
+    virtual void OnRecordTick() override;
+
     virtual void BeginPlay() override;
     virtual void OnComponentCreated() override;
-    virtual void TickComponent(float DeltaTime, ELevelTick TickType,
-        FActorComponentTickFunction* ThisTickFunction) override;
     TArray<FVector3f> PerformLineTraces(FVCCSimOdom* Odom = nullptr);
 
 public:
@@ -98,9 +97,6 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "LiDAR|Performance")
     int32 ChunkSize = 256;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Lidar|Debug")
-    bool bRecorded = false;
-
     UPROPERTY()
     UInsMeshHolder* MeshHolder;
 
@@ -109,31 +105,23 @@ private:
 
     TArray<FVector> LocalStartPoints;
     TArray<FVector> LocalEndPoints;
-    
-    FVector LastLocation; 
+
+    FVector LastLocation;
     FRotator LastRotation;
     TArray<FVector> CachedStartPoints;
     TArray<FVector> CachedEndPoints;
     TArray<FLiDARPoint> PointPool;
-    
+
     FCollisionQueryParams QueryParams;
-    
+
     int32 NumChunks = 0;
     TArray<int32> ChunkStartIndices;
     TArray<int32> ChunkEndIndices;
-    
+
     void ProcessChunk(int32 ChunkIndex);
     void UpdateCachedPoints(const FVector& NewLocation,
         const FRotator& NewRotation);
     bool ShouldUpdateCache(const FVector& NewLocation,
         const FRotator& NewRotation) const;
     TArray<FTransform> GetHitTransforms() const;
-
-    UPROPERTY()
-    AActor* ParentActor = nullptr;
-    UPROPERTY()
-    ARecorder* RecorderPtr = nullptr;
-    float RecordInterval = -1.f;
-    bool RecordState = false;
-    float TimeSinceLastCapture = 0.f;
 };

@@ -29,8 +29,6 @@ DEFINE_LOG_CATEGORY_STATIC(LogLidarSensor, Log, All);
 
 ULidarComponent::ULidarComponent()
 {
-    PrimaryComponentTick.bCanEverTick = true;
-	
     MeshHolder = nullptr;
 
 	QueryParams.bTraceComplex = true;
@@ -51,9 +49,8 @@ void ULidarComponent::RConfigure(
 	
 	if (Config.RecordInterval > 0)
 	{
-		ParentActor = GetOwner();
-		RecorderPtr = Recorder;
 		RecordInterval = Config.RecordInterval;
+		SetupRecorder(Recorder);
 		RecordState = Recorder->RecordState;
 		Recorder->OnRecordStateChanged.AddDynamic(this,
 			&ULidarComponent::SetRecordState);
@@ -95,30 +92,18 @@ void ULidarComponent::OnComponentCreated()
 	InitSensor();
 }
 
-void ULidarComponent::TickComponent(
-	float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+void ULidarComponent::OnRecordTick()
 {
-	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-
-
-	if (bRecorded && RecordState)
+	FLidarData LidarData;
+	LidarData.Timestamp = FPlatformTime::Seconds();
+	LidarData.Data = PerformLineTraces(nullptr);
+	if (bVisualizePoints)
 	{
-		TimeSinceLastCapture += DeltaTime;
-		if (TimeSinceLastCapture >= RecordInterval)
-		{
-			FLidarData LidarData;
-			LidarData.Timestamp = FPlatformTime::Seconds();
-			LidarData.Data = PerformLineTraces(nullptr);
-			if (bVisualizePoints)
-			{
-				VisualizePointCloud();
-			}
-			TimeSinceLastCapture = 0.0f;
-			if (RecorderPtr)
-			{
-				RecorderPtr->SubmitLidarData(ParentActor, MoveTemp(LidarData));
-			}
-		}
+		VisualizePointCloud();
+	}
+	if (RecorderPtr)
+	{
+		RecorderPtr->SubmitLidarData(ParentActor, MoveTemp(LidarData));
 	}
 }
 

@@ -25,21 +25,12 @@ DEFINE_LOG_CATEGORY_STATIC(LogDepthCamera, Log, All);
 #include "RHI.h"
 
 UDepthCameraComponent::UDepthCameraComponent()
-    : FOV(90.0f)
-    , MaxRange(2000.0f)
-    , MinRange(.0f)
-    , Width(512)
-    , Height(512)
-    , bOrthographic(false)
-    , OrthoWidth(512.0f)
-    , TimeSinceLastCapture(0.0f)
 {
-    PrimaryComponentTick.bCanEverTick = true;
 }
 
 void UDepthCameraComponent::RConfigure(
     const FDepthCameraConfig& Config, ARecorder* Recorder)
-{  
+{
     FOV = Config.FOV;
     MaxRange = Config.MaxRange;
     MinRange = Config.MinRange;
@@ -47,17 +38,17 @@ void UDepthCameraComponent::RConfigure(
     Height = Config.Height;
     bOrthographic = Config.bOrthographic;
     OrthoWidth = Config.OrthoWidth;
+
+    ComputeIntrinsics();
     InitializeRenderTargets();
     SetCaptureComponent();
 
     if (Config.RecordInterval > 0)
     {
-        ParentActor = GetOwner();
-        RecorderPtr = Recorder;
         RecordInterval = Config.RecordInterval;
+        SetupRecorder(Recorder);
         RecordState = Recorder->RecordState;
-        // UE_LOG(LogDepthCamera, Display, TEXT("RecordState: %d"),RecordState);
-        
+
         Recorder->OnRecordStateChanged.AddDynamic(this,
             &UDepthCameraComponent::SetRecordState);
         SetComponentTickEnabled(true);
@@ -72,85 +63,44 @@ void UDepthCameraComponent::RConfigure(
 
 void UDepthCameraComponent::SetCaptureComponent() const
 {
+    Super::SetCaptureComponent();
+
     if (CaptureComponent)
     {
-        CaptureComponent->ProjectionType = bOrthographic ?
-            ECameraProjectionMode::Orthographic : ECameraProjectionMode::Perspective;
-        CaptureComponent->FOVAngle = FOV;
-        CaptureComponent->OrthoWidth = OrthoWidth;
+        CaptureComponent->PrimitiveRenderMode = ESceneCapturePrimitiveRenderMode::PRM_RenderScenePrimitives;
         CaptureComponent->CaptureSource = ESceneCaptureSource::SCS_SceneDepth;
-        CaptureComponent->bCaptureEveryFrame = false;
-        CaptureComponent->bCaptureOnMovement = false;
-    }
-    else 
-    {
-        UE_LOG(LogDepthCamera, Error, TEXT("Capture component not initialized!"));
     }
 }
 
-void UDepthCameraComponent::BeginPlay()
+void UDepthCameraComponent::OnRecordTick()
 {
-    Super::BeginPlay();
-    InitializeRenderTargets();
-    SetCaptureComponent();
-    
-    SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-    SetCollisionResponseToAllChannels(ECR_Ignore);
-    SetSimulatePhysics(true);
-}
-
-void UDepthCameraComponent::OnComponentCreated()
-{
-    Super::OnComponentCreated();
-    
-    // Initialize capture component
-    CaptureComponent = NewObject<USceneCaptureComponent2D>(this);
-    CaptureComponent->AttachToComponent(this,
-        FAttachmentTransformRules::SnapToTargetIncludingScale);
-    
-    SetCaptureComponent();
-}
-
-void UDepthCameraComponent::TickComponent(float DeltaTime, ELevelTick TickType,
-    FActorComponentTickFunction* ThisTickFunction)
-{
-    Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-
-    if (bRecorded && RecordState)
+    double CaptureStartTime = FPlatformTime::Seconds();
+    CaptureDepthScene();
+    if (RecorderPtr)
     {
-        TimeSinceLastCapture += DeltaTime;
-        if (TimeSinceLastCapture >= RecordInterval)
+        FDepthCameraData DepthCameraData;
+        DepthCameraData.Timestamp = FPlatformTime::Seconds();
+        DepthCameraData.SensorIndex = GetSensorIndex();
+        DepthCameraData.Width = Width;
+        DepthCameraData.Height = Height;
+
+        double WaitStartTime = FPlatformTime::Seconds();
+        while(!Dirty)
         {
-            double CaptureStartTime = FPlatformTime::Seconds();
-            TimeSinceLastCapture = 0.0f;
-            CaptureDepthScene();
-            if (RecorderPtr)
-            {
-                FDepthCameraData DepthCameraData;
-                DepthCameraData.Timestamp = FPlatformTime::Seconds();
-                DepthCameraData.SensorIndex = CameraIndex;
-                DepthCameraData.Width = Width;
-                DepthCameraData.Height = Height;
-
-                double WaitStartTime = FPlatformTime::Seconds();
-                while(!Dirty)
-                {
-                    FPlatformProcess::Sleep(0.01f);
-                }
-                double WaitEndTime = FPlatformTime::Seconds();
-
-                DepthCameraData.Data = GetDepthImage();
-                Dirty = false;
-                RecorderPtr->SubmitDepthData(ParentActor, MoveTemp(DepthCameraData));
-
-                double CaptureEndTime = FPlatformTime::Seconds();
-                double TotalCaptureTime = CaptureEndTime - CaptureStartTime;
-                double WaitTime = WaitEndTime - WaitStartTime;
-
-                UE_LOG(LogDepthCamera, Log, TEXT("Depth capture - RecordInterval: %.6f, Total time: %.6f, Wait time: %.6f, Actual FPS: %.2f"),
-                    RecordInterval, TotalCaptureTime, WaitTime, 1.0 / TotalCaptureTime);
-            }
+            FPlatformProcess::Sleep(0.01f);
         }
+        double WaitEndTime = FPlatformTime::Seconds();
+
+        DepthCameraData.Data = GetDepthImage();
+        Dirty = false;
+        RecorderPtr->SubmitDepthData(ParentActor, MoveTemp(DepthCameraData));
+
+        double CaptureEndTime = FPlatformTime::Seconds();
+        double TotalCaptureTime = CaptureEndTime - CaptureStartTime;
+        double WaitTime = WaitEndTime - WaitStartTime;
+
+        UE_LOG(LogDepthCamera, Log, TEXT("Depth capture - RecordInterval: %.6f, Total time: %.6f, Wait time: %.6f, Actual FPS: %.2f"),
+            RecordInterval, TotalCaptureTime, WaitTime, 1.0 / TotalCaptureTime);
     }
 }
 
@@ -161,7 +111,6 @@ void UDepthCameraComponent::InitializeRenderTargets()
         PF_FloatRGBA, true);
     
     DepthRenderTarget->UpdateResource();
-    CaptureComponent->TextureTarget = DepthRenderTarget;
     
     if (CaptureComponent==nullptr)
     {
@@ -169,23 +118,11 @@ void UDepthCameraComponent::InitializeRenderTargets()
     }
 }
 
-bool UDepthCameraComponent::CheckComponentAndRenderTarget() const
-{
-    if (!CaptureComponent || !DepthRenderTarget)
-    {
-        UE_LOG(LogDepthCamera, Error, TEXT("Capture component or "
-                   "render target not initialized!"));
-        return true;
-    }
-    return false;
-}
 
 void UDepthCameraComponent::CaptureDepthScene()
 {
-    if (CheckComponentAndRenderTarget())
+    if (!CheckComponentAndRenderTarget())
     {
-        UE_LOG(LogDepthCamera, Error, TEXT("UDepthCameraComponent: "
-                                    "Capture component or render target not initialized!"));
         return;
     }
     
@@ -199,10 +136,8 @@ void UDepthCameraComponent::CaptureDepthScene()
 
 void UDepthCameraComponent::OnlyCaptureDepthScene()
 {
-    if (CheckComponentAndRenderTarget())
+    if (!CheckComponentAndRenderTarget())
     {
-        UE_LOG(LogDepthCamera, Error, TEXT("UDepthCameraComponent: "
-                                    "Capture component or render target not initialized!"));
         return;
     }
     if (IsInGameThread())

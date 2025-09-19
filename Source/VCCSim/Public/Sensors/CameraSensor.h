@@ -21,8 +21,6 @@
 #include "GameFramework/Actor.h"
 #include "SensorBase.h"
 #include "Engine/TextureRenderTarget2D.h"
-#include "Components/SceneCaptureComponent2D.h"
-#include "Engine/SceneCapture2D.h"
 #include "Materials/MaterialInterface.h"
 #include "RHIResources.h"
 #include "CameraSensor.generated.h"
@@ -30,85 +28,59 @@
 class ARecorder;
 class UInsMeshHolder;
 
-class FRGBCameraConfig : public FSensorConfig
+class FRGBCameraConfig : public FCameraConfig
 {
 public:
-    float FOV = 90.0f;
-    int32 Width = 512;
-    int32 Height = 512;
-    bool bOrthographic = false;
-    float OrthoWidth = 512.0f;
+    FRGBCameraConfig()
+    {
+        FOV = 90.0f;
+        Width = 512;
+        Height = 512;
+        bOrthographic = false;
+        OrthoWidth = 512.0f;
+    }
 };
 
 DECLARE_DYNAMIC_DELEGATE_TwoParams(
     FKeyPointCaptured, const FTransform&, Pose, const FString&, Name);
 
 UCLASS(ClassGroup = (VCCSIM), meta = (BlueprintSpawnableComponent))
-class VCCSIM_API URGBCameraComponent : public UPrimitiveComponent
+class VCCSIM_API URGBCameraComponent : public UCameraBaseComponent
 {
     GENERATED_BODY()
 
 public:
     URGBCameraComponent();
     void RConfigure(const FRGBCameraConfig& Config, ARecorder* Recorder);
-    bool IsConfigured() const { return bBPConfigured; }
     void SetIgnoreLidar(UInsMeshHolder* MeshHolder);
-    UFUNCTION()
-    void SetRecordState(bool RState) { RecordState = RState; }
-    
-    int32 GetCameraIndex() const { return CameraIndex; }
+
+    virtual ESensorType GetSensorType() const override { return ESensorType::RGBCamera; }
+
+    int32 GetCameraIndex() const { return GetSensorIndex(); }
     FString CameraName;
-    
-    void SetCaptureComponent() const;
-    void InitializeRenderTargets();
-    
+
     void ProcessRGBTextureAsyncRaw(TFunction<void()> OnComplete);
     void ProcessRGBTextureAsync(TFunction<void(const TArray<FColor>&)> OnComplete);
 
     UFUNCTION(BlueprintCallable, Category = "RGBCamera")
     void CaptureRGBScene();
 
-    void ComputeIntrinsics();
-    FMatrix44f GetCameraIntrinsics() const { return CameraIntrinsics; }
-    // For GRPC call
     void AsyncGetRGBImageData(TFunction<void(const TArray<FColor>&)> Callback);
-    std::pair<int32, int32> GetImageSize() const { return {Width, Height}; }
         
 protected:
-    virtual void BeginPlay() override;
-    virtual void OnComponentCreated() override;
-    virtual void TickComponent(float DeltaTime, ELevelTick TickType,
-        FActorComponentTickFunction* ThisTickFunction) override;
+    virtual void InitializeRenderTargets() override;
+    virtual UTextureRenderTarget2D* GetRenderTarget() const override { return RGBRenderTarget; }
+    virtual void SetCaptureComponent() const override;
+    virtual void OnRecordTick() override;
 
 public:
-    // Configuration Properties
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "RGBCamera|Config")
-    float FOV;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "RGBCamera|Config")
-    int32 Width;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "RGBCamera|Config")
-    int32 Height;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "RGBCamera|Config")
-    bool bOrthographic;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "RGBCamera|Config", 
-        meta = (EditCondition = "bOrthographic"))
-    float OrthoWidth;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "RGBCamera|Config")
-    bool bBPConfigured = false;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "RGBCamera|Config")
-    int32 CameraIndex = 0;
 
-    FKeyPointCaptured
-    OnKeyPointCaptured;
+    FKeyPointCaptured OnKeyPointCaptured;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "RGBCamera|Debug")
-    bool bRecorded = false;
-    
     UPROPERTY()
     UTextureRenderTarget2D* RGBRenderTarget = nullptr;
-    
+
 private:
-    bool CheckComponentAndRenderTarget() const;
     void ExecuteCaptureOnGameThread();
 
     struct FReadSurfaceContext
@@ -119,19 +91,5 @@ private:
         FReadSurfaceDataFlags Flags;
     };
 
-    FMatrix44f CameraIntrinsics;
-    
-    UPROPERTY()
-    USceneCaptureComponent2D* CaptureComponent = nullptr;
     TArray<FColor> RGBData;
-
-    UPROPERTY()
-    AActor* ParentActor = nullptr;
-    UPROPERTY()
-    ARecorder* RecorderPtr = nullptr;
-    bool RecordState = false;
-    float RecordInterval = -1.f;
-    float TimeSinceLastCapture;
-
-    bool Dirty = false;
 };

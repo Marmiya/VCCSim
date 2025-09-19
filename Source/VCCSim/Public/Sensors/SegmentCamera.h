@@ -21,83 +21,62 @@
 #include "GameFramework/Actor.h"
 #include "SensorBase.h"
 #include "Engine/TextureRenderTarget2D.h"
-#include "Components/SceneCaptureComponent2D.h"
-#include "Engine/SceneCapture2D.h"
 #include "Materials/MaterialInterface.h"
 #include "RHIResources.h"
 #include "SegmentCamera.generated.h"
 
 class ARecorder;
 
-class FSegmentationCameraConfig : public FSensorConfig
+class FSegmentationCameraConfig : public FCameraConfig
 {
 public:
-    float FOV = 90.0f;
-    int32 Width = 512;
-    int32 Height = 512;
+    FSegmentationCameraConfig()
+    {
+        Width = 512;
+        Height = 512;
+    }
 };
 
 UCLASS(ClassGroup = (VCCSIM), meta = (BlueprintSpawnableComponent))
-class VCCSIM_API USegmentationCameraComponent : public UPrimitiveComponent
+class VCCSIM_API USegmentationCameraComponent : public UCameraBaseComponent
 {
     GENERATED_BODY()
 
 public:
     USegmentationCameraComponent();
     void RConfigure(const FSegmentationCameraConfig& Config, ARecorder* Recorder);
-    bool IsConfigured() const { return bBPConfigured; }
-    UFUNCTION()
-    void SetRecordState(bool RState) { RecordState = RState; }
-    int32 GetCameraIndex() const { return CameraIndex; }
-    
+
+    virtual ESensorType GetSensorType() const override { return ESensorType::SegmentationCamera; }
+    int32 GetCameraIndex() const { return GetSensorIndex(); }
+
     FString CameraName;
-    
-    void SetCaptureComponent() const;
-    void InitializeRenderTargets();
-    
+
     void ProcessSegmentationTextureAsyncRaw(TFunction<void()> OnComplete);
     void ProcessSegmentationTextureAsync(TFunction<void(const TArray<FColor>&)> OnComplete);
 
     UFUNCTION(BlueprintCallable, Category = "SegmentationCamera")
     void CaptureSegmentationScene();
 
-    FMatrix44f GetCameraIntrinsics() const { return CameraIntrinsics; }
     // For GRPC call
     void AsyncGetSegmentationImageData(TFunction<void(const TArray<FColor>&)> Callback);
-    std::pair<int32, int32> GetImageSize() const { return {Width, Height}; }
-        
+
 protected:
-    virtual void BeginPlay() override;
-    virtual void OnComponentCreated() override;
-    virtual void TickComponent(float DeltaTime, ELevelTick TickType,
-        FActorComponentTickFunction* ThisTickFunction) override;
+    virtual void InitializeRenderTargets() override;
+    virtual UTextureRenderTarget2D* GetRenderTarget() const override { return SegmentationRenderTarget; }
+    virtual void SetCaptureComponent() const override;
+    virtual void OnRecordTick() override;
 
 public:
-    // Configuration Properties
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SegmentationCamera|Config")
-    float FOV;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SegmentationCamera|Config")
-    int32 Width;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SegmentationCamera|Config")
-    int32 Height;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SegmentationCamera|Config")
-    bool bBPConfigured = false;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "RGBCamera|Config")
-    int32 CameraIndex = 0;
-    
+    // Segmentation-specific properties
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SegmentationCamera|Config")
     UMaterialInterface* SegmentationMaterial = Cast<UMaterialInterface>(
         StaticLoadObject(UMaterialInterface::StaticClass(), nullptr,
             TEXT("/VCCSim/Materials/M_Segmentation.M_Segmentation")));
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SegmentationCamera|Debug")
-    bool bRecorded = false;
-    
     UPROPERTY()
     UTextureRenderTarget2D* SegmentationRenderTarget = nullptr;
-    
+
 private:
-    bool CheckComponentAndRenderTarget() const;
     void ExecuteCaptureOnGameThread();
 
     struct FReadSurfaceContext
@@ -108,20 +87,7 @@ private:
         FReadSurfaceDataFlags Flags;
     };
 
-    FMatrix44f CameraIntrinsics;
-    
-    UPROPERTY()
-    USceneCaptureComponent2D* CaptureComponent = nullptr;
     TArray<FColor> SegmentationData;
     FCriticalSection DataLock;
-
-    UPROPERTY()
-    AActor* ParentActor = nullptr;
-    UPROPERTY()
-    ARecorder* RecorderPtr = nullptr;
-    bool RecordState = false;
-    float RecordInterval = -1.f;
-    float TimeSinceLastCapture;
-
     bool Dirty = false;
 };

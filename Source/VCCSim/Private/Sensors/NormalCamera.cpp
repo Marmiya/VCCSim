@@ -25,31 +25,26 @@ DEFINE_LOG_CATEGORY_STATIC(LogNormalCamera, Log, All);
 #include "RHI.h"
 
 UNormalCameraComponent::UNormalCameraComponent()
-    : FOV(90.0f)
-    , Width(1920)
-    , Height(1080)
-    , TimeSinceLastCapture(0.0f)
 {
-    PrimaryComponentTick.bCanEverTick = true;
 }
 
 void UNormalCameraComponent::RConfigure(
     const FNormalCameraConfig& Config, ARecorder* Recorder)
-{  
+{
     FOV = Config.FOV;
     Width = Config.Width;
     Height = Config.Height;
-    
-    InitializeRenderTargets();
+
+    ComputeIntrinsics();
     SetCaptureComponent();
+    InitializeRenderTargets();
 
     if (Config.RecordInterval > 0)
     {
-        ParentActor = GetOwner();
-        RecorderPtr = Recorder;
         RecordInterval = Config.RecordInterval;
+        SetupRecorder(Recorder);
         RecordState = Recorder->RecordState;
-        
+
         Recorder->OnRecordStateChanged.AddDynamic(this,
             &UNormalCameraComponent::SetRecordState);
         SetComponentTickEnabled(true);
@@ -62,74 +57,37 @@ void UNormalCameraComponent::RConfigure(
     bBPConfigured = true;
 }
 
+
+
+void UNormalCameraComponent::OnRecordTick()
+{
+    CaptureScene();
+
+    if (RecorderPtr)
+    {
+        FNormalCameraData NormalCameraData;
+        NormalCameraData.Timestamp = FPlatformTime::Seconds();
+        NormalCameraData.SensorIndex = GetSensorIndex();
+        NormalCameraData.Width = Width;
+        NormalCameraData.Height = Height;
+        while(!Dirty)
+        {
+            FPlatformProcess::Sleep(0.01f);
+        }
+        NormalCameraData.Data = GetNormalImage();
+        Dirty = false;
+        RecorderPtr->SubmitNormalData(ParentActor, MoveTemp(NormalCameraData));
+    }
+}
+
 void UNormalCameraComponent::SetCaptureComponent() const
 {
+    Super::SetCaptureComponent();
+
     if (CaptureComponent)
     {
-        CaptureComponent->ProjectionType = ECameraProjectionMode::Perspective;
-        CaptureComponent->FOVAngle = FOV;
+        CaptureComponent->PrimitiveRenderMode = ESceneCapturePrimitiveRenderMode::PRM_RenderScenePrimitives;
         CaptureComponent->CaptureSource = ESceneCaptureSource::SCS_Normal;
-        CaptureComponent->bCaptureEveryFrame = false;
-        CaptureComponent->bCaptureOnMovement = false;
-    }
-    else 
-    {
-        UE_LOG(LogNormalCamera, Error, TEXT("Capture component not initialized!"));
-    }
-}
-
-void UNormalCameraComponent::BeginPlay()
-{
-    Super::BeginPlay();
-    InitializeRenderTargets();
-    SetCaptureComponent();
-    
-    SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-    SetCollisionResponseToAllChannels(ECR_Ignore);
-    SetSimulatePhysics(true);
-}
-
-void UNormalCameraComponent::OnComponentCreated()
-{
-    Super::OnComponentCreated();
-    
-    // Initialize capture component
-    CaptureComponent = NewObject<USceneCaptureComponent2D>(this);
-    CaptureComponent->AttachToComponent(this,
-        FAttachmentTransformRules::SnapToTargetIncludingScale);
-    
-    SetCaptureComponent();
-}
-
-void UNormalCameraComponent::TickComponent(float DeltaTime, ELevelTick TickType,
-    FActorComponentTickFunction* ThisTickFunction)
-{
-    Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-
-    if (bRecorded && RecordState)
-    {
-        TimeSinceLastCapture += DeltaTime;
-        if (TimeSinceLastCapture >= RecordInterval)
-        {
-            TimeSinceLastCapture = 0.0f;
-            CaptureScene();
-            
-            if (RecorderPtr)
-            {
-                FNormalCameraData NormalCameraData;
-                NormalCameraData.Timestamp = FPlatformTime::Seconds();
-                NormalCameraData.SensorIndex = CameraIndex;
-                NormalCameraData.Width = Width;
-                NormalCameraData.Height = Height;
-                while(!Dirty)
-                {
-                    FPlatformProcess::Sleep(0.01f);
-                }
-                NormalCameraData.Data = GetNormalImage();
-                Dirty = false;
-                RecorderPtr->SubmitNormalData(ParentActor, MoveTemp(NormalCameraData));
-            }
-        }
     }
 }
 
@@ -139,30 +97,13 @@ void UNormalCameraComponent::InitializeRenderTargets()
     NormalRenderTarget->InitCustomFormat(Width, Height,
         PF_A32B32G32R32F, true);
     NormalRenderTarget->UpdateResource();
-    
-    if (CaptureComponent)
-    {
-        CaptureComponent->TextureTarget = NormalRenderTarget;
-    }
 }
 
-bool UNormalCameraComponent::CheckComponentAndRenderTarget() const
-{
-    if (!CaptureComponent || !NormalRenderTarget)
-    {
-        UE_LOG(LogNormalCamera, Error, TEXT("Capture component or "
-                                    "render target not initialized!"));
-        return true;
-    }
-    return false;
-}
 
 void UNormalCameraComponent::CaptureScene()
 {
-    if (CheckComponentAndRenderTarget())
+    if (!CheckComponentAndRenderTarget())
     {
-        UE_LOG(LogNormalCamera, Error, TEXT("UNormalCameraComponent: "
-                                    "Capture component or render target not initialized!"));
         return;
     }
     
@@ -244,7 +185,7 @@ void UNormalCameraComponent::AsyncGetNormalImageData(
 {
     AsyncTask(ENamedThreads::GameThread,
         [this, Callback = MoveTemp(Callback)]() {
-        if (CheckComponentAndRenderTarget())
+        if (!CheckComponentAndRenderTarget())
         {
             Callback({});
             return;

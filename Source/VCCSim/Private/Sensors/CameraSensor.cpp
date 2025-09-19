@@ -26,116 +26,55 @@ DEFINE_LOG_CATEGORY_STATIC(LogCameraSensor, Log, All);
 #include "Components/InstancedStaticMeshComponent.h"
 
 URGBCameraComponent::URGBCameraComponent()
-    : FOV(90.0f)
-    , Width(512)
-    , Height(512)
-    , bOrthographic(false)
-    , OrthoWidth(512.0f)
-    , TimeSinceLastCapture(0.0f)
 {
-    PrimaryComponentTick.bCanEverTick = true;
 }
 
-void URGBCameraComponent::BeginPlay()
+void URGBCameraComponent::OnRecordTick()
 {
-    Super::BeginPlay();
-    
-    InitializeRenderTargets();
-    SetCaptureComponent();
-    
-    SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-    SetCollisionResponseToAllChannels(ECR_Ignore);
-    SetSimulatePhysics(true);
-}
+    UE_LOG(LogCameraSensor, Log, TEXT("Recording camera %s"), *CameraName);
+    CaptureRGBScene();
 
-void URGBCameraComponent::OnComponentCreated()
-{
-    Super::OnComponentCreated();
-    
-    CaptureComponent = NewObject<USceneCaptureComponent2D>(this);
-    CaptureComponent->AttachToComponent(this,
-        FAttachmentTransformRules::SnapToTargetIncludingScale);
-    
-    SetCaptureComponent();
-}
-
-void URGBCameraComponent::TickComponent(float DeltaTime, ELevelTick TickType,
-    FActorComponentTickFunction* ThisTickFunction)
-{
-    Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-    
-    if (bRecorded && RecordState)
+    ProcessRGBTextureAsyncRaw([this]
     {
-        UE_LOG(LogCameraSensor, Log, TEXT("Recording camera %s"), *CameraName);
-        TimeSinceLastCapture += DeltaTime;
-        if (TimeSinceLastCapture >= RecordInterval)
+        Dirty = true;
+    });
+
+    if (RecorderPtr)
+    {
+        FRGBCameraData CameraData;
+        CameraData.Timestamp = FPlatformTime::Seconds();
+        CameraData.SensorIndex = GetSensorIndex();
+        CameraData.Width = Width;
+        CameraData.Height = Height;
+        while(!Dirty)
         {
-            TimeSinceLastCapture = 0.0f;
-            CaptureRGBScene();
-            
-            ProcessRGBTextureAsyncRaw([this]
-            {
-                Dirty = true;
-            });
-            
-            if (RecorderPtr)
-            {
-                FRGBCameraData CameraData;
-                CameraData.Timestamp = FPlatformTime::Seconds();
-                CameraData.SensorIndex = CameraIndex;
-                CameraData.Width = Width;
-                CameraData.Height = Height;
-                while(!Dirty)
-                {
-                    FPlatformProcess::Sleep(0.01f);
-                }
-                CameraData.Data = RGBData;
-                Dirty = false;
-                RecorderPtr->SubmitRGBData(ParentActor, MoveTemp(CameraData));
-            }
+            FPlatformProcess::Sleep(0.01f);
         }
+        CameraData.Data = RGBData;
+        Dirty = false;
+        RecorderPtr->SubmitRGBData(ParentActor, MoveTemp(CameraData));
     }
 }
 
-void URGBCameraComponent::ComputeIntrinsics()
-{
-    float HorizontalFOVRad = FMath::DegreesToRadians(FOV);
-    float fx = (Width / 2.0f) / FMath::Tan(HorizontalFOVRad / 2.0f);
-
-    // Compute vertical FOV from horizontal FOV and aspect ratio.
-    float verticalFOVRad = 2.0f * FMath::Atan((static_cast<float>(Height) / Width) *
-        FMath::Tan(HorizontalFOVRad / 2.0f));
-    float fy = (Height / 2.0f) / FMath::Tan(verticalFOVRad / 2.0f);
-
-    float cx = Width / 2.0f;
-    float cy = Height / 2.0f;
-
-    CameraIntrinsics = FMatrix44f::Identity;
-    CameraIntrinsics.M[0][0] = fx;  // focal length in x
-    CameraIntrinsics.M[1][1] = fy;  // focal length in y
-    CameraIntrinsics.M[0][2] = cx;  // principal point x
-    CameraIntrinsics.M[1][2] = cy;  // principal point y
-}
 
 void URGBCameraComponent::RConfigure(
     const FRGBCameraConfig& Config, ARecorder* Recorder)
-{ 
+{
     FOV = Config.FOV;
     Width = Config.Width;
     Height = Config.Height;
     bOrthographic = Config.bOrthographic;
     OrthoWidth = Config.OrthoWidth;
-    
+
     ComputeIntrinsics();
-    
+
     InitializeRenderTargets();
     SetCaptureComponent();
-    
+
     if (Config.RecordInterval > 0)
     {
-        ParentActor = GetOwner();
-        RecorderPtr = Recorder;
         RecordInterval = Config.RecordInterval;
+        SetupRecorder(Recorder);
         RecordState = Recorder->RecordState;
         Recorder->OnRecordStateChanged.AddDynamic(this,
             &URGBCameraComponent::SetRecordState);
@@ -168,32 +107,26 @@ void URGBCameraComponent::SetIgnoreLidar(
 
 void URGBCameraComponent::SetCaptureComponent() const
 {
+    Super::SetCaptureComponent();
+
     if (CaptureComponent)
     {
-        // Basic camera settings
-        CaptureComponent->ProjectionType = bOrthographic ?
-            ECameraProjectionMode::Orthographic : ECameraProjectionMode::Perspective;
-        CaptureComponent->FOVAngle = FOV;
-        CaptureComponent->OrthoWidth = OrthoWidth;
-
-        // Change the capture source to HDR for better quality
+        CaptureComponent->PrimitiveRenderMode = ESceneCapturePrimitiveRenderMode::PRM_RenderScenePrimitives;
         CaptureComponent->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
         CaptureComponent->bCaptureEveryFrame = false;
         CaptureComponent->bCaptureOnMovement = false;
         CaptureComponent->bAlwaysPersistRenderingState = true;
         CaptureComponent->PrimaryComponentTick.bCanEverTick = true;
-        
+
         FEngineShowFlags& ShowFlags = CaptureComponent->ShowFlags;
-        // ShowFlags.SetTemporalAA(true);
         ShowFlags.EnableAdvancedFeatures();
         ShowFlags.SetPostProcessing(true);
         ShowFlags.SetTonemapper(true);
         ShowFlags.SetBloom(true);
-
         ShowFlags.SetLumenGlobalIllumination(true);
         ShowFlags.SetLumenReflections(true);
     }
-    else 
+    else
     {
         UE_LOG(LogCameraSensor, Error, TEXT("Capture component not initialized!"));
     }
@@ -211,12 +144,11 @@ void URGBCameraComponent::InitializeRenderTargets()
     RGBRenderTarget->bAutoGenerateMips = true;
     
     RGBRenderTarget->UpdateResource();
-    CaptureComponent->TextureTarget = RGBRenderTarget;
 }
 
 void URGBCameraComponent::CaptureRGBScene()
 {
-    if (CheckComponentAndRenderTarget())
+    if (!CheckComponentAndRenderTarget())
     {
         return;
     }
@@ -339,16 +271,6 @@ void URGBCameraComponent::ProcessRGBTextureAsync(
         });
 }
 
-bool URGBCameraComponent::CheckComponentAndRenderTarget() const
-{
-    if (!CaptureComponent || !RGBRenderTarget)
-    {
-        UE_LOG(LogCameraSensor, Error, TEXT("URGBCameraComponent::CheckComponentAndRenderTarget: "
-                                    "Capture component or render target not initialized!"));
-        return true;
-    }
-    return false;
-}
 
 void URGBCameraComponent::ExecuteCaptureOnGameThread()
 {

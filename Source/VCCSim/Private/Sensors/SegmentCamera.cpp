@@ -24,105 +24,50 @@ DEFINE_LOG_CATEGORY_STATIC(LogSegmentCamera, Log, All);
 #include "Windows/WindowsHWrapper.h"
 
 USegmentationCameraComponent::USegmentationCameraComponent()
-    : FOV(90.0f)
-    , Width(512)
-    , Height(512)
-    , TimeSinceLastCapture(0.0f)
 {
-    PrimaryComponentTick.bCanEverTick = true;
 }
 
-void USegmentationCameraComponent::BeginPlay()
-{
-    Super::BeginPlay();
-    
-    InitializeRenderTargets();
-    SetCaptureComponent();
-    
-    SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-    SetCollisionResponseToAllChannels(ECR_Ignore);
-    SetSimulatePhysics(true);
-}
 
-void USegmentationCameraComponent::OnComponentCreated()
+void USegmentationCameraComponent::OnRecordTick()
 {
-    Super::OnComponentCreated();
-    
-    CaptureComponent = NewObject<USceneCaptureComponent2D>(this);
-    CaptureComponent->AttachToComponent(this,
-        FAttachmentTransformRules::SnapToTargetIncludingScale);
-    
-    SetCaptureComponent();
-}
+    CaptureSegmentationScene();
 
-void USegmentationCameraComponent::TickComponent(float DeltaTime, ELevelTick TickType,
-    FActorComponentTickFunction* ThisTickFunction)
-{
-    Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-    
-    if (bRecorded && RecordState)
+    ProcessSegmentationTextureAsyncRaw([this]
     {
-        TimeSinceLastCapture += DeltaTime;
-        if (TimeSinceLastCapture >= RecordInterval)
+        Dirty = true;
+    });
+
+    if (RecorderPtr)
+    {
+        FSegmentationCameraData CameraData;
+        CameraData.Timestamp = FPlatformTime::Seconds();
+        CameraData.Width = Width;
+        CameraData.Height = Height;
+        while(!Dirty)
         {
-            TimeSinceLastCapture = 0.0f;
-            CaptureSegmentationScene();
-            
-            ProcessSegmentationTextureAsyncRaw([this]
-            {
-                Dirty = true;
-            });
-            
-            if (RecorderPtr)
-            {
-                FSegmentationCameraData CameraData;
-                CameraData.Timestamp = FPlatformTime::Seconds();
-                CameraData.Width = Width;
-                CameraData.Height = Height;
-                while(!Dirty)
-                {
-                    FPlatformProcess::Sleep(0.01f);
-                }
-                CameraData.Data = SegmentationData;
-                Dirty = false;
-                RecorderPtr->SubmitSegmentationData(ParentActor, MoveTemp(CameraData));
-            }
+            FPlatformProcess::Sleep(0.01f);
         }
+        CameraData.Data = SegmentationData;
+        Dirty = false;
+        RecorderPtr->SubmitSegmentationData(ParentActor, MoveTemp(CameraData));
     }
 }
 
 void USegmentationCameraComponent::RConfigure(
     const FSegmentationCameraConfig& Config, ARecorder* Recorder)
-{ 
+{
     FOV = Config.FOV;
     Width = Config.Width;
     Height = Config.Height;
-    
-    float HorizontalFOVRad = FMath::DegreesToRadians(FOV);
-    float fx = (Width / 2.0f) / FMath::Tan(HorizontalFOVRad / 2.0f);
 
-    // Compute vertical FOV from horizontal FOV and aspect ratio.
-    float verticalFOVRad = 2.0f * FMath::Atan((static_cast<float>(Height) / Width) *
-        FMath::Tan(HorizontalFOVRad / 2.0f));
-    float fy = (Height / 2.0f) / FMath::Tan(verticalFOVRad / 2.0f);
-
-    float cx = Width / 2.0f;
-    float cy = Height / 2.0f;
-
-    CameraIntrinsics = FMatrix44f::Identity;
-    CameraIntrinsics.M[0][0] = fx;  // focal length in x
-    CameraIntrinsics.M[1][1] = fy;  // focal length in y
-    CameraIntrinsics.M[0][2] = cx;  // principal point x
-    CameraIntrinsics.M[1][2] = cy;  // principal point y
-    
+    ComputeIntrinsics();
     InitializeRenderTargets();
     SetCaptureComponent();
     
     if (Config.RecordInterval > 0)
     {
-        ParentActor = GetOwner();
-        RecorderPtr = Recorder;
         RecordInterval = Config.RecordInterval;
+        SetupRecorder(Recorder);
         RecordState = Recorder->RecordState;
         Recorder->OnRecordStateChanged.AddDynamic(this,
             &USegmentationCameraComponent::SetRecordState);
@@ -139,18 +84,14 @@ void USegmentationCameraComponent::RConfigure(
 
 void USegmentationCameraComponent::SetCaptureComponent() const
 {
+    Super::SetCaptureComponent();
+
     if (CaptureComponent)
     {
-        // Basic camera settings
-        CaptureComponent->ProjectionType = ECameraProjectionMode::Perspective;
-        CaptureComponent->FOVAngle = FOV;
-
-        // For segmentation, we want to capture the base color/diffuse
+        CaptureComponent->PrimitiveRenderMode = ESceneCapturePrimitiveRenderMode::PRM_RenderScenePrimitives;
         CaptureComponent->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
-        CaptureComponent->bCaptureEveryFrame = false;
-        CaptureComponent->bCaptureOnMovement = false;
         CaptureComponent->bAlwaysPersistRenderingState = true;
-        
+
         // Apply the segmentation post-process material if available
         if (SegmentationMaterial)
         {
@@ -165,10 +106,6 @@ void USegmentationCameraComponent::SetCaptureComponent() const
             UE_LOG(LogSegmentCamera, Error, TEXT("Segmentation material not set!"));
         }
     }
-    else 
-    {
-        UE_LOG(LogSegmentCamera, Error, TEXT("Capture component not initialized!"));
-    }
 }
 
 void USegmentationCameraComponent::InitializeRenderTargets()
@@ -182,12 +119,11 @@ void USegmentationCameraComponent::InitializeRenderTargets()
     SegmentationRenderTarget->bAutoGenerateMips = false;
     
     SegmentationRenderTarget->UpdateResource();
-    CaptureComponent->TextureTarget = SegmentationRenderTarget;
 }
 
 void USegmentationCameraComponent::CaptureSegmentationScene()
 {
-    if (CheckComponentAndRenderTarget())
+    if (!CheckComponentAndRenderTarget())
     {
         return;
     }
@@ -213,7 +149,7 @@ void USegmentationCameraComponent::AsyncGetSegmentationImageData(
 {
     AsyncTask(ENamedThreads::GameThread, [this, Callback = MoveTemp(Callback)]()
     {
-        if (CheckComponentAndRenderTarget())
+        if (!CheckComponentAndRenderTarget())
         {
             return;
         }
@@ -309,16 +245,6 @@ void USegmentationCameraComponent::ProcessSegmentationTextureAsync(
         });
 }
 
-bool USegmentationCameraComponent::CheckComponentAndRenderTarget() const
-{
-    if (!CaptureComponent || !SegmentationRenderTarget)
-    {
-        UE_LOG(LogSegmentCamera, Error, TEXT("USegmentationCameraComponent::CheckComponentAndRenderTarget: "
-                                    "Capture component or render target not initialized!"));
-        return true;
-    }
-    return false;
-}
 
 void USegmentationCameraComponent::ExecuteCaptureOnGameThread()
 {

@@ -21,8 +21,6 @@
 #include "GameFramework/Actor.h"
 #include "SensorBase.h"
 #include "Engine/TextureRenderTarget2D.h"
-#include "Components/SceneCaptureComponent2D.h"
-#include "Engine/SceneCapture2D.h"
 #include "Materials/MaterialInterface.h"
 #include "RHIResources.h"
 #include "DepthCamera.generated.h"
@@ -35,34 +33,24 @@ struct FDCPoint
     FDCPoint() : Location(FVector::ZeroVector){}
 };
 
-class FDepthCameraConfig: public FSensorConfig
+class FDepthCameraConfig: public FCameraConfig
 {
 public:
-    float FOV = 90.0f;
     float MaxRange = 2000.0f;
     float MinRange = .0f;
-    int32 Width = 512;
-    int32 Height = 512;
-    bool bOrthographic = false;
-    float OrthoWidth = 512.0f;
 };
 
-UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
-class VCCSIM_API UDepthCameraComponent : public UPrimitiveComponent
+UCLASS(ClassGroup = (VCCSIM), meta = (BlueprintSpawnableComponent))
+class VCCSIM_API UDepthCameraComponent : public UCameraBaseComponent
 {
     GENERATED_BODY()
 
 public:
     UDepthCameraComponent();
     void RConfigure(const FDepthCameraConfig& Config, ARecorder* Recorder);
-    bool IsConfigured() const { return bBPConfigured; }
-    UFUNCTION()
-    void SetRecordState(bool RState){ RecordState = RState; }
-    
-    int32 GetCameraIndex() const { return CameraIndex; }
 
-    void InitializeRenderTargets();
-    void SetCaptureComponent() const;
+    virtual ESensorType GetSensorType() const override { return ESensorType::DepthCamera; }
+    int32 GetCameraIndex() const { return GetSensorIndex(); }
 
     UFUNCTION(BlueprintCallable, Category = "DepthCamera")
     void CaptureDepthScene();
@@ -75,62 +63,32 @@ public:
     // For grpc server
     void AsyncGetPointCloudData(TFunction<void()> Callback);
     void AsyncGetDepthImageData(TFunction<void(const TArray<FFloat16Color>&)> Callback);
-    std::pair<int32, int32> GetImageSize() const { return {Width, Height}; }
-    
-protected:
-    virtual void BeginPlay() override;
-    virtual void OnComponentCreated() override;
-    virtual void TickComponent(float DeltaTime, ELevelTick TickType,
-    FActorComponentTickFunction* ThisTickFunction) override;
-    
-    void ProcessDepthTexture(TFunction<void()> OnComplete);
-    void ProcessDepthTextureParam(
-        TFunction<void(const TArray<FFloat16Color>&)> OnComplete);
-    
-    TArray<float> GetDepthImage();
-    
-public:
-    // Configuration Properties
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthCamera|Config")
-    float FOV;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthCamera|Config")
-    float MaxRange;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthCamera|Config")
-    float MinRange;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthCamera|Config")
-    int32 Width;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthCamera|Config")
-    int32 Height;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthCamera|Config")
-    bool bOrthographic;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthCamera|Config", 
-        meta = (EditCondition = "bOrthographic"))
-    float OrthoWidth;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthCamera|Config")
-    bool bBPConfigured = false;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthCamera|Config")
-    int32 CameraIndex = 0;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Lidar|Debug")
-    bool bRecorded = false;
+protected:
+    virtual void InitializeRenderTargets() override;
+    virtual UTextureRenderTarget2D* GetRenderTarget() const override { return DepthRenderTarget; }
+    virtual void SetCaptureComponent() const override;
+    virtual void OnRecordTick() override;
+
+    void ProcessDepthTexture(TFunction<void()> OnComplete);
+    void ProcessDepthTextureParam(TFunction<void(const TArray<FFloat16Color>&)> OnComplete);
+
+    TArray<float> GetDepthImage();
+
+public:
+    // Depth-specific properties
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthCamera|Config")
+    float MaxRange = 2000.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthCamera|Config")
+    float MinRange = 0.0f;
 
     UPROPERTY()
     UTextureRenderTarget2D* DepthRenderTarget = nullptr;
+
     TArray<FDCPoint> PointCloudData;
-    
+
 private:
-    bool CheckComponentAndRenderTarget() const;
-    
-    UPROPERTY()
-    USceneCaptureComponent2D* CaptureComponent = nullptr;
     TArray<FFloat16Color> DepthData;
-    
-    UPROPERTY()
-    AActor* ParentActor = nullptr;
-    UPROPERTY()
-    ARecorder* RecorderPtr = nullptr;
-    float RecordInterval = -1.f;
-    bool RecordState = false;
-    float TimeSinceLastCapture;
     bool Dirty = false;
 };
