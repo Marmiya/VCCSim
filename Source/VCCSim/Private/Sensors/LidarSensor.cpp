@@ -109,6 +109,10 @@ void ULidarComponent::TickComponent(
 			FLidarData LidarData;
 			LidarData.Timestamp = FPlatformTime::Seconds();
 			LidarData.Data = PerformLineTraces(nullptr);
+			if (bVisualizePoints)
+			{
+				VisualizePointCloud();
+			}
 			TimeSinceLastCapture = 0.0f;
 			if (RecorderPtr)
 			{
