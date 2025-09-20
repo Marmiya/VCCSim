@@ -28,6 +28,68 @@ class URGBCameraComponent;
 class USegmentationCameraComponent;
 class UNormalCameraComponent;
 
+UENUM(BlueprintType)
+enum class EVCCSimViewType : uint8
+{
+    Unit = 0        UMETA(DisplayName = "Unit"), //dynamic
+    RGB = 4         UMETA(DisplayName = "RGB"),
+    Depth = 5       UMETA(DisplayName = "Depth"),
+    Normal = 6      UMETA(DisplayName = "Normal"),
+    Segmentation = 7 UMETA(DisplayName = "Segmentation"),
+    Lit = 8         UMETA(DisplayName = "Lit"),
+    PointCloud = 9  UMETA(DisplayName = "Point Cloud")
+};
+
+USTRUCT()
+struct FVCCSimViewData
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    TObjectPtr<UImage> ImageDisplay = nullptr;
+
+    UPROPERTY()
+    TObjectPtr<UMaterialInterface> VisualizationMaterial = nullptr;
+
+    UPROPERTY()
+    TObjectPtr<UMaterialInstanceDynamic> MaterialInstance = nullptr;
+
+    UPROPERTY()
+    TObjectPtr<UTextureRenderTarget2D> RenderTarget = nullptr;
+
+    UPROPERTY()
+    TObjectPtr<UObject> CameraComponent = nullptr;
+
+    UPROPERTY()
+    TObjectPtr<USceneCaptureComponent2D> SceneCapture = nullptr;
+
+    UPROPERTY()
+    TObjectPtr<UMeshHandlerComponent> MeshHandler = nullptr;
+
+    UPROPERTY(EditAnywhere, Category = "View Settings")
+    int32 RenderWidth = 960;
+
+    UPROPERTY(EditAnywhere, Category = "View Settings")
+    int32 RenderHeight = 540;
+
+    UPROPERTY(EditAnywhere, Category = "View Settings")
+    float UpdateInterval = 0.1f;
+
+    UPROPERTY(EditAnywhere, Category = "Depth Settings")
+    float MinDepth = 0.0f;
+
+    UPROPERTY(EditAnywhere, Category = "Depth Settings")
+    float MaxDepth = 5000.0f;
+
+    UPROPERTY(EditAnywhere, Category = "Depth Settings", meta = (ClampMin = "0.1", ClampMax = "5.0"))
+    float Contrast = 1.2f;
+
+    UPROPERTY(EditAnywhere, Category = "Depth Settings", meta = (ClampMin = "0.1", ClampMax = "5.0"))
+    float Brightness = 1.0f;
+
+    float UpdateTimer = 0.0f;
+};
+
 UCLASS()
 class VCCSIM_API UVCCSIMDisplayWidget : public UUserWidget
 {
@@ -43,6 +105,8 @@ public:
     UFUNCTION()
     void SetHolder(AActor* holder){ Holder = holder; }
     
+    void SetCameraContext(EVCCSimViewType ViewType, UTextureRenderTarget2D* RenderTexture, UObject* CameraComponent);
+
     void SetDepthContext(UTextureRenderTarget2D* DepthTexture, UDepthCameraComponent* InCamera);
     void SetRGBContext(UTextureRenderTarget2D* RGBTexture, URGBCameraComponent* InCamera);
     void SetSegContext(UTextureRenderTarget2D* SegTexture, USegmentationCameraComponent* InCamera);
@@ -59,14 +123,6 @@ public:
     UFUNCTION(BlueprintCallable, Category = "UnitView")
     void SetMeshHandler(UMeshHandlerComponent* InMeshHandler, const float& Opacity);
     
-    // ID:
-    // 4 -> Normal,
-    // 5 -> Segmentation,
-    // 6 -> RGB,
-    // 7 -> Lit,
-    // 8 -> PC,
-    // 9 -> Unit Dynamic
-    // 0 -> Depth
     UFUNCTION(BlueprintCallable, Category = "Capture")
     void RequestCapture(const int32& ID);
 
@@ -74,128 +130,47 @@ public:
     FString LogSavePath = FPaths::ProjectLogDir();
     
 protected:
-    // Depth camera visualization properties
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
     TObjectPtr<UImage> DepthImageDisplay;
-    UPROPERTY(EditDefaultsOnly, Category = "DepthCamera")
-    TObjectPtr<UMaterialInterface> DepthVisualizationMaterial;
-    UPROPERTY()
-    TObjectPtr<UMaterialInstanceDynamic> DepthMaterial;
-    UPROPERTY()
-    TObjectPtr<UTextureRenderTarget2D> DepthRenderTarget;
-    UPROPERTY()
-    UDepthCameraComponent* DepthCameraComponent = nullptr;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthCamera|Visualization")
-    float MinDepth = 0.0f;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthCamera|Visualization")
-    float MaxDepth = 5000.0f;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite,
-        Category = "DepthCamera|Visualization", meta = (ClampMin = "0.1", ClampMax = "5.0"))
-    float Contrast = 1.2f;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite,
-        Category = "DepthCamera|Visualization", meta = (ClampMin = "0.1", ClampMax = "5.0"))
-    float Brightness = 1.0f;
-    
-    // RGB camera visualization properties
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
     TObjectPtr<UImage> RGBImageDisplay;
-    UPROPERTY(EditDefaultsOnly, Category = "RGBCamera")
-    TObjectPtr<UMaterialInterface> RGBVisualizationMaterial;
-    UPROPERTY()
-    TObjectPtr<UMaterialInstanceDynamic> RGBMaterial;
-    UPROPERTY()
-    TObjectPtr<UTextureRenderTarget2D> RGBRenderTarget;
-    UPROPERTY()
-    URGBCameraComponent* RGBCameraComponent = nullptr;
-
-    // Segmentation camera visualization properties
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
     TObjectPtr<UImage> SegImageDisplay;
-    UPROPERTY(EditDefaultsOnly, Category = "SegCamera")
-    TObjectPtr<UMaterialInterface> SegVisualizationMaterial;
-    UPROPERTY()
-    TObjectPtr<UMaterialInstanceDynamic> SegMaterial;
-    UPROPERTY()
-    TObjectPtr<UTextureRenderTarget2D> SegRenderTarget;
-    UPROPERTY()
-    USegmentationCameraComponent* SegCameraComponent = nullptr;
-
-    // Normal visualization properties
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
     TObjectPtr<UImage> NormalImageDisplay;
-    UPROPERTY(EditDefaultsOnly, Category = "NormalView")
-    TObjectPtr<UMaterialInterface> NormalVisualizationMaterial;
-    UPROPERTY()
-    TObjectPtr<UMaterialInstanceDynamic> NormalMaterial;
-    UPROPERTY()
-    TObjectPtr<UTextureRenderTarget2D> NormalRenderTarget;
-    UPROPERTY()
-    UNormalCameraComponent* NormalCameraComponent = nullptr;
-        
-    // Lit image visualization properties
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
     TObjectPtr<UImage> LitImageDisplay;
-    UPROPERTY(EditDefaultsOnly, Category = "LitView")
-    TObjectPtr<UMaterialInterface> LitVisualizationMaterial;
-    UPROPERTY(EditDefaultsOnly, Category = "LitView")
-    int32 LitRenderWidth = 960;
-    UPROPERTY(EditDefaultsOnly, Category = "LitView")
-    int32 LitRenderHeight = 540;
-    UPROPERTY(EditDefaultsOnly, Category = "LitView")
-    float LitUpdateInterval = 1.0f/30.0f;
-    UPROPERTY()
-    TObjectPtr<UTextureRenderTarget2D> LitRenderTarget;
-    UPROPERTY()
-    TObjectPtr<USceneCaptureComponent2D> LitSceneCapture;
-    UPROPERTY()
-    TObjectPtr<UMaterialInstanceDynamic> LitMaterial;
-    
-    // Point cloud visualization properties
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
     TObjectPtr<UImage> PCImageDisplay;
-    UPROPERTY(EditDefaultsOnly, Category = "PCView")
-    TObjectPtr<UMaterialInterface> PCVisualizationMaterial;
-    UPROPERTY(EditDefaultsOnly, Category = "PCView")
-    int32 PCRenderWidth = 960;
-    UPROPERTY(EditDefaultsOnly, Category = "PCView")
-    int32 PCRenderHeight = 540;
-    UPROPERTY(EditDefaultsOnly, Category = "PCView")
-    float PCUpdateInterval = 0.1f;
-    UPROPERTY()
-    TObjectPtr<UTextureRenderTarget2D> PCRenderTarget;
-    UPROPERTY()
-    TObjectPtr<USceneCaptureComponent2D> PCSceneCapture;
-    UPROPERTY()
-    TObjectPtr<UMaterialInstanceDynamic> PCMaterial;
-    
-    // Unit visualization properties
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
     TObjectPtr<UImage> UnitImageDisplay;
-    UPROPERTY(EditDefaultsOnly, Category = "UnitView")
+
+    UPROPERTY(EditDefaultsOnly, Category = "ViewMaterials")
+    TObjectPtr<UMaterialInterface> DepthVisualizationMaterial;
+    UPROPERTY(EditDefaultsOnly, Category = "ViewMaterials")
+    TObjectPtr<UMaterialInterface> RGBVisualizationMaterial;
+    UPROPERTY(EditDefaultsOnly, Category = "ViewMaterials")
+    TObjectPtr<UMaterialInterface> SegVisualizationMaterial;
+    UPROPERTY(EditDefaultsOnly, Category = "ViewMaterials")
+    TObjectPtr<UMaterialInterface> NormalVisualizationMaterial;
+    UPROPERTY(EditDefaultsOnly, Category = "ViewMaterials")
+    TObjectPtr<UMaterialInterface> LitVisualizationMaterial;
+    UPROPERTY(EditDefaultsOnly, Category = "ViewMaterials")
+    TObjectPtr<UMaterialInterface> PCVisualizationMaterial;
+    UPROPERTY(EditDefaultsOnly, Category = "ViewMaterials")
     TObjectPtr<UMaterialInterface> MeshVisualizationMaterial;
-    UPROPERTY(EditDefaultsOnly, Category = "UnitView")
-    int32 MeshRenderWidth = 960;
-    UPROPERTY(EditDefaultsOnly, Category = "UnitView")
-    int32 MeshRenderHeight = 540;
-    UPROPERTY(EditDefaultsOnly, Category = "UnitView")
-    float MeshUpdateInterval = 0.1f;
+
     UPROPERTY()
-    TObjectPtr<UTextureRenderTarget2D> MeshRenderTarget;
-    UPROPERTY()
-    TObjectPtr<USceneCaptureComponent2D> MeshSceneCapture;
-    UPROPERTY()
-    TObjectPtr<UMaterialInstanceDynamic> MeshMaterial;
-    UPROPERTY()
-    TObjectPtr<UMeshHandlerComponent> MeshHandler;
+    TMap<EVCCSimViewType, FVCCSimViewData> ViewDataMap;
 
 private:
-    void UpdateLitImage(float InDeltaTime);
-    void UpdatePCImage(float InDeltaTime);
-    void UpdateMeshImage(float InDeltaTime);
-    
-    float LitUpdateTimer = 0.0f;
-    float PCUpdateTimer = 0.0f;
-    float MeshUpdateTimer = 0.0f;
+    void UpdateViewImage(EVCCSimViewType ViewType, float InDeltaTime);
+
+    FVCCSimViewData* GetViewData(EVCCSimViewType ViewType);
+    const FVCCSimViewData* GetViewData(EVCCSimViewType ViewType) const;
+
+    void InitializeViewData();
+    void SetupViewBindings();
 
     TQueue<int32> CaptureQueue;
     
@@ -207,6 +182,10 @@ private:
     TObjectPtr<AActor> Holder = nullptr;
 
     void ProcessCapture(const int32 ID);
+    void ProcessCaptureByType(EVCCSimViewType ViewType);
     void SaveRenderTargetToDisk(
-        UTextureRenderTarget2D* RenderTarget, const FString& FileName) const;
+        UTextureRenderTarget2D* RenderTarget, const FString& FileName, EVCCSimViewType ViewType) const;
+
+    static EVCCSimViewType IDToViewType(int32 ID);
+    static int32 ViewTypeToID(EVCCSimViewType ViewType);
 };

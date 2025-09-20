@@ -63,7 +63,7 @@ void USegmentationCameraComponent::RConfigure(
     ComputeIntrinsics();
     InitializeRenderTargets();
     SetCaptureComponent();
-    
+
     if (Config.RecordInterval > 0)
     {
         RecordInterval = Config.RecordInterval;
@@ -78,7 +78,25 @@ void USegmentationCameraComponent::RConfigure(
     {
         SetComponentTickEnabled(false);
     }
-    
+
+    // Perform a warmup capture to ensure SegmentationMaterial is properly applied
+    // This prevents the first capture from having incomplete segmentation material application
+    if (CheckComponentAndRenderTarget())
+    {
+        AsyncTask(ENamedThreads::GameThread, [this]()
+        {
+            // Wait one frame for PostProcess material to initialize
+            GetWorld()->GetTimerManager().SetTimerForNextTick([this]()
+            {
+                if (CaptureComponent)
+                {
+                    CaptureComponent->CaptureScene();
+                    UE_LOG(LogSegmentCamera, Log, TEXT("Warmup capture completed for SegmentationCamera"));
+                }
+            });
+        });
+    }
+
     bBPConfigured = true;
 }
 

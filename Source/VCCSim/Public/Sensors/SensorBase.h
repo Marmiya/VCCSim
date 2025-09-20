@@ -25,8 +25,6 @@
 
 class ARecorder;
 
-DEFINE_LOG_CATEGORY_STATIC(LogSensorBase, Log, All);
-
 enum class ESensorType : uint8
 {
 	Lidar,

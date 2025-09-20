@@ -15,6 +15,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+DEFINE_LOG_CATEGORY_STATIC(LogCameraSensor, Log, All);
+
+
 #include "Sensors/SensorBase.h"
 #include "Simulation/Recorder.h"
 #include "Engine/World.h"
@@ -91,9 +94,9 @@ void UCameraBaseComponent::ConfigureSensor()
 {
 	Super::ConfigureSensor();
 
-	SetCaptureComponent();
 	InitializeRenderTargets();
 	ComputeIntrinsics();
+	SetCaptureComponent();
 }
 
 void UCameraBaseComponent::SetCaptureComponent() const
@@ -107,6 +110,10 @@ void UCameraBaseComponent::SetCaptureComponent() const
 	if (UTextureRenderTarget2D* RenderTarget = GetRenderTarget())
 	{
 		CaptureComponent->TextureTarget = RenderTarget;
+	}
+	else 
+	{
+		UE_LOG(LogCameraSensor, Error, TEXT("GetRenderTarget() returned null!"));
 	}
 }
 

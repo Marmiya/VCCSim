@@ -1,4 +1,4 @@
-﻿/*
+/*
 * Copyright (C) 2025 Visual Computing Research Center, Shenzhen University
  *
  * This program is free software: you can redistribute it and/or modify
@@ -36,39 +36,107 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogVCCSimDisplayWidget, Log, All);
 
-
 void UVCCSIMDisplayWidget::NativeConstruct()
 {
     Super::NativeConstruct();
-    
-    if (DepthVisualizationMaterial && DepthImageDisplay)
-    {
-        DepthMaterial = UMaterialInstanceDynamic::Create(
-            DepthVisualizationMaterial, this);
-        DepthImageDisplay->SetBrushFromMaterial(DepthMaterial);
 
-        DepthMaterial->SetScalarParameterValue("MinDepth", MinDepth);
-        DepthMaterial->SetScalarParameterValue("MaxDepth", MaxDepth);
-        DepthMaterial->SetScalarParameterValue("Contrast", Contrast);
-        DepthMaterial->SetScalarParameterValue("Brightness", Brightness);
-    }
-    if (RGBVisualizationMaterial && RGBImageDisplay)
+    InitializeViewData();
+    SetupViewBindings();
+}
+
+void UVCCSIMDisplayWidget::InitializeViewData()
+{
+    ViewDataMap.Empty();
+
+    ViewDataMap.Add(EVCCSimViewType::RGB, FVCCSimViewData());
+    ViewDataMap.Add(EVCCSimViewType::Depth, FVCCSimViewData());
+    ViewDataMap.Add(EVCCSimViewType::Normal, FVCCSimViewData());
+    ViewDataMap.Add(EVCCSimViewType::Segmentation, FVCCSimViewData());
+    ViewDataMap.Add(EVCCSimViewType::Lit, FVCCSimViewData());
+    ViewDataMap.Add(EVCCSimViewType::PointCloud, FVCCSimViewData());
+    ViewDataMap.Add(EVCCSimViewType::Unit, FVCCSimViewData());
+
+    // Initialize depth-specific settings
+    if (FVCCSimViewData* DepthData = GetViewData(EVCCSimViewType::Depth))
     {
-        RGBMaterial = UMaterialInstanceDynamic::Create(
-            RGBVisualizationMaterial, this);
-        RGBImageDisplay->SetBrushFromMaterial(RGBMaterial);
+        DepthData->MinDepth = 0.0f;
+        DepthData->MaxDepth = 5000.0f;
+        DepthData->Contrast = 1.2f;
+        DepthData->Brightness = 1.0f;
     }
-    if (SegVisualizationMaterial && SegImageDisplay)
+
+    // Initialize render settings for scene capture views
+    if (FVCCSimViewData* LitData = GetViewData(EVCCSimViewType::Lit))
     {
-        SegMaterial = UMaterialInstanceDynamic::Create(
-            SegVisualizationMaterial, this);
-        SegImageDisplay->SetBrushFromMaterial(SegMaterial);
+        LitData->UpdateInterval = 1.0f/30.0f;
     }
-    if (NormalVisualizationMaterial && NormalImageDisplay)
+
+    if (FVCCSimViewData* PCData = GetViewData(EVCCSimViewType::PointCloud))
     {
-        NormalMaterial = UMaterialInstanceDynamic::Create(
-            NormalVisualizationMaterial, this);
-        NormalImageDisplay->SetBrushFromMaterial(NormalMaterial);
+        PCData->UpdateInterval = 0.1f;
+    }
+
+    if (FVCCSimViewData* UnitData = GetViewData(EVCCSimViewType::Unit))
+    {
+        UnitData->UpdateInterval = 0.1f;
+    }
+}
+
+void UVCCSIMDisplayWidget::SetupViewBindings()
+{
+    for (auto& [ViewType, ViewData] : ViewDataMap)
+    {
+        UImage* ImageDisplay = nullptr;
+        UMaterialInterface* Material = nullptr;
+
+        switch (ViewType)
+        {
+        case EVCCSimViewType::RGB:
+            ImageDisplay = RGBImageDisplay;
+            Material = RGBVisualizationMaterial;
+            break;
+        case EVCCSimViewType::Depth:
+            ImageDisplay = DepthImageDisplay;
+            Material = DepthVisualizationMaterial;
+            break;
+        case EVCCSimViewType::Normal:
+            ImageDisplay = NormalImageDisplay;
+            Material = NormalVisualizationMaterial;
+            break;
+        case EVCCSimViewType::Segmentation:
+            ImageDisplay = SegImageDisplay;
+            Material = SegVisualizationMaterial;
+            break;
+        case EVCCSimViewType::Lit:
+            ImageDisplay = LitImageDisplay;
+            Material = LitVisualizationMaterial;
+            break;
+        case EVCCSimViewType::PointCloud:
+            ImageDisplay = PCImageDisplay;
+            Material = PCVisualizationMaterial;
+            break;
+        case EVCCSimViewType::Unit:
+            ImageDisplay = UnitImageDisplay;
+            Material = MeshVisualizationMaterial;
+            break;
+        }
+
+        ViewData.ImageDisplay = ImageDisplay;
+        ViewData.VisualizationMaterial = Material;
+
+        if (ViewData.VisualizationMaterial && ViewData.ImageDisplay)
+        {
+            ViewData.MaterialInstance = UMaterialInstanceDynamic::Create(ViewData.VisualizationMaterial, this);
+            ViewData.ImageDisplay->SetBrushFromMaterial(ViewData.MaterialInstance);
+
+            if (ViewType == EVCCSimViewType::Depth && ViewData.MaterialInstance)
+            {
+                ViewData.MaterialInstance->SetScalarParameterValue("MinDepth", ViewData.MinDepth);
+                ViewData.MaterialInstance->SetScalarParameterValue("MaxDepth", ViewData.MaxDepth);
+                ViewData.MaterialInstance->SetScalarParameterValue("Contrast", ViewData.Contrast);
+                ViewData.MaterialInstance->SetScalarParameterValue("Brightness", ViewData.Brightness);
+            }
+        }
     }
 }
 
@@ -76,19 +144,19 @@ void UVCCSIMDisplayWidget::NativeTick(const FGeometry& MyGeometry, float InDelta
 {
     Super::NativeTick(MyGeometry, InDeltaTime);
 
-    if (LitImageDisplay->IsVisible())
+    if (LitImageDisplay && LitImageDisplay->IsVisible())
     {
-        UpdateLitImage(InDeltaTime);
+        UpdateViewImage(EVCCSimViewType::Lit, InDeltaTime);
     }
 
-    if (PCImageDisplay->IsVisible())
+    if (PCImageDisplay && PCImageDisplay->IsVisible())
     {
-        UpdatePCImage(InDeltaTime);
+        UpdateViewImage(EVCCSimViewType::PointCloud, InDeltaTime);
     }
-    
-    if (UnitImageDisplay->IsVisible())
+
+    if (UnitImageDisplay && UnitImageDisplay->IsVisible())
     {
-        UpdateMeshImage(InDeltaTime);
+        UpdateViewImage(EVCCSimViewType::Unit, InDeltaTime);
     }
 
     for (int i = 0; i < 6; ++i)
@@ -97,28 +165,27 @@ void UVCCSIMDisplayWidget::NativeTick(const FGeometry& MyGeometry, float InDelta
         if (CaptureQueue.Dequeue(ID))
         {
             CurrentQueueSize--;
+            EVCCSimViewType ViewType = IDToViewType(ID);
+
             switch (ID)
             {
-            case 5:
-                ProcessCapture(5);
+            case 4: // RGB
+            case 5: // Depth
+            case 6: // Normal
+            case 7: // Segmentation
+                ProcessCapture(ID);
                 break;
-            case 6:
-                ProcessCapture(6);
+            case 8: // Lit
+                UpdateViewImage(EVCCSimViewType::Lit, 0.0f);
+                ProcessCapture(ID);
                 break;
-            case 7:
-                UpdateLitImage(InDeltaTime);
-                ProcessCapture(7);
+            case 9: // Point Cloud
+                UpdateViewImage(EVCCSimViewType::PointCloud, 0.0f);
+                ProcessCapture(ID);
                 break;
-            case 8:
-                UpdatePCImage(InDeltaTime);
-                ProcessCapture(8);
-                break;
-            case 9:
-                UpdateMeshImage(InDeltaTime);
-                ProcessCapture(9);
-                break;
-            case 0:
-                ProcessCapture(0);
+            case 0: // Unit
+                UpdateViewImage(EVCCSimViewType::Unit, 0.0f);
+                ProcessCapture(ID);
                 break;
             default:
                 break;
@@ -127,11 +194,51 @@ void UVCCSIMDisplayWidget::NativeTick(const FGeometry& MyGeometry, float InDelta
     }
 }
 
+FVCCSimViewData* UVCCSIMDisplayWidget::GetViewData(EVCCSimViewType ViewType)
+{
+    return ViewDataMap.Find(ViewType);
+}
+
+const FVCCSimViewData* UVCCSIMDisplayWidget::GetViewData(EVCCSimViewType ViewType) const
+{
+    return ViewDataMap.Find(ViewType);
+}
+
+EVCCSimViewType UVCCSIMDisplayWidget::IDToViewType(int32 ID)
+{
+    switch (ID)
+    {
+    case 4: return EVCCSimViewType::RGB;
+    case 5: return EVCCSimViewType::Depth;
+    case 6: return EVCCSimViewType::Normal;
+    case 7: return EVCCSimViewType::Segmentation;
+    case 8: return EVCCSimViewType::Lit;
+    case 9: return EVCCSimViewType::PointCloud;
+    case 0: return EVCCSimViewType::Unit;
+    default: return EVCCSimViewType::RGB;
+    }
+}
+
+int32 UVCCSIMDisplayWidget::ViewTypeToID(EVCCSimViewType ViewType)
+{
+    switch (ViewType)
+    {
+    case EVCCSimViewType::RGB: return 4;
+    case EVCCSimViewType::Depth: return 5;
+    case EVCCSimViewType::Normal: return 6;
+    case EVCCSimViewType::Segmentation: return 7;
+    case EVCCSimViewType::Lit: return 8;
+    case EVCCSimViewType::PointCloud: return 9;
+    case EVCCSimViewType::Unit: return 0;
+    default: return 4;
+    }
+}
+
 void UVCCSIMDisplayWidget::InitFromConfig(const struct FVCCSimConfig& Config)
 {
     auto SubWindows = Config.VCCSim.SubWindows;
     auto SubWindowsOpacities = Config.VCCSim.SubWindowsOpacities;
-    
+
     for (int32 i = 0; i < SubWindows.Num(); ++i)
     {
         if (SubWindows[i] == "Lit")
@@ -250,102 +357,96 @@ void UVCCSIMDisplayWidget::InitFromConfig(const struct FVCCSimConfig& Config)
     }
 }
 
-void UVCCSIMDisplayWidget::SetDepthContext(
-    UTextureRenderTarget2D* DepthTexture, UDepthCameraComponent* InCamera)
-{    
-    if (DepthMaterial && DepthTexture)
+void UVCCSIMDisplayWidget::SetCameraContext(EVCCSimViewType ViewType,
+    UTextureRenderTarget2D* RenderTexture, UObject* CameraComponent)
+{
+    FVCCSimViewData* ViewData = GetViewData(ViewType);
+    if (!ViewData)
     {
-        DepthRenderTarget = DepthTexture;
-        DepthMaterial->SetTextureParameterValue(TEXT("DepthTexture"), DepthRenderTarget);
-        DepthCameraComponent = InCamera;
+        UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("Invalid ViewType for SetCameraContext"));
+        return;
+    }
+
+    if (ViewData->MaterialInstance && RenderTexture)
+    {
+        ViewData->RenderTarget = RenderTexture;
+        ViewData->CameraComponent = CameraComponent;
+
+        const TCHAR* TextureParam = nullptr;
+        switch (ViewType)
+        {
+        case EVCCSimViewType::Depth:
+            TextureParam = TEXT("DepthTexture");
+            break;
+        case EVCCSimViewType::RGB:
+            TextureParam = TEXT("RGBTexture");
+            break;
+        case EVCCSimViewType::Segmentation:
+            TextureParam = TEXT("SegTexture");
+            break;
+        case EVCCSimViewType::Normal:
+            TextureParam = TEXT("NormalTexture");
+            break;
+        default:
+            UE_LOG(LogVCCSimDisplayWidget, Warning, TEXT("Unknown texture parameter for ViewType"));
+            return;
+        }
+
+        ViewData->MaterialInstance->SetTextureParameterValue(TextureParam, ViewData->RenderTarget);
     }
     else
     {
-        UE_LOG(LogVCCSimDisplayWidget, Warning, 
-            TEXT("SetDepthTexture failed - Material: %s, Texture: %s"),
-            DepthMaterial ? TEXT("valid") : TEXT("null"),
-            DepthTexture ? TEXT("valid") : TEXT("null"));
+        UE_LOG(LogVCCSimDisplayWidget, Warning,
+            TEXT("SetCameraContext failed - Material: %s, Texture: %s"),
+            ViewData->MaterialInstance ? TEXT("valid") : TEXT("null"),
+            RenderTexture ? TEXT("valid") : TEXT("null"));
     }
 }
 
-void UVCCSIMDisplayWidget::SetRGBContext(
-    UTextureRenderTarget2D* RGBTexture, URGBCameraComponent* InCamera)
+void UVCCSIMDisplayWidget::SetDepthContext(UTextureRenderTarget2D* DepthTexture, UDepthCameraComponent* InCamera)
 {
-    if (RGBMaterial && RGBTexture)
-    {
-        RGBRenderTarget = RGBTexture;
-        RGBMaterial->SetTextureParameterValue(TEXT("RGBTexture"), RGBRenderTarget);
-        RGBCameraComponent = InCamera;
-    }
-    else
-    {
-        UE_LOG(LogVCCSimDisplayWidget, Warning, 
-            TEXT("SetRGBTexture failed - Material: %s, Texture: %s"),
-            RGBMaterial ? TEXT("valid") : TEXT("null"),
-            RGBTexture ? TEXT("valid") : TEXT("null"));
-    }
+    SetCameraContext(EVCCSimViewType::Depth, DepthTexture, InCamera);
 }
 
-void UVCCSIMDisplayWidget::SetSegContext(
-    UTextureRenderTarget2D* SegTexture, USegmentationCameraComponent* InCamera)
+void UVCCSIMDisplayWidget::SetRGBContext(UTextureRenderTarget2D* RGBTexture, URGBCameraComponent* InCamera)
 {
-    if (SegMaterial && SegTexture)
-    {
-        SegRenderTarget = SegTexture;
-        SegMaterial->SetTextureParameterValue(TEXT("SegTexture"), SegRenderTarget);
-        SegCameraComponent = InCamera;
-    }
-    else
-    {
-        UE_LOG(LogVCCSimDisplayWidget, Warning, 
-            TEXT("SetSegTexture failed - Material: %s, Texture: %s"),
-            SegMaterial ? TEXT("valid") : TEXT("null"),
-            SegTexture ? TEXT("valid") : TEXT("null"));
-    }
+    SetCameraContext(EVCCSimViewType::RGB, RGBTexture, InCamera);
 }
 
-void UVCCSIMDisplayWidget::SetNormalContext(
-    UTextureRenderTarget2D* NormalTexture, UNormalCameraComponent* InCamera)
+void UVCCSIMDisplayWidget::SetSegContext(UTextureRenderTarget2D* SegTexture, USegmentationCameraComponent* InCamera)
 {
-    if (NormalMaterial && NormalTexture)
-    {
-        NormalRenderTarget = NormalTexture;
-        NormalMaterial->SetTextureParameterValue(TEXT("NormalTexture"), NormalRenderTarget);
-        NormalCameraComponent = InCamera;
-    }
-    else
-    {
-        UE_LOG(LogVCCSimDisplayWidget, Warning, 
-            TEXT("SetNormalTexture failed - Material: %s, Texture: %s"),
-            NormalMaterial ? TEXT("valid") : TEXT("null"),
-            NormalTexture ? TEXT("valid") : TEXT("null"));
-    }
+    SetCameraContext(EVCCSimViewType::Segmentation, SegTexture, InCamera);
+}
+
+void UVCCSIMDisplayWidget::SetNormalContext(UTextureRenderTarget2D* NormalTexture, UNormalCameraComponent* InCamera)
+{
+    SetCameraContext(EVCCSimViewType::Normal, NormalTexture, InCamera);
 }
 
 void UVCCSIMDisplayWidget::SetLitMeshComponent(
     TArray<UStaticMeshComponent*> MeshComponent, const float& Opacity)
 {
-    if (!LitImageDisplay || !GetWorld())
+    FVCCSimViewData* LitData = GetViewData(EVCCSimViewType::Lit);
+    if (!LitData || !LitImageDisplay || !GetWorld())
     {
         UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("LitImageDisplay or World not valid"));
         return;
     }
 
-    LitRenderTarget = NewObject<UTextureRenderTarget2D>(this);
-    LitRenderTarget->InitCustomFormat(LitRenderWidth, LitRenderHeight,
-        PF_B8G8R8A8, true);
-    LitRenderTarget->bAutoGenerateMips = false;
-    LitRenderTarget->UpdateResource();
+    LitData->RenderTarget = NewObject<UTextureRenderTarget2D>(this);
+    LitData->RenderTarget->InitCustomFormat(LitData->RenderWidth, LitData->RenderHeight, PF_B8G8R8A8, true);
+    LitData->RenderTarget->bAutoGenerateMips = false;
+    LitData->RenderTarget->UpdateResource();
 
-    LitSceneCapture = NewObject<USceneCaptureComponent2D>(MeshComponent[0]);
-    LitSceneCapture->RegisterComponent();
-    
-    LitSceneCapture->bCaptureEveryFrame = false;
-    LitSceneCapture->bCaptureOnMovement = true;
-    LitSceneCapture->TextureTarget = LitRenderTarget;
-    LitSceneCapture->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
+    LitData->SceneCapture = NewObject<USceneCaptureComponent2D>(MeshComponent[0]);
+    LitData->SceneCapture->RegisterComponent();
 
-    FEngineShowFlags& ShowFlags = LitSceneCapture->ShowFlags;
+    LitData->SceneCapture->bCaptureEveryFrame = false;
+    LitData->SceneCapture->bCaptureOnMovement = true;
+    LitData->SceneCapture->TextureTarget = LitData->RenderTarget;
+    LitData->SceneCapture->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
+
+    FEngineShowFlags& ShowFlags = LitData->SceneCapture->ShowFlags;
     ShowFlags.SetAtmosphere(false);
     ShowFlags.SetFog(false);
     ShowFlags.SetBloom(false);
@@ -354,32 +455,20 @@ void UVCCSIMDisplayWidget::SetLitMeshComponent(
     ShowFlags.SetDynamicShadows(true);
     ShowFlags.SetTemporalAA(false);
     ShowFlags.SetMotionBlur(false);
-
     ShowFlags.SetGlobalIllumination(false);
     ShowFlags.SetReflectionEnvironment(false);
     ShowFlags.SetDecals(false);
 
-    LitSceneCapture->PrimitiveRenderMode =
-        ESceneCapturePrimitiveRenderMode::PRM_UseShowOnlyList;
+    LitData->SceneCapture->PrimitiveRenderMode = ESceneCapturePrimitiveRenderMode::PRM_UseShowOnlyList;
     for (UStaticMeshComponent* Mesh : MeshComponent)
     {
-        LitSceneCapture->ShowOnlyComponents.Add(Mesh);
+        LitData->SceneCapture->ShowOnlyComponents.Add(Mesh);
     }
-    
-    if (LitVisualizationMaterial)
+
+    if (LitData->MaterialInstance)
     {
-        LitMaterial = UMaterialInstanceDynamic::Create(LitVisualizationMaterial, this);
-        LitImageDisplay->SetBrushFromMaterial(LitMaterial);
-        
-        if (LitMaterial)
-        {
-            LitMaterial->SetTextureParameterValue(TEXT("MeshTexture"), LitRenderTarget);
-            LitMaterial->SetScalarParameterValue(TEXT("Opacity"), Opacity);
-        }
-        else
-        {
-            UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("Failed to create LitMaterial"));
-        }
+        LitData->MaterialInstance->SetTextureParameterValue(TEXT("MeshTexture"), LitData->RenderTarget);
+        LitData->MaterialInstance->SetScalarParameterValue(TEXT("Opacity"), Opacity);
     }
     else
     {
@@ -390,32 +479,32 @@ void UVCCSIMDisplayWidget::SetLitMeshComponent(
 void UVCCSIMDisplayWidget::SetPCViewComponent(
     UInstancedStaticMeshComponent* InInstancedMeshComponent, const float& Opacity)
 {
-    if (!PCImageDisplay || !GetWorld())
+    FVCCSimViewData* PCData = GetViewData(EVCCSimViewType::PointCloud);
+    if (!PCData || !PCImageDisplay || !GetWorld())
     {
         UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("PCImageDisplay or World not valid"));
         return;
     }
 
-    PCRenderTarget = NewObject<UTextureRenderTarget2D>(this);
-    PCRenderTarget->InitCustomFormat(PCRenderWidth, PCRenderHeight,
-        PF_B8G8R8A8, true);
-    PCRenderTarget->bAutoGenerateMips = false;
-    PCRenderTarget->UpdateResource();
+    PCData->RenderTarget = NewObject<UTextureRenderTarget2D>(this);
+    PCData->RenderTarget->InitCustomFormat(PCData->RenderWidth, PCData->RenderHeight, PF_B8G8R8A8, true);
+    PCData->RenderTarget->bAutoGenerateMips = false;
+    PCData->RenderTarget->UpdateResource();
 
     if (!Holder)
     {
         UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("Holder not valid"));
         return;
     }
-    PCSceneCapture = NewObject<USceneCaptureComponent2D>(Holder);
-    PCSceneCapture->RegisterComponent();
 
-    PCSceneCapture->bCaptureOnMovement = true;
-    PCSceneCapture->TextureTarget = PCRenderTarget;
-    PCSceneCapture->bCaptureEveryFrame = false;
-    PCSceneCapture->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
+    PCData->SceneCapture = NewObject<USceneCaptureComponent2D>(Holder);
+    PCData->SceneCapture->RegisterComponent();
+    PCData->SceneCapture->bCaptureOnMovement = true;
+    PCData->SceneCapture->TextureTarget = PCData->RenderTarget;
+    PCData->SceneCapture->bCaptureEveryFrame = false;
+    PCData->SceneCapture->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
 
-    FEngineShowFlags& ShowFlags = PCSceneCapture->ShowFlags;
+    FEngineShowFlags& ShowFlags = PCData->SceneCapture->ShowFlags;
     ShowFlags.SetAtmosphere(false);
     ShowFlags.SetFog(false);
     ShowFlags.SetBloom(false);
@@ -424,28 +513,17 @@ void UVCCSIMDisplayWidget::SetPCViewComponent(
     ShowFlags.SetDynamicShadows(true);
     ShowFlags.SetTemporalAA(false);
     ShowFlags.SetMotionBlur(false);
-
     ShowFlags.SetGlobalIllumination(false);
     ShowFlags.SetReflectionEnvironment(false);
     ShowFlags.SetDecals(false);
 
-    PCSceneCapture->PrimitiveRenderMode = ESceneCapturePrimitiveRenderMode::PRM_UseShowOnlyList;
-    PCSceneCapture->ShowOnlyComponents.Add(InInstancedMeshComponent);
-    
-    if (PCVisualizationMaterial)
+    PCData->SceneCapture->PrimitiveRenderMode = ESceneCapturePrimitiveRenderMode::PRM_UseShowOnlyList;
+    PCData->SceneCapture->ShowOnlyComponents.Add(InInstancedMeshComponent);
+
+    if (PCData->MaterialInstance)
     {
-        PCMaterial = UMaterialInstanceDynamic::Create(PCVisualizationMaterial, this);
-        PCImageDisplay->SetBrushFromMaterial(PCMaterial);
-        
-        if (PCMaterial)
-        {
-            PCMaterial->SetTextureParameterValue(TEXT("MeshTexture"), PCRenderTarget);
-            PCMaterial->SetScalarParameterValue(TEXT("Opacity"), Opacity);
-        }
-        else
-        {
-            UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("Failed to create PCMaterial"));
-        }
+        PCData->MaterialInstance->SetTextureParameterValue(TEXT("MeshTexture"), PCData->RenderTarget);
+        PCData->MaterialInstance->SetScalarParameterValue(TEXT("Opacity"), Opacity);
     }
     else
     {
@@ -453,31 +531,29 @@ void UVCCSIMDisplayWidget::SetPCViewComponent(
     }
 }
 
-void UVCCSIMDisplayWidget::SetMeshHandler(UMeshHandlerComponent* InMeshHandler,
-    const float& Opacity)
+void UVCCSIMDisplayWidget::SetMeshHandler(UMeshHandlerComponent* InMeshHandler, const float& Opacity)
 {
-    MeshHandler = InMeshHandler;
-    if (!UnitImageDisplay || !GetWorld())
+    FVCCSimViewData* UnitData = GetViewData(EVCCSimViewType::Unit);
+    if (!UnitData || !UnitImageDisplay || !GetWorld())
     {
         UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("UnitImageDisplay or World not valid"));
         return;
     }
 
-    MeshRenderTarget = NewObject<UTextureRenderTarget2D>(this);
-    MeshRenderTarget->InitCustomFormat(MeshRenderWidth, MeshRenderHeight,
-        PF_B8G8R8A8, true);
-    MeshRenderTarget->bAutoGenerateMips = false;
-    MeshRenderTarget->UpdateResource();
+    UnitData->MeshHandler = InMeshHandler;
+    UnitData->RenderTarget = NewObject<UTextureRenderTarget2D>(this);
+    UnitData->RenderTarget->InitCustomFormat(UnitData->RenderWidth, UnitData->RenderHeight, PF_B8G8R8A8, true);
+    UnitData->RenderTarget->bAutoGenerateMips = false;
+    UnitData->RenderTarget->UpdateResource();
 
-    MeshSceneCapture = NewObject<USceneCaptureComponent2D>(MeshHandler);
-    MeshSceneCapture->RegisterComponent();  
-    
-    MeshSceneCapture->bCaptureEveryFrame = false;
-    MeshSceneCapture->bCaptureOnMovement = true;
-    MeshSceneCapture->TextureTarget = MeshRenderTarget;
-    MeshSceneCapture->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
-    
-    FEngineShowFlags& ShowFlags = MeshSceneCapture->ShowFlags;
+    UnitData->SceneCapture = NewObject<USceneCaptureComponent2D>(InMeshHandler);
+    UnitData->SceneCapture->RegisterComponent();
+    UnitData->SceneCapture->bCaptureEveryFrame = false;
+    UnitData->SceneCapture->bCaptureOnMovement = true;
+    UnitData->SceneCapture->TextureTarget = UnitData->RenderTarget;
+    UnitData->SceneCapture->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
+
+    FEngineShowFlags& ShowFlags = UnitData->SceneCapture->ShowFlags;
     ShowFlags.SetAtmosphere(false);
     ShowFlags.SetFog(false);
     ShowFlags.SetLighting(true);
@@ -488,30 +564,17 @@ void UVCCSIMDisplayWidget::SetMeshHandler(UMeshHandlerComponent* InMeshHandler,
     ShowFlags.SetDynamicShadows(true);
     ShowFlags.SetTemporalAA(false);
     ShowFlags.SetMotionBlur(false);
-
     ShowFlags.SetGlobalIllumination(false);
     ShowFlags.SetReflectionEnvironment(false);
     ShowFlags.SetDecals(false);
 
-    // Set up primitive showing settings
-    MeshSceneCapture->PrimitiveRenderMode = ESceneCapturePrimitiveRenderMode::PRM_UseShowOnlyList;
-    MeshSceneCapture->ShowOnlyComponents.Add(MeshHandler->GetMeshComponent());
+    UnitData->SceneCapture->PrimitiveRenderMode = ESceneCapturePrimitiveRenderMode::PRM_UseShowOnlyList;
+    UnitData->SceneCapture->ShowOnlyComponents.Add(InMeshHandler->GetMeshComponent());
 
-    // Create and setup material for UnitImageDisplay
-    if (MeshVisualizationMaterial)
+    if (UnitData->MaterialInstance)
     {
-        MeshMaterial = UMaterialInstanceDynamic::Create(MeshVisualizationMaterial, this);
-        UnitImageDisplay->SetBrushFromMaterial(MeshMaterial);
-        
-        if (MeshMaterial)
-        {
-            MeshMaterial->SetTextureParameterValue(TEXT("MeshTexture"), MeshRenderTarget);
-            MeshMaterial->SetScalarParameterValue(TEXT("Opacity"), Opacity);
-        }
-        else
-        {
-            UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("Failed to create MeshMaterial"));
-        }
+        UnitData->MaterialInstance->SetTextureParameterValue(TEXT("MeshTexture"), UnitData->RenderTarget);
+        UnitData->MaterialInstance->SetScalarParameterValue(TEXT("Opacity"), Opacity);
     }
     else
     {
@@ -519,8 +582,8 @@ void UVCCSIMDisplayWidget::SetMeshHandler(UMeshHandlerComponent* InMeshHandler,
     }
 }
 
-void UVCCSIMDisplayWidget::RequestCapture(const int& ID)
-{    
+void UVCCSIMDisplayWidget::RequestCapture(const int32& ID)
+{
     if (CurrentQueueSize >= MaxQueuedCaptures)
     {
         UE_LOG(LogVCCSimDisplayWidget, Warning, TEXT("Too many pending captures. Skipping."));
@@ -531,226 +594,104 @@ void UVCCSIMDisplayWidget::RequestCapture(const int& ID)
     ++CurrentQueueSize;
 }
 
-void UVCCSIMDisplayWidget::UpdateLitImage(float InDeltaTime)
+void UVCCSIMDisplayWidget::UpdateViewImage(EVCCSimViewType ViewType, float InDeltaTime)
 {
-    LitUpdateTimer += InDeltaTime;
-
-    if (LitUpdateTimer >= LitUpdateInterval)
-    {
-        LitUpdateTimer = 0.0f;
-    }
-    else
+    FVCCSimViewData* ViewData = GetViewData(ViewType);
+    if (!ViewData || !ViewData->SceneCapture || !ViewData->RenderTarget || !GetWorld())
     {
         return;
     }
-    
-    if (!LitSceneCapture || !LitRenderTarget || !GetWorld())
+
+    ViewData->UpdateTimer += InDeltaTime;
+    if (ViewData->UpdateTimer < ViewData->UpdateInterval)
     {
-        UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("Required components not set. "
-                                    "LitSceneCapture: %s, LitRenderTarget: %s"),
-               LitSceneCapture ? TEXT("Valid") : TEXT("Invalid"),
-               LitRenderTarget ? TEXT("Valid") : TEXT("Invalid"));
         return;
     }
+    ViewData->UpdateTimer = 0.0f;
 
-    // Get the actual viewport camera transform
     APlayerController* PlayerController = GetWorld()->GetFirstPlayerController();
-    if (!PlayerController)
-    {
-        UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("PlayerController not found"));
-        return;
-    }
-
-    if (PlayerController->PlayerCameraManager)
-    {
-        FVector ViewLocation = PlayerController->PlayerCameraManager->GetCameraLocation();
-        FRotator ViewRotation = PlayerController->PlayerCameraManager->GetCameraRotation();
-        LitSceneCapture->SetWorldLocation(ViewLocation);
-        LitSceneCapture->SetWorldRotation(ViewRotation);
-    }
-
-    const float ViewportFOV = PlayerController->PlayerCameraManager
-        ? PlayerController->PlayerCameraManager->GetFOVAngle()
-        : 90.0f;
-    LitSceneCapture->FOVAngle = ViewportFOV;
-    
-    LitSceneCapture->CaptureScene();
-}
-
-void UVCCSIMDisplayWidget::UpdatePCImage(float InDeltaTime)
-{
-    PCUpdateTimer += InDeltaTime;
-    if (PCUpdateTimer >= PCUpdateInterval)
-    {
-        PCUpdateTimer = 0.0f;
-    }
-    else
+    if (!PlayerController || !PlayerController->PlayerCameraManager)
     {
         return;
     }
-    
-    if (!PCSceneCapture || !PCRenderTarget || !GetWorld())
-    {
-        UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("Required components not set. "
-                                    "PCSceneCapture: %s, PCRenderTarget: %s"),
-               PCSceneCapture ? TEXT("Valid") : TEXT("Invalid"),
-               PCRenderTarget ? TEXT("Valid") : TEXT("Invalid"));
-        return;
-    }
 
-    // Get the actual viewport camera transform
-    APlayerController* PlayerController = GetWorld()->GetFirstPlayerController();
-    if (!PlayerController)
-    {
-        UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("PlayerController not found"));
-        return;
-    }
+    FVector ViewLocation = PlayerController->PlayerCameraManager->GetCameraLocation();
+    FRotator ViewRotation = PlayerController->PlayerCameraManager->GetCameraRotation();
+    ViewData->SceneCapture->SetWorldLocation(ViewLocation);
+    ViewData->SceneCapture->SetWorldRotation(ViewRotation);
 
-    if (PlayerController->PlayerCameraManager)
-    {
-        FVector ViewLocation = PlayerController->PlayerCameraManager->GetCameraLocation();
-        FRotator ViewRotation = PlayerController->PlayerCameraManager->GetCameraRotation();
-        PCSceneCapture->SetWorldLocation(ViewLocation);
-        PCSceneCapture->SetWorldRotation(ViewRotation);
-    }
+    const float ViewportFOV = PlayerController->PlayerCameraManager->GetFOVAngle();
+    ViewData->SceneCapture->FOVAngle = ViewportFOV;
 
-    const float ViewportFOV = PlayerController->PlayerCameraManager
-        ? PlayerController->PlayerCameraManager->GetFOVAngle()
-        : 90.0f;
-    PCSceneCapture->FOVAngle = ViewportFOV;
-    
-    PCSceneCapture->CaptureScene();
-}
-
-void UVCCSIMDisplayWidget::UpdateMeshImage(float InDeltaTime)
-{
-    MeshUpdateTimer += InDeltaTime;
-    if (MeshUpdateTimer >= MeshUpdateInterval)
-    {
-        MeshUpdateTimer = 0.0f;
-    }
-    else
-    {
-        return;
-    }    
-    
-    if (!MeshHandler || !MeshSceneCapture || !MeshRenderTarget || !GetWorld())
-    {
-        UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("Required components not set. "
-                                    "MeshHandler: %s, SceneCapture: %s, RenderTarget: %s"), 
-               MeshHandler ? TEXT("Valid") : TEXT("Invalid"),
-               MeshSceneCapture ? TEXT("Valid") : TEXT("Invalid"),
-               MeshRenderTarget ? TEXT("Valid") : TEXT("Invalid"));
-        return;
-    }
-
-    // Get the actual viewport camera transform
-    APlayerController* PlayerController = GetWorld()->GetFirstPlayerController();
-    if (!PlayerController)
-    {
-        UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("PlayerController not found"));
-        return;
-    }
-
-    FVector ViewLocation;
-    FRotator ViewRotation;
-    PlayerController->GetPlayerViewPoint(ViewLocation, ViewRotation);
-    
-    // Update scene capture to match the actual view
-    MeshSceneCapture->SetWorldLocation(ViewLocation);
-    MeshSceneCapture->SetWorldRotation(ViewRotation);
-
-    // Get the FOV from the viewport
-    const float ViewportFOV = PlayerController->PlayerCameraManager 
-        ? PlayerController->PlayerCameraManager->GetFOVAngle()
-        : 90.0f;
-    
-    MeshSceneCapture->FOVAngle = ViewportFOV;
-
-    MeshSceneCapture->CaptureScene();
+    ViewData->SceneCapture->CaptureScene();
 }
 
 void UVCCSIMDisplayWidget::ProcessCapture(const int32 ID)
 {
-    // Update and capture the image
-    switch (ID)
+    EVCCSimViewType ViewType = IDToViewType(ID);
+    ProcessCaptureByType(ViewType);
+}
+
+void UVCCSIMDisplayWidget::ProcessCaptureByType(EVCCSimViewType ViewType)
+{
+    FVCCSimViewData* ViewData = GetViewData(ViewType);
+    if (!ViewData || !ViewData->RenderTarget)
     {
-    case 5:
-        if (SegRenderTarget)
+        UE_LOG(LogVCCSimDisplayWidget, Warning,
+            TEXT("ProcessCaptureByType: ViewData or RenderTarget not set for ViewType"));
+        return;
+    }
+
+    FString CaptureTypeName;
+    switch (ViewType)
+    {
+    case EVCCSimViewType::RGB:
+        if (auto* RGBCamera = Cast<URGBCameraComponent>(ViewData->CameraComponent))
         {
-            SegCameraComponent->CaptureSegmentationScene();
-            SaveRenderTargetToDisk(SegRenderTarget, "SegmentationCapture");
+            RGBCamera->CaptureRGBScene();
         }
-        else
-        {
-            UE_LOG(LogVCCSimDisplayWidget, Warning, TEXT("UVCCSIMDisplayWidget::ProcessCapture: "
-                                          "SegRenderTarget not set"));
-        }
+        CaptureTypeName = TEXT("RGBCapture");
         break;
-    case 6:
-        if (RGBRenderTarget)
+    case EVCCSimViewType::Depth:
+        if (auto* DepthCamera = Cast<UDepthCameraComponent>(ViewData->CameraComponent))
         {
-            RGBCameraComponent->CaptureRGBScene();
-            SaveRenderTargetToDisk(RGBRenderTarget, "RGBCapture");
+            DepthCamera->CaptureDepthScene();
         }
-        else
-        {
-            UE_LOG(LogVCCSimDisplayWidget, Warning, TEXT("UVCCSIMDisplayWidget::ProcessCapture: "
-                                          "RGBRenderTarget not set"));
-        }
+        CaptureTypeName = TEXT("DepthCapture");
         break;
-    case 7:
-        if (LitSceneCapture && LitRenderTarget)
+    case EVCCSimViewType::Normal:
+        if (auto* NormalCamera = Cast<UNormalCameraComponent>(ViewData->CameraComponent))
         {
-            SaveRenderTargetToDisk(LitRenderTarget, "LitCapture");
+            NormalCamera->CaptureScene();
         }
-        else
-        {
-            UE_LOG(LogVCCSimDisplayWidget, Warning, TEXT("UVCCSIMDisplayWidget::ProcessCapture: "
-                                          "LitSceneCapture or LitRenderTarget not set"));
-        }
+        CaptureTypeName = TEXT("NormalCapture");
         break;
-    case 8:
-        if (PCSceneCapture && PCRenderTarget)
+    case EVCCSimViewType::Segmentation:
+        if (auto* SegCamera = Cast<USegmentationCameraComponent>(ViewData->CameraComponent))
         {
-            SaveRenderTargetToDisk(PCRenderTarget, "PCCapture");
+            SegCamera->CaptureSegmentationScene();
         }
-        else
-        {
-            UE_LOG(LogVCCSimDisplayWidget, Warning, TEXT("UVCCSIMDisplayWidget::ProcessCapture: "
-                                          "PCSceneCapture or PCRenderTarget not set"));
-        }
+        CaptureTypeName = TEXT("SegmentationCapture");
         break;
-    case 9:
-        if (MeshSceneCapture && MeshRenderTarget)
-        {
-            SaveRenderTargetToDisk(MeshRenderTarget, "MeshCapture");
-        }
-        else
-        {
-            UE_LOG(LogVCCSimDisplayWidget, Warning, TEXT("UVCCSIMDisplayWidget::ProcessCapture: "
-                                          "MeshSceneCapture or MeshRenderTarget not set"));
-        }
+    case EVCCSimViewType::Lit:
+        CaptureTypeName = TEXT("LitCapture");
         break;
-    case 0:
-        if (DepthRenderTarget)
-        {
-            DepthCameraComponent->CaptureDepthScene();
-            SaveRenderTargetToDisk(DepthRenderTarget, "DepthCapture");
-        }
-        else
-        {
-            UE_LOG(LogVCCSimDisplayWidget, Warning, TEXT("UVCCSIMDisplayWidget::ProcessCapture: "
-                                          "DepthRenderTarget not set"));
-        }
+    case EVCCSimViewType::PointCloud:
+        CaptureTypeName = TEXT("PCCapture");
+        break;
+    case EVCCSimViewType::Unit:
+        CaptureTypeName = TEXT("UnitCapture");
         break;
     default:
-        UE_LOG(LogVCCSimDisplayWidget, Warning, TEXT("Invalid ID: %d"), ID);
+        UE_LOG(LogVCCSimDisplayWidget, Warning, TEXT("Invalid ViewType: %d"), (int32)ViewType);
+        return;
     }
+
+    SaveRenderTargetToDisk(ViewData->RenderTarget, CaptureTypeName, ViewType);
 }
 
 void UVCCSIMDisplayWidget::SaveRenderTargetToDisk(
-    UTextureRenderTarget2D* RenderTarget, const FString& FileName) const
+    UTextureRenderTarget2D* RenderTarget, const FString& FileName, EVCCSimViewType ViewType) const
 {
     if (!RenderTarget)
     {
@@ -768,35 +709,9 @@ void UVCCSIMDisplayWidget::SaveRenderTargetToDisk(
     }
 
     FIntPoint Size = RTResource->GetSizeXY();
-    TArray<FColor> Pixels;
-    Pixels.SetNum(Size.X * Size.Y);
-
-    bool bReadPixels = RTResource->ReadPixels(Pixels);
-    if (!bReadPixels)
-    {
-        UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("Failed to read pixels from RenderTarget."));
-        return;
-    }
-
-    if (FileName == TEXT("SegmentationCapture"))
-    {
-        for (FColor& Pixel : Pixels)
-        {
-            Pixel.A = 255; // Set alpha to 255 for segmentation
-        }
-    }
-    else if (FileName == TEXT("RGBCapture")) // Add this condition
-    {
-        for (FColor& Pixel : Pixels)
-        {
-            Pixel.A = 255; // Set alpha to 255 for RGB captures
-        }
-    }
-    
     auto CurTime = FDateTime::Now();
     FString FilePath = LogSavePath + "/LiveCaptures/" + FileName + "_" + CurTime.ToString() + ".png";
 
-    // Create directory synchronously as it's typically quick
     FFileManagerGeneric FileManager;
     if (!FileManager.MakeDirectory(*FPaths::GetPath(FilePath), true))
     {
@@ -804,7 +719,35 @@ void UVCCSIMDisplayWidget::SaveRenderTargetToDisk(
         return;
     }
 
-    // Start async task to save the image
-    (new FAutoDeleteAsyncTask<FAsyncImageSaveTask>(
-        Pixels, Size, FilePath))->StartBackgroundTask();
+    if (ViewType == EVCCSimViewType::Depth)
+    {
+        TArray<FFloat16Color> DepthPixels;
+        DepthPixels.SetNum(Size.X * Size.Y);
+
+        bool bReadDepthPixels = RTResource->ReadFloat16Pixels(DepthPixels);
+        if (!bReadDepthPixels)
+        {
+            UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("Failed to read depth pixels from RenderTarget."));
+            return;
+        }
+
+        float DepthScale = 1.0f;
+        (new FAutoDeleteAsyncTask<FAsyncDepth16SaveTask>(
+            DepthPixels, Size, FilePath, DepthScale))->StartBackgroundTask();
+    }
+    else
+    {
+        TArray<FColor> Pixels;
+        Pixels.SetNum(Size.X * Size.Y);
+
+        bool bReadPixels = RTResource->ReadPixels(Pixels);
+        if (!bReadPixels)
+        {
+            UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("Failed to read pixels from RenderTarget."));
+            return;
+        }
+
+        (new FAutoDeleteAsyncTask<FAsyncImageSaveTask>(
+            Pixels, Size, FilePath))->StartBackgroundTask();
+    }
 }

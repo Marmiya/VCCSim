@@ -31,7 +31,6 @@ URGBCameraComponent::URGBCameraComponent()
 
 void URGBCameraComponent::OnRecordTick()
 {
-    UE_LOG(LogCameraSensor, Log, TEXT("Recording camera %s"), *CameraName);
     CaptureRGBScene();
 
     ProcessRGBTextureAsyncRaw([this]

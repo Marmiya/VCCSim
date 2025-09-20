@@ -924,10 +924,6 @@ void FVCCSimPanelPathImageCapture::SaveSeg(int32 PoseIndex, bool& bAnyCaptured)
             Camera->AsyncGetSegmentationImageData(
                 [Filename, Size, JobNum = this->JobNum](TArray<FColor> ImageData)
                 {
-                    for (FColor& Color : ImageData)
-                    {
-                        Color.A = 255; // Ensure alpha is set to 255
-                    }
                     (new FAutoDeleteAsyncTask<FAsyncImageSaveTask>(ImageData, Size, Filename))
                     ->StartBackgroundTask();
                     *JobNum -= 1;
