@@ -59,7 +59,7 @@ public:
     void DoWork()
     {
     	grpc::ServerBuilder Builder;
-    	Builder.AddListeningPort(Config.VCCSim.Server, grpc::InsecureServerCredentials());
+    	Builder.AddListeningPort(TCHAR_TO_UTF8(*Config.VCCSim.Server), grpc::InsecureServerCredentials());
     	
     	VCCSim::DroneService::AsyncService DroneService;
         VCCSim::CarService::AsyncService CarService;
@@ -108,7 +108,7 @@ public:
         if (Server)
         {
             UE_LOG(LogRpcServer, Warning, TEXT("Asynchronous Server listening on %s"),
-            	*FString(Config.VCCSim.Server.c_str()));
+            	*Config.VCCSim.Server);
 
             // Spawn initial asynchronous calls
         	if (!RGrpcMaps.RMaps.DroneMap.empty())
@@ -233,7 +233,7 @@ public:
         else
         {
             UE_LOG(LogRpcServer, Error, TEXT("Failed to start server on %s"),
-            	*FString(Config.VCCSim.Server.c_str()));
+            	*Config.VCCSim.Server);
         }
     }
 

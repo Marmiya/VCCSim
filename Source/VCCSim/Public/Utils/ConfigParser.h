@@ -16,47 +16,44 @@
 */
 
 #pragma once
-#include <string>
-#include <vector>
-#include <set>
-#include <memory>
+#include "CoreMinimal.h"
 #include "Sensors/SensorBase.h"
 #include "Pawns/PawnBase.h"
 
-using FComponentConfig = std::pair<ESensorType, std::shared_ptr<FSensorConfig>>;
+using FComponentConfig = TPair<ESensorType, TSharedPtr<FSensorConfig>>;
 
 struct FRobot
 {
-	std::string UETag;
+	FString UETag;
 	EPawnType Type;
-	std::vector<FComponentConfig> ComponentConfigs;
+	TArray<FComponentConfig> ComponentConfigs;
 	float RecordInterval;
 };
 
 struct FVCCSimPresets
 {
-	std::string Server;
-	std::string MainCharacter;
-	std::vector<std::string> StaticMeshActor;
+	FString Server;
+	FString MainCharacter;
+	TArray<FString> StaticMeshActor;
 	bool ManualControl;
-	std::vector<std::string> SubWindows{};
-	std::vector<float> SubWindowsOpacities;
-	int LS_StartOffset;
+	TArray<FString> SubWindows;
+	TArray<float> SubWindowsOpacities;
+	int32 LS_StartOffset;
 	bool StartWithRecording;
 	bool BetterVisualsRecording;
 	bool UseMeshManager;
-	std::string MeshMaterial;
-	std::string LogSavePath;
-	std::string DefaultDronePawn;
-	std::string DefaultCarPawn;
-	std::string DefaultFlashPawn;
-	int BufferSize;
+	FString MeshMaterial;
+	FString LogSavePath;
+	FString DefaultDronePawn;
+	FString DefaultCarPawn;
+	FString DefaultFlashPawn;
+	int32 BufferSize;
 };
 
 struct FVCCSimConfig
 {
 	FVCCSimPresets VCCSim;
-	std::vector<FRobot> Robots;
+	TArray<FRobot> Robots;
 };
 
 FVCCSimConfig ParseConfig();

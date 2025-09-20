@@ -165,9 +165,9 @@ void AVCCHUD::OnToggleRecordingTriggered()
 void AVCCHUD::SetupRecorder(FVCCSimConfig& Config)
 {
     Recorder = GetWorld()->SpawnActor<ARecorder>(ARecorder::StaticClass(), FTransform::Identity);
-    Recorder->RecordingPath = FPaths::Combine(Config.VCCSim.LogSavePath.c_str(),
+    Recorder->RecordingPath = FPaths::Combine(Config.VCCSim.LogSavePath,
         FDateTime::Now().ToString(TEXT("%Y%m%d_%H%M%S")));
-    Config.VCCSim.LogSavePath = TCHAR_TO_UTF8(*Recorder->RecordingPath);
+    Config.VCCSim.LogSavePath = Recorder->RecordingPath;
     Recorder->BufferSize = Config.VCCSim.BufferSize;
     Recorder->RecordState = Config.VCCSim.StartWithRecording;
     Recorder->SetBetterVisualsRecording(Config.VCCSim.BetterVisualsRecording);
@@ -195,7 +195,7 @@ void AVCCHUD::SetupWidgetsAndLS(const FVCCSimConfig& Config)
 
     SetupEnhancedInput();
     
-    WidgetInstance->LogSavePath = Config.VCCSim.LogSavePath.c_str();
+    WidgetInstance->LogSavePath = Config.VCCSim.LogSavePath;
 
     TArray<AActor*> LevelSequenceActors;
     UGameplayStatics::GetAllActorsOfClass(GetWorld(), ALevelSequenceActor::StaticClass(), 
@@ -228,7 +228,7 @@ void AVCCHUD::SetupMainCharacter(const FVCCSimConfig& Config, TArray<AActor*> Fo
     
     MainCharacter = Cast<APawn>(FindPawnInTagAndName(Config.VCCSim.MainCharacter, FoundPawns));
 
-    if (Config.Robots.size() == 1 && !MainCharacter)
+    if (Config.Robots.Num() == 1 && !MainCharacter)
     {
         MainCharacter = Cast<APawn>(FindPawnInTagAndName(Config.Robots[0].UETag, FoundPawns));
         MainRobotConfig = Config.Robots[0];
@@ -299,7 +299,7 @@ void AVCCHUD::SetupMainCharacter(const FVCCSimConfig& Config, TArray<AActor*> Fo
     
     for (const auto& Component : MainRobotConfig.ComponentConfigs)
     {
-        if (Component.first == ESensorType::DepthCamera)
+        if (Component.Get<0>() == ESensorType::DepthCamera)
         {
             if (UDepthCameraComponent* DepthCameraComponent =
                 MainCharacter->FindComponentByClass<UDepthCameraComponent>())
@@ -314,7 +314,7 @@ void AVCCHUD::SetupMainCharacter(const FVCCSimConfig& Config, TArray<AActor*> Fo
                                               "DepthCamera component not found!"));
             }
         }
-        if (Component.first == ESensorType::RGBCamera)
+        if (Component.Get<0>() == ESensorType::RGBCamera)
         {
             if (URGBCameraComponent* RGBCameraComponent =
                 MainCharacter->FindComponentByClass<URGBCameraComponent>())
@@ -329,7 +329,7 @@ void AVCCHUD::SetupMainCharacter(const FVCCSimConfig& Config, TArray<AActor*> Fo
                                               "RGBCamera component not found!"));
             }
         }
-        if (Component.first == ESensorType::SegmentationCamera)
+        if (Component.Get<0>() == ESensorType::SegmentationCamera)
         {
             if (USegmentationCameraComponent* SegCameraComponent =
                 MainCharacter->FindComponentByClass<USegmentationCameraComponent>())
@@ -344,7 +344,7 @@ void AVCCHUD::SetupMainCharacter(const FVCCSimConfig& Config, TArray<AActor*> Fo
                                               "RGBCamera component not found!"));
             }
         }
-        if (Component.first == ESensorType::NormalCamera)
+        if (Component.Get<0>() == ESensorType::NormalCamera)
         {
             if (UNormalCameraComponent* NormalCameraComponent =
                 MainCharacter->FindComponentByClass<UNormalCameraComponent>())
@@ -375,28 +375,29 @@ FRobotGrpcMaps AVCCHUD::SetupActors(const FVCCSimConfig& Config)
             
         if (!RobotPawn)
         {
-            UE_LOG(LogVCCHUD, Warning, TEXT("Robot %s not found! Creating a new one"),
-                *FString(UTF8_TO_TCHAR(Robot.UETag.c_str())));
+            UE_LOG(LogVCCHUD, Warning, TEXT("Robot %s not found! Creating a new one"), *Robot.UETag);
             RobotPawn = CreatePawn(Config, Robot);
             if (!RobotPawn)
             {
-                UE_LOG(LogVCCHUD, Error, TEXT("Failed to create Robot %s"),
-                    *FString(UTF8_TO_TCHAR(Robot.UETag.c_str())));
+                UE_LOG(LogVCCHUD, Error, TEXT("Failed to create Robot %s"), *Robot.UETag);
                 continue;
             }
         }
-        
+
+        const FString RobotTagKey = Robot.UETag;
+        const std::string RobotTagStd = TCHAR_TO_UTF8(*RobotTagKey);
+
         if (Robot.Type == EPawnType::Drone)
         {
-            RGrpcMaps.RMaps.DroneMap[Robot.UETag] = RobotPawn;
+            RGrpcMaps.RMaps.DroneMap[RobotTagStd] = RobotPawn;
         }
         else if (Robot.Type == EPawnType::Car)
         {
-            RGrpcMaps.RMaps.CarMap[Robot.UETag] = RobotPawn;
+            RGrpcMaps.RMaps.CarMap[RobotTagStd] = RobotPawn;
         }
         else if (Robot.Type == EPawnType::Flash)
         {
-            RGrpcMaps.RMaps.FlashMap[Robot.UETag] = RobotPawn;
+            RGrpcMaps.RMaps.FlashMap[RobotTagStd] = RobotPawn;
         }
         else
         {
@@ -425,20 +426,27 @@ FRobotGrpcMaps AVCCHUD::SetupActors(const FVCCSimConfig& Config)
         
         for (const auto& Component : Robot.ComponentConfigs)
         {
-            if (Component.first == ESensorType::Lidar)
+            if (Component.Get<0>() == ESensorType::Lidar)
             {
                 ULidarComponent* LidarComponent =
                     RobotPawn->FindComponentByClass<ULidarComponent>();
-                LidarComponent->RConfigure(
-                    *static_cast<FLiDarConfig*>(Component.second.get()),
-                    Recorder);
-                LidarComponent->FirstCall();
-                LidarComponent->MeshHolder = Holder->FindComponentByClass<UInsMeshHolder>();
-                RGrpcMaps.RCMaps.RLMap[Robot.UETag] = LidarComponent;
+                if (LidarComponent)
+                {
+                    LidarComponent->RConfigure(
+                        *static_cast<FLiDarConfig*>(Component.Get<1>().Get()),
+                        Recorder);
+                    LidarComponent->FirstCall();
+                    LidarComponent->MeshHolder = Holder->FindComponentByClass<UInsMeshHolder>();
+                    RGrpcMaps.RCMaps.RLMap[RobotTagStd] = LidarComponent;
 
-                bHasLidar = true;
+                    bHasLidar = true;
+                }
+                else
+                {
+                    UE_LOG(LogVCCHUD, Warning, TEXT("LidarComponent not found on robot %s"), *Robot.UETag);
+                }
             }
-            else if (Component.first == ESensorType::DepthCamera)
+            else if (Component.Get<0>() == ESensorType::DepthCamera)
             {
                 TArray<UDepthCameraComponent*> DepthCameras;
                 RobotPawn->GetComponents<UDepthCameraComponent>(DepthCameras);
@@ -448,20 +456,17 @@ FRobotGrpcMaps AVCCHUD::SetupActors(const FVCCSimConfig& Config)
                     if (!DepthCam->IsConfigured())
                     {
                         DepthCam->RConfigure(
-                            *static_cast<FDepthCameraConfig*>(Component.second.get()),
+                            *static_cast<FDepthCameraConfig*>(Component.Get<1>().Get()),
                             Recorder);
-                        // Use both robot tag and camera ID/index for unique identification
-                        FString CameraKey = FString::Printf(TEXT("%s^%d"), 
-                            *FString(Robot.UETag.c_str()), DepthCam->GetCameraIndex());
-                        // FString CameraKey = FString::Printf(TEXT("%s"),
-                        //     *FString(Robot.UETag.c_str()));
+                        FString CameraKey = FString::Printf(TEXT("%s^%d"),
+                            *Robot.UETag, DepthCam->GetCameraIndex());
                         RGrpcMaps.RCMaps.RDCMap[TCHAR_TO_UTF8(*CameraKey)] = DepthCam;
                     }
 
                     bHasDepth = true;
                 }
             }
-            else if (Component.first == ESensorType::RGBCamera)
+            else if (Component.Get<0>() == ESensorType::RGBCamera)
             {
                 TArray<URGBCameraComponent*> RGBCameras;
                 RobotPawn->GetComponents<URGBCameraComponent>(RGBCameras);
@@ -471,10 +476,9 @@ FRobotGrpcMaps AVCCHUD::SetupActors(const FVCCSimConfig& Config)
                     if (!RGBCam->IsConfigured())
                     {
                         RGBCam->RConfigure(
-                            *static_cast<FRGBCameraConfig*>(Component.second.get()), Recorder);
-                        // Use both robot tag and camera ID/index for unique identification
-                        FString CameraKey = FString::Printf(TEXT("%s^%d"), 
-                            *FString(Robot.UETag.c_str()), RGBCam->GetCameraIndex());
+                            *static_cast<FRGBCameraConfig*>(Component.Get<1>().Get()), Recorder);
+                        FString CameraKey = FString::Printf(TEXT("%s^%d"),
+                            *Robot.UETag, RGBCam->GetCameraIndex());
                         RGrpcMaps.RCMaps.RRGBCMap[TCHAR_TO_UTF8(*CameraKey)] = RGBCam;
                         RGBCam->CameraName = CameraKey;
                     }
@@ -482,31 +486,45 @@ FRobotGrpcMaps AVCCHUD::SetupActors(const FVCCSimConfig& Config)
                     bHasRGB = true;
                 }
             }
-            else if (Component.first == ESensorType::SegmentationCamera)
+            else if (Component.Get<0>() == ESensorType::SegmentationCamera)
             {
                 USegmentationCameraComponent* SegmentationCamera =
                     RobotPawn->FindComponentByClass<USegmentationCameraComponent>();
-                SegmentationCamera->RConfigure(
-                    *static_cast<FSegmentationCameraConfig*>(Component.second.get()),
-                    Recorder);
-                RGrpcMaps.RCMaps.RSegMap[Robot.UETag] = SegmentationCamera;
+                if (SegmentationCamera)
+                {
+                    SegmentationCamera->RConfigure(
+                        *static_cast<FSegmentationCameraConfig*>(Component.Get<1>().Get()),
+                        Recorder);
+                    RGrpcMaps.RCMaps.RSegMap[RobotTagStd] = SegmentationCamera;
 
-                bHasSegmentation = true;
+                    bHasSegmentation = true;
+                }
+                else
+                {
+                    UE_LOG(LogVCCHUD, Warning, TEXT("SegmentationCameraComponent not found on robot %s"), *Robot.UETag);
+                }
             }
-            else if (Component.first == ESensorType::NormalCamera)
+            else if (Component.Get<0>() == ESensorType::NormalCamera)
             {
                 UNormalCameraComponent* NormalCamera =
                     RobotPawn->FindComponentByClass<UNormalCameraComponent>();
-                NormalCamera->RConfigure(
-                    *static_cast<FNormalCameraConfig*>(Component.second.get()), Recorder);
-                RGrpcMaps.RCMaps.RNormalMap[Robot.UETag] = NormalCamera;
+                if (NormalCamera)
+                {
+                    NormalCamera->RConfigure(
+                        *static_cast<FNormalCameraConfig*>(Component.Get<1>().Get()), Recorder);
+                    RGrpcMaps.RCMaps.RNormalMap[RobotTagStd] = NormalCamera;
 
-                bHasNormal = true;
+                    bHasNormal = true;
+                }
+                else
+                {
+                    UE_LOG(LogVCCHUD, Warning, TEXT("NormalCameraComponent not found on robot %s"), *Robot.UETag);
+                }
             }
             else
             {
                 UE_LOG(LogVCCHUD, Warning, TEXT(
-                    "AVCCHUD::SetupActors: Unknown component, %d"), Component.first);
+                    "AVCCHUD::SetupActors: Unknown component, %d"), static_cast<int32>(Component.Get<0>()));
             }
 
             if (bHasLidar && bHasRGB)
@@ -549,19 +567,15 @@ APawn* AVCCHUD::CreatePawn(const FVCCSimConfig& Config, const FRobot& Robot)
     UClass* PawnClass = nullptr;
     if (Robot.Type == EPawnType::Drone)
     {
-        PawnClass = LoadClass<APawn>(nullptr,
-            *FString(FUTF8ToTCHAR(Config.VCCSim.DefaultDronePawn.c_str())));
-
+        PawnClass = LoadClass<APawn>(nullptr, *Config.VCCSim.DefaultDronePawn);
     }
     else if (Robot.Type == EPawnType::Car)
     {
-        PawnClass = LoadClass<APawn>(nullptr,
-            *FString(FUTF8ToTCHAR(Config.VCCSim.DefaultCarPawn.c_str())));
+        PawnClass = LoadClass<APawn>(nullptr, *Config.VCCSim.DefaultCarPawn);
     }
     else if (Robot.Type == EPawnType::Flash)
     {
-        PawnClass = LoadClass<APawn>(nullptr,
-            *FString(FUTF8ToTCHAR(Config.VCCSim.DefaultFlashPawn.c_str())));
+        PawnClass = LoadClass<APawn>(nullptr, *Config.VCCSim.DefaultFlashPawn);
     }
     else
     {
@@ -575,8 +589,7 @@ APawn* AVCCHUD::CreatePawn(const FVCCSimConfig& Config, const FRobot& Robot)
             FVector{0, 0, 10}, FRotator::ZeroRotator, SpawnParams);
         if (!RobotPawn)
         {
-            UE_LOG(LogVCCHUD, Error, TEXT("Failed to create Pawn %s"),
-                *FString(Robot.UETag.c_str()));
+            UE_LOG(LogVCCHUD, Error, TEXT("Failed to create Pawn %s"), *Robot.UETag);
             return nullptr;
         }
     }
@@ -586,19 +599,19 @@ APawn* AVCCHUD::CreatePawn(const FVCCSimConfig& Config, const FRobot& Robot)
         return nullptr;
     }
     
-    RobotPawn->Tags.Add(FName(Robot.UETag.c_str()));
+    RobotPawn->Tags.Add(FName(*Robot.UETag));
     return RobotPawn;
 }
 
-AActor* AVCCHUD::FindPawnInTagAndName(const std::string& Target, TArray<AActor*> FoundPawns)
+AActor* AVCCHUD::FindPawnInTagAndName(const FString& Target, TArray<AActor*> FoundPawns)
 {
     UGameplayStatics::GetAllActorsOfClass(GetWorld(), APawn::StaticClass(), FoundPawns);
 
     AActor* Ans = nullptr;
-    
+
     for (AActor* Actor : FoundPawns)
     {
-        if (Actor->ActorHasTag(Target.c_str()))
+        if (Actor->ActorHasTag(FName(*Target)))
         {
             Ans = Actor;
             break;
@@ -608,7 +621,7 @@ AActor* AVCCHUD::FindPawnInTagAndName(const std::string& Target, TArray<AActor*>
     {
         for (AActor* Actor : FoundPawns)
         {
-            if (Actor->GetName().Contains(Target.c_str()))
+            if (Actor->GetName().Contains(Target))
             {
                 Ans = Actor;
                 break;

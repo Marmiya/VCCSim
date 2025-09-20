@@ -85,5 +85,5 @@ private:
 	UPROPERTY()
 	ASceneAnalysisManager* SceneAnalysisManager = nullptr;
 
-	AActor* FindPawnInTagAndName(const std::string& Target, TArray<AActor*> FoundPawns);
+	AActor* FindPawnInTagAndName(const FString& Target, TArray<AActor*> FoundPawns);
 };

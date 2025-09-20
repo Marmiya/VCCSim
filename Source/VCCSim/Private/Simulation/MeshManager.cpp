@@ -39,11 +39,11 @@ void UFMeshManager::RConfigure(const FVCCSimConfig& Config)
     }
 
     // Load mesh material from config
-    if (Config.VCCSim.MeshMaterial != "")
+    if (!Config.VCCSim.MeshMaterial.IsEmpty())
     {
         MeshMaterial = Cast<UMaterialInterface>(StaticLoadObject(
             UMaterialInterface::StaticClass(), nullptr,
-            UTF8_TO_TCHAR(Config.VCCSim.MeshMaterial.c_str())));
+            *Config.VCCSim.MeshMaterial));
     }
 
     if (MeshMaterial == nullptr)

@@ -22,225 +22,249 @@
 #include "Sensors/SegmentCamera.h"
 #include "Sensors/NormalCamera.h"
 #include "toml++/toml.hpp"
-#include <filesystem>
-#include "CoreMinimal.h"
+#include "HAL/PlatformFilemanager.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogConfigParser, Log, All);
 
-using namespace std::literals;
 
+namespace ConfigParserHelpers
+{
+	FString GetConfigFilePath()
+	{
+		FString ConfigPath = FPaths::Combine(FPaths::ProjectPluginsDir(), TEXT("VCCSim/Source/VCCSim/RSConfig.toml"));
+
+		if (!FPlatformFileManager::Get().GetPlatformFile().FileExists(*ConfigPath))
+		{
+			UE_LOG(LogConfigParser, Warning, TEXT("ParseConfig: Using default config!"));
+			ConfigPath = FPaths::Combine(FPlatformProcess::UserDir(), TEXT("VCCSim/RSConfig.toml"));
+		}
+
+		return ConfigPath;
+	}
+
+	void ParseStringArray(const toml::array* Array, TArray<FString>& OutArray)
+	{
+		if (!Array) return;
+
+		for (const auto& Element : *Array)
+		{
+			if (auto Value = Element.value<std::string>())
+			{
+				OutArray.Add(FString(UTF8_TO_TCHAR(Value->c_str())));
+			}
+		}
+	}
+
+	void ParseFloatArray(const toml::array* Array, TArray<float>& OutArray)
+	{
+		if (!Array) return;
+
+		for (const auto& Element : *Array)
+		{
+			if (auto Value = Element.value<double>())
+			{
+				OutArray.Add(static_cast<float>(*Value));
+			}
+		}
+	}
+
+	FString TomlStringToFString(const std::string& Str)
+	{
+		return FString(UTF8_TO_TCHAR(Str.c_str()));
+	}
+
+	EPawnType ParsePawnType(const std::string& TypeStr)
+	{
+		if (TypeStr == "Drone") return EPawnType::Drone;
+		if (TypeStr == "Car") return EPawnType::Car;
+		if (TypeStr == "Flash") return EPawnType::Flash;
+
+		UE_LOG(LogConfigParser, Warning, TEXT("Unknown pawn type: %s"), *TomlStringToFString(TypeStr));
+		return EPawnType::Drone;
+	}
+
+	TSharedPtr<FSensorConfig> CreateSensorConfig(const std::string& SensorType, const toml::table* ConfigTable)
+	{
+		if (SensorType == "Lidar")
+		{
+			auto Config = MakeShared<FLiDarConfig>();
+			if (ConfigTable)
+			{
+				Config->RecordInterval = (*ConfigTable)["RecordInterval"].value_or(Config->RecordInterval);
+				Config->NumRays = (*ConfigTable)["NumRays"].value_or(Config->NumRays);
+				Config->NumPoints = (*ConfigTable)["NumPoints"].value_or(Config->NumPoints);
+				Config->ScannerRangeInner = (*ConfigTable)["ScannerRangeInner"].value_or(Config->ScannerRangeInner);
+				Config->ScannerRangeOuter = (*ConfigTable)["ScannerRangeOuter"].value_or(Config->ScannerRangeOuter);
+				Config->ScannerAngleUp = (*ConfigTable)["ScannerAngle"].value_or(Config->ScannerAngleUp);
+				Config->ScannerAngleDown = (*ConfigTable)["ScannerAngleDown"].value_or(Config->ScannerAngleDown);
+				Config->bVisualizePoints = (*ConfigTable)["bVisualizePoints"].value_or(Config->bVisualizePoints);
+			}
+			return Config;
+		}
+
+		if (SensorType == "DepthCamera")
+		{
+			auto Config = MakeShared<FDepthCameraConfig>();
+			if (ConfigTable)
+			{
+				Config->RecordInterval = (*ConfigTable)["RecordInterval"].value_or(Config->RecordInterval);
+				Config->FOV = (*ConfigTable)["FOV"].value_or(Config->FOV);
+				Config->MaxRange = (*ConfigTable)["MaxRange"].value_or(Config->MaxRange);
+				Config->MinRange = (*ConfigTable)["MinRange"].value_or(Config->MinRange);
+				Config->Width = (*ConfigTable)["Width"].value_or(Config->Width);
+				Config->Height = (*ConfigTable)["Height"].value_or(Config->Height);
+				Config->bOrthographic = (*ConfigTable)["bOrthographic"].value_or(Config->bOrthographic);
+				Config->OrthoWidth = (*ConfigTable)["OrthoWidth"].value_or(Config->OrthoWidth);
+			}
+			return Config;
+		}
+
+		if (SensorType == "RGBCamera")
+		{
+			auto Config = MakeShared<FRGBCameraConfig>();
+			if (ConfigTable)
+			{
+				Config->RecordInterval = (*ConfigTable)["RecordInterval"].value_or(Config->RecordInterval);
+				Config->FOV = (*ConfigTable)["FOV"].value_or(Config->FOV);
+				Config->Width = (*ConfigTable)["Width"].value_or(Config->Width);
+				Config->Height = (*ConfigTable)["Height"].value_or(Config->Height);
+				Config->bOrthographic = (*ConfigTable)["bOrthographic"].value_or(Config->bOrthographic);
+				Config->OrthoWidth = (*ConfigTable)["OrthoWidth"].value_or(Config->OrthoWidth);
+			}
+			return Config;
+		}
+
+		if (SensorType == "SegmentationCamera")
+		{
+			auto Config = MakeShared<FSegmentationCameraConfig>();
+			if (ConfigTable)
+			{
+				Config->RecordInterval = (*ConfigTable)["RecordInterval"].value_or(Config->RecordInterval);
+				Config->FOV = (*ConfigTable)["FOV"].value_or(Config->FOV);
+				Config->Width = (*ConfigTable)["Width"].value_or(Config->Width);
+				Config->Height = (*ConfigTable)["Height"].value_or(Config->Height);
+			}
+			return Config;
+		}
+
+		if (SensorType == "NormalCamera")
+		{
+			auto Config = MakeShared<FNormalCameraConfig>();
+			if (ConfigTable)
+			{
+				Config->RecordInterval = (*ConfigTable)["RecordInterval"].value_or(Config->RecordInterval);
+				Config->FOV = (*ConfigTable)["FOV"].value_or(Config->FOV);
+				Config->Width = (*ConfigTable)["Width"].value_or(Config->Width);
+				Config->Height = (*ConfigTable)["Height"].value_or(Config->Height);
+			}
+			return Config;
+		}
+
+		UE_LOG(LogConfigParser, Warning, TEXT("Unknown sensor type: %s"), *TomlStringToFString(SensorType));
+		return nullptr;
+	}
+
+	ESensorType StringToSensorType(const std::string& SensorType)
+	{
+		if (SensorType == "Lidar") return ESensorType::Lidar;
+		if (SensorType == "DepthCamera") return ESensorType::DepthCamera;
+		if (SensorType == "RGBCamera") return ESensorType::RGBCamera;
+		if (SensorType == "SegmentationCamera") return ESensorType::SegmentationCamera;
+		if (SensorType == "NormalCamera") return ESensorType::NormalCamera;
+		return ESensorType::RGBCamera;
+	}
+}
 
 FVCCSimConfig ParseConfig()
 {
-    FVCCSimConfig Config;
-    
-    std::string Filename = TCHAR_TO_UTF8(*FPaths::Combine(FPaths::ProjectPluginsDir(),
-        TEXT("VCCSim/Source/VCCSim/RSConfig.toml")));;
-    
-    if (!std::filesystem::exists(Filename))
-    {
-        UE_LOG(LogConfigParser, Warning, TEXT("ParseConfig: Using default config!"));
-        // Get the user's documents directory
-        FString DocPath = FPlatformProcess::UserDir();
-        Filename = TCHAR_TO_UTF8(*FPaths::Combine(
-            DocPath, TEXT("VCCSim"), TEXT("RSConfig.toml")));
-    }
+	using namespace ConfigParserHelpers;
 
-    auto Tbl = toml::parse_file(Filename);
+	FVCCSimConfig Config;
+	const FString ConfigPath = GetConfigFilePath();
+	const std::string ConfigPathStd = TCHAR_TO_UTF8(*ConfigPath);
 
-    if (auto VCCSim = Tbl["VCCSimPresets"].as_table())
-    {
-        Config.VCCSim.Server =
-            std::string((*VCCSim)["IP"].value_or("0.0.0.0"sv)) + ":" +
-            std::to_string((*VCCSim)["Port"].value_or(50996));
-        Config.VCCSim.MainCharacter = (*VCCSim)["MainCharacter"].value_or("");
-        Config.VCCSim.ManualControl = (*VCCSim)["ManualControl"].value_or(true);
-        Config.VCCSim.LS_StartOffset = (*VCCSim)["LS_StartOffset"].value_or(0);
-        Config.VCCSim.LogSavePath = (*VCCSim)["LogSavePath"].value_or(
-            TCHAR_TO_UTF8(FPlatformProcess::UserDir()));
-        Config.VCCSim.DefaultDronePawn = (*VCCSim)["DefaultDronePawn"].value_or("");
-        Config.VCCSim.DefaultCarPawn = (*VCCSim)["DefaultCarPawn"].value_or("");
-        Config.VCCSim.DefaultFlashPawn = (*VCCSim)["DefaultFlashPawn"].value_or("");
-        Config.VCCSim.BufferSize = (*VCCSim)["BufferSize"].value_or(100);
-        Config.VCCSim.StartWithRecording = (*VCCSim)["StartWithRecording"].value_or(false);
-        Config.VCCSim.BetterVisualsRecording = (*VCCSim)["BetterVisualsRecording"].value_or(false);
-        Config.VCCSim.UseMeshManager = (*VCCSim)["UseMeshManager"].value_or(false);
-        Config.VCCSim.MeshMaterial = (*VCCSim)["MeshMaterial"].value_or("None"sv);
-        
-        if (auto staticMeshActors = (*VCCSim)["StaticMeshActor"].as_array())
-        {
-            for (const auto& actor : *staticMeshActors)
-            {
-                if (auto actorName = actor.value<std::string>())
-                {
-                    Config.VCCSim.StaticMeshActor.push_back(*actorName);
-                }
-            }
-        }
-        if (auto subWindows = (*VCCSim)["SubWindows"].as_array())
-        {
-            for (const auto& window : *subWindows)
-            {
-                if (auto windowName = window.value<std::string>())
-                {
-                    Config.VCCSim.SubWindows.push_back(*windowName);
-                }
-            }
-        }
-        if (auto subWindowsOpacities
-            = (*VCCSim)["SubWindowsOpacities"].as_array())
-        {
-            for (const auto& opacity : *subWindowsOpacities)
-            {
-                if (auto op = opacity.value<double>())
-                {
-                    Config.VCCSim.SubWindowsOpacities.push_back(*op);
-                }
-            }
-        }
-    }
+	toml::table ParsedToml;
+	try
+	{
+		ParsedToml = toml::parse_file(ConfigPathStd);
+	}
+	catch (const toml::parse_error& Error)
+	{
+		UE_LOG(LogConfigParser, Error, TEXT("Failed to parse config file: %s"),
+			*TomlStringToFString(std::string(Error.description())));
+		return Config;
+	}
 
-    if (auto Robots = Tbl["Robots"].as_array())
-    {
-        for (const auto& Robot : *Robots)
-        {
-            FRobot r;
-            auto RobotDetails = *Robot.as_table();
+	if (auto VCCSimTable = ParsedToml["VCCSimPresets"].as_table())
+	{
+		const auto& Presets = *VCCSimTable;
 
-            r.UETag = RobotDetails["UETag"].value_or("None"sv);
-            if (r.UETag == "None")
-            {
-                UE_LOG(LogConfigParser, Error, TEXT("ParseConfig: Robot name not found!"));
-                continue;
-            }
+		const std::string IP = Presets["IP"].value_or("0.0.0.0");
+		const int32 Port = Presets["Port"].value_or(50996);
+		Config.VCCSim.Server = FString::Printf(TEXT("%s:%d"), *TomlStringToFString(IP), Port);
 
-            if (RobotDetails["Type"].value_or("Drone"sv) == "Drone"sv)
-            {
-                r.Type = EPawnType::Drone;
-            }
-            else if (RobotDetails["Type"].value_or("Drone"sv) == "Car"sv)
-            {
-                r.Type = EPawnType::Car;
-            }
-            else if (RobotDetails["Type"].value_or("Drone"sv) == "Flash"sv)
-            {
-                r.Type = EPawnType::Flash;
-            }
-            else
-            {
-                UE_LOG(LogConfigParser, Warning, TEXT("ParseConfig: Robot type not found!"));
-                continue;
-            }
+		Config.VCCSim.MainCharacter = TomlStringToFString(Presets["MainCharacter"].value_or(""));
+		Config.VCCSim.ManualControl = Presets["ManualControl"].value_or(true);
+		Config.VCCSim.LS_StartOffset = Presets["LS_StartOffset"].value_or(0);
+		const FString DefaultLogPath = FPlatformProcess::UserDir();
+		const std::string DefaultLogPathStd = DefaultLogPath.IsEmpty() ?
+			std::string("C:/temp") : std::string(TCHAR_TO_UTF8(*DefaultLogPath));
+		Config.VCCSim.LogSavePath = TomlStringToFString(Presets["LogSavePath"]
+			.value_or(DefaultLogPathStd));
+		Config.VCCSim.DefaultDronePawn = TomlStringToFString(Presets["DefaultDronePawn"].value_or(""));
+		Config.VCCSim.DefaultCarPawn = TomlStringToFString(Presets["DefaultCarPawn"].value_or(""));
+		Config.VCCSim.DefaultFlashPawn = TomlStringToFString(Presets["DefaultFlashPawn"].value_or(""));
+		Config.VCCSim.BufferSize = Presets["BufferSize"].value_or(100);
+		Config.VCCSim.StartWithRecording = Presets["StartWithRecording"].value_or(false);
+		Config.VCCSim.BetterVisualsRecording = Presets["BetterVisualsRecording"].value_or(false);
+		Config.VCCSim.UseMeshManager = Presets["UseMeshManager"].value_or(false);
+		Config.VCCSim.MeshMaterial = TomlStringToFString(Presets["MeshMaterial"].value_or("None"));
 
-            r.RecordInterval = RobotDetails["RecordInterval"].value_or(-1.0);
+		ParseStringArray(Presets["StaticMeshActor"].as_array(), Config.VCCSim.StaticMeshActor);
+		ParseStringArray(Presets["SubWindows"].as_array(), Config.VCCSim.SubWindows);
+		ParseFloatArray(Presets["SubWindowsOpacities"].as_array(), Config.VCCSim.SubWindowsOpacities);
+	}
 
-            if (auto ComponentConfigs = RobotDetails["ComponentConfigs"].as_table())
-            {
-                for (const auto& [comp_name, comp_config] : *ComponentConfigs)
-                {
-                    if (comp_name == "Lidar")
-                    {
-                        auto LiDarConfig = std::make_shared<FLiDarConfig>();
-                        if (auto Table = comp_config.as_table())
-                        {
-                            LiDarConfig->RecordInterval =
-                                (*Table)["RecordInterval"].value_or(LiDarConfig->RecordInterval);
-                            LiDarConfig->NumRays =
-                                (*Table)["NumRays"].value_or(LiDarConfig->NumRays);
-                            LiDarConfig->NumPoints =
-                                (*Table)["NumPoints"].value_or(LiDarConfig->NumPoints);
-                            LiDarConfig->ScannerRangeInner =
-                                (*Table)["ScannerRangeInner"].value_or(LiDarConfig->ScannerRangeInner);
-                            LiDarConfig->ScannerRangeOuter =
-                                (*Table)["ScannerRangeOuter"].value_or(LiDarConfig->ScannerRangeOuter);
-                            LiDarConfig->ScannerAngleUp =
-                                (*Table)["ScannerAngle"].value_or(LiDarConfig->ScannerAngleUp);
-                            LiDarConfig->ScannerAngleDown =
-                                (*Table)["ScannerAngleDown"].value_or(LiDarConfig->ScannerAngleDown);
-                            LiDarConfig->bVisualizePoints =
-                                (*Table)["bVisualizePoints"].value_or(LiDarConfig->bVisualizePoints);
-                        }
-                        r.ComponentConfigs.push_back({ESensorType::Lidar, LiDarConfig});
-                    }
-                    else if (comp_name == "DepthCamera")
-                    {
-                        auto DepthConfig = std::make_shared<FDepthCameraConfig>();
-                        if (auto Table = comp_config.as_table())
-                        {
-                            DepthConfig->RecordInterval =
-                                (*Table)["RecordInterval"].value_or(DepthConfig->RecordInterval);
-                            DepthConfig->FOV = (*Table)["FOV"].value_or(DepthConfig->FOV);
-                            DepthConfig->MaxRange = (*Table)["MaxRange"].value_or(DepthConfig->MaxRange);
-                            DepthConfig->MinRange = (*Table)["MinRange"].value_or(DepthConfig->MinRange);
-                            DepthConfig->Width = (*Table)["Width"].value_or(DepthConfig->Width);
-                            DepthConfig->Height = (*Table)["Height"].value_or(DepthConfig->Height);
-                            DepthConfig->bOrthographic =
-                                (*Table)["bOrthographic"].value_or(DepthConfig->bOrthographic);
-                            DepthConfig->OrthoWidth =
-                                (*Table)["OrthoWidth"].value_or(DepthConfig->OrthoWidth);
-                        }
-                        r.ComponentConfigs.push_back({ESensorType::DepthCamera, DepthConfig});
-                    }
-                    else if (comp_name == "RGBCamera")
-                    {
-                        auto RGBConfig = std::make_shared<FRGBCameraConfig>();
-                        if (auto Table = comp_config.as_table())
-                        {
-                            RGBConfig->RecordInterval =
-                                (*Table)["RecordInterval"].value_or(RGBConfig->RecordInterval);
-                            RGBConfig->FOV = (*Table)["FOV"].value_or(RGBConfig->FOV);
-                            RGBConfig->Width = (*Table)["Width"].value_or(RGBConfig->Width);
-                            RGBConfig->Height = (*Table)["Height"].value_or(RGBConfig->Height);
-                            RGBConfig->bOrthographic =
-                                (*Table)["bOrthographic"].value_or(RGBConfig->bOrthographic);
-                            RGBConfig->OrthoWidth =
-                                (*Table)["OrthoWidth"].value_or(RGBConfig->OrthoWidth);
-                        }
-                        r.ComponentConfigs.push_back({ESensorType::RGBCamera, RGBConfig});
-                    }
-                    else if (comp_name == "SegmentationCamera")
-                    {
-                        auto SegmentationConfig = std::make_shared<FSegmentationCameraConfig>();
-                        if (auto Table = comp_config.as_table())
-                        {
-                            SegmentationConfig->RecordInterval =
-                                (*Table)["RecordInterval"].value_or(SegmentationConfig->RecordInterval);
-                            SegmentationConfig->FOV =
-                                (*Table)["FOV"].value_or(SegmentationConfig->FOV);
-                            SegmentationConfig->Width =
-                                (*Table)["Width"].value_or(SegmentationConfig->Width);
-                            SegmentationConfig->Height =
-                                (*Table)["Height"].value_or(SegmentationConfig->Height);
-                        }
-                        r.ComponentConfigs.push_back({ESensorType::SegmentationCamera, SegmentationConfig});
-                    }
-                    else if (comp_name == "NormalCamera")
-                    {
-                        auto NormalCameraConfig = std::make_shared<FNormalCameraConfig>();
-                        if (auto Table = comp_config.as_table())
-                        {
-                            NormalCameraConfig->RecordInterval =
-                                (*Table)["RecordInterval"].value_or(NormalCameraConfig->RecordInterval);
-                            NormalCameraConfig->FOV =
-                                (*Table)["FOV"].value_or(NormalCameraConfig->FOV);
-                            NormalCameraConfig->Width =
-                                (*Table)["Width"].value_or(NormalCameraConfig->Width);
-                            NormalCameraConfig->Height =
-                                (*Table)["Height"].value_or(NormalCameraConfig->Height);
-                        }
-                        r.ComponentConfigs.push_back({ESensorType::NormalCamera, NormalCameraConfig});
-                    }
-                    else
-                    {
-                        UE_LOG(LogConfigParser, Warning, TEXT("ParseConfig: Component %s not found!"),
-                            *FString{UTF8_TO_TCHAR(std::string(comp_name).c_str())});
-                    }
-                }
-            }
+	if (auto RobotsArray = ParsedToml["Robots"].as_array())
+	{
+		for (const auto& RobotElement : *RobotsArray)
+		{
+			auto RobotTable = RobotElement.as_table();
+			if (!RobotTable) continue;
 
-            Config.Robots.push_back(std::move(r));
-        }
-    }
+			const auto& Robot = *RobotTable;
+			FRobot RobotConfig;
 
-    return Config;
+			const std::string TagStr = Robot["UETag"].value_or("None");
+			if (TagStr == "None")
+			{
+				UE_LOG(LogConfigParser, Error, TEXT("Robot UETag not found, skipping robot"));
+				continue;
+			}
+
+			RobotConfig.UETag = TomlStringToFString(TagStr);
+			RobotConfig.Type = ParsePawnType(Robot["Type"].value_or("Drone"));
+			RobotConfig.RecordInterval = Robot["RecordInterval"].value_or(-1.0f);
+
+			if (auto ComponentConfigsTable = Robot["ComponentConfigs"].as_table())
+			{
+				for (const auto& [SensorName, SensorConfigValue] : *ComponentConfigsTable)
+				{
+					const std::string SensorNameStr(SensorName);
+					auto SensorConfigTable = SensorConfigValue.as_table();
+
+					if (auto SensorConfig = CreateSensorConfig(SensorNameStr, SensorConfigTable))
+					{
+						const ESensorType SensorType = StringToSensorType(SensorNameStr);
+						RobotConfig.ComponentConfigs.Add(TPair<ESensorType,
+							TSharedPtr<FSensorConfig>>(SensorType, SensorConfig));
+					}
+				}
+			}
+
+			Config.Robots.Add(MoveTemp(RobotConfig));
+		}
+	}
+
+	return Config;
 }

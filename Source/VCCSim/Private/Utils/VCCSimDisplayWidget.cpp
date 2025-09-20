@@ -132,16 +132,16 @@ void UVCCSIMDisplayWidget::InitFromConfig(const struct FVCCSimConfig& Config)
     auto SubWindows = Config.VCCSim.SubWindows;
     auto SubWindowsOpacities = Config.VCCSim.SubWindowsOpacities;
     
-    for (int i = 0; i < SubWindows.size(); ++i)
+    for (int32 i = 0; i < SubWindows.Num(); ++i)
     {
         if (SubWindows[i] == "Lit")
         {
-            if (!Config.VCCSim.StaticMeshActor.empty())
+            if (Config.VCCSim.StaticMeshActor.Num() > 0)
             {
                 TArray<UStaticMeshComponent*> MeshComponents;
-                for (const std::string& mesh : Config.VCCSim.StaticMeshActor)
+                for (const FString& mesh : Config.VCCSim.StaticMeshActor)
                 {
-                    auto ActorName = mesh.c_str();
+                    auto ActorName = *mesh;
                     for (TActorIterator<AStaticMeshActor> It(GetWorld()); It; ++It)
                     {
                         if (It->ActorHasTag(ActorName))
@@ -244,8 +244,8 @@ void UVCCSIMDisplayWidget::InitFromConfig(const struct FVCCSimConfig& Config)
         }
         else
         {
-            UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("Unknown SubWindow: %s"), 
-                *FString(SubWindows[i].c_str()));
+            UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("Unknown SubWindow: %s"),
+                *SubWindows[i]);
         }
     }
 }
