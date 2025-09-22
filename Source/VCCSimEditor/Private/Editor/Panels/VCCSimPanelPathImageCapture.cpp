@@ -771,7 +771,7 @@ void FVCCSimPanelPathImageCapture::SaveRGB(int32 PoseIndex, bool& bAnyCaptured)
                 UE_LOG(LogPathImageCapture, Log, TEXT("SaveRGB: Activated camera[%d]"), i);
             }
             // Get camera index or use iterator index
-            int32 CameraIndex = Camera->GetCameraIndex();
+            int32 CameraIndex = Camera->GetSensorIndex();
             if (CameraIndex < 0) CameraIndex = i;
             
             // Filename for this camera
@@ -840,7 +840,7 @@ void FVCCSimPanelPathImageCapture::SaveDepth(int32 PoseIndex, bool& bAnyCaptured
                 UE_LOG(LogPathImageCapture, Log, TEXT("SaveDepth: Activated camera[%d]"), i);
             }
             // Get camera index or use iterator index
-            int32 CameraIndex = Camera->GetCameraIndex();
+            int32 CameraIndex = Camera->GetSensorIndex();
             if (CameraIndex < 0) CameraIndex = i;
             
             FString DepthFilename = SaveDirectory / FString::Printf(
@@ -907,7 +907,7 @@ void FVCCSimPanelPathImageCapture::SaveSeg(int32 PoseIndex, bool& bAnyCaptured)
                 UE_LOG(LogPathImageCapture, Log, TEXT("SaveSeg: Activated camera[%d]"), i);
             }
             // Get camera index or use iterator index
-            int32 CameraIndex = Camera->GetCameraIndex();
+            int32 CameraIndex = Camera->GetSensorIndex();
             if (CameraIndex < 0) CameraIndex = i;
                     
             // Filename for this camera
@@ -964,7 +964,7 @@ void FVCCSimPanelPathImageCapture::SaveNormal(int32 PoseIndex, bool& bAnyCapture
                 UE_LOG(LogPathImageCapture, Log, TEXT("SaveNormal: Activated camera[%d]"), i);
             }
             // Get camera index or use iterator index
-            int32 CameraIndex = Camera->GetCameraIndex();
+            int32 CameraIndex = Camera->GetSensorIndex();
             if (CameraIndex < 0) CameraIndex = i;
             
             // Generate filename for EXR format

@@ -18,14 +18,13 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ISensorDataProvider.h"
 #include "GameFramework/Actor.h"
 #include "SensorBase.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Materials/MaterialInterface.h"
 #include "RHIResources.h"
 #include "NormalCamera.generated.h"
-
-class ARecorder;
 
 class FNormalCameraConfig: public FCameraConfig
 {
@@ -38,38 +37,86 @@ public:
 };
 
 UCLASS(ClassGroup = (VCCSIM), meta = (BlueprintSpawnableComponent))
-class VCCSIM_API UNormalCameraComponent : public UCameraBaseComponent
+class VCCSIM_API UNormalCameraComponent : public UCameraBaseComponent, public ISensorDataProvider
 {
     GENERATED_BODY()
 
 public:
     UNormalCameraComponent();
-    void RConfigure(const FNormalCameraConfig& Config, ARecorder* Recorder);
-
-    virtual ESensorType GetSensorType() const override { return ESensorType::NormalCamera; }
-    int32 GetCameraIndex() const { return GetSensorIndex(); }
+    virtual void Configure(const FSensorConfig& Config) override final;
 
     UFUNCTION(BlueprintCallable, Category = "NormalCamera")
-    void CaptureScene();
+    void CaptureNormalScene();
+    UFUNCTION(BlueprintCallable, Category = "NormalCamera")
+    void CaptureNormalSceneAndProcess();
 
-    // High precision normal data access
+    // For grpc server
     void AsyncGetNormalImageData(TFunction<void(const TArray<FLinearColor>&)> Callback);
+
+    // ISensorDataProvider interface
+    virtual TFuture<FSensorDataPacket> CaptureDataAsync() override;
+    virtual ESensorType GetSensorType() const override { return ESensorType::NormalCamera; }
+    virtual AActor* GetOwnerActor() const override { return ParentActor; }
 
 protected:
     virtual void InitializeRenderTargets() override;
     virtual UTextureRenderTarget2D* GetRenderTarget() const override { return NormalRenderTarget; }
     virtual void SetCaptureComponent() const override;
-    virtual void OnRecordTick() override;
 
-    void ProcessNormalTexture(TFunction<void(const TArray<FLinearColor>&)> OnComplete);
-    TArray<FLinearColor> GetNormalImage();
+    void ProcessNormalTexture(TFunction<void()> OnComplete);
+    void ProcessNormalTextureParam(TFunction<void(const TArray<FLinearColor>&)> OnComplete);
 
 public:
     UPROPERTY()
     UTextureRenderTarget2D* NormalRenderTarget = nullptr;
 
-private:
-    // Store high precision normal data
+private:    
     TArray<FLinearColor> NormalData;
     bool Dirty = false;
+
+    template<typename CallbackType>
+    void ProcessNormalTextureTemplate(CallbackType&& Callback);
 };
+
+template<typename CallbackType>
+void UNormalCameraComponent::ProcessNormalTextureTemplate(CallbackType&& Callback)
+{
+    if (!NormalRenderTarget) { UE_LOG(LogTemp, Error, TEXT("NormalRenderTarget is null!")); return; }
+
+    if (NormalData.Num() != Width * Height)
+    {
+        NormalData.SetNumUninitialized(Width * Height);
+    }
+
+    struct FReadSurfaceContext
+    {
+        TArray<FLinearColor>* OutData;
+        FIntRect Rect;
+    } Context { &NormalData, FIntRect(0, 0, Width, Height) };
+
+    auto SharedCallback = MakeShared<std::decay_t<CallbackType>>(std::forward<CallbackType>(Callback));
+
+    UTextureRenderTarget2D* RT = NormalRenderTarget;
+
+    ENQUEUE_RENDER_COMMAND(ReadNormalSurfaceCommand)(
+        [RT, Context, SharedCallback](FRHICommandListImmediate& RHICmdList)
+        {
+            if (!RT) return;
+
+            FTextureRenderTargetResource* RTRes = RT->GetRenderTargetResource();
+            if (!RTRes) return;
+
+            RHICmdList.ReadSurfaceData(
+                RTRes->GetRenderTargetTexture(),
+                Context.Rect,
+                *Context.OutData,
+                FReadSurfaceDataFlags()
+            );
+
+            if constexpr (std::is_invocable_v<std::decay_t<CallbackType>>)
+            { (*SharedCallback)(); }
+            else if constexpr (std::is_invocable_v<std::decay_t<CallbackType>, const TArray<FLinearColor>&>)
+            { (*SharedCallback)(*Context.OutData); }
+        }
+    );
+}

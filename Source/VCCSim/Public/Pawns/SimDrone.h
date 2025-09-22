@@ -23,7 +23,6 @@
 // #include "InputActionValue.h"
 // #include "SimDrone.generated.h"
 //
-// class ARecorder;
 //
 // UCLASS()
 // class VCCSIM_API ASimDrone : public ADronePawn

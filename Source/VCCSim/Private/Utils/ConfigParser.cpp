@@ -87,7 +87,7 @@ namespace ConfigParserHelpers
 	{
 		if (SensorType == "Lidar")
 		{
-			auto Config = MakeShared<FLiDarConfig>();
+			auto Config = MakeShared<FLiDARConfig>();
 			if (ConfigTable)
 			{
 				Config->RecordInterval = (*ConfigTable)["RecordInterval"].value_or(Config->RecordInterval);
@@ -206,11 +206,6 @@ FVCCSimConfig ParseConfig()
 		Config.VCCSim.MainCharacter = TomlStringToFString(Presets["MainCharacter"].value_or(""));
 		Config.VCCSim.ManualControl = Presets["ManualControl"].value_or(true);
 		Config.VCCSim.LS_StartOffset = Presets["LS_StartOffset"].value_or(0);
-		const FString DefaultLogPath = FPlatformProcess::UserDir();
-		const std::string DefaultLogPathStd = DefaultLogPath.IsEmpty() ?
-			std::string("C:/temp") : std::string(TCHAR_TO_UTF8(*DefaultLogPath));
-		Config.VCCSim.LogSavePath = TomlStringToFString(Presets["LogSavePath"]
-			.value_or(DefaultLogPathStd));
 		Config.VCCSim.DefaultDronePawn = TomlStringToFString(Presets["DefaultDronePawn"].value_or(""));
 		Config.VCCSim.DefaultCarPawn = TomlStringToFString(Presets["DefaultCarPawn"].value_or(""));
 		Config.VCCSim.DefaultFlashPawn = TomlStringToFString(Presets["DefaultFlashPawn"].value_or(""));

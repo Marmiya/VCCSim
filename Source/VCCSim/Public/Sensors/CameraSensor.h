@@ -20,12 +20,12 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "SensorBase.h"
+#include "ISensorDataProvider.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Materials/MaterialInterface.h"
 #include "RHIResources.h"
 #include "CameraSensor.generated.h"
 
-class ARecorder;
 class UInsMeshHolder;
 
 class FRGBCameraConfig : public FCameraConfig
@@ -41,55 +41,87 @@ public:
     }
 };
 
-DECLARE_DYNAMIC_DELEGATE_TwoParams(
-    FKeyPointCaptured, const FTransform&, Pose, const FString&, Name);
-
 UCLASS(ClassGroup = (VCCSIM), meta = (BlueprintSpawnableComponent))
-class VCCSIM_API URGBCameraComponent : public UCameraBaseComponent
+class VCCSIM_API URGBCameraComponent : public UCameraBaseComponent, public ISensorDataProvider
 {
     GENERATED_BODY()
 
 public:
     URGBCameraComponent();
-    void RConfigure(const FRGBCameraConfig& Config, ARecorder* Recorder);
+    virtual void Configure(const FSensorConfig& Config) override final;
     void SetIgnoreLidar(UInsMeshHolder* MeshHolder);
-
-    virtual ESensorType GetSensorType() const override { return ESensorType::RGBCamera; }
-
-    int32 GetCameraIndex() const { return GetSensorIndex(); }
     FString CameraName;
-
-    void ProcessRGBTextureAsyncRaw(TFunction<void()> OnComplete);
-    void ProcessRGBTextureAsync(TFunction<void(const TArray<FColor>&)> OnComplete);
 
     UFUNCTION(BlueprintCallable, Category = "RGBCamera")
     void CaptureRGBScene();
 
+    // For grpc service
     void AsyncGetRGBImageData(TFunction<void(const TArray<FColor>&)> Callback);
+
+    // ISensorDataProvider interface
+    virtual TFuture<FSensorDataPacket> CaptureDataAsync() override;
+    virtual ESensorType GetSensorType() const override { return ESensorType::RGBCamera; }
+    virtual AActor* GetOwnerActor() const override { return ParentActor; }
         
 protected:
     virtual void InitializeRenderTargets() override;
     virtual UTextureRenderTarget2D* GetRenderTarget() const override { return RGBRenderTarget; }
     virtual void SetCaptureComponent() const override;
-    virtual void OnRecordTick() override;
+    void ProcessRGBTexture(TFunction<void()> OnComplete);
+    void ProcessRGBTextureParam(TFunction<void(const TArray<FColor>&)> OnComplete);
 
 public:
-
-    FKeyPointCaptured OnKeyPointCaptured;
-
     UPROPERTY()
     UTextureRenderTarget2D* RGBRenderTarget = nullptr;
 
 private:
-    void ExecuteCaptureOnGameThread();
+    TArray<FColor> RGBData;
+
+    template<typename CallbackType>
+    void ProcessRGBTextureTemplate(CallbackType&& Callback);
+};
+
+template<typename CallbackType>
+void URGBCameraComponent::ProcessRGBTextureTemplate(CallbackType&& Callback)
+{
+    if (!RGBRenderTarget) { UE_LOG(LogTemp, Error, TEXT("RGBRenderTarget is null!")); return; }
+
+    if (RGBData.Num() != Width * Height)
+    {
+        RGBData.SetNumUninitialized(Width * Height);
+    }
 
     struct FReadSurfaceContext
     {
         TArray<FColor>* OutData;
-        FTextureRenderTargetResource* RenderTarget;
         FIntRect Rect;
         FReadSurfaceDataFlags Flags;
-    };
+    } Context { &RGBData, FIntRect(0, 0, Width, Height),
+                FReadSurfaceDataFlags(RCM_UNorm, CubeFace_MAX) };
 
-    TArray<FColor> RGBData;
-};
+    auto SharedCallback = MakeShared<std::decay_t<CallbackType>>(std::forward<CallbackType>(Callback));
+
+    UTextureRenderTarget2D* RT = RGBRenderTarget;
+
+    ENQUEUE_RENDER_COMMAND(ReadSurfaceCommand)(
+        [RT, Context, SharedCallback](FRHICommandListImmediate& RHICmdList)
+        {
+            if (!RT) return;
+
+            FTextureRenderTargetResource* RTRes = RT->GetRenderTargetResource();
+            if (!RTRes) return;
+
+            RHICmdList.ReadSurfaceData(
+                RTRes->GetRenderTargetTexture(),
+                Context.Rect,
+                *Context.OutData,
+                Context.Flags
+            );
+
+            if constexpr (std::is_invocable_v<std::decay_t<CallbackType>>)
+            { (*SharedCallback)(); }
+            else if constexpr (std::is_invocable_v<std::decay_t<CallbackType>, const TArray<FColor>&>)
+            { (*SharedCallback)(*Context.OutData); }
+        }
+    );
+}

@@ -18,7 +18,7 @@
 DEFINE_LOG_CATEGORY_STATIC(LogSegmentCamera, Log, All);
 
 #include "Sensors/SegmentCamera.h"
-#include "Simulation/Recorder.h"
+#include "DataStructures/RecordData.h"
 #include "RenderingThread.h"
 #include "Async/AsyncWork.h"
 #include "Windows/WindowsHWrapper.h"
@@ -27,77 +27,81 @@ USegmentationCameraComponent::USegmentationCameraComponent()
 {
 }
 
-
-void USegmentationCameraComponent::OnRecordTick()
+void USegmentationCameraComponent::Configure(const FSensorConfig& Config)
 {
-    CaptureSegmentationScene();
-
-    ProcessSegmentationTextureAsyncRaw([this]
+    if (!bBPConfigured)
     {
-        Dirty = true;
-    });
-
-    if (RecorderPtr)
-    {
-        FSegmentationCameraData CameraData;
-        CameraData.Timestamp = FPlatformTime::Seconds();
-        CameraData.Width = Width;
-        CameraData.Height = Height;
-        while(!Dirty)
-        {
-            FPlatformProcess::Sleep(0.01f);
-        }
-        CameraData.Data = SegmentationData;
-        Dirty = false;
-        RecorderPtr->SubmitSegmentationData(ParentActor, MoveTemp(CameraData));
+        auto SegConfig = static_cast<const FSegmentationCameraConfig&>(Config);
+        FOV = SegConfig.FOV;
+        Width = SegConfig.Width;
+        Height = SegConfig.Height;
     }
-}
-
-void USegmentationCameraComponent::RConfigure(
-    const FSegmentationCameraConfig& Config, ARecorder* Recorder)
-{
-    FOV = Config.FOV;
-    Width = Config.Width;
-    Height = Config.Height;
 
     ComputeIntrinsics();
     InitializeRenderTargets();
     SetCaptureComponent();
 
-    if (Config.RecordInterval > 0)
-    {
-        RecordInterval = Config.RecordInterval;
-        SetupRecorder(Recorder);
-        RecordState = Recorder->RecordState;
-        Recorder->OnRecordStateChanged.AddDynamic(this,
-            &USegmentationCameraComponent::SetRecordState);
-        SetComponentTickEnabled(true);
-        bRecorded = true;
-    }
-    else
-    {
-        SetComponentTickEnabled(false);
-    }
-
-    // Perform a warmup capture to ensure SegmentationMaterial is properly applied
-    // This prevents the first capture from having incomplete segmentation material application
     if (CheckComponentAndRenderTarget())
     {
         AsyncTask(ENamedThreads::GameThread, [this]()
         {
-            // Wait one frame for PostProcess material to initialize
             GetWorld()->GetTimerManager().SetTimerForNextTick([this]()
             {
                 if (CaptureComponent)
                 {
-                    CaptureComponent->CaptureScene();
-                    UE_LOG(LogSegmentCamera, Log, TEXT("Warmup capture completed for SegmentationCamera"));
+                    CaptureComponent->ShowOnlyActors.Empty();
                 }
             });
         });
     }
+}
 
-    bBPConfigured = true;
+TFuture<FSensorDataPacket> USegmentationCameraComponent::CaptureDataAsync()
+{
+    TSharedPtr<TPromise<FSensorDataPacket>> Promise = MakeShared<TPromise<FSensorDataPacket>>();
+    TFuture<FSensorDataPacket> Future = Promise->GetFuture();
+
+    AsyncTask(ENamedThreads::GameThread, [this, Promise]()
+    {
+        FSensorDataPacket Packet;
+        Packet.Type = ESensorType::SegmentationCamera;
+        Packet.SensorIndex = GetSensorIndex();
+        Packet.OwnerActor = GetOwnerActor();
+        Packet.Timestamp = FPlatformTime::Seconds();
+
+        if (!CheckComponentAndRenderTarget())
+        {
+            Packet.bValid = false;
+            Promise->SetValue(Packet);
+            return;
+        }
+
+        CaptureSegmentationScene();
+
+        ProcessSegmentationTextureParam([this, Promise, Packet](const TArray<FColor>& CapturedSegmentationData) mutable
+        {
+            Async(EAsyncExecution::TaskGraph, [Promise, Packet, CapturedSegmentationData, Width = this->Width, Height = this->Height]() mutable
+            {
+                auto SegmentationData = MakeShared<FSegmentationCameraData>();
+                SegmentationData->Timestamp = Packet.Timestamp;
+                SegmentationData->Width = Width;
+                SegmentationData->Height = Height;
+                SegmentationData->Data = CapturedSegmentationData;
+
+                Packet.Data = SegmentationData;
+                Packet.bValid = true;
+                Promise->SetValue(Packet);
+            });
+        });
+    });
+
+    return Future;
+}
+
+void USegmentationCameraComponent::InitializeRenderTargets()
+{
+    SegmentationRenderTarget = NewObject<UTextureRenderTarget2D>(this);
+    SegmentationRenderTarget->InitCustomFormat(Width, Height, PF_B8G8R8A8, true);
 }
 
 void USegmentationCameraComponent::SetCaptureComponent() const
@@ -108,35 +112,12 @@ void USegmentationCameraComponent::SetCaptureComponent() const
     {
         CaptureComponent->PrimitiveRenderMode = ESceneCapturePrimitiveRenderMode::PRM_RenderScenePrimitives;
         CaptureComponent->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
-        CaptureComponent->bAlwaysPersistRenderingState = true;
-
-        // Apply the segmentation post-process material if available
-        if (SegmentationMaterial)
-        {
-            CaptureComponent->PostProcessSettings.WeightedBlendables.Array.Empty();
-            FWeightedBlendable WeightedBlendable;
-            WeightedBlendable.Object = SegmentationMaterial;
-            WeightedBlendable.Weight = 1.f;
-            CaptureComponent->PostProcessSettings.WeightedBlendables.Array.Add(WeightedBlendable);
-        }
-        else
-        {
-            UE_LOG(LogSegmentCamera, Error, TEXT("Segmentation material not set!"));
-        }
+        CaptureComponent->PostProcessSettings.bOverride_AutoExposureMinBrightness = true;
+        CaptureComponent->PostProcessSettings.bOverride_AutoExposureMaxBrightness = true;
+        CaptureComponent->PostProcessSettings.AutoExposureMinBrightness = 1.0f;
+        CaptureComponent->PostProcessSettings.AutoExposureMaxBrightness = 1.0f;
+        CaptureComponent->TextureTarget = SegmentationRenderTarget;
     }
-}
-
-void USegmentationCameraComponent::InitializeRenderTargets()
-{
-    SegmentationRenderTarget = NewObject<UTextureRenderTarget2D>(this);
-    SegmentationRenderTarget->RenderTargetFormat = ETextureRenderTargetFormat::RTF_RGBA8;
-    SegmentationRenderTarget->InitCustomFormat(Width, Height,
-        PF_R8G8B8A8, true);
-    SegmentationRenderTarget->TargetGamma = GEngine->GetDisplayGamma();
-    SegmentationRenderTarget->bGPUSharedFlag = true;
-    SegmentationRenderTarget->bAutoGenerateMips = false;
-    
-    SegmentationRenderTarget->UpdateResource();
 }
 
 void USegmentationCameraComponent::CaptureSegmentationScene()
@@ -145,25 +126,21 @@ void USegmentationCameraComponent::CaptureSegmentationScene()
     {
         return;
     }
-    
-    // Check if we're on the game thread
+
     if (IsInGameThread())
     {
-        // We're already on the game thread, proceed normally
-        ExecuteCaptureOnGameThread();
+        CaptureComponent->CaptureScene();
     }
     else
     {
-        // We're not on the game thread, so we need to dispatch to it
         AsyncTask(ENamedThreads::GameThread, [this]()
         {
-            ExecuteCaptureOnGameThread();
+            CaptureComponent->CaptureScene();
         });
     }
 }
 
-void USegmentationCameraComponent::AsyncGetSegmentationImageData(
-    TFunction<void(const TArray<FColor>&)> Callback)
+void USegmentationCameraComponent::AsyncGetSegmentationImageData(TFunction<void(const TArray<FColor>&)> Callback)
 {
     AsyncTask(ENamedThreads::GameThread, [this, Callback = MoveTemp(Callback)]()
     {
@@ -171,102 +148,23 @@ void USegmentationCameraComponent::AsyncGetSegmentationImageData(
         {
             return;
         }
-        
+
         CaptureComponent->CaptureScene();
-        
-        ProcessSegmentationTextureAsync([Callback](const TArray<FColor>& ColorData)
+
+        ProcessSegmentationTextureParam([Callback](const TArray<FColor>& ColorData)
         {
             Callback(ColorData);
         });
     });
 }
 
-void USegmentationCameraComponent::ProcessSegmentationTextureAsyncRaw(TFunction<void()> OnComplete)
+void USegmentationCameraComponent::ProcessSegmentationTexture(TFunction<void()> OnComplete)
 {
-    FTextureRenderTargetResource* RenderTargetResource = 
-        SegmentationRenderTarget->GameThread_GetRenderTargetResource();
-    
-    if (!RenderTargetResource)
-    {
-        UE_LOG(LogSegmentCamera, Error, TEXT("Failed to get render target resource!"));
-        return;
-    }
-
-    // Ensure SegmentationData has correct size
-    if (SegmentationData.Num() != Width * Height)
-    {
-        SegmentationData.SetNumUninitialized(Width * Height);
-    }
-    
-    FReadSurfaceContext Context =
-    {
-        &SegmentationData,
-        RenderTargetResource,
-        FIntRect(0, 0, Width, Height),
-        FReadSurfaceDataFlags(RCM_UNorm, CubeFace_MAX)
-    };
-
-    auto SharedCallback = MakeShared<TFunction<void()>>(OnComplete);
-    
-    ENQUEUE_RENDER_COMMAND(ReadSurfaceCommand)(
-        [Context, SharedCallback](FRHICommandListImmediate& RHICmdList)
-        {
-            RHICmdList.ReadSurfaceData(
-                Context.RenderTarget->GetRenderTargetTexture(),
-                Context.Rect,
-                *Context.OutData,
-                Context.Flags
-            );
-            (*SharedCallback)();
-        });
+    ProcessSegTextureTemplate(std::move(OnComplete));
 }
 
-void USegmentationCameraComponent::ProcessSegmentationTextureAsync(
+void USegmentationCameraComponent::ProcessSegmentationTextureParam(
     TFunction<void(const TArray<FColor>&)> OnComplete)
 {
-    FTextureRenderTargetResource* RenderTargetResource = 
-        SegmentationRenderTarget->GameThread_GetRenderTargetResource();
-    
-    if (!RenderTargetResource)
-    {
-        UE_LOG(LogSegmentCamera, Error, TEXT("Failed to get render target resource!"));
-        return;
-    }
-
-    // Ensure SegmentationData has correct size
-    if (SegmentationData.Num() != Width * Height)
-    {
-        SegmentationData.SetNumUninitialized(Width * Height);
-    }
-    
-    FReadSurfaceContext Context =
-    {
-        &SegmentationData,
-        RenderTargetResource,
-        FIntRect(0, 0, Width, Height),
-        FReadSurfaceDataFlags(RCM_UNorm, CubeFace_MAX)
-    };
-
-    auto SharedCallback = MakeShared<TFunction<void(const TArray<FColor>&)>>(MoveTemp(OnComplete));
-    // Capture the OnComplete callback in the render command
-    ENQUEUE_RENDER_COMMAND(ReadSurfaceCommand)(
-        [Context, SharedCallback](FRHICommandListImmediate& RHICmdList)
-        {            
-            RHICmdList.ReadSurfaceData(
-                Context.RenderTarget->GetRenderTargetTexture(),
-                Context.Rect,
-                *Context.OutData,
-                Context.Flags
-            );
-            
-            (*SharedCallback)(*Context.OutData);
-        });
-}
-
-
-void USegmentationCameraComponent::ExecuteCaptureOnGameThread()
-{
-    check(IsInGameThread());
-    
-    CaptureComponent->CaptureScene();
+    ProcessSegTextureTemplate(std::move(OnComplete));
 }

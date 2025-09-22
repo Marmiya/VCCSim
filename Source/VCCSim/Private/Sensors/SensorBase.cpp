@@ -19,7 +19,6 @@ DEFINE_LOG_CATEGORY_STATIC(LogCameraSensor, Log, All);
 
 
 #include "Sensors/SensorBase.h"
-#include "Simulation/Recorder.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
 
@@ -33,7 +32,9 @@ void USensorBaseComponent::BeginPlay()
 {
 	Super::BeginPlay();
 	ParentActor = GetOwner();
-	ConfigureSensor();
+	SetComponentTickEnabled(false);
+	SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	SetCollisionResponseToAllChannels(ECR_Ignore);
 }
 
 void USensorBaseComponent::OnComponentCreated()
@@ -41,45 +42,8 @@ void USensorBaseComponent::OnComponentCreated()
 	Super::OnComponentCreated();
 }
 
-void USensorBaseComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
-{
-	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-
-	OnSensorTick(DeltaTime);
-
-	if (ShouldRecord())
-	{
-		UpdateRecordTimer(DeltaTime);
-
-		if (TimeSinceLastCapture >= RecordInterval)
-		{
-			OnRecordTick();
-			TimeSinceLastCapture = 0.0f;
-			bRecorded = true;
-		}
-	}
-}
-
-void USensorBaseComponent::SetupRecorder(ARecorder* Recorder)
-{
-	RecorderPtr = Recorder;
-}
-
-bool USensorBaseComponent::ShouldRecord() const
-{
-	return RecordState && RecorderPtr && RecordInterval > 0.0f;
-}
-
-void USensorBaseComponent::UpdateRecordTimer(float DeltaTime)
-{
-	TimeSinceLastCapture += DeltaTime;
-}
-
 UCameraBaseComponent::UCameraBaseComponent()
 {
-	SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	SetCollisionResponseToAllChannels(ECR_Ignore);
-
 	CaptureComponent = CreateDefaultSubobject<USceneCaptureComponent2D>(TEXT("CaptureComponent"));
 	if (CaptureComponent)
 	{
@@ -88,15 +52,6 @@ UCameraBaseComponent::UCameraBaseComponent()
 		CaptureComponent->bCaptureEveryFrame = false;
 		CaptureComponent->bCaptureOnMovement = false;
 	}
-}
-
-void UCameraBaseComponent::ConfigureSensor()
-{
-	Super::ConfigureSensor();
-
-	InitializeRenderTargets();
-	ComputeIntrinsics();
-	SetCaptureComponent();
 }
 
 void UCameraBaseComponent::SetCaptureComponent() const

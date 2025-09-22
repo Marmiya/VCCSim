@@ -18,7 +18,7 @@
 DEFINE_LOG_CATEGORY_STATIC(LogNormalCamera, Log, All);
 
 #include "Sensors/NormalCamera.h"
-#include "Simulation/Recorder.h"
+#include "DataStructures/RecordData.h"
 #include "RenderingThread.h"
 #include "Async/AsyncWork.h"
 #include "Windows/WindowsHWrapper.h"
@@ -28,56 +28,62 @@ UNormalCameraComponent::UNormalCameraComponent()
 {
 }
 
-void UNormalCameraComponent::RConfigure(
-    const FNormalCameraConfig& Config, ARecorder* Recorder)
+void UNormalCameraComponent::Configure(const FSensorConfig& Config)
 {
-    FOV = Config.FOV;
-    Width = Config.Width;
-    Height = Config.Height;
+    if (!bBPConfigured)
+    {       
+        const auto NormalConfig = static_cast<const FNormalCameraConfig&>(Config);
+        FOV = NormalConfig.FOV;
+        Width = NormalConfig.Width;
+        Height = NormalConfig.Height;
+    }
 
     ComputeIntrinsics();
-    SetCaptureComponent();
     InitializeRenderTargets();
-
-    if (Config.RecordInterval > 0)
-    {
-        RecordInterval = Config.RecordInterval;
-        SetupRecorder(Recorder);
-        RecordState = Recorder->RecordState;
-
-        Recorder->OnRecordStateChanged.AddDynamic(this,
-            &UNormalCameraComponent::SetRecordState);
-        SetComponentTickEnabled(true);
-        bRecorded = true;
-    }
-    else
-    {
-        SetComponentTickEnabled(false);
-    }
-    bBPConfigured = true;
+    SetCaptureComponent();
 }
 
-
-
-void UNormalCameraComponent::OnRecordTick()
+TFuture<FSensorDataPacket> UNormalCameraComponent::CaptureDataAsync()
 {
-    CaptureScene();
+    TSharedPtr<TPromise<FSensorDataPacket>> Promise = MakeShared<TPromise<FSensorDataPacket>>();
+    TFuture<FSensorDataPacket> Future = Promise->GetFuture();
 
-    if (RecorderPtr)
+    AsyncTask(ENamedThreads::GameThread, [this, Promise]()
     {
-        FNormalCameraData NormalCameraData;
-        NormalCameraData.Timestamp = FPlatformTime::Seconds();
-        NormalCameraData.SensorIndex = GetSensorIndex();
-        NormalCameraData.Width = Width;
-        NormalCameraData.Height = Height;
-        while(!Dirty)
+        FSensorDataPacket Packet;
+        Packet.Type = ESensorType::NormalCamera;
+        Packet.SensorIndex = GetSensorIndex();
+        Packet.OwnerActor = GetOwnerActor();
+        Packet.Timestamp = FPlatformTime::Seconds();
+
+        if (!CheckComponentAndRenderTarget())
         {
-            FPlatformProcess::Sleep(0.01f);
+            Packet.bValid = false;
+            Promise->SetValue(Packet);
+            return;
         }
-        NormalCameraData.Data = GetNormalImage();
-        Dirty = false;
-        RecorderPtr->SubmitNormalData(ParentActor, MoveTemp(NormalCameraData));
-    }
+
+        CaptureNormalScene();
+
+        ProcessNormalTextureParam([this, Promise, Packet](const TArray<FLinearColor>& CapturedNormalData) mutable
+        {
+            Async(EAsyncExecution::TaskGraph, [Promise, Packet, CapturedNormalData, Width = this->Width, Height = this->Height]() mutable
+            {
+                auto NormalData = MakeShared<FNormalCameraData>();
+                NormalData->Timestamp = Packet.Timestamp;
+                NormalData->SensorIndex = Packet.SensorIndex;
+                NormalData->Width = Width;
+                NormalData->Height = Height;
+                NormalData->Data = CapturedNormalData;
+
+                Packet.Data = NormalData;
+                Packet.bValid = true;
+                Promise->SetValue(Packet);
+            });
+        });
+    });
+
+    return Future;
 }
 
 void UNormalCameraComponent::SetCaptureComponent() const
@@ -86,7 +92,6 @@ void UNormalCameraComponent::SetCaptureComponent() const
 
     if (CaptureComponent)
     {
-        CaptureComponent->PrimitiveRenderMode = ESceneCapturePrimitiveRenderMode::PRM_RenderScenePrimitives;
         CaptureComponent->CaptureSource = ESceneCaptureSource::SCS_Normal;
     }
 }
@@ -99,85 +104,43 @@ void UNormalCameraComponent::InitializeRenderTargets()
     NormalRenderTarget->UpdateResource();
 }
 
-
-void UNormalCameraComponent::CaptureScene()
+void UNormalCameraComponent::CaptureNormalScene()
 {
     if (!CheckComponentAndRenderTarget())
     {
+        UE_LOG(LogNormalCamera, Error, TEXT("Component or RenderTarget not valid!"));
         return;
     }
-    
-    CaptureComponent->CaptureScene();
-    
-    ProcessNormalTexture([this](const TArray<FLinearColor>& ImageData)
+    if (IsInGameThread())
+    {
+        CaptureComponent->CaptureScene();
+    }
+    else
+    {
+        AsyncTask(ENamedThreads::GameThread, [this]()
         {
-            NormalData = ImageData;
-            Dirty = true;
+            CaptureComponent->CaptureScene();
         });
+    }
 }
 
-void UNormalCameraComponent::ProcessNormalTexture(
-    TFunction<void(const TArray<FLinearColor>&)> OnComplete)
+void UNormalCameraComponent::CaptureNormalSceneAndProcess()
 {
-    // Get the render target resource
-    FTextureRenderTargetResource* RenderTargetResource = 
-        NormalRenderTarget->GameThread_GetRenderTargetResource();
-    
-    if (!RenderTargetResource)
+    CaptureNormalScene();
+    ProcessNormalTexture([]()
     {
-        UE_LOG(LogNormalCamera, Error, TEXT("Failed to get render target resource!"));
-        return;
-    }
-
-    // Prepare normal data array
-    TArray<FLinearColor>* NormalDataPtr = new TArray<FLinearColor>();
-    NormalDataPtr->Empty(Width * Height);
-    NormalDataPtr->SetNumUninitialized(Width * Height);
-
-    // Define context for reading surface data
-    struct FReadSurfaceContext
-    {
-        TArray<FLinearColor>* OutData;
-        FTextureRenderTargetResource* RenderTarget;
-        FIntRect Rect;
-    };
-
-    FReadSurfaceContext Context = {
-        NormalDataPtr,
-        RenderTargetResource,
-        FIntRect(0, 0, Width, Height)
-    };
-
-    auto SharedCallback =
-        MakeShared<TFunction<void(const TArray<FLinearColor>&)>>(OnComplete);
-    
-    // Submit the render thread command
-    ENQUEUE_RENDER_COMMAND(ReadNormalSurfaceCommand)(
-        [Context, SharedCallback](FRHICommandListImmediate& RHICmdList)
-    {
-        // Read the float data directly into FLinearColor array
-        RHICmdList.ReadSurfaceData(
-            Context.RenderTarget->GetRenderTargetTexture(),
-            Context.Rect,
-            *Context.OutData,
-            FReadSurfaceDataFlags()
-        );
-        
-        // Call the callback with the data and then clean up
-        (*SharedCallback)(*Context.OutData);
-        delete Context.OutData;
     });
 }
 
-TArray<FLinearColor> UNormalCameraComponent::GetNormalImage()
+void UNormalCameraComponent::ProcessNormalTexture(TFunction<void()> OnComplete)
 {
-    if (NormalData.Num() == 0)
-    {
-        UE_LOG(LogNormalCamera, Warning, TEXT("GetNormalImage: No normal data available!"));
-        return TArray<FLinearColor>();
-    }
-    
-    return NormalData;
+    ProcessNormalTextureTemplate(std::move(OnComplete));    
+}
+
+void UNormalCameraComponent::ProcessNormalTextureParam(
+    TFunction<void(const TArray<FLinearColor>&)> OnComplete)
+{
+    ProcessNormalTextureTemplate(std::move(OnComplete));
 }
 
 void UNormalCameraComponent::AsyncGetNormalImageData(
@@ -187,11 +150,12 @@ void UNormalCameraComponent::AsyncGetNormalImageData(
         [this, Callback = MoveTemp(Callback)]() {
         if (!CheckComponentAndRenderTarget())
         {
+            UE_LOG(LogNormalCamera, Error, TEXT("Component or RenderTarget not valid!"));
             Callback({});
             return;
         }
         
         CaptureComponent->CaptureScene();
-        ProcessNormalTexture(Callback);
+        ProcessNormalTextureParam(Callback);
     });
 }

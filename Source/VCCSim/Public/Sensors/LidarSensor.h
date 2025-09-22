@@ -18,16 +18,14 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ISensorDataProvider.h"
 #include "GameFramework/Actor.h"
 #include "SensorBase.h"
 #include "Utils/InsMeshHolder.h"
 #include "DataStructures/PointCloud.h"
-
 #include "LidarSensor.generated.h"
 
-class ARecorder;
-
-class FLiDarConfig : public FSensorConfig
+class FLiDARConfig : public FSensorConfig
 {
 public:
     int32 NumRays = 32;
@@ -40,16 +38,13 @@ public:
 };
 
 UCLASS(ClassGroup = (VCCSIM), meta = (BlueprintSpawnableComponent))
-class VCCSIM_API ULidarComponent : public USensorBaseComponent
+class VCCSIM_API ULidarComponent : public USensorBaseComponent,  public ISensorDataProvider
 {
     GENERATED_BODY()
 
 public:
-
     ULidarComponent();
-    void RConfigure(const FLiDarConfig& Config, ARecorder* Recorder);
-
-    virtual ESensorType GetSensorType() const override { return ESensorType::Lidar; }
+    virtual void Configure(const FSensorConfig& Config) override final;
 
     UFUNCTION(BlueprintCallable, Category = "Lidar")
     void FirstCall();
@@ -62,15 +57,17 @@ public:
     TArray<FVector3f> GetPointCloudData();
     TPair<TArray<FVector3f>, FVCCSimOdom> GetPointCloudDataAndOdom();
 
-protected:
-    virtual void OnRecordTick() override;
+    // ISensorDataProvider interface
+    virtual TFuture<FSensorDataPacket> CaptureDataAsync() override;
+    virtual ESensorType GetSensorType() const override { return ESensorType::Lidar; }
+    virtual AActor* GetOwnerActor() const override { return ParentActor; }
 
+protected:
     virtual void BeginPlay() override;
     virtual void OnComponentCreated() override;
     TArray<FVector3f> PerformLineTraces(FVCCSimOdom* Odom = nullptr);
 
 public:
-
     // Properties can be set in the editor and config file.
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lidar|Config")
     int32 NumRays = 32;

@@ -20,12 +20,11 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "SensorBase.h"
+#include "ISensorDataProvider.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Materials/MaterialInterface.h"
 #include "RHIResources.h"
 #include "DepthCamera.generated.h"
-
-class ARecorder;
 
 struct FDCPoint
 {
@@ -41,21 +40,18 @@ public:
 };
 
 UCLASS(ClassGroup = (VCCSIM), meta = (BlueprintSpawnableComponent))
-class VCCSIM_API UDepthCameraComponent : public UCameraBaseComponent
+class VCCSIM_API UDepthCameraComponent : public UCameraBaseComponent, public ISensorDataProvider
 {
     GENERATED_BODY()
 
 public:
     UDepthCameraComponent();
-    void RConfigure(const FDepthCameraConfig& Config, ARecorder* Recorder);
-
-    virtual ESensorType GetSensorType() const override { return ESensorType::DepthCamera; }
-    int32 GetCameraIndex() const { return GetSensorIndex(); }
+    virtual void Configure(const FSensorConfig& Config) override final;
 
     UFUNCTION(BlueprintCallable, Category = "DepthCamera")
     void CaptureDepthScene();
     UFUNCTION(BlueprintCallable, Category = "DepthCamera")
-    void OnlyCaptureDepthScene();
+    void CaptureDepthSceneAndProcess();
     UFUNCTION(BlueprintCallable, Category = "DepthCamera")
     void VisualizePointCloud();
     TArray<FDCPoint> GeneratePointCloud();
@@ -64,11 +60,15 @@ public:
     void AsyncGetPointCloudData(TFunction<void()> Callback);
     void AsyncGetDepthImageData(TFunction<void(const TArray<FFloat16Color>&)> Callback);
 
+    // ISensorDataProvider interface
+    virtual TFuture<FSensorDataPacket> CaptureDataAsync() override;
+    virtual ESensorType GetSensorType() const override { return ESensorType::DepthCamera; }
+    virtual AActor* GetOwnerActor() const override { return ParentActor; }
+    
 protected:
     virtual void InitializeRenderTargets() override;
     virtual UTextureRenderTarget2D* GetRenderTarget() const override { return DepthRenderTarget; }
     virtual void SetCaptureComponent() const override;
-    virtual void OnRecordTick() override;
 
     void ProcessDepthTexture(TFunction<void()> OnComplete);
     void ProcessDepthTextureParam(TFunction<void(const TArray<FFloat16Color>&)> OnComplete);
@@ -91,4 +91,55 @@ public:
 private:
     TArray<FFloat16Color> DepthData;
     bool Dirty = false;
+
+    template<typename CallbackType>
+    void ProcessDepthTextureTemplate(CallbackType&& Callback);
 };
+
+
+template<typename CallbackType>
+void UDepthCameraComponent::ProcessDepthTextureTemplate(CallbackType&& Callback)
+{
+    if (!DepthRenderTarget) { UE_LOG(LogTemp, Error, TEXT("DepthRenderTarget is null!")); return; }
+
+    if (DepthData.Num() != Width * Height)
+    {
+        DepthData.SetNumUninitialized(Width * Height);
+    }
+
+    struct FReadSurfaceContext
+    {
+        TArray<FFloat16Color>* OutData;
+        FIntRect Rect;
+        FReadSurfaceDataFlags Flags;
+    } Context { &DepthData, FIntRect(0, 0, Width, Height),
+                FReadSurfaceDataFlags(RCM_MinMax, CubeFace_MAX) };
+
+    auto SharedCallback = MakeShared<std::decay_t<CallbackType>>(std::forward<CallbackType>(Callback));
+
+    UTextureRenderTarget2D* RT = DepthRenderTarget;
+
+    ENQUEUE_RENDER_COMMAND(ReadSurfaceCommand)(
+        [RT, Context, SharedCallback](FRHICommandListImmediate& RHICmdList)
+        {
+            if (!RT) return;
+
+            FTextureRenderTargetResource* RTRes = RT->GetRenderTargetResource();
+            if (!RTRes) return;
+
+            RHICmdList.ReadSurfaceFloatData(
+                RTRes->GetRenderTargetTexture(),
+                Context.Rect,
+                *Context.OutData,
+                ECubeFace::CubeFace_PosX,
+                0,
+                0
+            );
+
+            if constexpr (std::is_invocable_v<std::decay_t<CallbackType>>)
+            { (*SharedCallback)(); }
+            else if constexpr (std::is_invocable_v<std::decay_t<CallbackType>, const TArray<FFloat16Color>&>)
+            { (*SharedCallback)(*Context.OutData); }
+        }
+    );
+}

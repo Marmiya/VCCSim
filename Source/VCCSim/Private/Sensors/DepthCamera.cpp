@@ -18,7 +18,7 @@
 DEFINE_LOG_CATEGORY_STATIC(LogDepthCamera, Log, All);
 
 #include "Sensors/DepthCamera.h"
-#include "Simulation/Recorder.h"
+#include "DataStructures/RecordData.h"
 #include "RenderingThread.h"
 #include "Async/AsyncWork.h"
 #include "Windows/WindowsHWrapper.h"
@@ -28,37 +28,23 @@ UDepthCameraComponent::UDepthCameraComponent()
 {
 }
 
-void UDepthCameraComponent::RConfigure(
-    const FDepthCameraConfig& Config, ARecorder* Recorder)
+void UDepthCameraComponent::Configure(const FSensorConfig& Config)
 {
-    FOV = Config.FOV;
-    MaxRange = Config.MaxRange;
-    MinRange = Config.MinRange;
-    Width = Config.Width;
-    Height = Config.Height;
-    bOrthographic = Config.bOrthographic;
-    OrthoWidth = Config.OrthoWidth;
+    if (!bBPConfigured)
+    {
+        const auto DepthConfig = static_cast<const FDepthCameraConfig&>(Config);
+        FOV = DepthConfig.FOV;
+        MaxRange = DepthConfig.MaxRange;
+        MinRange = DepthConfig.MinRange;
+        Width = DepthConfig.Width;
+        Height = DepthConfig.Height;
+        bOrthographic = DepthConfig.bOrthographic;
+        OrthoWidth = DepthConfig.OrthoWidth;
+    }
 
     ComputeIntrinsics();
     InitializeRenderTargets();
     SetCaptureComponent();
-
-    if (Config.RecordInterval > 0)
-    {
-        RecordInterval = Config.RecordInterval;
-        SetupRecorder(Recorder);
-        RecordState = Recorder->RecordState;
-
-        Recorder->OnRecordStateChanged.AddDynamic(this,
-            &UDepthCameraComponent::SetRecordState);
-        SetComponentTickEnabled(true);
-        bRecorded = true;
-    }
-    else
-    {
-        SetComponentTickEnabled(false);
-    }
-    bBPConfigured = true;
 }
 
 void UDepthCameraComponent::SetCaptureComponent() const
@@ -72,36 +58,54 @@ void UDepthCameraComponent::SetCaptureComponent() const
     }
 }
 
-void UDepthCameraComponent::OnRecordTick()
+TFuture<FSensorDataPacket> UDepthCameraComponent::CaptureDataAsync()
 {
-    double CaptureStartTime = FPlatformTime::Seconds();
-    CaptureDepthScene();
-    if (RecorderPtr)
+    TSharedPtr<TPromise<FSensorDataPacket>> Promise = MakeShared<TPromise<FSensorDataPacket>>();
+    TFuture<FSensorDataPacket> Future = Promise->GetFuture();
+
+    AsyncTask(ENamedThreads::GameThread, [this, Promise]()
     {
-        FDepthCameraData DepthCameraData;
-        DepthCameraData.Timestamp = FPlatformTime::Seconds();
-        DepthCameraData.SensorIndex = GetSensorIndex();
-        DepthCameraData.Width = Width;
-        DepthCameraData.Height = Height;
+        FSensorDataPacket Packet;
+        Packet.Type = ESensorType::DepthCamera;
+        Packet.SensorIndex = GetSensorIndex();
+        Packet.OwnerActor = GetOwnerActor();
+        Packet.Timestamp = FPlatformTime::Seconds();
 
-        double WaitStartTime = FPlatformTime::Seconds();
-        while(!Dirty)
+        if (!CheckComponentAndRenderTarget())
         {
-            FPlatformProcess::Sleep(0.01f);
+            Packet.bValid = false;
+            Promise->SetValue(Packet);
+            return;
         }
-        double WaitEndTime = FPlatformTime::Seconds();
 
-        DepthCameraData.Data = GetDepthImage();
-        Dirty = false;
-        RecorderPtr->SubmitDepthData(ParentActor, MoveTemp(DepthCameraData));
+        CaptureDepthScene();
 
-        double CaptureEndTime = FPlatformTime::Seconds();
-        double TotalCaptureTime = CaptureEndTime - CaptureStartTime;
-        double WaitTime = WaitEndTime - WaitStartTime;
+        ProcessDepthTextureParam([this, Promise, Packet](const TArray<FFloat16Color>& CapturedDepthData) mutable
+        {
+            Async(EAsyncExecution::TaskGraph, [Promise, Packet, CapturedDepthData, Width = this->Width, Height = this->Height]() mutable
+            {
+                TArray<float> DepthValues;
+                DepthValues.SetNumUninitialized(Width * Height);
+                for (int32 i = 0; i < CapturedDepthData.Num(); ++i)
+                {
+                    DepthValues[i] = CapturedDepthData[i].R.GetFloat();
+                }
 
-        UE_LOG(LogDepthCamera, Log, TEXT("Depth capture - RecordInterval: %.6f, Total time: %.6f, Wait time: %.6f, Actual FPS: %.2f"),
-            RecordInterval, TotalCaptureTime, WaitTime, 1.0 / TotalCaptureTime);
-    }
+                auto DepthData = MakeShared<FDepthCameraData>();
+                DepthData->Timestamp = Packet.Timestamp;
+                DepthData->SensorIndex = Packet.SensorIndex;
+                DepthData->Width = Width;
+                DepthData->Height = Height;
+                DepthData->Data = MoveTemp(DepthValues);
+
+                Packet.Data = DepthData;
+                Packet.bValid = true;
+                Promise->SetValue(Packet);
+            });
+        });
+    });
+
+    return Future;
 }
 
 void UDepthCameraComponent::InitializeRenderTargets()
@@ -119,25 +123,19 @@ void UDepthCameraComponent::InitializeRenderTargets()
 }
 
 
+void UDepthCameraComponent::CaptureDepthSceneAndProcess()
+{
+    CaptureDepthScene();
+    ProcessDepthTexture([]()
+        {
+        });
+}
+
 void UDepthCameraComponent::CaptureDepthScene()
 {
     if (!CheckComponentAndRenderTarget())
     {
-        return;
-    }
-    
-    CaptureComponent->CaptureScene();
-    
-    ProcessDepthTexture([this]()
-        {
-            Dirty = true;
-        });
-}
-
-void UDepthCameraComponent::OnlyCaptureDepthScene()
-{
-    if (!CheckComponentAndRenderTarget())
-    {
+        UE_LOG(LogDepthCamera, Error, TEXT("Component or RenderTarget not valid!"));
         return;
     }
     if (IsInGameThread())
@@ -155,105 +153,13 @@ void UDepthCameraComponent::OnlyCaptureDepthScene()
 
 void UDepthCameraComponent::ProcessDepthTexture(TFunction<void()> OnComplete)
 {
-    // Get the render target resource
-    FTextureRenderTargetResource* RenderTargetResource = 
-        DepthRenderTarget->GameThread_GetRenderTargetResource();
-    
-    if (!RenderTargetResource)
-    {
-        UE_LOG(LogDepthCamera, Error, TEXT("Failed to get render target resource!"));
-        return;
-    }
-
-    // Prepare depth data array
-    DepthData.Empty(Width * Height);
-    DepthData.SetNumUninitialized(Width * Height);
-
-    // Define context for reading surface data
-    struct FReadSurfaceContext
-    {
-        TArray<FFloat16Color>* OutData;
-        FTextureRenderTargetResource* RenderTarget;
-        FIntRect Rect;
-        FReadSurfaceDataFlags Flags;
-    };
-
-    FReadSurfaceContext Context = {
-        &DepthData,
-        RenderTargetResource,
-        FIntRect(0, 0, Width, Height),
-        FReadSurfaceDataFlags(RCM_MinMax, CubeFace_MAX)
-    };
-
-    auto SharedCallback = MakeShared<TFunction<void()>>(OnComplete);
-    // Submit the render thread command
-    ENQUEUE_RENDER_COMMAND(ReadSurfaceCommand)(
-        [Context, SharedCallback](FRHICommandListImmediate& RHICmdList)
-    {
-        // The render thread performs the data read
-        RHICmdList.ReadSurfaceFloatData(
-            Context.RenderTarget->GetRenderTargetTexture(),
-            Context.Rect,
-            *Context.OutData,
-            ECubeFace::CubeFace_PosX,
-            0,
-            0
-        );
-        (*SharedCallback)();
-    });
+    ProcessDepthTextureTemplate(std::move(OnComplete));
 }
 
 void UDepthCameraComponent::ProcessDepthTextureParam(
     TFunction<void(const TArray<FFloat16Color>&)> OnComplete)
 {
-    // Get the render target resource
-    FTextureRenderTargetResource* RenderTargetResource = 
-        DepthRenderTarget->GameThread_GetRenderTargetResource();
-    
-    if (!RenderTargetResource)
-    {
-        UE_LOG(LogDepthCamera, Error, TEXT("Failed to get render target resource!"));
-        return;
-    }
-
-    // Prepare depth data array
-    DepthData.Empty(Width * Height);
-    DepthData.SetNumUninitialized(Width * Height);
-
-    // Define context for reading surface data
-    struct FReadSurfaceContext
-    {
-        TArray<FFloat16Color>* OutData;
-        FTextureRenderTargetResource* RenderTarget;
-        FIntRect Rect;
-        FReadSurfaceDataFlags Flags;
-    };
-
-    FReadSurfaceContext Context = {
-        &DepthData,
-        RenderTargetResource,
-        FIntRect(0, 0, Width, Height),
-        FReadSurfaceDataFlags(RCM_MinMax, CubeFace_MAX)
-    };
-
-    auto SharedCallback = MakeShared<TFunction<void(const TArray<FFloat16Color>&)>>(OnComplete);
-    // Submit the render thread command
-    
-    
-    ENQUEUE_RENDER_COMMAND(ReadSurfaceCommand)(
-        [Context, SharedCallback](FRHICommandListImmediate& RHICmdList)
-    {
-        // The render thread performs the data read
-        RHICmdList.ReadSurfaceFloatData(
-            Context.RenderTarget->GetRenderTargetTexture(),
-            Context.Rect,
-            *Context.OutData,
-            ECubeFace::CubeFace_PosX,
-            0,
-            0
-        );
-        (*SharedCallback)(*Context.OutData);
-    });
+    ProcessDepthTextureTemplate(std::move(OnComplete));
 }
 
 TArray<FDCPoint> UDepthCameraComponent::GeneratePointCloud()
@@ -378,8 +284,9 @@ void UDepthCameraComponent::AsyncGetPointCloudData(
     TFunction<void()> Callback)
 {
     AsyncTask(ENamedThreads::GameThread, [this, Callback = MoveTemp(Callback)]() {
-        if (CheckComponentAndRenderTarget())
+        if (!CheckComponentAndRenderTarget())
         {
+            UE_LOG(LogDepthCamera, Error, TEXT("Component or RenderTarget not valid!"));
             Callback();
             return;
         }
@@ -393,8 +300,9 @@ void UDepthCameraComponent::AsyncGetDepthImageData(
     TFunction<void(const TArray<FFloat16Color>&)> Callback)
 {
     AsyncTask(ENamedThreads::GameThread, [this, Callback = MoveTemp(Callback)]() {
-        if (CheckComponentAndRenderTarget())
+        if (!CheckComponentAndRenderTarget())
         {
+            UE_LOG(LogDepthCamera, Error, TEXT("Component or RenderTarget not valid!"));
             Callback({});
             return;
         }

@@ -127,7 +127,7 @@ public:
     void RequestCapture(const int32& ID);
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ViewSaver")
-    FString LogSavePath = FPaths::ProjectLogDir();
+    FString LogSavePath = FPaths::ProjectSavedDir();
     
 protected:
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))

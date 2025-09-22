@@ -37,8 +37,8 @@ UPrimitiveComponent* FSensorFactory::CreateSensor(
 	{
 	case ESensorType::Lidar:
 		{
-			const FLiDarConfig* LidarConfig =
-				static_cast<const FLiDarConfig*>(&Config);
+			const FLiDARConfig* LidarConfig =
+				static_cast<const FLiDARConfig*>(&Config);
 			if (!LidarConfig)
 			{
 				UE_LOG(LogSensorFactory, Error, TEXT("FSensorFactory::CreateSensor: "

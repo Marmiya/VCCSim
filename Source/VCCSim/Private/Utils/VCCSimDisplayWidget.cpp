@@ -662,7 +662,7 @@ void UVCCSIMDisplayWidget::ProcessCaptureByType(EVCCSimViewType ViewType)
     case EVCCSimViewType::Normal:
         if (auto* NormalCamera = Cast<UNormalCameraComponent>(ViewData->CameraComponent))
         {
-            NormalCamera->CaptureScene();
+            NormalCamera->CaptureNormalScene();
         }
         CaptureTypeName = TEXT("NormalCapture");
         break;

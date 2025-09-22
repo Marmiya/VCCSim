@@ -23,15 +23,14 @@
 #include "Components/SceneCaptureComponent2D.h"
 #include "SensorBase.generated.h"
 
-class ARecorder;
 
 enum class ESensorType : uint8
 {
-	Lidar,
-	DepthCamera,
-	RGBCamera,
-	SegmentationCamera,
-	NormalCamera
+	Lidar = 3,
+	RGBCamera = 4,
+	DepthCamera = 5,
+	NormalCamera = 6,
+	SegmentationCamera = 7
 };
 
 class VCCSIM_API FSensorConfig
@@ -71,6 +70,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Sensor")
 	virtual void SetRecordState(bool RState) { RecordState = RState; }
 
+	virtual void Configure(const FSensorConfig& Config){};
+
 	UFUNCTION(BlueprintCallable, Category = "Sensor")
 	virtual bool IsConfigured() const { return bBPConfigured; }
 
@@ -80,36 +81,22 @@ public:
 protected:
 	virtual void BeginPlay() override;
 	virtual void OnComponentCreated() override;
-	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
-
-	virtual void OnSensorTick(float DeltaTime) {}
-	virtual void OnRecordTick() {}
-	virtual void ConfigureSensor() {}
-
-	void SetupRecorder(ARecorder* Recorder);
-	bool ShouldRecord() const;
-	void UpdateRecordTimer(float DeltaTime);
 
 public:
+	// If the sensor has been configured via Editor or BP
+	// If true, cpp HUD will not override the configuration
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sensor|Config")
 	bool bBPConfigured = false;
 
+	// This index is assgined in BP or Editor to identify multiple sensors of the same type
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sensor|Config")
 	int32 SensorIndex = 0;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Sensor|Debug")
-	bool bRecorded = false;
 
 protected:
 	UPROPERTY()
 	AActor* ParentActor = nullptr;
 
-	UPROPERTY()
-	ARecorder* RecorderPtr = nullptr;
-
 	bool RecordState = false;
-	float RecordInterval = -1.f;
-	float TimeSinceLastCapture = 0.f;
 };
 
 UCLASS(Abstract, ClassGroup = (VCCSIM), meta = (BlueprintSpawnableComponent))
@@ -123,12 +110,12 @@ public:
 	virtual void InitializeRenderTargets() PURE_VIRTUAL(UCameraBaseComponent::InitializeRenderTargets);
 	virtual void SetCaptureComponent() const;
 	virtual std::pair<int32, int32> GetImageSize() const { return {Width, Height}; }
+	virtual void Configure(const FSensorConfig& Config) override {};
 
 	void ComputeIntrinsics();
 	FMatrix44f GetCameraIntrinsics() const { return CameraIntrinsics; }
 
 protected:
-	virtual void ConfigureSensor() override;
 	virtual UTextureRenderTarget2D* GetRenderTarget() const PURE_VIRTUAL(UCameraBaseComponent::GetRenderTarget, return nullptr;);
 
 	bool CheckComponentAndRenderTarget() const;
@@ -154,5 +141,4 @@ protected:
 	USceneCaptureComponent2D* CaptureComponent = nullptr;
 
 	FMatrix44f CameraIntrinsics;
-	bool Dirty = false;
 };

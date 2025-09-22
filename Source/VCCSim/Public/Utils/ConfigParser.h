@@ -43,7 +43,6 @@ struct FVCCSimPresets
 	bool BetterVisualsRecording;
 	bool UseMeshManager;
 	FString MeshMaterial;
-	FString LogSavePath;
 	FString DefaultDronePawn;
 	FString DefaultCarPawn;
 	FString DefaultFlashPawn;

@@ -32,12 +32,16 @@ class UFMeshManager;
 class ASceneAnalysisManager;
 struct FRobotGrpcMaps;
 
+
 UCLASS()
 class VCCSIM_API AVCCHUD : public AHUD
 {
 	GENERATED_BODY()
 
 public:
+	AVCCHUD();
+	virtual ~AVCCHUD();
+
 	void SetupRecorder(FVCCSimConfig& Config);
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;

@@ -18,7 +18,7 @@
 DEFINE_LOG_CATEGORY_STATIC(LogLidarSensor, Log, All);
 
 #include "Sensors/LidarSensor.h"
-#include "Simulation/Recorder.h"
+#include "DataStructures/RecordData.h"
 #include "DrawDebugHelpers.h"
 #include "Async/Async.h"
 #include "Misc/FileHelper.h"
@@ -26,41 +26,35 @@ DEFINE_LOG_CATEGORY_STATIC(LogLidarSensor, Log, All);
 #include "Async/ParallelFor.h"
 #include "HAL/CriticalSection.h"
 
+void ULidarComponent::OnComponentCreated()
+{
+	Super::OnComponentCreated();
+	InitSensor();
+}
 
 ULidarComponent::ULidarComponent()
 {
     MeshHolder = nullptr;
-
 	QueryParams.bTraceComplex = true;
 	QueryParams.bReturnPhysicalMaterial = false;
 	QueryParams.bReturnFaceIndex = false;
 }
 
-void ULidarComponent::RConfigure(
-	const FLiDarConfig& Config, ARecorder* Recorder)
+void ULidarComponent::Configure(const FSensorConfig& Config)
 {
-	NumPoints = Config.NumPoints;
-	NumRays = Config.NumRays;
-	ScannerRangeInner = Config.ScannerRangeInner;
-	ScannerRangeOuter = Config.ScannerRangeOuter;
-	ScannerAngleUp = Config.ScannerAngleUp;
-	ScannerAngleDown = Config.ScannerAngleDown;
-	bVisualizePoints = Config.bVisualizePoints;
-	
-	if (Config.RecordInterval > 0)
+	if (!bBPConfigured)
 	{
-		RecordInterval = Config.RecordInterval;
-		SetupRecorder(Recorder);
-		RecordState = Recorder->RecordState;
-		Recorder->OnRecordStateChanged.AddDynamic(this,
-			&ULidarComponent::SetRecordState);
-		SetComponentTickEnabled(true);
-		bRecorded = true;
+		const auto LidarConfig = static_cast<const FLiDARConfig&>(Config);
+		NumPoints = LidarConfig.NumPoints;
+		NumRays = LidarConfig.NumRays;
+		ScannerRangeInner = LidarConfig.ScannerRangeInner;
+		ScannerRangeOuter = LidarConfig.ScannerRangeOuter;
+		ScannerAngleUp = LidarConfig.ScannerAngleUp;
+		ScannerAngleDown = LidarConfig.ScannerAngleDown;
+		bVisualizePoints = LidarConfig.bVisualizePoints;
 	}
-	else
-	{
-		SetComponentTickEnabled(false);
-	}
+
+	FirstCall();
 }
 
 void ULidarComponent::BeginPlay()
@@ -84,119 +78,6 @@ void ULidarComponent::FirstCall()
 	LastLocation = GetComponentLocation();
 	LastRotation = GetComponentRotation();
 	UpdateCachedPoints(LastLocation, LastRotation);
-}
-
-void ULidarComponent::OnComponentCreated()
-{
-    Super::OnComponentCreated();
-	InitSensor();
-}
-
-void ULidarComponent::OnRecordTick()
-{
-	FLidarData LidarData;
-	LidarData.Timestamp = FPlatformTime::Seconds();
-	LidarData.Data = PerformLineTraces(nullptr);
-	if (bVisualizePoints)
-	{
-		VisualizePointCloud();
-	}
-	if (RecorderPtr)
-	{
-		RecorderPtr->SubmitLidarData(ParentActor, MoveTemp(LidarData));
-	}
-}
-
-TArray<FVector3f> ULidarComponent::PerformLineTraces(FVCCSimOdom* Odom)
-{
-    if (!GetWorld())
-    {
-	    UE_LOG(LogLidarSensor, Error, TEXT("No world found!"));
-    	return{};
-    }
-
-	const FVector ComponentLocation = GetComponentLocation();
-    const FRotator ComponentRotation = GetComponentRotation();
-
-	if (Odom)
-	{
-		Odom->Location = ComponentLocation;
-		Odom->Rotation = ComponentRotation;
-		Odom->LinearVelocity = GetPhysicsLinearVelocity();
-		Odom->AngularVelocity = GetPhysicsAngularVelocityInDegrees();
-	}
-
-	// Check if we need to update cached points
-	if (ShouldUpdateCache(ComponentLocation, ComponentRotation))
-	{
-		UpdateCachedPoints(ComponentLocation, ComponentRotation);
-		LastLocation = ComponentLocation;
-		LastRotation = ComponentRotation;
-	}
-
-	// Perform chunked parallel processing
-	ParallelFor(NumChunks, [&](int32 ChunkIndex)
-	{
-		ProcessChunk(ChunkIndex);
-	});
-
-	// Collect valid points
-	TArray<FVector3f> ValidPoints;
-	
-	ValidPoints.Reserve(ActualNumPoints);
-	FCriticalSection CriticalSection;  // For thread-safe array access
-
-	// Process chunks in parallel
-	ParallelFor(NumChunks, [&](int32 ChunkIndex)
-	{
-		// Create local array for this chunk's valid points
-		TArray<FVector3f> ChunkValidPoints;
-		ChunkValidPoints.Reserve(ChunkSize);
-
-		const int32 StartIdx = ChunkStartIndices[ChunkIndex];
-		const int32 EndIdx = ChunkEndIndices[ChunkIndex];
-
-		// Collect hit points for this chunk
-		for (int32 Index = StartIdx; Index < EndIdx; ++Index)
-		{
-			if (PointPool[Index].bHit)
-			{
-				ChunkValidPoints.Add({
-					static_cast<float>(PointPool[Index].Position.X),
-					static_cast<float>(PointPool[Index].Position.Y),
-					static_cast<float>(PointPool[Index].Position.Z)
-				});
-			}
-		}
-
-		// Add chunk results to main array
-		if (ChunkValidPoints.Num() > 0)
-		{
-			FScopeLock Lock(&CriticalSection);
-			ValidPoints.Append(ChunkValidPoints);
-		}
-	});
-	
-	return ValidPoints;
-}
-
-void ULidarComponent::VisualizePointCloud()
-{
-	if (!GetWorld())
-	{
-		UE_LOG(LogLidarSensor, Warning,
-			TEXT("No world found!, cannot visualize point cloud"));
-	}
-
-	if (!MeshHolder)
-	{
-		UE_LOG(LogLidarSensor, Warning,
-			TEXT("MeshHolder not set, cannot visualize point cloud"));
-	}
-	else
-	{
-		MeshHolder->ClearAndAddNewInstances(GetHitTransforms());
-	}
 }
 
 void ULidarComponent::InitSensor()
@@ -294,6 +175,121 @@ void ULidarComponent::InitSensor()
 	{
 		ChunkStartIndices[i] = i * ChunkSize;
 		ChunkEndIndices[i] = FMath::Min((i + 1) * ChunkSize, ActualNumPoints);
+	}
+}
+
+TFuture<FSensorDataPacket> ULidarComponent::CaptureDataAsync()
+{
+	return Async(EAsyncExecution::TaskGraph, [this]() -> FSensorDataPacket
+	{
+		FSensorDataPacket Packet;
+		Packet.Type = ESensorType::Lidar;
+		Packet.SensorIndex = GetSensorIndex();
+		Packet.OwnerActor = GetOwnerActor();
+		Packet.Timestamp = FPlatformTime::Seconds();
+
+		TArray<FVector3f> LidarPoints = PerformLineTraces();
+
+		auto LidarData = MakeShared<FLiDARData>();
+		LidarData->Timestamp = Packet.Timestamp;
+		LidarData->Data = MoveTemp(LidarPoints);
+
+		Packet.Data = LidarData;
+		Packet.bValid = true;
+
+		return Packet;
+	});
+}
+
+TArray<FVector3f> ULidarComponent::PerformLineTraces(FVCCSimOdom* Odom)
+{
+    if (!GetWorld())
+    {
+	    UE_LOG(LogLidarSensor, Error, TEXT("No world found!"));
+    	return{};
+    }
+
+	const FVector ComponentLocation = GetComponentLocation();
+    const FRotator ComponentRotation = GetComponentRotation();
+
+	if (Odom)
+	{
+		Odom->Location = ComponentLocation;
+		Odom->Rotation = ComponentRotation;
+		Odom->LinearVelocity = GetPhysicsLinearVelocity();
+		Odom->AngularVelocity = GetPhysicsAngularVelocityInDegrees();
+	}
+
+	// Check if we need to update cached points
+	if (ShouldUpdateCache(ComponentLocation, ComponentRotation))
+	{
+		UpdateCachedPoints(ComponentLocation, ComponentRotation);
+		LastLocation = ComponentLocation;
+		LastRotation = ComponentRotation;
+	}
+
+	// Perform chunked parallel processing
+	ParallelFor(NumChunks, [&](int32 ChunkIndex)
+	{
+		ProcessChunk(ChunkIndex);
+	});
+
+	// Collect valid points
+	TArray<FVector3f> ValidPoints;
+	
+	ValidPoints.Reserve(ActualNumPoints);
+	FCriticalSection CriticalSection;  // For thread-safe array access
+
+	// Process chunks in parallel
+	ParallelFor(NumChunks, [&](int32 ChunkIndex)
+	{
+		// Create local array for this chunk's valid points
+		TArray<FVector3f> ChunkValidPoints;
+		ChunkValidPoints.Reserve(ChunkSize);
+
+		const int32 StartIdx = ChunkStartIndices[ChunkIndex];
+		const int32 EndIdx = ChunkEndIndices[ChunkIndex];
+
+		// Collect hit points for this chunk
+		for (int32 Index = StartIdx; Index < EndIdx; ++Index)
+		{
+			if (PointPool[Index].bHit)
+			{
+				ChunkValidPoints.Add({
+					static_cast<float>(PointPool[Index].Position.X),
+					static_cast<float>(PointPool[Index].Position.Y),
+					static_cast<float>(PointPool[Index].Position.Z)
+				});
+			}
+		}
+
+		// Add chunk results to main array
+		if (ChunkValidPoints.Num() > 0)
+		{
+			FScopeLock Lock(&CriticalSection);
+			ValidPoints.Append(ChunkValidPoints);
+		}
+	});
+	
+	return ValidPoints;
+}
+
+void ULidarComponent::VisualizePointCloud()
+{
+	if (!GetWorld())
+	{
+		UE_LOG(LogLidarSensor, Warning,
+			TEXT("No world found!, cannot visualize point cloud"));
+	}
+
+	if (!MeshHolder)
+	{
+		UE_LOG(LogLidarSensor, Warning,
+			TEXT("MeshHolder not set, cannot visualize point cloud"));
+	}
+	else
+	{
+		MeshHolder->ClearAndAddNewInstances(GetHitTransforms());
 	}
 }
 

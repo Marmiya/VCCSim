@@ -18,14 +18,13 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ISensorDataProvider.h"
 #include "GameFramework/Actor.h"
 #include "SensorBase.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Materials/MaterialInterface.h"
 #include "RHIResources.h"
 #include "SegmentCamera.generated.h"
-
-class ARecorder;
 
 class FSegmentationCameraConfig : public FCameraConfig
 {
@@ -38,33 +37,32 @@ public:
 };
 
 UCLASS(ClassGroup = (VCCSIM), meta = (BlueprintSpawnableComponent))
-class VCCSIM_API USegmentationCameraComponent : public UCameraBaseComponent
+class VCCSIM_API USegmentationCameraComponent : public UCameraBaseComponent, public ISensorDataProvider
 {
     GENERATED_BODY()
 
 public:
     USegmentationCameraComponent();
-    void RConfigure(const FSegmentationCameraConfig& Config, ARecorder* Recorder);
-
-    virtual ESensorType GetSensorType() const override { return ESensorType::SegmentationCamera; }
-    int32 GetCameraIndex() const { return GetSensorIndex(); }
-
+    virtual void Configure(const FSensorConfig& Config) override final;
     FString CameraName;
-
-    void ProcessSegmentationTextureAsyncRaw(TFunction<void()> OnComplete);
-    void ProcessSegmentationTextureAsync(TFunction<void(const TArray<FColor>&)> OnComplete);
-
+    
     UFUNCTION(BlueprintCallable, Category = "SegmentationCamera")
     void CaptureSegmentationScene();
 
     // For GRPC call
     void AsyncGetSegmentationImageData(TFunction<void(const TArray<FColor>&)> Callback);
 
+    // ISensorDataProvider interface
+    virtual TFuture<FSensorDataPacket> CaptureDataAsync() override;
+    virtual ESensorType GetSensorType() const override { return ESensorType::SegmentationCamera; }
+    virtual AActor* GetOwnerActor() const override { return ParentActor; }
+
 protected:
     virtual void InitializeRenderTargets() override;
     virtual UTextureRenderTarget2D* GetRenderTarget() const override { return SegmentationRenderTarget; }
     virtual void SetCaptureComponent() const override;
-    virtual void OnRecordTick() override;
+    void ProcessSegmentationTexture(TFunction<void()> OnComplete);
+    void ProcessSegmentationTextureParam(TFunction<void(const TArray<FColor>&)> OnComplete);
 
 public:
     // Segmentation-specific properties
@@ -77,17 +75,54 @@ public:
     UTextureRenderTarget2D* SegmentationRenderTarget = nullptr;
 
 private:
-    void ExecuteCaptureOnGameThread();
+    TArray<FColor> SegmentationData;
+    bool Dirty = false;
+    
+    template<typename CallbackType>
+    void ProcessSegTextureTemplate(CallbackType&& Callback);
+};
+
+template<typename CallbackType>
+void USegmentationCameraComponent::ProcessSegTextureTemplate(CallbackType&& Callback)
+{
+    if (!SegmentationRenderTarget) { UE_LOG(LogTemp, Error, TEXT("SegmentationRenderTarget is null!")); return; }
+
+    if (SegmentationData.Num() != Width * Height)
+    {
+        SegmentationData.SetNumUninitialized(Width * Height);
+    }
 
     struct FReadSurfaceContext
     {
         TArray<FColor>* OutData;
-        FTextureRenderTargetResource* RenderTarget;
         FIntRect Rect;
         FReadSurfaceDataFlags Flags;
-    };
+    } Context { &SegmentationData, FIntRect(0, 0, Width, Height),
+                FReadSurfaceDataFlags(RCM_UNorm, CubeFace_MAX) };
 
-    TArray<FColor> SegmentationData;
-    FCriticalSection DataLock;
-    bool Dirty = false;
-};
+    auto SharedCallback = MakeShared<std::decay_t<CallbackType>>(std::forward<CallbackType>(Callback));
+
+    UTextureRenderTarget2D* RT = SegmentationRenderTarget;
+
+    ENQUEUE_RENDER_COMMAND(ReadSurfaceCommand)(
+        [RT, Context, SharedCallback](FRHICommandListImmediate& RHICmdList)
+        {
+            if (!RT) return;
+
+            FTextureRenderTargetResource* RTRes = RT->GetRenderTargetResource();
+            if (!RTRes) return;
+
+            RHICmdList.ReadSurfaceData(
+                RTRes->GetRenderTargetTexture(),
+                Context.Rect,
+                *Context.OutData,
+                Context.Flags
+            );
+
+            if constexpr (std::is_invocable_v<std::decay_t<CallbackType>>)
+            { (*SharedCallback)(); }
+            else if constexpr (std::is_invocable_v<std::decay_t<CallbackType>, const TArray<FColor>&>)
+            { (*SharedCallback)(*Context.OutData); }
+        }
+    );
+}

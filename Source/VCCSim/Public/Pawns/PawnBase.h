@@ -36,12 +36,6 @@ class VCCSIM_API APawnBase : public APawn
 	
 public:
 	UFUNCTION(BlueprintCallable)
-	void SetRecorder(ARecorder* InRecorder);
-	UFUNCTION(BlueprintCallable)
-	void SetRecordInterval(const float& Interval);
-	UFUNCTION(BlueprintCallable)
-	void SetRecordState(bool RState){ RecordState = RState; }
-	UFUNCTION(BlueprintCallable)
 	void SetManualControl(bool Manual){ ManualControl = Manual; }
 
 	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Category = "VCCSim|Debug")
