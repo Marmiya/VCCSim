@@ -23,6 +23,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogNormalCamera, Log, All);
 #include "Async/AsyncWork.h"
 #include "Windows/WindowsHWrapper.h"
 #include "RHI.h"
+#include "RenderGraphBuilder.h"
 
 UNormalCameraComponent::UNormalCameraComponent()
 {
@@ -158,4 +159,44 @@ void UNormalCameraComponent::AsyncGetNormalImageData(
         CaptureComponent->CaptureScene();
         ProcessNormalTextureParam(Callback);
     });
+}
+
+void UNormalCameraComponent::ContributeToRDGPass(FSensorViewInfo& OutViewInfo)
+{
+    OutViewInfo.SensorType = ESensorType::NormalCamera;
+    OutViewInfo.MRTSlot = GetMRTSlot();
+    OutViewInfo.ViewMatrix = GetComponentTransform().ToInverseMatrixWithScale();
+    OutViewInfo.ProjectionMatrix = GetProjectionMatrix();
+    OutViewInfo.CaptureSource = ESceneCaptureSource::SCS_Normal;
+    OutViewInfo.Resolution = FIntPoint(Width, Height);
+    OutViewInfo.Provider = this;
+}
+
+
+FMatrix UNormalCameraComponent::GetProjectionMatrix() const
+{
+    if (bOrthographic)
+    {
+        const float HalfOrthoWidth = OrthoWidth * 0.5f;
+        const float HalfOrthoHeight = (OrthoWidth / (float(Width) / float(Height))) * 0.5f;
+
+        return FReversedZOrthoMatrix(
+            HalfOrthoWidth,
+            HalfOrthoHeight,
+            0.1f,  // Near plane
+            1000.0f  // Far plane
+        );
+    }
+    else
+    {
+        const float HalfFOV = FMath::DegreesToRadians(FOV) * 0.5f;
+        const float AspectRatio = (float)Width / (float)Height;
+
+        return FReversedZPerspectiveMatrix(
+            HalfFOV,
+            AspectRatio,
+            0.1f,  // Near plane
+            1000.0f  // Far plane
+        );
+    }
 }

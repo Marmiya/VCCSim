@@ -22,7 +22,33 @@
 #include "Async/Async.h"
 #include "DataStructures/RecordData.h"
 #include "UObject/Interface.h"
+#include "RenderGraphBuilder.h"
+#include "RenderGraphDefinitions.h"
 #include "ISensorDataProvider.generated.h"
+
+class ISensorDataProvider;
+
+struct VCCSIM_API FSensorViewInfo
+{
+    ESensorType SensorType;
+    int32 MRTSlot;
+    FMatrix ViewMatrix;
+    FMatrix ProjectionMatrix;
+    ESceneCaptureSource CaptureSource;
+    FIntPoint Resolution;
+    ISensorDataProvider* Provider;
+
+    FSensorViewInfo()
+        : SensorType(ESensorType::RGBCamera)
+        , MRTSlot(0)
+        , ViewMatrix(FMatrix::Identity)
+        , ProjectionMatrix(FMatrix::Identity)
+        , CaptureSource(ESceneCaptureSource::SCS_FinalColorLDR)
+        , Resolution(FIntPoint(512, 512))
+        , Provider(nullptr)
+    {
+    }
+};
 
 struct VCCSIM_API FSensorDataPacket
 {
@@ -32,6 +58,7 @@ struct VCCSIM_API FSensorDataPacket
     double Timestamp;
     TSharedPtr<FSensorData> Data;
     bool bValid;
+    bool bFromRDGBatch;
 
     FSensorDataPacket()
         : Type(ESensorType::RGBCamera)
@@ -40,6 +67,7 @@ struct VCCSIM_API FSensorDataPacket
         , Timestamp(0.0)
         , Data(nullptr)
         , bValid(false)
+        , bFromRDGBatch(false)
     {
     }
 };
@@ -58,4 +86,7 @@ public:
     virtual TFuture<FSensorDataPacket> CaptureDataAsync() = 0;
     virtual ESensorType GetSensorType() const = 0;
     virtual AActor* GetOwnerActor() const = 0;
+
+    virtual void ContributeToRDGPass(FSensorViewInfo& OutViewInfo) = 0;
+    virtual int32 GetMRTSlot() const = 0;
 };

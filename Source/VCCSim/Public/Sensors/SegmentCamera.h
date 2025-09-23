@@ -29,10 +29,13 @@
 class FSegmentationCameraConfig : public FCameraConfig
 {
 public:
+    float MaxRange = 10000.0f;
+
     FSegmentationCameraConfig()
     {
         Width = 512;
         Height = 512;
+        MaxRange = 10000.0f;
     }
 };
 
@@ -57,6 +60,10 @@ public:
     virtual ESensorType GetSensorType() const override { return ESensorType::SegmentationCamera; }
     virtual AActor* GetOwnerActor() const override { return ParentActor; }
 
+    // RDG interface
+    virtual void ContributeToRDGPass(FSensorViewInfo& OutViewInfo) override;
+    virtual int32 GetMRTSlot() const override { return 3; }
+
 protected:
     virtual void InitializeRenderTargets() override;
     virtual UTextureRenderTarget2D* GetRenderTarget() const override { return SegmentationRenderTarget; }
@@ -66,6 +73,9 @@ protected:
 
 public:
     // Segmentation-specific properties
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SegmentationCamera|Config")
+    float MaxRange = 10000.0f;
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SegmentationCamera|Config")
     UMaterialInterface* SegmentationMaterial = Cast<UMaterialInterface>(
         StaticLoadObject(UMaterialInterface::StaticClass(), nullptr,

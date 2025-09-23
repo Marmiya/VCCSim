@@ -31,6 +31,8 @@ class UInsMeshHolder;
 class FRGBCameraConfig : public FCameraConfig
 {
 public:
+    float MaxRange = 10000.0f;
+
     FRGBCameraConfig()
     {
         FOV = 90.0f;
@@ -38,6 +40,7 @@ public:
         Height = 512;
         bOrthographic = false;
         OrthoWidth = 512.0f;
+        MaxRange = 10000.0f;
     }
 };
 
@@ -62,6 +65,10 @@ public:
     virtual TFuture<FSensorDataPacket> CaptureDataAsync() override;
     virtual ESensorType GetSensorType() const override { return ESensorType::RGBCamera; }
     virtual AActor* GetOwnerActor() const override { return ParentActor; }
+
+    // RDG interface
+    virtual void ContributeToRDGPass(FSensorViewInfo& OutViewInfo) override;
+    virtual int32 GetMRTSlot() const override { return 0; }
         
 protected:
     virtual void InitializeRenderTargets() override;
@@ -71,6 +78,9 @@ protected:
     void ProcessRGBTextureParam(TFunction<void(const TArray<FColor>&)> OnComplete);
 
 public:
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Config")
+    float MaxRange = 10000.0f;
+
     UPROPERTY()
     UTextureRenderTarget2D* RGBRenderTarget = nullptr;
 

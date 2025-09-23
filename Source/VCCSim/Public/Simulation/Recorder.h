@@ -22,7 +22,15 @@
 #include "Utils/AsyncFileWriter.h"
 #include "Sensors/ISensorDataProvider.h"
 #include "Async/Async.h"
+#include "RenderGraphDefinitions.h"
+#include "RenderGraphPass.h"
+#include "RHICommandList.h"
 #include "Recorder.generated.h"
+
+// MRT pass parameters for sensor data capture
+BEGIN_SHADER_PARAMETER_STRUCT(FMRTPassParameters, )
+    RENDER_TARGET_BINDING_SLOTS()
+END_SHADER_PARAMETER_STRUCT()
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FRecordStateChanged, bool, RecordState);
 
@@ -65,6 +73,22 @@ private:
     void CreateRecordingDirectoryStructure();
     void TickRecording();
     void CollectSensorDataConcurrently();
+    void CollectSensorDataMRT(AActor* Actor, const TArray<ISensorDataProvider*>& Sensors);
+    void AddMRTRenderPass(FRDGBuilder& GraphBuilder, AActor* Actor,
+        const TArray<ISensorDataProvider*>& Sensors,
+        FRDGTextureRef RGBTexture, FRDGTextureRef DepthTexture,
+        FRDGTextureRef NormalTexture, FRDGTextureRef SegmentTexture);
+    void RenderSceneToMRT(FRHICommandList& RHICmdList, AActor* Actor,
+        const TArray<ISensorDataProvider*>& Sensors,
+        FRDGTextureRef RGBTexture, FRDGTextureRef DepthTexture,
+        FRDGTextureRef NormalTexture, FRDGTextureRef SegmentTexture);
+    void ExtractMRTData(FRDGBuilder& GraphBuilder, AActor* Actor,
+        const TArray<ISensorDataProvider*>& Sensors,
+        FRDGTextureRef RGBTexture, FRDGTextureRef DepthTexture,
+        FRDGTextureRef NormalTexture, FRDGTextureRef SegmentTexture);
+    void ProcessSensorPixelData(ISensorDataProvider* Sensor, FIntPoint Resolution,
+        double Timestamp, TArray<FColor>&& PixelData);
+    void CollectSensorDataIndividual(const TArray<ISensorDataProvider*>& Sensors);
     void InitializeAsyncWriter();
     void ShutdownAsyncWriter();
 };

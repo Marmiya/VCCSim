@@ -64,6 +64,10 @@ public:
     virtual TFuture<FSensorDataPacket> CaptureDataAsync() override;
     virtual ESensorType GetSensorType() const override { return ESensorType::DepthCamera; }
     virtual AActor* GetOwnerActor() const override { return ParentActor; }
+
+    // RDG interface
+    virtual void ContributeToRDGPass(FSensorViewInfo& OutViewInfo) override;
+    virtual int32 GetMRTSlot() const override { return 1; }
     
 protected:
     virtual void InitializeRenderTargets() override;

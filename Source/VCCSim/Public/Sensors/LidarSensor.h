@@ -61,6 +61,8 @@ public:
     virtual TFuture<FSensorDataPacket> CaptureDataAsync() override;
     virtual ESensorType GetSensorType() const override { return ESensorType::Lidar; }
     virtual AActor* GetOwnerActor() const override { return ParentActor; }
+    virtual void ContributeToRDGPass(FSensorViewInfo& OutViewInfo) override;
+    virtual int32 GetMRTSlot() const override { return 1; }
 
 protected:
     virtual void BeginPlay() override;

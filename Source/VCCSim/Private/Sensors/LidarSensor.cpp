@@ -404,3 +404,18 @@ TArray<FTransform> ULidarComponent::GetHitTransforms() const
 	);
 	return HitTransforms;
 }
+
+void ULidarComponent::ContributeToRDGPass(FSensorViewInfo& OutViewInfo)
+{
+	OutViewInfo.SensorType = ESensorType::Lidar;
+	OutViewInfo.MRTSlot = GetMRTSlot();
+
+	FVector ComponentLocation = GetComponentLocation();
+	FRotator ComponentRotation = GetComponentRotation();
+	OutViewInfo.ViewMatrix = FInverseRotationMatrix(ComponentRotation) * FTranslationMatrix(-ComponentLocation);
+
+	OutViewInfo.ProjectionMatrix = FMatrix::Identity;
+	OutViewInfo.CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
+	OutViewInfo.Resolution = FIntPoint(512, 512);
+	OutViewInfo.Provider = this;
+}

@@ -310,3 +310,22 @@ void UDepthCameraComponent::AsyncGetDepthImageData(
         ProcessDepthTextureParam(Callback);
     });
 }
+
+void UDepthCameraComponent::ContributeToRDGPass(FSensorViewInfo& OutViewInfo)
+{
+    OutViewInfo.SensorType = ESensorType::DepthCamera;
+    OutViewInfo.MRTSlot = GetMRTSlot();
+
+    FVector CameraLocation = GetComponentLocation();
+    FRotator CameraRotation = GetComponentRotation();
+    OutViewInfo.ViewMatrix = FInverseRotationMatrix(CameraRotation) * FTranslationMatrix(-CameraLocation);
+
+    float FOVRadians = FMath::DegreesToRadians(FOV);
+    float AspectRatio = (float)Width / (float)Height;
+    OutViewInfo.ProjectionMatrix = FReversedZPerspectiveMatrix(FOVRadians, AspectRatio, MinRange, MaxRange);
+
+    OutViewInfo.CaptureSource = ESceneCaptureSource::SCS_SceneDepth;
+    OutViewInfo.Resolution = FIntPoint(Width, Height);
+    OutViewInfo.Provider = this;
+}
+

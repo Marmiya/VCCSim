@@ -35,6 +35,7 @@ void USegmentationCameraComponent::Configure(const FSensorConfig& Config)
         FOV = SegConfig.FOV;
         Width = SegConfig.Width;
         Height = SegConfig.Height;
+        MaxRange = SegConfig.MaxRange;
     }
 
     ComputeIntrinsics();
@@ -168,3 +169,22 @@ void USegmentationCameraComponent::ProcessSegmentationTextureParam(
 {
     ProcessSegTextureTemplate(std::move(OnComplete));
 }
+
+void USegmentationCameraComponent::ContributeToRDGPass(FSensorViewInfo& OutViewInfo)
+{
+    OutViewInfo.SensorType = ESensorType::SegmentationCamera;
+    OutViewInfo.MRTSlot = GetMRTSlot();
+
+    FVector CameraLocation = GetComponentLocation();
+    FRotator CameraRotation = GetComponentRotation();
+    OutViewInfo.ViewMatrix = FInverseRotationMatrix(CameraRotation) * FTranslationMatrix(-CameraLocation);
+
+    float FOVRadians = FMath::DegreesToRadians(FOV);
+    float AspectRatio = (float)Width / (float)Height;
+    OutViewInfo.ProjectionMatrix = FReversedZPerspectiveMatrix(FOVRadians, AspectRatio, GNearClippingPlane, MaxRange);
+
+    OutViewInfo.CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
+    OutViewInfo.Resolution = FIntPoint(Width, Height);
+    OutViewInfo.Provider = this;
+}
+

@@ -39,6 +39,7 @@ void URGBCameraComponent::Configure(const FSensorConfig& Config)
         Height = RGBConfig.Height;
         bOrthographic = RGBConfig.bOrthographic;
         OrthoWidth = RGBConfig.OrthoWidth;
+        MaxRange = RGBConfig.MaxRange;
     }
     
     ComputeIntrinsics();
@@ -186,3 +187,22 @@ void URGBCameraComponent::ProcessRGBTextureParam(
 {
     ProcessRGBTextureTemplate(std::move(OnComplete));
 }
+
+void URGBCameraComponent::ContributeToRDGPass(FSensorViewInfo& OutViewInfo)
+{
+    OutViewInfo.SensorType = ESensorType::RGBCamera;
+    OutViewInfo.MRTSlot = GetMRTSlot();
+
+    FVector CameraLocation = GetComponentLocation();
+    FRotator CameraRotation = GetComponentRotation();
+    OutViewInfo.ViewMatrix = FInverseRotationMatrix(CameraRotation) * FTranslationMatrix(-CameraLocation);
+
+    float FOVRadians = FMath::DegreesToRadians(FOV);
+    float AspectRatio = (float)Width / (float)Height;
+    OutViewInfo.ProjectionMatrix = FReversedZPerspectiveMatrix(FOVRadians, AspectRatio, GNearClippingPlane, MaxRange);
+
+    OutViewInfo.CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
+    OutViewInfo.Resolution = FIntPoint(Width, Height);
+    OutViewInfo.Provider = this;
+}
+

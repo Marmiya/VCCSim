@@ -58,6 +58,10 @@ public:
     virtual ESensorType GetSensorType() const override { return ESensorType::NormalCamera; }
     virtual AActor* GetOwnerActor() const override { return ParentActor; }
 
+    // RDG interface
+    virtual void ContributeToRDGPass(FSensorViewInfo& OutViewInfo) override;
+    virtual int32 GetMRTSlot() const override { return 2; }
+
 protected:
     virtual void InitializeRenderTargets() override;
     virtual UTextureRenderTarget2D* GetRenderTarget() const override { return NormalRenderTarget; }
@@ -65,6 +69,8 @@ protected:
 
     void ProcessNormalTexture(TFunction<void()> OnComplete);
     void ProcessNormalTextureParam(TFunction<void(const TArray<FLinearColor>&)> OnComplete);
+
+    FMatrix GetProjectionMatrix() const;
 
 public:
     UPROPERTY()

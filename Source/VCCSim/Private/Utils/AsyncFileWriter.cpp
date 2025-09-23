@@ -50,8 +50,12 @@ FAsyncFileWriter::~FAsyncFileWriter()
 
 void FAsyncFileWriter::WriteDataAsync(const FSensorDataPacket& DataPacket)
 {
+    UE_LOG(LogAsyncFileWriter, Log, TEXT("WriteDataAsync called for sensor type %d"),
+           static_cast<int32>(DataPacket.Type));
+
     if (bShouldStop.load())
     {
+        UE_LOG(LogAsyncFileWriter, Warning, TEXT("WriteDataAsync: Writer is stopped, ignoring packet"));
         return;
     }
 
@@ -62,6 +66,8 @@ void FAsyncFileWriter::WriteDataAsync(const FSensorDataPacket& DataPacket)
     }
 
     WriteQueue.Enqueue(DataPacket);
+    UE_LOG(LogAsyncFileWriter, Log, TEXT("Data packet enqueued for sensor type %d"),
+           static_cast<int32>(DataPacket.Type));
 }
 
 
@@ -115,13 +121,21 @@ void FAsyncFileWriter::ProcessWriteQueue()
 
 void FAsyncFileWriter::WriteDataToFile(const FSensorDataPacket& DataPacket)
 {
+    UE_LOG(LogAsyncFileWriter, Log, TEXT("WriteDataToFile called for sensor type %d"),
+           static_cast<int32>(DataPacket.Type));
+
     if (!DataPacket.bValid || !DataPacket.Data.IsValid() || !DataPacket.OwnerActor)
     {
+        UE_LOG(LogAsyncFileWriter, Warning, TEXT("WriteDataToFile: Invalid packet - Valid: %s, Data: %s, Actor: %s"),
+               DataPacket.bValid ? TEXT("true") : TEXT("false"),
+               DataPacket.Data.IsValid() ? TEXT("valid") : TEXT("invalid"),
+               DataPacket.OwnerActor ? TEXT("valid") : TEXT("null"));
         return;
     }
 
     CreateDirectoryStructure(DataPacket);
     FString FilePath = GetFilePathForSensor(DataPacket);
+    UE_LOG(LogAsyncFileWriter, Log, TEXT("Writing file to: %s"), *FilePath);
 
     switch (DataPacket.Type)
     {
