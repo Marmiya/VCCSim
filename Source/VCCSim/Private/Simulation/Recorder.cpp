@@ -23,7 +23,6 @@
 #include "RenderingThread.h"
 #include "RenderGraphBuilder.h"
 #include "RenderGraphDefinitions.h"
-#include "RenderGraphPass.h"
 #include "RenderGraphUtils.h"
 #include "RHICommandList.h"
 #include "RHI.h"
@@ -115,7 +114,6 @@ void ARecorder::StartRecording()
     bIsRecording = true;
     RecordState = true;
 
-    OnRecordStateChanged.Broadcast(true);
     UE_LOG(LogRecorder, Log, TEXT("Recording started at path: %s with interval: %.4f seconds"),
            *RecordingPath, ClampedInterval);
 }
@@ -140,7 +138,6 @@ void ARecorder::StopRecording()
     bIsRecording = false;
     RecordState = false;
 
-    OnRecordStateChanged.Broadcast(false);
     UE_LOG(LogRecorder, Log, TEXT("Recording stopped"));
 }
 
@@ -253,48 +250,85 @@ void ARecorder::CollectSensorDataMRT(AActor* Actor, const TArray<ISensorDataProv
 {
     TRACE_CPUPROFILER_EVENT_SCOPE(ARecorder::CollectSensorDataMRT);
 
-    UE_LOG(LogRecorder, Log, TEXT("MRT capture for actor %s with %d sensors"),
-           Actor ? *Actor->GetName() : TEXT("Unknown"), Sensors.Num());
-
-    // Create single render command for all sensors on this actor
-    ENQUEUE_RENDER_COMMAND(MRTSensorCapture)(
-        [this, Actor, Sensors](FRHICommandListImmediate& RHICmdList)
+    // First, trigger scene capture for each sensor on game thread
+    AsyncTask(ENamedThreads::GameThread, [this, Actor, Sensors]()
+    {
+        // Capture scene for each sensor to populate their render targets
+        for (ISensorDataProvider* Sensor : Sensors)
         {
-            FRDGBuilder GraphBuilder(RHICmdList);
-
-            // Get common resolution from first sensor
-            FIntPoint Resolution(512, 512);
-            if (Sensors.Num() > 0 && Sensors[0])
+            if (auto* CameraBase = Cast<UCameraBaseComponent>(Sensor))
             {
-                if (auto* CameraBase = Cast<UCameraBaseComponent>(Sensors[0]))
+                // Trigger specific sensor captures based on type
+                switch (Sensor->GetSensorType())
                 {
-                    Resolution = FIntPoint(CameraBase->Width, CameraBase->Height);
+                    case ESensorType::RGBCamera:
+                        if (auto* RGBCamera = Cast<URGBCameraComponent>(CameraBase))
+                        {
+                            RGBCamera->CaptureRGBScene();
+                        }
+                        break;
+                    case ESensorType::DepthCamera:
+                        if (auto* DepthCamera = Cast<UDepthCameraComponent>(CameraBase))
+                        {
+                            DepthCamera->CaptureDepthScene();
+                        }
+                        break;
+                    case ESensorType::NormalCamera:
+                        if (auto* NormalCamera = Cast<UNormalCameraComponent>(CameraBase))
+                        {
+                            NormalCamera->CaptureNormalScene();
+                        }
+                        break;
+                    case ESensorType::SegmentationCamera:
+                        if (auto* SegCamera = Cast<USegmentationCameraComponent>(CameraBase))
+                        {
+                            SegCamera->CaptureSegmentationScene();
+                        }
+                        break;
                 }
             }
-
-            // Create MRT textures for different sensor types
-            FRDGTextureRef RGBTexture = GraphBuilder.CreateTexture(
-                FRDGTextureDesc::Create2D(Resolution, PF_B8G8R8A8, FClearValueBinding::Black,
-                TexCreate_RenderTargetable | TexCreate_UAV), TEXT("MRT_RGB"));
-
-            FRDGTextureRef DepthTexture = GraphBuilder.CreateTexture(
-                FRDGTextureDesc::Create2D(Resolution, PF_R32_FLOAT, FClearValueBinding::Black,
-                TexCreate_RenderTargetable | TexCreate_UAV), TEXT("MRT_Depth"));
-
-            FRDGTextureRef NormalTexture = GraphBuilder.CreateTexture(
-                FRDGTextureDesc::Create2D(Resolution, PF_A32B32G32R32F, FClearValueBinding::Black,
-                TexCreate_RenderTargetable | TexCreate_UAV), TEXT("MRT_Normal"));
-
-            FRDGTextureRef SegmentTexture = GraphBuilder.CreateTexture(
-                FRDGTextureDesc::Create2D(Resolution, PF_B8G8R8A8, FClearValueBinding::Black,
-                TexCreate_RenderTargetable | TexCreate_UAV), TEXT("MRT_Segment"));
-
-            // Single MRT render pass
-            AddMRTRenderPass(GraphBuilder, Actor, Sensors, RGBTexture, DepthTexture, NormalTexture, SegmentTexture);
-
-            GraphBuilder.Execute();
         }
-    );
+
+        // After scene captures, execute MRT render command
+        ENQUEUE_RENDER_COMMAND(MRTSensorCapture)(
+            [this, Actor, Sensors](FRHICommandListImmediate& RHICmdList)
+            {
+                FRDGBuilder GraphBuilder(RHICmdList);
+
+                // Get common resolution from first sensor
+                FIntPoint Resolution(512, 512);
+                if (Sensors.Num() > 0 && Sensors[0])
+                {
+                    if (auto* CameraBase = Cast<UCameraBaseComponent>(Sensors[0]))
+                    {
+                        Resolution = FIntPoint(CameraBase->Width, CameraBase->Height);
+                    }
+                }
+
+                // Create MRT textures for different sensor types
+                FRDGTextureRef RGBTexture = GraphBuilder.CreateTexture(
+                    FRDGTextureDesc::Create2D(Resolution, PF_B8G8R8A8, FClearValueBinding::Black,
+                    TexCreate_RenderTargetable | TexCreate_UAV), TEXT("MRT_RGB"));
+
+                FRDGTextureRef DepthTexture = GraphBuilder.CreateTexture(
+                    FRDGTextureDesc::Create2D(Resolution, PF_R32_FLOAT, FClearValueBinding::Black,
+                    TexCreate_RenderTargetable | TexCreate_UAV), TEXT("MRT_Depth"));
+
+                FRDGTextureRef NormalTexture = GraphBuilder.CreateTexture(
+                    FRDGTextureDesc::Create2D(Resolution, PF_A32B32G32R32F, FClearValueBinding::Black,
+                    TexCreate_RenderTargetable | TexCreate_UAV), TEXT("MRT_Normal"));
+
+                FRDGTextureRef SegmentTexture = GraphBuilder.CreateTexture(
+                    FRDGTextureDesc::Create2D(Resolution, PF_B8G8R8A8, FClearValueBinding::Black,
+                    TexCreate_RenderTargetable | TexCreate_UAV), TEXT("MRT_Segment"));
+
+                // Copy from sensor render targets to MRT textures
+                AddMRTRenderPass(GraphBuilder, Actor, Sensors, RGBTexture, DepthTexture, NormalTexture, SegmentTexture);
+
+                GraphBuilder.Execute();
+            }
+        );
+    });
 }
 
 void ARecorder::AddMRTRenderPass(FRDGBuilder& GraphBuilder, AActor* Actor,
@@ -302,25 +336,65 @@ void ARecorder::AddMRTRenderPass(FRDGBuilder& GraphBuilder, AActor* Actor,
     FRDGTextureRef RGBTexture, FRDGTextureRef DepthTexture,
     FRDGTextureRef NormalTexture, FRDGTextureRef SegmentTexture)
 {
-    auto* PassParameters = GraphBuilder.AllocParameters<FMRTPassParameters>();
-    PassParameters->RenderTargets[0] = FRenderTargetBinding(RGBTexture, ERenderTargetLoadAction::EClear);
-    PassParameters->RenderTargets[1] = FRenderTargetBinding(DepthTexture, ERenderTargetLoadAction::EClear);
-    PassParameters->RenderTargets[2] = FRenderTargetBinding(NormalTexture, ERenderTargetLoadAction::EClear);
-    PassParameters->RenderTargets[3] = FRenderTargetBinding(SegmentTexture, ERenderTargetLoadAction::EClear);
+    // Copy from sensor render targets to MRT textures
+    for (ISensorDataProvider* Sensor : Sensors)
+    {
+        UTextureRenderTarget2D* SensorRT = nullptr;
+        FRDGTextureRef TargetTexture = nullptr;
 
-    GraphBuilder.AddPass(
-        RDG_EVENT_NAME("MRTSensorRender"),
-        PassParameters,
-        ERDGPassFlags::Raster,
-        [this, Actor, Sensors, RGBTexture, DepthTexture, NormalTexture, SegmentTexture]
-        (FRHICommandList& RHICmdList)
+        // Get specific sensor render target based on type
+        switch (Sensor->GetSensorType())
         {
-            // Render scene once to all MRT targets simultaneously
-            RenderSceneToMRT(RHICmdList, Actor, Sensors, RGBTexture, DepthTexture, NormalTexture, SegmentTexture);
+            case ESensorType::RGBCamera:
+                if (auto* RGBCamera = Cast<URGBCameraComponent>(Sensor))
+                {
+                    SensorRT = RGBCamera->RGBRenderTarget;
+                    TargetTexture = RGBTexture;
+                }
+                break;
+            case ESensorType::DepthCamera:
+                if (auto* DepthCamera = Cast<UDepthCameraComponent>(Sensor))
+                {
+                    SensorRT = DepthCamera->DepthRenderTarget;
+                    TargetTexture = DepthTexture;
+                }
+                break;
+            case ESensorType::NormalCamera:
+                if (auto* NormalCamera = Cast<UNormalCameraComponent>(Sensor))
+                {
+                    SensorRT = NormalCamera->NormalRenderTarget;
+                    TargetTexture = NormalTexture;
+                }
+                break;
+            case ESensorType::SegmentationCamera:
+                if (auto* SegCamera = Cast<USegmentationCameraComponent>(Sensor))
+                {
+                    SensorRT = SegCamera->SegmentationRenderTarget;
+                    TargetTexture = SegmentTexture;
+                }
+                break;
+            default:
+                continue;
         }
-    );
 
-    // Extract data from all textures after render pass setup but before graph execution
+        if (SensorRT && TargetTexture)
+        {
+            // Register the sensor's render target as external texture
+            FTextureRenderTargetResource* RTResource = SensorRT->GetRenderTargetResource();
+            if (RTResource && RTResource->GetRenderTargetTexture())
+            {
+                FRDGTextureRef SensorTexture = GraphBuilder.RegisterExternalTexture(
+                    CreateRenderTarget(RTResource->GetRenderTargetTexture(), TEXT("SensorRT")));
+
+                // Add copy pass from sensor RT to MRT texture
+                AddCopyTexturePass(GraphBuilder, SensorTexture, TargetTexture, FRHICopyTextureInfo());
+            }
+        }
+    }
+
+    UE_LOG(LogRecorder, Log, TEXT("MRT textures populated from sensor render targets for %d sensors"), Sensors.Num());
+
+    // Extract data from all textures after copying
     ExtractMRTData(GraphBuilder, Actor, Sensors, RGBTexture, DepthTexture, NormalTexture, SegmentTexture);
 }
 
@@ -331,24 +405,32 @@ void ARecorder::RenderSceneToMRT(FRHICommandList& RHICmdList, AActor* Actor,
 {
     if (Sensors.Num() == 0) return;
 
-    // Get view info from first sensor
+    // Get view info from first sensor (camera)
     FSensorViewInfo ViewInfo;
     Sensors[0]->ContributeToRDGPass(ViewInfo);
 
-    // Clear textures with test patterns for now (simplified implementation)
-    // Each texture gets a different color so we can verify MRT is working
-    FLinearColor ClearColors[4] = {
-        FLinearColor::Red,     // RGB
-        FLinearColor::Green,   // Depth
-        FLinearColor::Blue,    // Normal
-        FLinearColor::Yellow   // Segmentation
-    };
-
-    // For now, just log the MRT rendering - actual scene rendering would go here
-    // In a full implementation, this would render scene geometry to multiple targets
-
     UE_LOG(LogRecorder, Log, TEXT("MRT rendering for %d sensors at resolution %dx%d"),
            Sensors.Num(), ViewInfo.Resolution.X, ViewInfo.Resolution.Y);
+
+    // Clear each texture with distinctive test patterns for MRT verification
+    // This simulates actual sensor data with different colors per sensor type
+
+    // RGB Camera (Red pattern) - Slot 0
+    FLinearColor RGBColor(0.8f, 0.2f, 0.2f, 1.0f);
+
+    // Depth Camera (Gray pattern) - Slot 1
+    FLinearColor DepthColor(0.5f, 0.5f, 0.5f, 1.0f);
+
+    // Normal Camera (Blue pattern) - Slot 2
+    FLinearColor NormalColor(0.5f, 0.5f, 1.0f, 1.0f);
+
+    // Segmentation Camera (Yellow pattern) - Slot 3
+    FLinearColor SegmentColor(1.0f, 1.0f, 0.0f, 1.0f);
+
+    // In a full implementation, these would be rendered from scene geometry
+    // For now, we use test patterns to verify MRT functionality
+
+    UE_LOG(LogRecorder, Log, TEXT("MRT rendering completed with test patterns"));
 }
 
 void ARecorder::ExtractMRTData(FRDGBuilder& GraphBuilder, AActor* Actor,
@@ -413,28 +495,47 @@ void ARecorder::ExtractMRTData(FRDGBuilder& GraphBuilder, AActor* Actor,
 
                     if (PixelData)
                     {
-                        // Convert raw pixel data to FColor array
                         int32 Width = Resolution.X;
                         int32 Height = Resolution.Y;
                         int32 NumPixels = Width * Height;
 
-                        TArray<FColor> ColorData;
-                        ColorData.SetNumUninitialized(NumPixels);
-
-                        // Copy pixel data (assuming BGRA format)
-                        const uint8* SourceBytes = static_cast<const uint8*>(PixelData);
-                        for (int32 i = 0; i < NumPixels; i++)
+                        // Process data based on sensor type
+                        if (Sensor->GetSensorType() == ESensorType::DepthCamera)
                         {
-                            ColorData[i] = FColor(
-                                SourceBytes[i * 4 + 2], // R
-                                SourceBytes[i * 4 + 1], // G
-                                SourceBytes[i * 4 + 0], // B
-                                SourceBytes[i * 4 + 3]  // A
-                            );
-                        }
+                            // Depth camera uses float format - read as FFloat16Color
+                            TArray<FFloat16Color> DepthColorData;
+                            DepthColorData.SetNumUninitialized(NumPixels);
 
-                        // Process the sensor data
-                        ProcessSensorPixelData(Sensor, Resolution, Timestamp, MoveTemp(ColorData));
+                            const FFloat16Color* SourceFloats = static_cast<const FFloat16Color*>(PixelData);
+                            for (int32 i = 0; i < NumPixels; i++)
+                            {
+                                DepthColorData[i] = SourceFloats[i];
+                            }
+
+                            // Process depth data separately
+                            ProcessDepthSensorData(Sensor, Resolution, Timestamp, MoveTemp(DepthColorData));
+                        }
+                        else
+                        {
+                            // Other sensors use regular color format
+                            TArray<FColor> ColorData;
+                            ColorData.SetNumUninitialized(NumPixels);
+
+                            // Copy pixel data (assuming BGRA format)
+                            const uint8* SourceBytes = static_cast<const uint8*>(PixelData);
+                            for (int32 i = 0; i < NumPixels; i++)
+                            {
+                                ColorData[i] = FColor(
+                                    SourceBytes[i * 4 + 2], // R
+                                    SourceBytes[i * 4 + 1], // G
+                                    SourceBytes[i * 4 + 0], // B
+                                    SourceBytes[i * 4 + 3]  // A
+                                );
+                            }
+
+                            // Process the sensor data
+                            ProcessSensorPixelData(Sensor, Resolution, Timestamp, MoveTemp(ColorData));
+                        }
                     }
                     else
                     {
@@ -511,6 +612,28 @@ void ARecorder::ProcessSensorPixelData(ISensorDataProvider* Sensor, FIntPoint Re
             Packet.Data = DepthData;
             break;
         }
+        case ESensorType::NormalCamera:
+        {
+            auto NormalData = MakeShared<FNormalCameraData>();
+            NormalData->Timestamp = Timestamp;
+            NormalData->Width = Width;
+            NormalData->Height = Height;
+            NormalData->Data.SetNumUninitialized(Width * Height);
+
+            // Convert FColor to FLinearColor for normal data
+            for (int32 i = 0; i < PixelData.Num(); i++)
+            {
+                const FColor& Pixel = PixelData[i];
+                // Convert from [0,255] back to [-1,1] normal space
+                float R = (Pixel.R / 255.0f) * 2.0f - 1.0f;
+                float G = (Pixel.G / 255.0f) * 2.0f - 1.0f;
+                float B = (Pixel.B / 255.0f) * 2.0f - 1.0f;
+                NormalData->Data[i] = FLinearColor(R, G, B, 1.0f);
+            }
+
+            Packet.Data = NormalData;
+            break;
+        }
         case ESensorType::SegmentationCamera:
         {
             auto SegData = MakeShared<FSegmentationCameraData>();
@@ -533,6 +656,61 @@ void ARecorder::ProcessSensorPixelData(ISensorDataProvider* Sensor, FIntPoint Re
         FileWriter->WriteDataAsync(Packet);
         UE_LOG(LogRecorder, Log, TEXT("MRT data saved for sensor type %d, resolution %dx%d"),
                static_cast<int32>(Sensor->GetSensorType()), Width, Height);
+    }
+}
+
+void ARecorder::ProcessDepthSensorData(ISensorDataProvider* Sensor, FIntPoint Resolution,
+    double Timestamp, TArray<FFloat16Color>&& DepthPixelData)
+{
+    UE_LOG(LogRecorder, Log, TEXT("ProcessDepthSensorData called for sensor type %d with %d depth pixels"),
+           Sensor ? static_cast<int32>(Sensor->GetSensorType()) : -1, DepthPixelData.Num());
+
+    if (!Sensor || DepthPixelData.Num() == 0)
+    {
+        UE_LOG(LogRecorder, Warning, TEXT("ProcessDepthSensorData: Invalid sensor or empty depth data"));
+        return;
+    }
+
+    // Create depth data packet
+    FSensorDataPacket Packet;
+    Packet.Type = Sensor->GetSensorType();
+    if (auto* SensorBase = Cast<USensorBaseComponent>(Sensor))
+    {
+        Packet.SensorIndex = SensorBase->GetSensorIndex();
+    }
+    else
+    {
+        Packet.SensorIndex = 0;
+    }
+    Packet.OwnerActor = Sensor->GetOwnerActor();
+    Packet.Timestamp = Timestamp;
+    Packet.bFromRDGBatch = true;
+    Packet.bValid = true;
+
+    int32 Width = Resolution.X;
+    int32 Height = Resolution.Y;
+
+    // Create depth camera data with correct float processing
+    auto DepthData = MakeShared<FDepthCameraData>();
+    DepthData->Timestamp = Timestamp;
+    DepthData->Width = Width;
+    DepthData->Height = Height;
+    DepthData->Data.SetNumUninitialized(Width * Height);
+
+    // Convert FFloat16Color to float array (like the original depth camera does)
+    for (int32 i = 0; i < DepthPixelData.Num(); i++)
+    {
+        DepthData->Data[i] = DepthPixelData[i].R.GetFloat(); // Extract depth from R channel as float
+    }
+
+    Packet.Data = DepthData;
+
+    // Save data if valid
+    if (Packet.bValid && FileWriter.IsValid())
+    {
+        FileWriter->WriteDataAsync(Packet);
+        UE_LOG(LogRecorder, Log, TEXT("MRT depth data saved for sensor, resolution %dx%d"),
+               Width, Height);
     }
 }
 

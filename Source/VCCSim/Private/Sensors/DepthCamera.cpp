@@ -22,6 +22,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogDepthCamera, Log, All);
 #include "RenderingThread.h"
 #include "Async/AsyncWork.h"
 #include "Windows/WindowsHWrapper.h"
+#include "Kismet/GameplayStatics.h"
 #include "RHI.h"
 
 UDepthCameraComponent::UDepthCameraComponent()
@@ -316,16 +317,19 @@ void UDepthCameraComponent::ContributeToRDGPass(FSensorViewInfo& OutViewInfo)
     OutViewInfo.SensorType = ESensorType::DepthCamera;
     OutViewInfo.MRTSlot = GetMRTSlot();
 
-    FVector CameraLocation = GetComponentLocation();
-    FRotator CameraRotation = GetComponentRotation();
-    OutViewInfo.ViewMatrix = FInverseRotationMatrix(CameraRotation) * FTranslationMatrix(-CameraLocation);
-
-    float FOVRadians = FMath::DegreesToRadians(FOV);
-    float AspectRatio = (float)Width / (float)Height;
-    OutViewInfo.ProjectionMatrix = FReversedZPerspectiveMatrix(FOVRadians, AspectRatio, MinRange, MaxRange);
+    FMinimalViewInfo ViewInfo;
+    CaptureComponent->GetCameraView(0.f, ViewInfo);
+    FMatrix ViewMatrix, ProjectionMatrix, ViewProjectionMatrix;
+    UGameplayStatics::GetViewProjectionMatrix(
+        ViewInfo,
+        ViewMatrix,
+        ProjectionMatrix,
+        ViewProjectionMatrix);
+    OutViewInfo.ViewMatrix = ViewMatrix;
+    OutViewInfo.ProjectionMatrix = ProjectionMatrix;OutViewInfo.CaptureSource = ESceneCaptureSource::SCS_Normal;
 
     OutViewInfo.CaptureSource = ESceneCaptureSource::SCS_SceneDepth;
     OutViewInfo.Resolution = FIntPoint(Width, Height);
     OutViewInfo.Provider = this;
+    OutViewInfo.CustomMaterial = DepthMaterial;
 }
-

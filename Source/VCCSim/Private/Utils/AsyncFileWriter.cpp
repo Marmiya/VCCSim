@@ -21,6 +21,9 @@
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Engine/Engine.h"
+#include "ImageUtils.h"
+#include "IImageWrapper.h"
+#include "IImageWrapperModule.h"
 
 DEFINE_LOG_CATEGORY(LogAsyncFileWriter);
 
@@ -66,8 +69,6 @@ void FAsyncFileWriter::WriteDataAsync(const FSensorDataPacket& DataPacket)
     }
 
     WriteQueue.Enqueue(DataPacket);
-    UE_LOG(LogAsyncFileWriter, Log, TEXT("Data packet enqueued for sensor type %d"),
-           static_cast<int32>(DataPacket.Type));
 }
 
 
@@ -77,7 +78,6 @@ void FAsyncFileWriter::Flush()
     {
         FPlatformProcess::Sleep(0.001f);
     }
-    UE_LOG(LogAsyncFileWriter, Log, TEXT("AsyncFileWriter flush completed"));
 }
 
 bool FAsyncFileWriter::Init()
@@ -121,21 +121,17 @@ void FAsyncFileWriter::ProcessWriteQueue()
 
 void FAsyncFileWriter::WriteDataToFile(const FSensorDataPacket& DataPacket)
 {
-    UE_LOG(LogAsyncFileWriter, Log, TEXT("WriteDataToFile called for sensor type %d"),
-           static_cast<int32>(DataPacket.Type));
-
     if (!DataPacket.bValid || !DataPacket.Data.IsValid() || !DataPacket.OwnerActor)
     {
-        UE_LOG(LogAsyncFileWriter, Warning, TEXT("WriteDataToFile: Invalid packet - Valid: %s, Data: %s, Actor: %s"),
+        UE_LOG(LogAsyncFileWriter, Warning,
+            TEXT("WriteDataToFile: Invalid packet - Valid: %s, Data: %s, Actor: %s"),
                DataPacket.bValid ? TEXT("true") : TEXT("false"),
                DataPacket.Data.IsValid() ? TEXT("valid") : TEXT("invalid"),
                DataPacket.OwnerActor ? TEXT("valid") : TEXT("null"));
         return;
     }
 
-    CreateDirectoryStructure(DataPacket);
     FString FilePath = GetFilePathForSensor(DataPacket);
-    UE_LOG(LogAsyncFileWriter, Log, TEXT("Writing file to: %s"), *FilePath);
 
     switch (DataPacket.Type)
     {
@@ -143,18 +139,14 @@ void FAsyncFileWriter::WriteDataToFile(const FSensorDataPacket& DataPacket)
         {
             if (const FRGBCameraData* RGBData = static_cast<const FRGBCameraData*>(DataPacket.Data.Get()))
             {
-                TArray<uint8> ImageData;
-                ImageData.SetNumUninitialized(RGBData->Width * RGBData->Height * 3);
+                // Use proper PNG compression like ImageProcesser
+                TArray64<uint8> CompressedBitmap;
+                FImageUtils::PNGCompressImageArray(RGBData->Width, RGBData->Height, RGBData->Data, CompressedBitmap);
 
-                for (int32 i = 0; i < RGBData->Data.Num(); ++i)
+                if (!FFileHelper::SaveArrayToFile(CompressedBitmap, *FilePath))
                 {
-                    const FColor& Pixel = RGBData->Data[i];
-                    ImageData[i * 3] = Pixel.R;
-                    ImageData[i * 3 + 1] = Pixel.G;
-                    ImageData[i * 3 + 2] = Pixel.B;
+                    UE_LOG(LogAsyncFileWriter, Error, TEXT("Failed to save RGB image to file: %s"), *FilePath);
                 }
-
-                FFileHelper::SaveArrayToFile(ImageData, *FilePath);
             }
             break;
         }
@@ -163,10 +155,44 @@ void FAsyncFileWriter::WriteDataToFile(const FSensorDataPacket& DataPacket)
         {
             if (const FDepthCameraData* DepthData = static_cast<const FDepthCameraData*>(DataPacket.Data.Get()))
             {
-                TArray<uint8> RawData;
-                RawData.SetNumUninitialized(DepthData->Data.Num() * sizeof(float));
-                FMemory::Memcpy(RawData.GetData(), DepthData->Data.GetData(), RawData.Num());
-                FFileHelper::SaveArrayToFile(RawData, *FilePath);
+                // Convert float depth data to visual grayscale PNG
+                TArray<FColor> VisualPixels;
+                VisualPixels.Reserve(DepthData->Data.Num());
+
+                // Find depth range for normalization
+                float MinDepth = 0.0f, MaxDepth = 100.0f; // Default reasonable range
+                if (DepthData->Data.Num() > 0)
+                {
+                    TArray<float> ValidDepths = DepthData->Data;
+                    ValidDepths.RemoveAll([](float Depth) { return !FMath::IsFinite(Depth) || Depth < 0.0f; });
+
+                    if (ValidDepths.Num() > 0)
+                    {
+                        ValidDepths.Sort();
+                        MinDepth = ValidDepths[FMath::FloorToInt(ValidDepths.Num() * 0.02f)];
+                        MaxDepth = ValidDepths[FMath::FloorToInt(ValidDepths.Num() * 0.98f)];
+                        if (MaxDepth <= MinDepth) MaxDepth = MinDepth + 100.0f;
+                    }
+                }
+
+                // Convert to grayscale (closer = darker, farther = lighter)
+                for (float Depth : DepthData->Data)
+                {
+                    float ClampedDepth = FMath::Clamp(Depth, MinDepth, MaxDepth);
+                    float NormalizedDepth = (ClampedDepth - MinDepth) / (MaxDepth - MinDepth);
+                    float InvertedDepth = 1.0f - NormalizedDepth;
+                    uint8 GrayValue = FMath::RoundToInt(InvertedDepth * 255.0f);
+                    VisualPixels.Add(FColor(GrayValue, GrayValue, GrayValue, 255));
+                }
+
+                // Save as PNG
+                TArray64<uint8> CompressedBitmap;
+                FImageUtils::PNGCompressImageArray(DepthData->Width, DepthData->Height, VisualPixels, CompressedBitmap);
+
+                if (!FFileHelper::SaveArrayToFile(CompressedBitmap, *FilePath))
+                {
+                    UE_LOG(LogAsyncFileWriter, Error, TEXT("Failed to save depth image to file: %s"), *FilePath);
+                }
             }
             break;
         }
@@ -175,10 +201,46 @@ void FAsyncFileWriter::WriteDataToFile(const FSensorDataPacket& DataPacket)
         {
             if (const FNormalCameraData* NormalData = static_cast<const FNormalCameraData*>(DataPacket.Data.Get()))
             {
-                TArray<uint8> RawData;
-                RawData.SetNumUninitialized(NormalData->Data.Num() * sizeof(FLinearColor));
-                FMemory::Memcpy(RawData.GetData(), NormalData->Data.GetData(), RawData.Num());
-                FFileHelper::SaveArrayToFile(RawData, *FilePath);
+                // Use modern UE image API with FImage for EXR
+                FImage Image;
+                Image.Init(NormalData->Width, NormalData->Height, ERawImageFormat::RGBA32F);
+
+                // Convert FLinearColor to FImage data
+                TArrayView64<FLinearColor> ImageData = Image.AsRGBA32F();
+
+                if (ImageData.Num() == NormalData->Data.Num())
+                {
+                    // Copy normal data to image
+                    for (int32 i = 0; i < NormalData->Data.Num(); ++i)
+                    {
+                        ImageData[i] = NormalData->Data[i];
+                    }
+
+                    // Get image wrapper module
+                    IImageWrapperModule& ImageWrapperModule =
+                        FModuleManager::LoadModuleChecked<IImageWrapperModule>(FName("ImageWrapper"));
+
+                    // Compress image using modern API
+                    TArray64<uint8> CompressedData;
+                    bool bSuccess = ImageWrapperModule.CompressImage(
+                        CompressedData,
+                        EImageFormat::EXR,
+                        Image,
+                        100
+                    );
+
+                    if (bSuccess && CompressedData.Num() > 0)
+                    {
+                        if (!FFileHelper::SaveArrayToFile(CompressedData, *FilePath))
+                        {
+                            UE_LOG(LogAsyncFileWriter, Error, TEXT("Failed to save normal EXR image to file: %s"), *FilePath);
+                        }
+                    }
+                    else
+                    {
+                        UE_LOG(LogAsyncFileWriter, Error, TEXT("Failed to compress normal image to EXR format"));
+                    }
+                }
             }
             break;
         }
@@ -187,18 +249,14 @@ void FAsyncFileWriter::WriteDataToFile(const FSensorDataPacket& DataPacket)
         {
             if (const FSegmentationCameraData* SegData = static_cast<const FSegmentationCameraData*>(DataPacket.Data.Get()))
             {
-                TArray<uint8> ImageData;
-                ImageData.SetNumUninitialized(SegData->Width * SegData->Height * 3);
+                // Use proper PNG compression for segmentation data
+                TArray64<uint8> CompressedBitmap;
+                FImageUtils::PNGCompressImageArray(SegData->Width, SegData->Height, SegData->Data, CompressedBitmap);
 
-                for (int32 i = 0; i < SegData->Data.Num(); ++i)
+                if (!FFileHelper::SaveArrayToFile(CompressedBitmap, *FilePath))
                 {
-                    const FColor& Pixel = SegData->Data[i];
-                    ImageData[i * 3] = Pixel.R;
-                    ImageData[i * 3 + 1] = Pixel.G;
-                    ImageData[i * 3 + 2] = Pixel.B;
+                    UE_LOG(LogAsyncFileWriter, Error, TEXT("Failed to save segmentation image to file: %s"), *FilePath);
                 }
-
-                FFileHelper::SaveArrayToFile(ImageData, *FilePath);
             }
             break;
         }
@@ -207,10 +265,49 @@ void FAsyncFileWriter::WriteDataToFile(const FSensorDataPacket& DataPacket)
         {
             if (const FLiDARData* LidarData = static_cast<const FLiDARData*>(DataPacket.Data.Get()))
             {
-                TArray<uint8> RawData;
-                RawData.SetNumUninitialized(LidarData->Data.Num() * sizeof(FVector3f));
-                FMemory::Memcpy(RawData.GetData(), LidarData->Data.GetData(), RawData.Num());
-                FFileHelper::SaveArrayToFile(RawData, *FilePath);
+                // Save as PLY point cloud format
+                if (LidarData->Data.Num() > 0)
+                {
+                    FString PLYContent;
+
+                    // PLY header
+                    PLYContent += TEXT("ply\n");
+                    PLYContent += TEXT("format ascii 1.0\n");
+                    PLYContent += FString::Printf(TEXT("comment LiDAR Point Cloud generated by VCCSim - %s\n"),
+                        *FDateTime::Now().ToString());
+                    PLYContent += TEXT("comment UE Coordinate System: X=Forward, Y=Right, Z=Up (left-handed)\n");
+                    PLYContent += TEXT("comment Units: centimeters\n");
+                    PLYContent += FString::Printf(TEXT("element vertex %d\n"), LidarData->Data.Num());
+                    PLYContent += TEXT("property float x\n");
+                    PLYContent += TEXT("property float y\n");
+                    PLYContent += TEXT("property float z\n");
+                    PLYContent += TEXT("property uchar red\n");
+                    PLYContent += TEXT("property uchar green\n");
+                    PLYContent += TEXT("property uchar blue\n");
+                    PLYContent += TEXT("end_header\n");
+
+                    // Write vertex data with default white color
+                    for (const FVector3f& Point : LidarData->Data)
+                    {
+                        PLYContent += FString::Printf(TEXT("%.6f %.6f %.6f 255 255 255\n"),
+                            Point.X, Point.Y, Point.Z);
+                    }
+
+                    // Save to file
+                    if (!FFileHelper::SaveStringToFile(PLYContent, *FilePath))
+                    {
+                        UE_LOG(LogAsyncFileWriter, Error, TEXT("Failed to save LiDAR PLY file: %s"), *FilePath);
+                    }
+                    else
+                    {
+                        UE_LOG(LogAsyncFileWriter, Log, TEXT("Successfully saved %d LiDAR points to PLY: %s"),
+                            LidarData->Data.Num(), *FilePath);
+                    }
+                }
+                else
+                {
+                    UE_LOG(LogAsyncFileWriter, Warning, TEXT("No LiDAR points to save"));
+                }
             }
             break;
         }
@@ -255,10 +352,4 @@ FString FAsyncFileWriter::GetFilePathForSensor(const FSensorDataPacket& DataPack
     FString FileName = FString::Printf(TEXT("%.9f%s"), DataPacket.Timestamp, *FileExtension);
 
     return FPaths::Combine(BasePath, ActorName, SensorTypeStr, FileName);
-}
-
-void FAsyncFileWriter::CreateDirectoryStructure(const FSensorDataPacket& DataPacket)
-{
-    // Directory creation is now handled by Recorder - AsyncFileWriter just writes to existing directories
-    // This method is kept for interface compatibility but does nothing
 }

@@ -40,7 +40,6 @@ public:
         Height = 512;
         bOrthographic = false;
         OrthoWidth = 512.0f;
-        MaxRange = 10000.0f;
     }
 };
 
@@ -63,6 +62,8 @@ public:
 
     // ISensorDataProvider interface
     virtual TFuture<FSensorDataPacket> CaptureDataAsync() override;
+    virtual UTextureRenderTarget2D* GetRenderTarget() const override { return RGBRenderTarget; }
+    virtual FIntPoint GetResolution() const override { return FIntPoint(Width, Height); }
     virtual ESensorType GetSensorType() const override { return ESensorType::RGBCamera; }
     virtual AActor* GetOwnerActor() const override { return ParentActor; }
 
@@ -72,15 +73,12 @@ public:
         
 protected:
     virtual void InitializeRenderTargets() override;
-    virtual UTextureRenderTarget2D* GetRenderTarget() const override { return RGBRenderTarget; }
+
     virtual void SetCaptureComponent() const override;
     void ProcessRGBTexture(TFunction<void()> OnComplete);
     void ProcessRGBTextureParam(TFunction<void(const TArray<FColor>&)> OnComplete);
 
 public:
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Config")
-    float MaxRange = 10000.0f;
-
     UPROPERTY()
     UTextureRenderTarget2D* RGBRenderTarget = nullptr;
 

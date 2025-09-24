@@ -111,13 +111,12 @@ public:
 	virtual void SetCaptureComponent() const;
 	virtual std::pair<int32, int32> GetImageSize() const { return {Width, Height}; }
 	virtual void Configure(const FSensorConfig& Config) override {};
+	virtual UTextureRenderTarget2D* GetRenderTarget() const PURE_VIRTUAL(UCameraBaseComponent::GetRenderTarget, return nullptr;);
 
 	void ComputeIntrinsics();
 	FMatrix44f GetCameraIntrinsics() const { return CameraIntrinsics; }
 
 protected:
-	virtual UTextureRenderTarget2D* GetRenderTarget() const PURE_VIRTUAL(UCameraBaseComponent::GetRenderTarget, return nullptr;);
-
 	bool CheckComponentAndRenderTarget() const;
 
 public:

@@ -60,9 +60,10 @@ public:
     // ISensorDataProvider interface
     virtual TFuture<FSensorDataPacket> CaptureDataAsync() override;
     virtual ESensorType GetSensorType() const override { return ESensorType::Lidar; }
+    virtual FIntPoint GetResolution() const override { return FIntPoint(NumPoints, NumRays); }
     virtual AActor* GetOwnerActor() const override { return ParentActor; }
     virtual void ContributeToRDGPass(FSensorViewInfo& OutViewInfo) override;
-    virtual int32 GetMRTSlot() const override { return 1; }
+    virtual int32 GetMRTSlot() const override { return -1; } // LiDAR doesn't use MRT
 
 protected:
     virtual void BeginPlay() override;

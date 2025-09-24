@@ -22,6 +22,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogSegmentCamera, Log, All);
 #include "RenderingThread.h"
 #include "Async/AsyncWork.h"
 #include "Windows/WindowsHWrapper.h"
+#include "Kismet/GameplayStatics.h"
 
 USegmentationCameraComponent::USegmentationCameraComponent()
 {
@@ -35,7 +36,6 @@ void USegmentationCameraComponent::Configure(const FSensorConfig& Config)
         FOV = SegConfig.FOV;
         Width = SegConfig.Width;
         Height = SegConfig.Height;
-        MaxRange = SegConfig.MaxRange;
     }
 
     ComputeIntrinsics();
@@ -118,6 +118,20 @@ void USegmentationCameraComponent::SetCaptureComponent() const
         CaptureComponent->PostProcessSettings.AutoExposureMinBrightness = 1.0f;
         CaptureComponent->PostProcessSettings.AutoExposureMaxBrightness = 1.0f;
         CaptureComponent->TextureTarget = SegmentationRenderTarget;
+
+        // Apply segmentation material for proper segmentation rendering
+        if (SegmentationMaterial)
+        {
+            CaptureComponent->PostProcessSettings.WeightedBlendables.Array.Empty();
+            FWeightedBlendable WeightedBlendable;
+            WeightedBlendable.Object = SegmentationMaterial;
+            WeightedBlendable.Weight = 1.f;
+            CaptureComponent->PostProcessSettings.WeightedBlendables.Array.Add(WeightedBlendable);
+        }
+        else
+        {
+            UE_LOG(LogSegmentCamera, Error, TEXT("Segmentation material not set!"));
+        }
     }
 }
 
@@ -175,16 +189,19 @@ void USegmentationCameraComponent::ContributeToRDGPass(FSensorViewInfo& OutViewI
     OutViewInfo.SensorType = ESensorType::SegmentationCamera;
     OutViewInfo.MRTSlot = GetMRTSlot();
 
-    FVector CameraLocation = GetComponentLocation();
-    FRotator CameraRotation = GetComponentRotation();
-    OutViewInfo.ViewMatrix = FInverseRotationMatrix(CameraRotation) * FTranslationMatrix(-CameraLocation);
-
-    float FOVRadians = FMath::DegreesToRadians(FOV);
-    float AspectRatio = (float)Width / (float)Height;
-    OutViewInfo.ProjectionMatrix = FReversedZPerspectiveMatrix(FOVRadians, AspectRatio, GNearClippingPlane, MaxRange);
+    FMinimalViewInfo ViewInfo;
+    CaptureComponent->GetCameraView(0.f, ViewInfo);
+    FMatrix ViewMatrix, ProjectionMatrix, ViewProjectionMatrix;
+    UGameplayStatics::GetViewProjectionMatrix(
+        ViewInfo,
+        ViewMatrix,
+        ProjectionMatrix,
+        ViewProjectionMatrix);
+    OutViewInfo.ViewMatrix = ViewMatrix;
+    OutViewInfo.ProjectionMatrix = ProjectionMatrix;OutViewInfo.CaptureSource = ESceneCaptureSource::SCS_Normal;
 
     OutViewInfo.CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
     OutViewInfo.Resolution = FIntPoint(Width, Height);
     OutViewInfo.Provider = this;
+    OutViewInfo.CustomMaterial = SegmentationMaterial;
 }
-

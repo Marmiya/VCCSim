@@ -22,7 +22,6 @@
 #include "Async/Async.h"
 #include "DataStructures/RecordData.h"
 #include "UObject/Interface.h"
-#include "RenderGraphBuilder.h"
 #include "RenderGraphDefinitions.h"
 #include "ISensorDataProvider.generated.h"
 
@@ -37,6 +36,7 @@ struct VCCSIM_API FSensorViewInfo
     ESceneCaptureSource CaptureSource;
     FIntPoint Resolution;
     ISensorDataProvider* Provider;
+    UMaterialInterface* CustomMaterial;
 
     FSensorViewInfo()
         : SensorType(ESensorType::RGBCamera)
@@ -46,6 +46,7 @@ struct VCCSIM_API FSensorViewInfo
         , CaptureSource(ESceneCaptureSource::SCS_FinalColorLDR)
         , Resolution(FIntPoint(512, 512))
         , Provider(nullptr)
+        , CustomMaterial(nullptr)
     {
     }
 };
@@ -86,6 +87,7 @@ public:
     virtual TFuture<FSensorDataPacket> CaptureDataAsync() = 0;
     virtual ESensorType GetSensorType() const = 0;
     virtual AActor* GetOwnerActor() const = 0;
+    virtual FIntPoint GetResolution() const = 0;
 
     virtual void ContributeToRDGPass(FSensorViewInfo& OutViewInfo) = 0;
     virtual int32 GetMRTSlot() const = 0;

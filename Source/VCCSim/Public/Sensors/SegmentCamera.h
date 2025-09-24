@@ -35,7 +35,6 @@ public:
     {
         Width = 512;
         Height = 512;
-        MaxRange = 10000.0f;
     }
 };
 
@@ -52,11 +51,14 @@ public:
     UFUNCTION(BlueprintCallable, Category = "SegmentationCamera")
     void CaptureSegmentationScene();
 
+    virtual UTextureRenderTarget2D* GetRenderTarget() const override { return SegmentationRenderTarget; }
+
     // For GRPC call
     void AsyncGetSegmentationImageData(TFunction<void(const TArray<FColor>&)> Callback);
 
     // ISensorDataProvider interface
     virtual TFuture<FSensorDataPacket> CaptureDataAsync() override;
+    virtual FIntPoint GetResolution() const override { return FIntPoint(Width, Height); }
     virtual ESensorType GetSensorType() const override { return ESensorType::SegmentationCamera; }
     virtual AActor* GetOwnerActor() const override { return ParentActor; }
 
@@ -66,16 +68,11 @@ public:
 
 protected:
     virtual void InitializeRenderTargets() override;
-    virtual UTextureRenderTarget2D* GetRenderTarget() const override { return SegmentationRenderTarget; }
     virtual void SetCaptureComponent() const override;
     void ProcessSegmentationTexture(TFunction<void()> OnComplete);
     void ProcessSegmentationTextureParam(TFunction<void(const TArray<FColor>&)> OnComplete);
 
 public:
-    // Segmentation-specific properties
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SegmentationCamera|Config")
-    float MaxRange = 10000.0f;
-
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SegmentationCamera|Config")
     UMaterialInterface* SegmentationMaterial = Cast<UMaterialInterface>(
         StaticLoadObject(UMaterialInterface::StaticClass(), nullptr,

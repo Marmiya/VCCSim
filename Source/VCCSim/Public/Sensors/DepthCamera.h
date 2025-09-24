@@ -52,6 +52,9 @@ public:
     void CaptureDepthScene();
     UFUNCTION(BlueprintCallable, Category = "DepthCamera")
     void CaptureDepthSceneAndProcess();
+
+    virtual UTextureRenderTarget2D* GetRenderTarget() const override { return DepthRenderTarget; }
+    
     UFUNCTION(BlueprintCallable, Category = "DepthCamera")
     void VisualizePointCloud();
     TArray<FDCPoint> GeneratePointCloud();
@@ -62,24 +65,14 @@ public:
 
     // ISensorDataProvider interface
     virtual TFuture<FSensorDataPacket> CaptureDataAsync() override;
+    virtual FIntPoint GetResolution() const override { return FIntPoint(Width, Height); }
     virtual ESensorType GetSensorType() const override { return ESensorType::DepthCamera; }
     virtual AActor* GetOwnerActor() const override { return ParentActor; }
 
     // RDG interface
     virtual void ContributeToRDGPass(FSensorViewInfo& OutViewInfo) override;
     virtual int32 GetMRTSlot() const override { return 1; }
-    
-protected:
-    virtual void InitializeRenderTargets() override;
-    virtual UTextureRenderTarget2D* GetRenderTarget() const override { return DepthRenderTarget; }
-    virtual void SetCaptureComponent() const override;
 
-    void ProcessDepthTexture(TFunction<void()> OnComplete);
-    void ProcessDepthTextureParam(TFunction<void(const TArray<FFloat16Color>&)> OnComplete);
-
-    TArray<float> GetDepthImage();
-
-public:
     // Depth-specific properties
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthCamera|Config")
     float MaxRange = 2000.0f;
@@ -87,10 +80,24 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthCamera|Config")
     float MinRange = 0.0f;
 
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthCamera|Config")
+    UMaterialInterface* DepthMaterial = Cast<UMaterialInterface>(
+        StaticLoadObject(UMaterialInterface::StaticClass(), nullptr,
+            TEXT("/VCCSim/Materials/M_Depth.M_Depth")));
+
     UPROPERTY()
     UTextureRenderTarget2D* DepthRenderTarget = nullptr;
 
     TArray<FDCPoint> PointCloudData;
+
+protected:
+    virtual void InitializeRenderTargets() override;
+    virtual void SetCaptureComponent() const override;
+
+    void ProcessDepthTexture(TFunction<void()> OnComplete);
+    void ProcessDepthTextureParam(TFunction<void(const TArray<FFloat16Color>&)> OnComplete);
+
+    TArray<float> GetDepthImage();
 
 private:
     TArray<FFloat16Color> DepthData;

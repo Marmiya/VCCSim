@@ -19,10 +19,10 @@ DEFINE_LOG_CATEGORY_STATIC(LogCameraSensor, Log, All);
 
 #include "Sensors/CameraSensor.h"
 #include "DataStructures/RecordData.h"
-#include "RenderingThread.h"
 #include "Async/AsyncWork.h"
 #include "Windows/WindowsHWrapper.h"
 #include "Utils/InsMeshHolder.h"
+#include "Kismet/GameplayStatics.h"
 #include "Components/InstancedStaticMeshComponent.h"
 
 URGBCameraComponent::URGBCameraComponent()
@@ -39,7 +39,6 @@ void URGBCameraComponent::Configure(const FSensorConfig& Config)
         Height = RGBConfig.Height;
         bOrthographic = RGBConfig.bOrthographic;
         OrthoWidth = RGBConfig.OrthoWidth;
-        MaxRange = RGBConfig.MaxRange;
     }
     
     ComputeIntrinsics();
@@ -193,16 +192,20 @@ void URGBCameraComponent::ContributeToRDGPass(FSensorViewInfo& OutViewInfo)
     OutViewInfo.SensorType = ESensorType::RGBCamera;
     OutViewInfo.MRTSlot = GetMRTSlot();
 
-    FVector CameraLocation = GetComponentLocation();
-    FRotator CameraRotation = GetComponentRotation();
-    OutViewInfo.ViewMatrix = FInverseRotationMatrix(CameraRotation) * FTranslationMatrix(-CameraLocation);
-
-    float FOVRadians = FMath::DegreesToRadians(FOV);
-    float AspectRatio = (float)Width / (float)Height;
-    OutViewInfo.ProjectionMatrix = FReversedZPerspectiveMatrix(FOVRadians, AspectRatio, GNearClippingPlane, MaxRange);
+    FMinimalViewInfo ViewInfo;
+    CaptureComponent->GetCameraView(0.f, ViewInfo);
+    FMatrix ViewMatrix, ProjectionMatrix, ViewProjectionMatrix;
+    UGameplayStatics::GetViewProjectionMatrix(
+        ViewInfo,
+        ViewMatrix,
+        ProjectionMatrix,
+        ViewProjectionMatrix);
+    OutViewInfo.ViewMatrix = ViewMatrix;
+    OutViewInfo.ProjectionMatrix = ProjectionMatrix;OutViewInfo.CaptureSource = ESceneCaptureSource::SCS_Normal;
 
     OutViewInfo.CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
     OutViewInfo.Resolution = FIntPoint(Width, Height);
     OutViewInfo.Provider = this;
+    OutViewInfo.CustomMaterial = nullptr; // Use default rendering
 }
 

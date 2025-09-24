@@ -32,7 +32,6 @@ BEGIN_SHADER_PARAMETER_STRUCT(FMRTPassParameters, )
     RENDER_TARGET_BINDING_SLOTS()
 END_SHADER_PARAMETER_STRUCT()
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FRecordStateChanged, bool, RecordState);
 
 UCLASS()
 class VCCSIM_API ARecorder : public AActor
@@ -56,9 +55,6 @@ public:
     bool IsRecording() const { return bIsRecording; }
 
     void CreateActorDirectories(const FString& ActorName, TSet<ESensorType>&& SensorTypes);
-
-    UPROPERTY(BlueprintAssignable)
-    FRecordStateChanged OnRecordStateChanged;
 
     bool RecordState = false;
 
@@ -88,6 +84,8 @@ private:
         FRDGTextureRef NormalTexture, FRDGTextureRef SegmentTexture);
     void ProcessSensorPixelData(ISensorDataProvider* Sensor, FIntPoint Resolution,
         double Timestamp, TArray<FColor>&& PixelData);
+    void ProcessDepthSensorData(ISensorDataProvider* Sensor, FIntPoint Resolution,
+        double Timestamp, TArray<FFloat16Color>&& DepthData);
     void CollectSensorDataIndividual(const TArray<ISensorDataProvider*>& Sensors);
     void InitializeAsyncWriter();
     void ShutdownAsyncWriter();

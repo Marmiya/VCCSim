@@ -44,7 +44,6 @@ private:
     void ProcessWriteQueue();
     void WriteDataToFile(const FSensorDataPacket& DataPacket);
     FString GetFilePathForSensor(const FSensorDataPacket& DataPacket);
-    void CreateDirectoryStructure(const FSensorDataPacket& DataPacket);
 
     FString BasePath;
     TQueue<FSensorDataPacket, EQueueMode::Mpsc> WriteQueue;

@@ -49,12 +49,14 @@ public:
     void CaptureNormalScene();
     UFUNCTION(BlueprintCallable, Category = "NormalCamera")
     void CaptureNormalSceneAndProcess();
+    virtual UTextureRenderTarget2D* GetRenderTarget() const override { return NormalRenderTarget; }
 
     // For grpc server
     void AsyncGetNormalImageData(TFunction<void(const TArray<FLinearColor>&)> Callback);
 
     // ISensorDataProvider interface
     virtual TFuture<FSensorDataPacket> CaptureDataAsync() override;
+    virtual FIntPoint GetResolution() const override { return FIntPoint(Width, Height); }
     virtual ESensorType GetSensorType() const override { return ESensorType::NormalCamera; }
     virtual AActor* GetOwnerActor() const override { return ParentActor; }
 
@@ -62,17 +64,18 @@ public:
     virtual void ContributeToRDGPass(FSensorViewInfo& OutViewInfo) override;
     virtual int32 GetMRTSlot() const override { return 2; }
 
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NormalCamera|Config")
+    UMaterialInterface* NormalMaterial = Cast<UMaterialInterface>(
+        StaticLoadObject(UMaterialInterface::StaticClass(), nullptr,
+            TEXT("/VCCSim/Materials/M_Normal.M_Normal")));
+
 protected:
     virtual void InitializeRenderTargets() override;
-    virtual UTextureRenderTarget2D* GetRenderTarget() const override { return NormalRenderTarget; }
     virtual void SetCaptureComponent() const override;
 
     void ProcessNormalTexture(TFunction<void()> OnComplete);
     void ProcessNormalTextureParam(TFunction<void(const TArray<FLinearColor>&)> OnComplete);
 
-    FMatrix GetProjectionMatrix() const;
-
-public:
     UPROPERTY()
     UTextureRenderTarget2D* NormalRenderTarget = nullptr;
 
