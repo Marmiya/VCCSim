@@ -28,88 +28,113 @@
 
 class UInsMeshHolder;
 
-class FRGBCameraConfig : public FCameraConfig
+struct FDCPoint
+{
+    FVector Location;
+    FDCPoint() : Location(FVector::ZeroVector){}
+};
+
+class FRGBDCameraConfig : public FCameraConfig
 {
 public:
     float MaxRange = 10000.0f;
+    float MinRange = 0.0f;
+    bool bSaveRGB = true;
+    bool bSaveDepth = true;
 
-    FRGBCameraConfig()
+    FRGBDCameraConfig()
     {
         FOV = 90.0f;
         Width = 512;
         Height = 512;
-        bOrthographic = false;
-        OrthoWidth = 512.0f;
     }
 };
 
 UCLASS(ClassGroup = (VCCSIM), meta = (BlueprintSpawnableComponent))
-class VCCSIM_API URGBCameraComponent : public UCameraBaseComponent, public ISensorDataProvider
+class VCCSIM_API URGBDCameraComponent : public UCameraBaseComponent, public ISensorDataProvider
 {
     GENERATED_BODY()
 
 public:
-    URGBCameraComponent();
+    URGBDCameraComponent();
     virtual void Configure(const FSensorConfig& Config) override final;
     void SetIgnoreLidar(UInsMeshHolder* MeshHolder);
     FString CameraName;
 
-    UFUNCTION(BlueprintCallable, Category = "RGBCamera")
-    void CaptureRGBScene();
+    UFUNCTION(BlueprintCallable, Category = "RGBDCamera")
+    void CaptureRGBDScene();
+
+    UFUNCTION(BlueprintCallable, Category = "RGBDCamera")
+    void VisualizePointCloud();
+
+    TArray<FDCPoint> GeneratePointCloud();
 
     // For grpc service
-    void AsyncGetRGBImageData(TFunction<void(const TArray<FColor>&)> Callback);
+    void AsyncGetRGBDImageData(TFunction<void(const TArray<FLinearColor>&)> Callback);
+    void AsyncGetPointCloudData(TFunction<void()> Callback);
 
     // ISensorDataProvider interface
-    virtual TFuture<FSensorDataPacket> CaptureDataAsync() override;
-    virtual UTextureRenderTarget2D* GetRenderTarget() const override { return RGBRenderTarget; }
+    virtual UTextureRenderTarget2D* GetRenderTarget() const override { return RenderTarget; }
     virtual FIntPoint GetResolution() const override { return FIntPoint(Width, Height); }
-    virtual ESensorType GetSensorType() const override { return ESensorType::RGBCamera; }
+    virtual ESensorType GetSensorType() const override { return ESensorType::RGBDCamera; }
     virtual AActor* GetOwnerActor() const override { return ParentActor; }
 
-    // RDG interface
-    virtual void ContributeToRDGPass(FSensorViewInfo& OutViewInfo) override;
-    virtual int32 GetMRTSlot() const override { return 0; }
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "RGBDCamera|Config")
+    float MaxRange = 10000.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "RGBDCamera|Config")
+    float MinRange = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "RGBDCamera|Config")
+    bool bSaveRGB = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "RGBDCamera|Config")
+    bool bSaveDepth = true;
+
+    TArray<FDCPoint> PointCloudData;
+
+    const TArray<FLinearColor>& GetCombinedData() const { return CombinedData; }
         
 protected:
     virtual void InitializeRenderTargets() override;
 
     virtual void SetCaptureComponent() const override;
-    void ProcessRGBTexture(TFunction<void()> OnComplete);
-    void ProcessRGBTextureParam(TFunction<void(const TArray<FColor>&)> OnComplete);
-
-public:
-    UPROPERTY()
-    UTextureRenderTarget2D* RGBRenderTarget = nullptr;
+    void ProcessRGBDTexture(TFunction<void()> OnComplete);
+    void ProcessRGBDTextureParam(TFunction<void(const TArray<FLinearColor>&)> OnComplete);
 
 private:
-    TArray<FColor> RGBData;
+    TArray<FLinearColor> CombinedData;
 
     template<typename CallbackType>
-    void ProcessRGBTextureTemplate(CallbackType&& Callback);
+    void ProcessRGBDepthTextureTemplate(CallbackType&& Callback);
 };
 
 template<typename CallbackType>
-void URGBCameraComponent::ProcessRGBTextureTemplate(CallbackType&& Callback)
+void URGBDCameraComponent::ProcessRGBDepthTextureTemplate(CallbackType&& Callback)
 {
-    if (!RGBRenderTarget) { UE_LOG(LogTemp, Error, TEXT("RGBRenderTarget is null!")); return; }
-
-    if (RGBData.Num() != Width * Height)
+    if (!RenderTarget)
     {
-        RGBData.SetNumUninitialized(Width * Height);
+        UE_LOG(LogTemp, Error, TEXT("CombinedRenderTarget is null!"));
+        return;
+    }
+
+    if (CombinedData.Num() != Width * Height)
+    {
+        CombinedData.SetNumUninitialized(Width * Height);
     }
 
     struct FReadSurfaceContext
     {
-        TArray<FColor>* OutData;
+        TArray<FLinearColor>* OutCombinedData;
         FIntRect Rect;
         FReadSurfaceDataFlags Flags;
-    } Context { &RGBData, FIntRect(0, 0, Width, Height),
+    } Context { &CombinedData, FIntRect(0, 0, Width, Height),
                 FReadSurfaceDataFlags(RCM_UNorm, CubeFace_MAX) };
 
     auto SharedCallback = MakeShared<std::decay_t<CallbackType>>(std::forward<CallbackType>(Callback));
 
-    UTextureRenderTarget2D* RT = RGBRenderTarget;
+    UTextureRenderTarget2D* RT = RenderTarget;
 
     ENQUEUE_RENDER_COMMAND(ReadSurfaceCommand)(
         [RT, Context, SharedCallback](FRHICommandListImmediate& RHICmdList)
@@ -119,17 +144,24 @@ void URGBCameraComponent::ProcessRGBTextureTemplate(CallbackType&& Callback)
             FTextureRenderTargetResource* RTRes = RT->GetRenderTargetResource();
             if (!RTRes) return;
 
+            TArray<FLinearColor> TempData;
             RHICmdList.ReadSurfaceData(
                 RTRes->GetRenderTargetTexture(),
                 Context.Rect,
-                *Context.OutData,
-                Context.Flags
+                TempData,
+                FReadSurfaceDataFlags()
             );
+
+            Context.OutCombinedData->SetNumUninitialized(TempData.Num());
+            for (int32 i = 0; i < TempData.Num(); ++i)
+            {
+                (*Context.OutCombinedData)[i] = TempData[i];
+            }
 
             if constexpr (std::is_invocable_v<std::decay_t<CallbackType>>)
             { (*SharedCallback)(); }
-            else if constexpr (std::is_invocable_v<std::decay_t<CallbackType>, const TArray<FColor>&>)
-            { (*SharedCallback)(*Context.OutData); }
+            else if constexpr (std::is_invocable_v<std::decay_t<CallbackType>, const TArray<FLinearColor>&>)
+            { (*SharedCallback)(*Context.OutCombinedData); }
         }
     );
 }

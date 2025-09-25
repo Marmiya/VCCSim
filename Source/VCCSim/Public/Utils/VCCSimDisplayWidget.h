@@ -23,8 +23,7 @@
 #include "VCCSIMDisplayWidget.generated.h"
 
 class UMeshHandlerComponent;
-class UDepthCameraComponent;
-class URGBCameraComponent;
+class URGBDCameraComponent;
 class USegmentationCameraComponent;
 class UNormalCameraComponent;
 
@@ -107,8 +106,8 @@ public:
     
     void SetCameraContext(EVCCSimViewType ViewType, UTextureRenderTarget2D* RenderTexture, UObject* CameraComponent);
 
-    void SetDepthContext(UTextureRenderTarget2D* DepthTexture, UDepthCameraComponent* InCamera);
-    void SetRGBContext(UTextureRenderTarget2D* RGBTexture, URGBCameraComponent* InCamera);
+    void SetDepthContext(UTextureRenderTarget2D* DepthTexture, URGBDCameraComponent* InCamera);
+    void SetRGBContext(UTextureRenderTarget2D* RGBTexture, URGBDCameraComponent* InCamera);
     void SetSegContext(UTextureRenderTarget2D* SegTexture, USegmentationCameraComponent* InCamera);
     void SetNormalContext(UTextureRenderTarget2D* NormalTexture, UNormalCameraComponent* InCamera);
     

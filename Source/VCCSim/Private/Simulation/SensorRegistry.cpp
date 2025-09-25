@@ -19,7 +19,6 @@
 #include "Sensors/ISensorDataProvider.h"
 #include "Sensors/CameraSensor.h"
 #include "Sensors/LidarSensor.h"
-#include "Sensors/DepthCamera.h"
 #include "Sensors/NormalCamera.h"
 #include "Sensors/SegmentCamera.h"
 
@@ -37,7 +36,7 @@ void FSensorRegistry::RegisterSensor(UObject* ProviderComponent)
     USensorBaseComponent* SensorBase = nullptr;
 
     // Try casting to each sensor type that implements ISensorDataProvider
-    if (URGBCameraComponent* RGBCam = Cast<URGBCameraComponent>(ProviderComponent))
+    if (URGBDCameraComponent* RGBCam = Cast<URGBDCameraComponent>(ProviderComponent))
     {
         Provider = static_cast<ISensorDataProvider*>(RGBCam);
         SensorBase = RGBCam;
@@ -46,11 +45,6 @@ void FSensorRegistry::RegisterSensor(UObject* ProviderComponent)
     {
         Provider = static_cast<ISensorDataProvider*>(LidarCam);
         SensorBase = LidarCam;
-    }
-    else if (UDepthCameraComponent* DepthCam = Cast<UDepthCameraComponent>(ProviderComponent))
-    {
-        Provider = static_cast<ISensorDataProvider*>(DepthCam);
-        SensorBase = DepthCam;
     }
     else if (UNormalCameraComponent* NormalCam = Cast<UNormalCameraComponent>(ProviderComponent))
     {
@@ -213,4 +207,29 @@ void FSensorRegistry::RemoveInvalidEntries_Internal()
     {
         UE_LOG(LogSensorRegistry, Warning, TEXT("Cleaned up %d invalid sensor entries"), RemovedCount);
     }
+}
+
+ISensorDataProvider* FSensorRegistryEntry::GetProvider() const
+{
+    if (UObject* Component = ProviderComponent.Get())
+    {
+        // Try casting to each sensor type that implements ISensorDataProvider
+        if (URGBDCameraComponent* RGBCam = Cast<URGBDCameraComponent>(Component))
+        {
+            return static_cast<ISensorDataProvider*>(RGBCam);
+        }
+        if (ULidarComponent* LidarCam = Cast<ULidarComponent>(Component))
+        {
+            return static_cast<ISensorDataProvider*>(LidarCam);
+        }
+        if (UNormalCameraComponent* NormalCam = Cast<UNormalCameraComponent>(Component))
+        {
+            return static_cast<ISensorDataProvider*>(NormalCam);
+        }
+        if (USegmentationCameraComponent* SegCam = Cast<USegmentationCameraComponent>(Component))
+        {
+            return static_cast<ISensorDataProvider*>(SegCam);
+        }
+    }
+    return nullptr;
 }

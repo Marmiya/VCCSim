@@ -51,35 +51,26 @@ public:
     UFUNCTION(BlueprintCallable, Category = "SegmentationCamera")
     void CaptureSegmentationScene();
 
-    virtual UTextureRenderTarget2D* GetRenderTarget() const override { return SegmentationRenderTarget; }
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SegmentationCamera|Config")
+    UMaterialInterface* SegmentationMaterial = Cast<UMaterialInterface>(
+        StaticLoadObject(UMaterialInterface::StaticClass(), nullptr,
+            TEXT("/VCCSim/Materials/M_Segmentation.M_Segmentation")));
+    
+    virtual UTextureRenderTarget2D* GetRenderTarget() const override { return RenderTarget; }
 
     // For GRPC call
     void AsyncGetSegmentationImageData(TFunction<void(const TArray<FColor>&)> Callback);
 
     // ISensorDataProvider interface
-    virtual TFuture<FSensorDataPacket> CaptureDataAsync() override;
     virtual FIntPoint GetResolution() const override { return FIntPoint(Width, Height); }
     virtual ESensorType GetSensorType() const override { return ESensorType::SegmentationCamera; }
     virtual AActor* GetOwnerActor() const override { return ParentActor; }
-
-    // RDG interface
-    virtual void ContributeToRDGPass(FSensorViewInfo& OutViewInfo) override;
-    virtual int32 GetMRTSlot() const override { return 3; }
 
 protected:
     virtual void InitializeRenderTargets() override;
     virtual void SetCaptureComponent() const override;
     void ProcessSegmentationTexture(TFunction<void()> OnComplete);
     void ProcessSegmentationTextureParam(TFunction<void(const TArray<FColor>&)> OnComplete);
-
-public:
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SegmentationCamera|Config")
-    UMaterialInterface* SegmentationMaterial = Cast<UMaterialInterface>(
-        StaticLoadObject(UMaterialInterface::StaticClass(), nullptr,
-            TEXT("/VCCSim/Materials/M_Segmentation.M_Segmentation")));
-
-    UPROPERTY()
-    UTextureRenderTarget2D* SegmentationRenderTarget = nullptr;
 
 private:
     TArray<FColor> SegmentationData;
@@ -92,7 +83,7 @@ private:
 template<typename CallbackType>
 void USegmentationCameraComponent::ProcessSegTextureTemplate(CallbackType&& Callback)
 {
-    if (!SegmentationRenderTarget) { UE_LOG(LogTemp, Error, TEXT("SegmentationRenderTarget is null!")); return; }
+    if (!RenderTarget) { UE_LOG(LogTemp, Error, TEXT("SegmentationRenderTarget is null!")); return; }
 
     if (SegmentationData.Num() != Width * Height)
     {
@@ -109,7 +100,7 @@ void USegmentationCameraComponent::ProcessSegTextureTemplate(CallbackType&& Call
 
     auto SharedCallback = MakeShared<std::decay_t<CallbackType>>(std::forward<CallbackType>(Callback));
 
-    UTextureRenderTarget2D* RT = SegmentationRenderTarget;
+    UTextureRenderTarget2D* RT = RenderTarget;
 
     ENQUEUE_RENDER_COMMAND(ReadSurfaceCommand)(
         [RT, Context, SharedCallback](FRHICommandListImmediate& RHICmdList)

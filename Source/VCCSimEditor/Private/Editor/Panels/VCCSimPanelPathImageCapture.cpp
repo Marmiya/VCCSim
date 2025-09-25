@@ -22,7 +22,6 @@ DEFINE_LOG_CATEGORY_STATIC(LogPathImageCapture, Log, All);
 #include "Utils/VCCSimUIHelpers.h"
 #include "Pawns/FlashPawn.h"
 #include "Sensors/CameraSensor.h"
-#include "Sensors/DepthCamera.h"
 #include "Sensors/SegmentCamera.h"
 #include "Sensors/NormalCamera.h"
 #include "Simulation/PathPlanner.h"
@@ -736,8 +735,8 @@ void FVCCSimPanelPathImageCapture::SaveRGB(int32 PoseIndex, bool& bAnyCaptured)
     }
     
     // Get the RGB cameras
-    TArray<URGBCameraComponent*> RGBCameras;
-    SelectedFlashPawn->GetComponents<URGBCameraComponent>(RGBCameras);
+    TArray<URGBDCameraComponent*> RGBCameras;
+    SelectedFlashPawn->GetComponents<URGBDCameraComponent>(RGBCameras);
     *JobNum += RGBCameras.Num();
     
     // Get the editor viewport
@@ -760,7 +759,7 @@ void FVCCSimPanelPathImageCapture::SaveRGB(int32 PoseIndex, bool& bAnyCaptured)
     
     for (int32 i = 0; i < RGBCameras.Num(); ++i)
     {
-        URGBCameraComponent* Camera = RGBCameras[i];
+        URGBDCameraComponent* Camera = RGBCameras[i];
         
         if (Camera)
         {
@@ -823,13 +822,13 @@ void FVCCSimPanelPathImageCapture::SaveDepth(int32 PoseIndex, bool& bAnyCaptured
         return;
     }
     
-    TArray<UDepthCameraComponent*> DepthCameras;
-    SelectedFlashPawn->GetComponents<UDepthCameraComponent>(DepthCameras);
+    TArray<URGBDCameraComponent*> DepthCameras;
+    SelectedFlashPawn->GetComponents<URGBDCameraComponent>(DepthCameras);
     *JobNum += DepthCameras.Num();
 
     for (int32 i = 0; i < DepthCameras.Num(); ++i)
     {
-        UDepthCameraComponent* Camera = DepthCameras[i];
+        URGBDCameraComponent* Camera = DepthCameras[i];
         
         if (Camera)
         {
@@ -851,19 +850,20 @@ void FVCCSimPanelPathImageCapture::SaveDepth(int32 PoseIndex, bool& bAnyCaptured
             
             FIntPoint Size = {Camera->GetImageSize().first,
                 Camera->GetImageSize().second};
-            
-            Camera->AsyncGetDepthImageData(
-           [DepthFilename, Size, JobNum = this->JobNum]
-           (const TArray<FFloat16Color>& ImageData)
-           {
-               float DepthScale = 1.0f;
 
-               (new FAutoDeleteAsyncTask<FAsyncDepth16SaveTask>(
-                   ImageData, 
-                   Size, 
-                   DepthFilename, 
-                   DepthScale))
-               ->StartBackgroundTask();
+            Camera->AsyncGetRGBDImageData(
+           [DepthFilename, Size, JobNum = this->JobNum]
+           (const TArray<FLinearColor>& ImageData)
+           {
+               TArray<float> DepthValues;
+               DepthValues.SetNum(ImageData.Num());
+               for (int32 idx = 0; idx < ImageData.Num(); ++idx)
+               {
+                   DepthValues[idx] = ImageData[idx].A;
+               }
+
+               (new FAutoDeleteAsyncTask<FAsyncDepthSaveTask>
+                   (DepthValues, Size, DepthFilename))->StartBackgroundTask();
 
                *JobNum -= 1;
            });

@@ -19,7 +19,6 @@ DEFINE_LOG_CATEGORY_STATIC(LogSensorFactory, Log, All);
 
 #include "Sensors/SensorFactory.h"
 #include "Sensors/LidarSensor.h"
-#include "Sensors/DepthCamera.h"
 #include "Sensors/CameraSensor.h"
 
 UPrimitiveComponent* FSensorFactory::CreateSensor(
@@ -57,49 +56,27 @@ UPrimitiveComponent* FSensorFactory::CreateSensor(
 			}
 			break;
 		}
-	case ESensorType::DepthCamera:
+	case ESensorType::RGBDCamera:
 		{
-			const FDepthCameraConfig* DepthConfig =
-				static_cast<const FDepthCameraConfig*>(&Config);
-			if (!DepthConfig)
-			{
-				UE_LOG(LogSensorFactory, Error, TEXT("FSensorFactory::CreateSensor: "
-								"Invalid config type for Depth Camera sensor!"));
-				return nullptr;
-			}
-
-			if (auto DepthSensor = NewObject<UDepthCameraComponent>(Owner, Name))
-			{
-				Sensor = DepthSensor;
-			}
-			else
-			{
-				UE_LOG(LogSensorFactory, Error, TEXT("FSensorFactory::CreateSensor: "
-								"Failed to create Depth Camera sensor!"));
-			}
-			break;
-		}
-	case ESensorType::RGBCamera:
-		{
-			const FRGBCameraConfig* CameraConfig =
-				static_cast<const FRGBCameraConfig*>(&Config);
+			const FRGBDCameraConfig* CameraConfig =
+				static_cast<const FRGBDCameraConfig*>(&Config);
 			if (!CameraConfig)
 			{
 				UE_LOG(LogSensorFactory, Error, TEXT("FSensorFactory::CreateSensor: "
-								"Invalid config type for RGB Camera sensor!"));
+								"Invalid config type for RGBD Camera sensor!"));
 				return nullptr;
 			}
 
-			if (auto CameraSensor = NewObject<URGBCameraComponent>(Owner, Name))
+			if (auto CameraSensor = NewObject<URGBDCameraComponent>(Owner, Name))
 			{
 				Sensor = CameraSensor;
 			}
 			else
 			{
 				UE_LOG(LogSensorFactory, Error, TEXT("FSensorFactory::CreateSensor: "
-								"Failed to create RGB Camera sensor!"));
+								"Failed to create RGBD Camera sensor!"));
 			}
-			
+
 			break;
 		}
 	default:

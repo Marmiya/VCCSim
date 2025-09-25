@@ -18,11 +18,9 @@
 DEFINE_LOG_CATEGORY_STATIC(LogSegmentCamera, Log, All);
 
 #include "Sensors/SegmentCamera.h"
-#include "DataStructures/RecordData.h"
 #include "RenderingThread.h"
 #include "Async/AsyncWork.h"
 #include "Windows/WindowsHWrapper.h"
-#include "Kismet/GameplayStatics.h"
 
 USegmentationCameraComponent::USegmentationCameraComponent()
 {
@@ -57,52 +55,11 @@ void USegmentationCameraComponent::Configure(const FSensorConfig& Config)
     }
 }
 
-TFuture<FSensorDataPacket> USegmentationCameraComponent::CaptureDataAsync()
-{
-    TSharedPtr<TPromise<FSensorDataPacket>> Promise = MakeShared<TPromise<FSensorDataPacket>>();
-    TFuture<FSensorDataPacket> Future = Promise->GetFuture();
-
-    AsyncTask(ENamedThreads::GameThread, [this, Promise]()
-    {
-        FSensorDataPacket Packet;
-        Packet.Type = ESensorType::SegmentationCamera;
-        Packet.SensorIndex = GetSensorIndex();
-        Packet.OwnerActor = GetOwnerActor();
-        Packet.Timestamp = FPlatformTime::Seconds();
-
-        if (!CheckComponentAndRenderTarget())
-        {
-            Packet.bValid = false;
-            Promise->SetValue(Packet);
-            return;
-        }
-
-        CaptureSegmentationScene();
-
-        ProcessSegmentationTextureParam([this, Promise, Packet](const TArray<FColor>& CapturedSegmentationData) mutable
-        {
-            Async(EAsyncExecution::TaskGraph, [Promise, Packet, CapturedSegmentationData, Width = this->Width, Height = this->Height]() mutable
-            {
-                auto SegmentationData = MakeShared<FSegmentationCameraData>();
-                SegmentationData->Timestamp = Packet.Timestamp;
-                SegmentationData->Width = Width;
-                SegmentationData->Height = Height;
-                SegmentationData->Data = CapturedSegmentationData;
-
-                Packet.Data = SegmentationData;
-                Packet.bValid = true;
-                Promise->SetValue(Packet);
-            });
-        });
-    });
-
-    return Future;
-}
-
 void USegmentationCameraComponent::InitializeRenderTargets()
 {
-    SegmentationRenderTarget = NewObject<UTextureRenderTarget2D>(this);
-    SegmentationRenderTarget->InitCustomFormat(Width, Height, PF_B8G8R8A8, true);
+    RenderTarget = NewObject<UTextureRenderTarget2D>(this);
+    RenderTarget->InitCustomFormat(Width, Height, PF_B8G8R8A8, true);
+    RenderTarget->RenderTargetFormat = RTF_RGBA8;
 }
 
 void USegmentationCameraComponent::SetCaptureComponent() const
@@ -112,12 +69,8 @@ void USegmentationCameraComponent::SetCaptureComponent() const
     if (CaptureComponent)
     {
         CaptureComponent->PrimitiveRenderMode = ESceneCapturePrimitiveRenderMode::PRM_RenderScenePrimitives;
-        CaptureComponent->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
-        CaptureComponent->PostProcessSettings.bOverride_AutoExposureMinBrightness = true;
-        CaptureComponent->PostProcessSettings.bOverride_AutoExposureMaxBrightness = true;
-        CaptureComponent->PostProcessSettings.AutoExposureMinBrightness = 1.0f;
-        CaptureComponent->PostProcessSettings.AutoExposureMaxBrightness = 1.0f;
-        CaptureComponent->TextureTarget = SegmentationRenderTarget;
+        CaptureComponent->CaptureSource = SCS_FinalColorLDR;
+        CaptureComponent->TextureTarget = RenderTarget;
 
         // Apply segmentation material for proper segmentation rendering
         if (SegmentationMaterial)
@@ -182,26 +135,4 @@ void USegmentationCameraComponent::ProcessSegmentationTextureParam(
     TFunction<void(const TArray<FColor>&)> OnComplete)
 {
     ProcessSegTextureTemplate(std::move(OnComplete));
-}
-
-void USegmentationCameraComponent::ContributeToRDGPass(FSensorViewInfo& OutViewInfo)
-{
-    OutViewInfo.SensorType = ESensorType::SegmentationCamera;
-    OutViewInfo.MRTSlot = GetMRTSlot();
-
-    FMinimalViewInfo ViewInfo;
-    CaptureComponent->GetCameraView(0.f, ViewInfo);
-    FMatrix ViewMatrix, ProjectionMatrix, ViewProjectionMatrix;
-    UGameplayStatics::GetViewProjectionMatrix(
-        ViewInfo,
-        ViewMatrix,
-        ProjectionMatrix,
-        ViewProjectionMatrix);
-    OutViewInfo.ViewMatrix = ViewMatrix;
-    OutViewInfo.ProjectionMatrix = ProjectionMatrix;OutViewInfo.CaptureSource = ESceneCaptureSource::SCS_Normal;
-
-    OutViewInfo.CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
-    OutViewInfo.Resolution = FIntPoint(Width, Height);
-    OutViewInfo.Provider = this;
-    OutViewInfo.CustomMaterial = SegmentationMaterial;
 }

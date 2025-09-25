@@ -22,7 +22,7 @@
 
 class ASceneAnalysisManager;
 class FVCCSimPanelSelection;
-class URGBCameraComponent;
+class URGBDCameraComponent;
 
 /**
  * Scene Analysis Panel - Modular panel for scene analysis functionality

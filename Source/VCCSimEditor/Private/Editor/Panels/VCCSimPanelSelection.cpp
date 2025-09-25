@@ -24,7 +24,6 @@ DEFINE_LOG_CATEGORY_STATIC(LogSelection, Log, All);
 #include "EngineUtils.h"
 #include "Pawns/FlashPawn.h"
 #include "Sensors/CameraSensor.h"
-#include "Sensors/DepthCamera.h"
 #include "Sensors/SegmentCamera.h"
 #include "Sensors/NormalCamera.h"
 
@@ -630,13 +629,13 @@ void FVCCSimPanelSelection::RefreshCameraAvailability()
     }
     
     // Check for camera components
-    TArray<URGBCameraComponent*> RGBCameras;
-    TArray<UDepthCameraComponent*> DepthCameras;
+    TArray<URGBDCameraComponent*> RGBCameras;
+    TArray<URGBDCameraComponent*> DepthCameras;
     TArray<USegmentationCameraComponent*> SegmentationCameras;
     TArray<UNormalCameraComponent*> NormalCameras;
     
-    SelectedFlashPawn->GetComponents<URGBCameraComponent>(RGBCameras);
-    SelectedFlashPawn->GetComponents<UDepthCameraComponent>(DepthCameras);
+    SelectedFlashPawn->GetComponents<URGBDCameraComponent>(RGBCameras);
+    SelectedFlashPawn->GetComponents<URGBDCameraComponent>(DepthCameras);
     SelectedFlashPawn->GetComponents<USegmentationCameraComponent>(SegmentationCameras);
     SelectedFlashPawn->GetComponents<UNormalCameraComponent>(NormalCameras);
     
@@ -682,8 +681,8 @@ float FVCCSimPanelSelection::GetActiveCameraFOV() const
     // Priority order: RGB -> Depth -> Segmentation -> Normal
     if (bHasRGBCamera && bUseRGBCamera)
     {
-        TArray<URGBCameraComponent*> RGBCameras;
-        SelectedFlashPawn->GetComponents<URGBCameraComponent>(RGBCameras);
+        TArray<URGBDCameraComponent*> RGBCameras;
+        SelectedFlashPawn->GetComponents<URGBDCameraComponent>(RGBCameras);
         if (RGBCameras.Num() > 0 && RGBCameras[0])
         {
             return RGBCameras[0]->FOV;
@@ -692,8 +691,8 @@ float FVCCSimPanelSelection::GetActiveCameraFOV() const
     
     if (bHasDepthCamera && bUseDepthCamera)
     {
-        TArray<UDepthCameraComponent*> DepthCameras;
-        SelectedFlashPawn->GetComponents<UDepthCameraComponent>(DepthCameras);
+        TArray<URGBDCameraComponent*> DepthCameras;
+        SelectedFlashPawn->GetComponents<URGBDCameraComponent>(DepthCameras);
         if (DepthCameras.Num() > 0 && DepthCameras[0])
         {
             return DepthCameras[0]->FOV;
@@ -733,8 +732,8 @@ FIntPoint FVCCSimPanelSelection::GetActiveCameraResolution() const
     // Priority order: RGB -> Depth -> Segmentation -> Normal
     if (bHasRGBCamera && bUseRGBCamera)
     {
-        TArray<URGBCameraComponent*> RGBCameras;
-        SelectedFlashPawn->GetComponents<URGBCameraComponent>(RGBCameras);
+        TArray<URGBDCameraComponent*> RGBCameras;
+        SelectedFlashPawn->GetComponents<URGBDCameraComponent>(RGBCameras);
         if (RGBCameras.Num() > 0 && RGBCameras[0])
         {
             return FIntPoint(RGBCameras[0]->Width, RGBCameras[0]->Height);
@@ -743,8 +742,8 @@ FIntPoint FVCCSimPanelSelection::GetActiveCameraResolution() const
     
     if (bHasDepthCamera && bUseDepthCamera)
     {
-        TArray<UDepthCameraComponent*> DepthCameras;
-        SelectedFlashPawn->GetComponents<UDepthCameraComponent>(DepthCameras);
+        TArray<URGBDCameraComponent*> DepthCameras;
+        SelectedFlashPawn->GetComponents<URGBDCameraComponent>(DepthCameras);
         if (DepthCameras.Num() > 0 && DepthCameras[0])
         {
             return FIntPoint(DepthCameras[0]->Width, DepthCameras[0]->Height);

@@ -178,29 +178,6 @@ void ULidarComponent::InitSensor()
 	}
 }
 
-TFuture<FSensorDataPacket> ULidarComponent::CaptureDataAsync()
-{
-	return Async(EAsyncExecution::TaskGraph, [this]() -> FSensorDataPacket
-	{
-		FSensorDataPacket Packet;
-		Packet.Type = ESensorType::Lidar;
-		Packet.SensorIndex = GetSensorIndex();
-		Packet.OwnerActor = GetOwnerActor();
-		Packet.Timestamp = FPlatformTime::Seconds();
-
-		TArray<FVector3f> LidarPoints = PerformLineTraces();
-
-		auto LidarData = MakeShared<FLiDARData>();
-		LidarData->Timestamp = Packet.Timestamp;
-		LidarData->Data = MoveTemp(LidarPoints);
-
-		Packet.Data = LidarData;
-		Packet.bValid = true;
-
-		return Packet;
-	});
-}
-
 TArray<FVector3f> ULidarComponent::PerformLineTraces(FVCCSimOdom* Odom)
 {
     if (!GetWorld())
@@ -403,19 +380,4 @@ TArray<FTransform> ULidarComponent::GetHitTransforms() const
 		[](const FLiDARPoint& Point) { return FTransform(Point.Position); }
 	);
 	return HitTransforms;
-}
-
-void ULidarComponent::ContributeToRDGPass(FSensorViewInfo& OutViewInfo)
-{
-	OutViewInfo.SensorType = ESensorType::Lidar;
-	OutViewInfo.MRTSlot = GetMRTSlot();
-
-	FVector ComponentLocation = GetComponentLocation();
-	FRotator ComponentRotation = GetComponentRotation();
-	OutViewInfo.ViewMatrix = FInverseRotationMatrix(ComponentRotation) * FTranslationMatrix(-ComponentLocation);
-
-	OutViewInfo.ProjectionMatrix = FMatrix::Identity;
-	OutViewInfo.CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
-	OutViewInfo.Resolution = FIntPoint(512, 512);
-	OutViewInfo.Provider = this;
 }

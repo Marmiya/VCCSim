@@ -17,7 +17,6 @@
 
 #include "Utils/ConfigParser.h"
 #include "Sensors/LidarSensor.h"
-#include "Sensors/DepthCamera.h"
 #include "Sensors/CameraSensor.h"
 #include "Sensors/SegmentCamera.h"
 #include "Sensors/NormalCamera.h"
@@ -102,9 +101,9 @@ namespace ConfigParserHelpers
 			return Config;
 		}
 
-		if (SensorType == "DepthCamera")
+		if (SensorType == "RGBDCamera")
 		{
-			auto Config = MakeShared<FDepthCameraConfig>();
+			auto Config = MakeShared<FRGBDCameraConfig>();
 			if (ConfigTable)
 			{
 				Config->RecordInterval = (*ConfigTable)["RecordInterval"].value_or(Config->RecordInterval);
@@ -113,23 +112,8 @@ namespace ConfigParserHelpers
 				Config->MinRange = (*ConfigTable)["MinRange"].value_or(Config->MinRange);
 				Config->Width = (*ConfigTable)["Width"].value_or(Config->Width);
 				Config->Height = (*ConfigTable)["Height"].value_or(Config->Height);
-				Config->bOrthographic = (*ConfigTable)["bOrthographic"].value_or(Config->bOrthographic);
-				Config->OrthoWidth = (*ConfigTable)["OrthoWidth"].value_or(Config->OrthoWidth);
-			}
-			return Config;
-		}
-
-		if (SensorType == "RGBCamera")
-		{
-			auto Config = MakeShared<FRGBCameraConfig>();
-			if (ConfigTable)
-			{
-				Config->RecordInterval = (*ConfigTable)["RecordInterval"].value_or(Config->RecordInterval);
-				Config->FOV = (*ConfigTable)["FOV"].value_or(Config->FOV);
-				Config->Width = (*ConfigTable)["Width"].value_or(Config->Width);
-				Config->Height = (*ConfigTable)["Height"].value_or(Config->Height);
-				Config->bOrthographic = (*ConfigTable)["bOrthographic"].value_or(Config->bOrthographic);
-				Config->OrthoWidth = (*ConfigTable)["OrthoWidth"].value_or(Config->OrthoWidth);
+				Config->bSaveRGB = (*ConfigTable)["bSaveRGB"].value_or(Config->bSaveRGB);
+				Config->bSaveDepth = (*ConfigTable)["bSaveDepth"].value_or(Config->bSaveDepth);
 			}
 			return Config;
 		}
@@ -167,11 +151,10 @@ namespace ConfigParserHelpers
 	ESensorType StringToSensorType(const std::string& SensorType)
 	{
 		if (SensorType == "Lidar") return ESensorType::Lidar;
-		if (SensorType == "DepthCamera") return ESensorType::DepthCamera;
-		if (SensorType == "RGBCamera") return ESensorType::RGBCamera;
+		if (SensorType == "RGBDCamera") return ESensorType::RGBDCamera;
 		if (SensorType == "SegmentationCamera") return ESensorType::SegmentationCamera;
 		if (SensorType == "NormalCamera") return ESensorType::NormalCamera;
-		return ESensorType::RGBCamera;
+		return ESensorType::RGBDCamera;
 	}
 }
 

@@ -16,6 +16,7 @@
 */
 
 #include "Utils/ImageProcesser.h"
+#include "Sensors/CameraSensor.h"
 #include "ImageUtils.h"
 #include "IImageWrapper.h"
 #include "IImageWrapperModule.h"
@@ -34,19 +35,17 @@ void FAsyncImageSaveTask::DoWork()
     }
 }
 
-void FAsyncDepth16SaveTask::DoWork()
+void FAsyncDepthSaveTask::DoWork()
 {
-    // Convert FFloat16Color depth data to 16-bit grayscale
+    // Convert depth data to 16-bit grayscale
     TArray<uint16> DepthData16;
     DepthData16.Reserve(DepthPixels.Num());
-    
-    for (const FFloat16Color& DepthPixel : DepthPixels)
+
+    for (const float& DepthPixel : DepthPixels)
     {
-        // Extract depth value from R channel and scale to 16-bit range
-        float DepthValue = DepthPixel.R.GetFloat() * DepthScale;
         uint16 Depth16 = FMath::Clamp(
-            FMath::RoundToInt(DepthValue), 
-            0, 
+            FMath::RoundToInt(DepthPixel),
+            0,
             65535
         );
         DepthData16.Add(Depth16);
@@ -70,7 +69,6 @@ void FAsyncDepth16SaveTask::DoWork()
             RawData.Add((Value >> 8) & 0xFF); // High byte
         }
         
-        // Set the image data (16-bit grayscale)
         if (ImageWrapper->SetRaw(
             RawData.GetData(), 
             RawData.Num(), 

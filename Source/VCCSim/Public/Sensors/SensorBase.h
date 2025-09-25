@@ -19,7 +19,6 @@
 
 #include "CoreMinimal.h"
 #include "Components/PrimitiveComponent.h"
-#include "Engine/TextureRenderTarget2D.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "SensorBase.generated.h"
 
@@ -27,8 +26,7 @@
 enum class ESensorType : uint8
 {
 	Lidar = 3,
-	RGBCamera = 4,
-	DepthCamera = 5,
+	RGBDCamera = 4,
 	NormalCamera = 6,
 	SegmentationCamera = 7
 };
@@ -53,8 +51,6 @@ public:
 	float FOV = 90.0f;
 	int32 Width = 512;
 	int32 Height = 512;
-	bool bOrthographic = false;
-	float OrthoWidth = 512.0f;
 };
 
 UCLASS(Abstract, ClassGroup = (VCCSIM), meta = (BlueprintSpawnableComponent))
@@ -65,7 +61,7 @@ class VCCSIM_API USensorBaseComponent : public UPrimitiveComponent
 public:
 	USensorBaseComponent();
 
-	virtual ESensorType GetSensorType() const PURE_VIRTUAL(USensorBaseComponent::GetSensorType, return ESensorType::RGBCamera;);
+	virtual ESensorType GetSensorType() const PURE_VIRTUAL(USensorBaseComponent::GetSensorType, return ESensorType::RGBDCamera;);
 
 	UFUNCTION(BlueprintCallable, Category = "Sensor")
 	virtual void SetRecordState(bool RState) { RecordState = RState; }
@@ -111,7 +107,6 @@ public:
 	virtual void SetCaptureComponent() const;
 	virtual std::pair<int32, int32> GetImageSize() const { return {Width, Height}; }
 	virtual void Configure(const FSensorConfig& Config) override {};
-	virtual UTextureRenderTarget2D* GetRenderTarget() const PURE_VIRTUAL(UCameraBaseComponent::GetRenderTarget, return nullptr;);
 
 	void ComputeIntrinsics();
 	FMatrix44f GetCameraIntrinsics() const { return CameraIntrinsics; }
@@ -122,22 +117,16 @@ protected:
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Config")
 	float FOV = 90.0f;
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Config")
 	int32 Width = 512;
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Config")
 	int32 Height = 512;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Config")
-	bool bOrthographic = false;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Config", meta = (EditCondition = "bOrthographic"))
-	float OrthoWidth = 512.0f;
 
 protected:
 	UPROPERTY()
 	USceneCaptureComponent2D* CaptureComponent = nullptr;
+	UPROPERTY()
+	UTextureRenderTarget2D* RenderTarget = nullptr;
 
 	FMatrix44f CameraIntrinsics;
 };

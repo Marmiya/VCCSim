@@ -23,7 +23,6 @@
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "Sensors/CameraSensor.h"
-#include "Sensors/DepthCamera.h"
 #include "Sensors/SegmentCamera.h"
 #include "Sensors/NormalCamera.h"
 #include "EngineUtils.h"
@@ -403,12 +402,12 @@ void UVCCSIMDisplayWidget::SetCameraContext(EVCCSimViewType ViewType,
     }
 }
 
-void UVCCSIMDisplayWidget::SetDepthContext(UTextureRenderTarget2D* DepthTexture, UDepthCameraComponent* InCamera)
+void UVCCSIMDisplayWidget::SetDepthContext(UTextureRenderTarget2D* DepthTexture, URGBDCameraComponent* InCamera)
 {
     SetCameraContext(EVCCSimViewType::Depth, DepthTexture, InCamera);
 }
 
-void UVCCSIMDisplayWidget::SetRGBContext(UTextureRenderTarget2D* RGBTexture, URGBCameraComponent* InCamera)
+void UVCCSIMDisplayWidget::SetRGBContext(UTextureRenderTarget2D* RGBTexture, URGBDCameraComponent* InCamera)
 {
     SetCameraContext(EVCCSimViewType::RGB, RGBTexture, InCamera);
 }
@@ -646,16 +645,16 @@ void UVCCSIMDisplayWidget::ProcessCaptureByType(EVCCSimViewType ViewType)
     switch (ViewType)
     {
     case EVCCSimViewType::RGB:
-        if (auto* RGBCamera = Cast<URGBCameraComponent>(ViewData->CameraComponent))
+        if (auto* RGBCamera = Cast<URGBDCameraComponent>(ViewData->CameraComponent))
         {
-            RGBCamera->CaptureRGBScene();
+            RGBCamera->CaptureRGBDScene();
         }
         CaptureTypeName = TEXT("RGBCapture");
         break;
     case EVCCSimViewType::Depth:
-        if (auto* DepthCamera = Cast<UDepthCameraComponent>(ViewData->CameraComponent))
+        if (auto* DepthCamera = Cast<URGBDCameraComponent>(ViewData->CameraComponent))
         {
-            DepthCamera->CaptureDepthScene();
+            DepthCamera->CaptureRGBDScene();
         }
         CaptureTypeName = TEXT("DepthCapture");
         break;
@@ -721,19 +720,24 @@ void UVCCSIMDisplayWidget::SaveRenderTargetToDisk(
 
     if (ViewType == EVCCSimViewType::Depth)
     {
-        TArray<FFloat16Color> DepthPixels;
+        TArray<FLinearColor> DepthPixels;
         DepthPixels.SetNum(Size.X * Size.Y);
 
-        bool bReadDepthPixels = RTResource->ReadFloat16Pixels(DepthPixels);
+        bool bReadDepthPixels = RTResource->ReadLinearColorPixels(DepthPixels);
         if (!bReadDepthPixels)
         {
             UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("Failed to read depth pixels from RenderTarget."));
             return;
         }
 
-        float DepthScale = 1.0f;
-        (new FAutoDeleteAsyncTask<FAsyncDepth16SaveTask>(
-            DepthPixels, Size, FilePath, DepthScale))->StartBackgroundTask();
+        TArray<float> DepthPixelsFloat;
+        DepthPixelsFloat.SetNum(Size.X * Size.Y);
+        for (int32 i = 0; i < DepthPixels.Num(); ++i)
+        {
+            DepthPixelsFloat[i] = DepthPixels[i].A;
+        }
+        (new FAutoDeleteAsyncTask<FAsyncDepthSaveTask>(
+            DepthPixelsFloat, Size, FilePath))->StartBackgroundTask();
     }
     else
     {

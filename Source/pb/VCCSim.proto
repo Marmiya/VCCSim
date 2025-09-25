@@ -5,14 +5,35 @@ package VCCSim;
 // Attention: The coordinates are left-handed, x is forward, y is right, z is up
 
 // Public:
-message Point {
+message EmptyRequest {
+}
+
+message Vec3f {
   float x = 1;
   float y = 2;
   float z = 3;
 }
 
+message Rotation {
+  float x = 1;
+  float y = 2;
+  float z = 3;
+  float w = 4;
+}
+
+message Pose {
+  Vec3f position = 1;
+  Rotation rotation = 2;
+}
+
+message PoseYawOnly {
+  Vec3f position = 1;
+  float yaw = 2;
+}
+
+// ===== POINT CLOUD TYPES =====
 message PointWithColor {
-  Point point = 1;
+  Vec3f point = 1;
   uint32 color = 2;
 }
 
@@ -20,45 +41,17 @@ message PointCloudWithColor {
   repeated PointWithColor data = 1;
 }
 
-message EmptyRequest {
-}
-
-message Position {
-  float x = 1;
-  float y = 2;
-  float z = 3;
-}
-
-message Pose {
-  float x = 1;
-  float y = 2;
-  float z = 3;
-  float roll = 4;
-  float pitch = 5;
-  float yaw = 6;
-}
-
-message PoseOnlyYaw{
-  float x = 1;
-  float y = 2;
-  float z = 3;
-  float yaw = 4;
-}
-
-message twist{
-  float linear_x = 1;
-  float linear_y = 2;
-  float linear_z = 3;
-  float angular_x = 4;
-  float angular_y = 5;
-  float angular_z = 6;
+message Twist {
+  Vec3f linear = 1;   // Linear velocity (x, y, z)
+  Vec3f angular = 2;  // Angular velocity (x, y, z)
 }
 
 message Odometry {
   Pose pose = 1;
-  twist twist = 2;
+  Twist twist = 2;
 }
 
+// ===== COMMON TYPES =====
 message Status {
   bool status = 1;
 }
@@ -67,39 +60,15 @@ message RobotName {
   string name = 1;
 }
 
-enum Format {
-  PNG = 0;              // PNG compressed
-  JPEG = 1;             // JPEG compressed
-  RAW = 2;              // RAW uncompressed
+message IndexedCamera {
+  RobotName robot_name = 1;
+  uint32 index = 2;
 }
 
-message IndexedCamera{
-    RobotName robot_name = 1;
-    uint32 index = 2;
-    Format format = 3;
-}
+// ===== SENSOR DATA MESSAGES =====
 
-message ImageSize {
-  uint32 width = 1;
-  uint32 height = 2;
-}
-
-// Mesh:
-message MeshData {
-  bytes data = 1;           // Binary mesh data
-  uint32 format = 2;        // Format identifier
-  uint32 version = 3;       // Format version
-  bool simplified = 4;      // Whether mesh is simplified
-  Pose transform = 5;       // Mesh world transform
-}
-
-message MeshID {
-  uint32 id = 1; 
-}
-
-// Lidar:
 message LidarData {
-  repeated Point data = 1;
+  repeated Vec3f data = 1;
 }
 
 message LidarDataAndOdom {
@@ -107,37 +76,36 @@ message LidarDataAndOdom {
   Odometry odom = 2;
 }
 
-// Depth Camera:
-message DepthCameraPointData {
-  repeated Point data = 1;
-}
-
-message DepthCameraImageData {
-  repeated float data = 1;
-}
-
-// RGB Camera:
-message RGBCameraImageData {
+message RGBImageData {
   uint32 width = 1;
   uint32 height = 2;
-  bytes data = 3;         // Raw RGB data or compressed image data
-  Format format = 4;       // Image format
-  uint32 timestamp = 5;    
-
-  // Optional fields for additional metadata
-  optional uint32 bytes_per_pixel = 6;  // Usually 3 for RGB/BGR
-  optional uint32 stride = 7;           // Bytes per row (for alignment)
-  optional bool is_compressed = 8;      // Whether data is compressed
+  bytes data = 3;
+  uint32 timestamp = 5;
 }
 
-// Segmentation Camera:
-message SegmentationCameraImageData {
+message DepthImageData {
   uint32 width = 1;
   uint32 height = 2;
-  bytes data = 3;         // JPEG compressed image data
+  repeated float data = 3;
+  uint32 timestamp = 4;
 }
 
-// Drone:
+message DepthPointCloudData {
+  repeated Vec3f data = 1;
+  uint32 timestamp = 2;
+}
+
+message RGBDCombinedData {
+  uint32 width = 1;
+  uint32 height = 2;
+  uint32 timestamp = 3;
+  bytes rgb_data = 4;
+  repeated float depth_data = 5;
+}
+
+// ===== ROBOT CONTROL MESSAGES =====
+
+// Drone (6DOF - full pose with quaternion rotation)
 message DronePose {
   string name = 1;
   Pose pose = 2;
@@ -148,26 +116,15 @@ message DronePath {
   repeated Pose path = 2;
 }
 
-// Car:
+// Car (simplified - position + yaw only)
 message CarPose {
   string name = 1;
-  PoseOnlyYaw pose = 2;
+  PoseYawOnly pose = 2;
 }
 
 message CarPath {
   string name = 1;
-  repeated PoseOnlyYaw path = 2;
-}
-
-// Flash:
-message FlashPose {
-  string name = 1;
-  Pose pose = 2;
-}
-
-message FlashPath {
-  string name = 1;
-  repeated Pose path = 2;
+  repeated PoseYawOnly path = 2;
 }
 
 // Services:
@@ -181,43 +138,48 @@ service LidarService {
   rpc GetLiDARDataAndOdom (RobotName) returns (LidarDataAndOdom);
 }
 
-service DepthCameraService {
-  rpc GetDepthIndexedCameraPointData (IndexedCamera) returns (DepthCameraPointData);
-  rpc GetDepthIndexedCameraImageSize (IndexedCamera) returns (ImageSize);
-  rpc GetDepthIndexedCameraImageData (IndexedCamera) returns (DepthCameraImageData);
-  rpc GetDepthCameraOdom (RobotName) returns (Odometry);
-}
-
-service RGBCameraService {
-  rpc GetRGBCameraOdom (RobotName) returns (Odometry);
-  rpc GetRGBIndexedCameraImageData (IndexedCamera) returns (RGBCameraImageData);
-  rpc GetRGBIndexedCameraImageSize (IndexedCamera) returns (ImageSize);
+service RGBDCameraService {
+  rpc GetRGBData (IndexedCamera) returns (RGBImageData);
+  rpc GetDepthData (IndexedCamera) returns (DepthImageData);
+  rpc GetDepthPointCloud (IndexedCamera) returns (DepthPointCloudData);
+  rpc GetRGBDData (IndexedCamera) returns (RGBDCombinedData);
+  rpc GetCameraOdom (RobotName) returns (Odometry);
 }
 
 service SegmentationCameraService {
   rpc GetSegmentationCameraOdom (RobotName) returns (Odometry);
-  rpc GetSegmentationCameraImageData (IndexedCamera) returns (SegmentationCameraImageData);
-  rpc GetSegmentationCameraImageSize (IndexedCamera) returns (ImageSize);
+  rpc GetSegmentationCameraImageData (IndexedCamera) returns (RGBImageData);
+}
+
+service NormalCameraService {
+  rpc GetNormalCameraOdom (RobotName) returns (Odometry);
+  rpc GetNormalCameraImageData (IndexedCamera) returns (RGBImageData); //todo: change type
 }
 
 service DroneService {
   rpc GetDronePose (RobotName) returns (Pose);
   rpc SendDronePose (DronePose) returns (Status);
   rpc SendDronePath (DronePath) returns (Status);
+  rpc MoveToNext (RobotName) returns (Status);
 }
 
 service CarService {
   rpc GetCarOdom (RobotName) returns (Odometry);
   rpc SendCarPose (CarPose) returns (Status);
   rpc SendCarPath (CarPath) returns (Status);
+  rpc MoveToNext (RobotName) returns (Status); // todo: implement
 }
 
-service FlashService {
-  rpc GetFlashPose (RobotName) returns (Pose);
-  rpc SendFlashPose (FlashPose) returns (Status);
-  rpc SendFlashPath (FlashPath) returns (Status);
-  rpc CheckFlashReady (RobotName) returns (Status);
-  rpc MoveToNext (RobotName) returns (Status);
+message MeshData {
+  bytes data = 1;           // Binary mesh data
+  uint32 format = 2;        // Format identifier
+  uint32 version = 3;       // Format version
+  bool simplified = 4;      // Whether mesh is simplified
+  Pose transform = 5;       // Mesh world transform
+}
+
+message MeshID {
+  uint32 id = 1;
 }
 
 service MeshService {
@@ -231,7 +193,7 @@ service PointCloudService {
 }
 
 service SafeCheckService {
-  rpc CheckSafetyPawn (RobotName) returns (Status);  // todo
-  rpc CheckSafetyPosition (Position) returns (Status);  // todo
-  rpc CheckSafetyDronePath (DronePath) returns (Status);  // todo
+  rpc CheckSafetyPawn (RobotName) returns (Status); // todo: implement
+  rpc CheckSafetyPosition (Vec3f) returns (Status); // todo: implement
+  rpc CheckSafetyDronePath (DronePath) returns (Status); // todo: implement
 }

@@ -59,10 +59,9 @@ void UCameraBaseComponent::SetCaptureComponent() const
 	if (!CaptureComponent) return;
 
 	CaptureComponent->FOVAngle = FOV;
-	CaptureComponent->ProjectionType = bOrthographic ? ECameraProjectionMode::Orthographic : ECameraProjectionMode::Perspective;
-	CaptureComponent->OrthoWidth = OrthoWidth;
+	CaptureComponent->ProjectionType = ECameraProjectionMode::Perspective;
 
-	if (UTextureRenderTarget2D* RenderTarget = GetRenderTarget())
+	if (RenderTarget)
 	{
 		CaptureComponent->TextureTarget = RenderTarget;
 	}
@@ -74,34 +73,21 @@ void UCameraBaseComponent::SetCaptureComponent() const
 
 bool UCameraBaseComponent::CheckComponentAndRenderTarget() const
 {
-	return CaptureComponent && GetRenderTarget();
+	return CaptureComponent && RenderTarget;
 }
 
 void UCameraBaseComponent::ComputeIntrinsics()
 {
-	if (bOrthographic)
-	{
-		const float Scale = 2.0f / OrthoWidth;
-		CameraIntrinsics = FMatrix44f(
-			FPlane4f(Scale, 0.0f, 0.0f, 0.0f),
-			FPlane4f(0.0f, Scale, 0.0f, 0.0f),
-			FPlane4f(0.0f, 0.0f, 1.0f, 0.0f),
-			FPlane4f(0.0f, 0.0f, 0.0f, 1.0f)
-		);
-	}
-	else
-	{
-		const float HalfFOVRad = FMath::DegreesToRadians(FOV / 2.0f);
-		const float FocalLengthX = Width / (2.0f * FMath::Tan(HalfFOVRad));
-		const float FocalLengthY = Height / (2.0f * FMath::Tan(HalfFOVRad));
-		const float CenterX = Width / 2.0f;
-		const float CenterY = Height / 2.0f;
+	const float HalfFOVRad = FMath::DegreesToRadians(FOV / 2.0f);
+	const float FocalLengthX = Width / (2.0f * FMath::Tan(HalfFOVRad));
+	const float FocalLengthY = Height / (2.0f * FMath::Tan(HalfFOVRad));
+	const float CenterX = Width / 2.0f;
+	const float CenterY = Height / 2.0f;
 
-		CameraIntrinsics = FMatrix44f(
-			FPlane4f(FocalLengthX, 0.0f, CenterX, 0.0f),
-			FPlane4f(0.0f, FocalLengthY, CenterY, 0.0f),
-			FPlane4f(0.0f, 0.0f, 1.0f, 0.0f),
-			FPlane4f(0.0f, 0.0f, 0.0f, 1.0f)
-		);
-	}
+	CameraIntrinsics = FMatrix44f(
+		FPlane4f(FocalLengthX, 0.0f, CenterX, 0.0f),
+		FPlane4f(0.0f, FocalLengthY, CenterY, 0.0f),
+		FPlane4f(0.0f, 0.0f, 1.0f, 0.0f),
+		FPlane4f(0.0f, 0.0f, 0.0f, 1.0f)
+	);
 }

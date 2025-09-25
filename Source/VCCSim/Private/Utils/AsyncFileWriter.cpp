@@ -53,18 +53,15 @@ FAsyncFileWriter::~FAsyncFileWriter()
 
 void FAsyncFileWriter::WriteDataAsync(const FSensorDataPacket& DataPacket)
 {
-    UE_LOG(LogAsyncFileWriter, Log, TEXT("WriteDataAsync called for sensor type %d"),
-           static_cast<int32>(DataPacket.Type));
-
     if (bShouldStop.load())
     {
         UE_LOG(LogAsyncFileWriter, Warning, TEXT("WriteDataAsync: Writer is stopped, ignoring packet"));
         return;
     }
 
-    if (!DataPacket.bValid || !DataPacket.Data.IsValid())
+    if (!DataPacket.Data.IsValid())
     {
-        UE_LOG(LogAsyncFileWriter, Warning, TEXT("Invalid data packet received for writing"));
+        UE_LOG(LogAsyncFileWriter, Warning, TEXT("Invalid data packet Data received for writing"));
         return;
     }
 
@@ -131,72 +128,74 @@ void FAsyncFileWriter::WriteDataToFile(const FSensorDataPacket& DataPacket)
         return;
     }
 
-    FString FilePath = GetFilePathForSensor(DataPacket);
-
     switch (DataPacket.Type)
     {
-        case ESensorType::RGBCamera:
+        case ESensorType::RGBDCamera:
         {
-            if (const FRGBCameraData* RGBData = static_cast<const FRGBCameraData*>(DataPacket.Data.Get()))
+            if (const FRGBDCameraData* RGBData = static_cast<const FRGBDCameraData*>(DataPacket.Data.Get()))
             {
-                // Use proper PNG compression like ImageProcesser
-                TArray64<uint8> CompressedBitmap;
-                FImageUtils::PNGCompressImageArray(RGBData->Width, RGBData->Height, RGBData->Data, CompressedBitmap);
-
-                if (!FFileHelper::SaveArrayToFile(CompressedBitmap, *FilePath))
+                if (RGBData->RGBData.Num() != 0)
                 {
-                    UE_LOG(LogAsyncFileWriter, Error, TEXT("Failed to save RGB image to file: %s"), *FilePath);
+                    TArray64<uint8> CompressedBitmap;
+                    FImageUtils::PNGCompressImageArray(RGBData->Width, RGBData->Height, RGBData->RGBData, CompressedBitmap);
+
+                    FString FileName = FString::Printf(TEXT("%.9f%s"), DataPacket.Data->Timestamp, *FString(".png"));
+                    
+                    FFileHelper::SaveArrayToFile(CompressedBitmap,
+                        *FPaths::Combine(BasePath, DataPacket.OwnerActor->GetName(), "RGB", FileName));
                 }
-            }
-            break;
-        }
-
-        case ESensorType::DepthCamera:
-        {
-            if (const FDepthCameraData* DepthData = static_cast<const FDepthCameraData*>(DataPacket.Data.Get()))
-            {
-                // Convert float depth data to visual grayscale PNG
-                TArray<FColor> VisualPixels;
-                VisualPixels.Reserve(DepthData->Data.Num());
-
-                // Find depth range for normalization
-                float MinDepth = 0.0f, MaxDepth = 100.0f; // Default reasonable range
-                if (DepthData->Data.Num() > 0)
+                if (RGBData->DepthData.Num() != 0)
                 {
-                    TArray<float> ValidDepths = DepthData->Data;
-                    ValidDepths.RemoveAll([](float Depth) { return !FMath::IsFinite(Depth) || Depth < 0.0f; });
+                    // Convert FLinearColor depth data to 16-bit grayscale
+                    TArray<uint16> DepthData16;
+                    DepthData16.Reserve(RGBData->DepthData.Num());
 
-                    if (ValidDepths.Num() > 0)
+                    for (const float& DepthPixel : RGBData->DepthData)
                     {
-                        ValidDepths.Sort();
-                        MinDepth = ValidDepths[FMath::FloorToInt(ValidDepths.Num() * 0.02f)];
-                        MaxDepth = ValidDepths[FMath::FloorToInt(ValidDepths.Num() * 0.98f)];
-                        if (MaxDepth <= MinDepth) MaxDepth = MinDepth + 100.0f;
+                        uint16 Depth16 = FMath::Clamp(
+                            FMath::RoundToInt(DepthPixel),
+                            0,
+                            65535
+                        );
+                        DepthData16.Add(Depth16);
+                    }
+                    
+                    // Get image wrapper module
+                    IImageWrapperModule& ImageWrapperModule =
+                        FModuleManager::LoadModuleChecked<IImageWrapperModule>(FName("ImageWrapper"));
+                    TSharedPtr<IImageWrapper> ImageWrapper =
+                        ImageWrapperModule.CreateImageWrapper(EImageFormat::PNG);
+                    
+                    TArray<uint8> RawData;
+                    RawData.Reserve(DepthData16.Num() * 2);
+                    
+                    for (uint16 Value : DepthData16)
+                    {
+                        RawData.Add(Value & 0xFF);        // Low byte
+                        RawData.Add((Value >> 8) & 0xFF); // High byte
+                    }
+                    
+                    if (ImageWrapper->SetRaw(
+                        RawData.GetData(), 
+                        RawData.Num(), 
+                        RGBData->Width,
+                        RGBData->Height, 
+                        ERGBFormat::Gray, 
+                        16))
+                    {
+                        // Get compressed PNG data
+                        TArray64<uint8> CompressedData = ImageWrapper->GetCompressed();
+                        
+                        // Save to file
+                        FString FileName = FString::Printf(TEXT("%.9f%s"), DataPacket.Data->Timestamp, *FString(".png"));
+                        FFileHelper::SaveArrayToFile(CompressedData, 
+                            *FPaths::Combine(BasePath, DataPacket.OwnerActor->GetName(), "Depth", FileName));
                     }
                 }
-
-                // Convert to grayscale (closer = darker, farther = lighter)
-                for (float Depth : DepthData->Data)
-                {
-                    float ClampedDepth = FMath::Clamp(Depth, MinDepth, MaxDepth);
-                    float NormalizedDepth = (ClampedDepth - MinDepth) / (MaxDepth - MinDepth);
-                    float InvertedDepth = 1.0f - NormalizedDepth;
-                    uint8 GrayValue = FMath::RoundToInt(InvertedDepth * 255.0f);
-                    VisualPixels.Add(FColor(GrayValue, GrayValue, GrayValue, 255));
-                }
-
-                // Save as PNG
-                TArray64<uint8> CompressedBitmap;
-                FImageUtils::PNGCompressImageArray(DepthData->Width, DepthData->Height, VisualPixels, CompressedBitmap);
-
-                if (!FFileHelper::SaveArrayToFile(CompressedBitmap, *FilePath))
-                {
-                    UE_LOG(LogAsyncFileWriter, Error, TEXT("Failed to save depth image to file: %s"), *FilePath);
-                }
             }
             break;
         }
-
+        
         case ESensorType::NormalCamera:
         {
             if (const FNormalCameraData* NormalData = static_cast<const FNormalCameraData*>(DataPacket.Data.Get()))
@@ -231,6 +230,7 @@ void FAsyncFileWriter::WriteDataToFile(const FSensorDataPacket& DataPacket)
 
                     if (bSuccess && CompressedData.Num() > 0)
                     {
+                        FString FilePath = GetFilePathForSensor(DataPacket);
                         if (!FFileHelper::SaveArrayToFile(CompressedData, *FilePath))
                         {
                             UE_LOG(LogAsyncFileWriter, Error, TEXT("Failed to save normal EXR image to file: %s"), *FilePath);
@@ -253,6 +253,7 @@ void FAsyncFileWriter::WriteDataToFile(const FSensorDataPacket& DataPacket)
                 TArray64<uint8> CompressedBitmap;
                 FImageUtils::PNGCompressImageArray(SegData->Width, SegData->Height, SegData->Data, CompressedBitmap);
 
+                FString FilePath = GetFilePathForSensor(DataPacket);
                 if (!FFileHelper::SaveArrayToFile(CompressedBitmap, *FilePath))
                 {
                     UE_LOG(LogAsyncFileWriter, Error, TEXT("Failed to save segmentation image to file: %s"), *FilePath);
@@ -294,6 +295,7 @@ void FAsyncFileWriter::WriteDataToFile(const FSensorDataPacket& DataPacket)
                     }
 
                     // Save to file
+                    FString FilePath = GetFilePathForSensor(DataPacket);
                     if (!FFileHelper::SaveStringToFile(PLYContent, *FilePath))
                     {
                         UE_LOG(LogAsyncFileWriter, Error, TEXT("Failed to save LiDAR PLY file: %s"), *FilePath);
@@ -322,14 +324,6 @@ FString FAsyncFileWriter::GetFilePathForSensor(const FSensorDataPacket& DataPack
 
     switch (DataPacket.Type)
     {
-        case ESensorType::RGBCamera:
-            SensorTypeStr = TEXT("RGB");
-            FileExtension = TEXT(".png");
-            break;
-        case ESensorType::DepthCamera:
-            SensorTypeStr = TEXT("Depth");
-            FileExtension = TEXT(".png");
-            break;
         case ESensorType::NormalCamera:
             SensorTypeStr = TEXT("Normal");
             FileExtension = TEXT(".exr");
@@ -348,8 +342,6 @@ FString FAsyncFileWriter::GetFilePathForSensor(const FSensorDataPacket& DataPack
             break;
     }
 
-    // Format filename with 9 decimal places for timestamp (matching original)
-    FString FileName = FString::Printf(TEXT("%.9f%s"), DataPacket.Timestamp, *FileExtension);
-
+    FString FileName = FString::Printf(TEXT("%.9f%s"), DataPacket.Data->Timestamp, *FileExtension);
     return FPaths::Combine(BasePath, ActorName, SensorTypeStr, FileName);
 }

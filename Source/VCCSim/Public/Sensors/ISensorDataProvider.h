@@ -25,50 +25,21 @@
 #include "RenderGraphDefinitions.h"
 #include "ISensorDataProvider.generated.h"
 
-class ISensorDataProvider;
-
-struct VCCSIM_API FSensorViewInfo
-{
-    ESensorType SensorType;
-    int32 MRTSlot;
-    FMatrix ViewMatrix;
-    FMatrix ProjectionMatrix;
-    ESceneCaptureSource CaptureSource;
-    FIntPoint Resolution;
-    ISensorDataProvider* Provider;
-    UMaterialInterface* CustomMaterial;
-
-    FSensorViewInfo()
-        : SensorType(ESensorType::RGBCamera)
-        , MRTSlot(0)
-        , ViewMatrix(FMatrix::Identity)
-        , ProjectionMatrix(FMatrix::Identity)
-        , CaptureSource(ESceneCaptureSource::SCS_FinalColorLDR)
-        , Resolution(FIntPoint(512, 512))
-        , Provider(nullptr)
-        , CustomMaterial(nullptr)
-    {
-    }
-};
 
 struct VCCSIM_API FSensorDataPacket
 {
     ESensorType Type;
     int32 SensorIndex;
     AActor* OwnerActor;
-    double Timestamp;
     TSharedPtr<FSensorData> Data;
     bool bValid;
-    bool bFromRDGBatch;
 
     FSensorDataPacket()
-        : Type(ESensorType::RGBCamera)
+        : Type(ESensorType::RGBDCamera)
         , SensorIndex(0)
         , OwnerActor(nullptr)
-        , Timestamp(0.0)
         , Data(nullptr)
         , bValid(false)
-        , bFromRDGBatch(false)
     {
     }
 };
@@ -84,11 +55,8 @@ class VCCSIM_API ISensorDataProvider
     GENERATED_BODY()
 
 public:
-    virtual TFuture<FSensorDataPacket> CaptureDataAsync() = 0;
     virtual ESensorType GetSensorType() const = 0;
     virtual AActor* GetOwnerActor() const = 0;
     virtual FIntPoint GetResolution() const = 0;
-
-    virtual void ContributeToRDGPass(FSensorViewInfo& OutViewInfo) = 0;
-    virtual int32 GetMRTSlot() const = 0;
+    virtual UTextureRenderTarget2D* GetRenderTarget() const PURE_VIRTUAL(UCameraBaseComponent::GetRenderTarget, return nullptr;);
 };

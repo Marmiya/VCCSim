@@ -19,11 +19,6 @@
 
 #include "CoreMinimal.h"
 #include "Sensors/SensorBase.h"
-#include "Sensors/CameraSensor.h"
-#include "Sensors/LidarSensor.h"
-#include "Sensors/DepthCamera.h"
-#include "Sensors/NormalCamera.h"
-#include "Sensors/SegmentCamera.h"
 
 class ISensorDataProvider;
 
@@ -51,34 +46,7 @@ struct VCCSIM_API FSensorRegistryEntry
         return ProviderComponent.IsValid() && OwnerActor.IsValid();
     }
 
-    ISensorDataProvider* GetProvider() const
-    {
-        if (UObject* Component = ProviderComponent.Get())
-        {
-            // Try casting to each sensor type that implements ISensorDataProvider
-            if (URGBCameraComponent* RGBCam = Cast<URGBCameraComponent>(Component))
-            {
-                return static_cast<ISensorDataProvider*>(RGBCam);
-            }
-            if (ULidarComponent* LidarCam = Cast<ULidarComponent>(Component))
-            {
-                return static_cast<ISensorDataProvider*>(LidarCam);
-            }
-            if (UDepthCameraComponent* DepthCam = Cast<UDepthCameraComponent>(Component))
-            {
-                return static_cast<ISensorDataProvider*>(DepthCam);
-            }
-            if (UNormalCameraComponent* NormalCam = Cast<UNormalCameraComponent>(Component))
-            {
-                return static_cast<ISensorDataProvider*>(NormalCam);
-            }
-            if (USegmentationCameraComponent* SegCam = Cast<USegmentationCameraComponent>(Component))
-            {
-                return static_cast<ISensorDataProvider*>(SegCam);
-            }
-        }
-        return nullptr;
-    }
+    ISensorDataProvider* GetProvider() const;
 };
 
 class VCCSIM_API FSensorRegistry

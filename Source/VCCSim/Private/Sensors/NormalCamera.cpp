@@ -18,12 +18,10 @@
 DEFINE_LOG_CATEGORY_STATIC(LogNormalCamera, Log, All);
 
 #include "Sensors/NormalCamera.h"
-#include "DataStructures/RecordData.h"
 #include "RenderingThread.h"
 #include "Async/AsyncWork.h"
 #include "Windows/WindowsHWrapper.h"
 #include "RHI.h"
-#include "Kismet/GameplayStatics.h"
 
 UNormalCameraComponent::UNormalCameraComponent()
 {
@@ -44,49 +42,6 @@ void UNormalCameraComponent::Configure(const FSensorConfig& Config)
     SetCaptureComponent();
 }
 
-TFuture<FSensorDataPacket> UNormalCameraComponent::CaptureDataAsync()
-{
-    TSharedPtr<TPromise<FSensorDataPacket>> Promise = MakeShared<TPromise<FSensorDataPacket>>();
-    TFuture<FSensorDataPacket> Future = Promise->GetFuture();
-
-    AsyncTask(ENamedThreads::GameThread, [this, Promise]()
-    {
-        FSensorDataPacket Packet;
-        Packet.Type = ESensorType::NormalCamera;
-        Packet.SensorIndex = GetSensorIndex();
-        Packet.OwnerActor = GetOwnerActor();
-        Packet.Timestamp = FPlatformTime::Seconds();
-
-        if (!CheckComponentAndRenderTarget())
-        {
-            Packet.bValid = false;
-            Promise->SetValue(Packet);
-            return;
-        }
-
-        CaptureNormalScene();
-
-        ProcessNormalTextureParam([this, Promise, Packet](const TArray<FLinearColor>& CapturedNormalData) mutable
-        {
-            Async(EAsyncExecution::TaskGraph, [Promise, Packet, CapturedNormalData, Width = this->Width, Height = this->Height]() mutable
-            {
-                auto NormalData = MakeShared<FNormalCameraData>();
-                NormalData->Timestamp = Packet.Timestamp;
-                NormalData->SensorIndex = Packet.SensorIndex;
-                NormalData->Width = Width;
-                NormalData->Height = Height;
-                NormalData->Data = CapturedNormalData;
-
-                Packet.Data = NormalData;
-                Packet.bValid = true;
-                Promise->SetValue(Packet);
-            });
-        });
-    });
-
-    return Future;
-}
-
 void UNormalCameraComponent::SetCaptureComponent() const
 {
     Super::SetCaptureComponent();
@@ -99,10 +54,10 @@ void UNormalCameraComponent::SetCaptureComponent() const
 
 void UNormalCameraComponent::InitializeRenderTargets()
 {
-    NormalRenderTarget = NewObject<UTextureRenderTarget2D>(this);
-    NormalRenderTarget->InitCustomFormat(Width, Height,
-        PF_A32B32G32R32F, true);
-    NormalRenderTarget->UpdateResource();
+    RenderTarget = NewObject<UTextureRenderTarget2D>(this);
+    RenderTarget->InitCustomFormat(Width, Height,
+        PF_B8G8R8A8, true);
+    RenderTarget->UpdateResource();
 }
 
 void UNormalCameraComponent::CaptureNormalScene()
@@ -159,25 +114,4 @@ void UNormalCameraComponent::AsyncGetNormalImageData(
         CaptureComponent->CaptureScene();
         ProcessNormalTextureParam(Callback);
     });
-}
-
-void UNormalCameraComponent::ContributeToRDGPass(FSensorViewInfo& OutViewInfo)
-{
-    OutViewInfo.SensorType = ESensorType::NormalCamera;
-    OutViewInfo.MRTSlot = GetMRTSlot();
-    
-    FMinimalViewInfo ViewInfo;
-    CaptureComponent->GetCameraView(0.f, ViewInfo);
-    FMatrix ViewMatrix, ProjectionMatrix, ViewProjectionMatrix;
-    UGameplayStatics::GetViewProjectionMatrix(
-        ViewInfo,
-        ViewMatrix,
-        ProjectionMatrix,
-        ViewProjectionMatrix);
-    OutViewInfo.ViewMatrix = ViewMatrix;
-    OutViewInfo.ProjectionMatrix = ProjectionMatrix;OutViewInfo.CaptureSource = ESceneCaptureSource::SCS_Normal;
-
-    OutViewInfo.Resolution = FIntPoint(Width, Height);
-    OutViewInfo.Provider = this;
-    OutViewInfo.CustomMaterial = NormalMaterial;
 }

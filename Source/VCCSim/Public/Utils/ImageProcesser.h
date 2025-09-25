@@ -19,7 +19,8 @@
 
 #include "CoreMinimal.h"
 #include "Async/AsyncWork.h"
-#include "Sensors/DepthCamera.h"
+
+struct FDCPoint;
 
 class VCCSIM_API FAsyncImageSaveTask : public FNonAbandonableTask
 {
@@ -46,18 +47,16 @@ private:
     FString FilePath;
 };
 
-class VCCSIM_API FAsyncDepth16SaveTask : public FNonAbandonableTask
+class VCCSIM_API FAsyncDepthSaveTask : public FNonAbandonableTask
 {
 public:
-    FAsyncDepth16SaveTask(
-        const TArray<FFloat16Color>& InDepthPixels,
+    FAsyncDepthSaveTask(
+        const TArray<float>& InDepthPixels,
         FIntPoint InSize, 
-        const FString& InFilePath,
-        float InDepthScale = 1.0f)
+        const FString& InFilePath)
         : DepthPixels(InDepthPixels)
         , Size(InSize)
         , FilePath(InFilePath)
-        , DepthScale(InDepthScale)
     {}
 
     void DoWork();
@@ -69,10 +68,9 @@ public:
     }
 
 private:
-    TArray<FFloat16Color> DepthPixels;
+    TArray<float> DepthPixels;
     FIntPoint Size;
     FString FilePath;
-    float DepthScale;
 };
 
 class FAsyncPLYSaveTask : public FNonAbandonableTask

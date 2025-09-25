@@ -24,8 +24,7 @@
 #include "GameFramework/Actor.h"
 
 class AFlashPawn;
-class URGBCameraComponent;
-class UDepthCameraComponent;
+class URGBDCameraComponent;
 class USegmentationCameraComponent;
 class UNormalCameraComponent;
 

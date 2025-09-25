@@ -19,19 +19,11 @@
 
 #include "CoreMinimal.h"
 #include "SensorRegistry.h"
-#include "Utils/AsyncFileWriter.h"
 #include "Sensors/ISensorDataProvider.h"
 #include "Async/Async.h"
-#include "RenderGraphDefinitions.h"
-#include "RenderGraphPass.h"
 #include "RHICommandList.h"
+#include "Utils/AsyncFileWriter.h"
 #include "Recorder.generated.h"
-
-// MRT pass parameters for sensor data capture
-BEGIN_SHADER_PARAMETER_STRUCT(FMRTPassParameters, )
-    RENDER_TARGET_BINDING_SLOTS()
-END_SHADER_PARAMETER_STRUCT()
-
 
 UCLASS()
 class VCCSIM_API ARecorder : public AActor
@@ -48,6 +40,8 @@ public:
 
     UPROPERTY(EditAnywhere, Category = "Recording")
     float RecordingInterval = 0.033f;
+    bool RecordState = false;
+    FSensorRegistry SensorRegistry;
 
     void StartRecording();
     void StopRecording();
@@ -56,37 +50,16 @@ public:
 
     void CreateActorDirectories(const FString& ActorName, TSet<ESensorType>&& SensorTypes);
 
-    bool RecordState = false;
-
-    // Sensor registry for direct access from VCCHUD
-    FSensorRegistry SensorRegistry;
-
 private:
     bool bIsRecording = false;
     FTimerHandle RecordingTimerHandle;
     TUniquePtr<FAsyncFileWriter> FileWriter;
 
-    void CreateRecordingDirectoryStructure();
     void TickRecording();
     void CollectSensorDataConcurrently();
-    void CollectSensorDataMRT(AActor* Actor, const TArray<ISensorDataProvider*>& Sensors);
-    void AddMRTRenderPass(FRDGBuilder& GraphBuilder, AActor* Actor,
-        const TArray<ISensorDataProvider*>& Sensors,
-        FRDGTextureRef RGBTexture, FRDGTextureRef DepthTexture,
-        FRDGTextureRef NormalTexture, FRDGTextureRef SegmentTexture);
-    void RenderSceneToMRT(FRHICommandList& RHICmdList, AActor* Actor,
-        const TArray<ISensorDataProvider*>& Sensors,
-        FRDGTextureRef RGBTexture, FRDGTextureRef DepthTexture,
-        FRDGTextureRef NormalTexture, FRDGTextureRef SegmentTexture);
-    void ExtractMRTData(FRDGBuilder& GraphBuilder, AActor* Actor,
-        const TArray<ISensorDataProvider*>& Sensors,
-        FRDGTextureRef RGBTexture, FRDGTextureRef DepthTexture,
-        FRDGTextureRef NormalTexture, FRDGTextureRef SegmentTexture);
-    void ProcessSensorPixelData(ISensorDataProvider* Sensor, FIntPoint Resolution,
-        double Timestamp, TArray<FColor>&& PixelData);
-    void ProcessDepthSensorData(ISensorDataProvider* Sensor, FIntPoint Resolution,
-        double Timestamp, TArray<FFloat16Color>&& DepthData);
-    void CollectSensorDataIndividual(const TArray<ISensorDataProvider*>& Sensors);
+    void AddMRTRenderPass(FRDGBuilder& GraphBuilder,
+        const TArray<ISensorDataProvider*>& Sensors, TArray<FRDGTextureRef> MRTTextures);
+
     void InitializeAsyncWriter();
     void ShutdownAsyncWriter();
 };

@@ -58,12 +58,10 @@ public:
     TPair<TArray<FVector3f>, FVCCSimOdom> GetPointCloudDataAndOdom();
 
     // ISensorDataProvider interface
-    virtual TFuture<FSensorDataPacket> CaptureDataAsync() override;
     virtual ESensorType GetSensorType() const override { return ESensorType::Lidar; }
     virtual FIntPoint GetResolution() const override { return FIntPoint(NumPoints, NumRays); }
     virtual AActor* GetOwnerActor() const override { return ParentActor; }
-    virtual void ContributeToRDGPass(FSensorViewInfo& OutViewInfo) override;
-    virtual int32 GetMRTSlot() const override { return -1; } // LiDAR doesn't use MRT
+    virtual UTextureRenderTarget2D* GetRenderTarget() const override { return nullptr; }
 
 protected:
     virtual void BeginPlay() override;

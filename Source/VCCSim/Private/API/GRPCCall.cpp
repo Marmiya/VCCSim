@@ -19,9 +19,9 @@ DEFINE_LOG_CATEGORY_STATIC(LogGRPCCall, Log, All);
 
 #include "API/GRPCCall.h"
 #include "Sensors/LidarSensor.h"
-#include "Sensors/DepthCamera.h"
 #include "Sensors/CameraSensor.h"
 #include "Sensors/SegmentCamera.h"
+#include "Sensors/NormalCamera.h"
 #include "Utils/MeshHandlerComponent.h"
 #include "Utils/InsMeshHolder.h"
 #include "Pawns/DronePawn.h"
@@ -79,7 +79,7 @@ void LidarGetDataCall::ProcessRequest()
     {
         for (const auto& Point : RCMap_[request_.name()]->GetPointCloudData())
         {
-            VCCSim::Point* LidarPoint = response_.add_data();
+            VCCSim::Vec3f* LidarPoint = response_.add_data();
             LidarPoint->set_x(Point.X);
             LidarPoint->set_y(Point.Y);
             LidarPoint->set_z(Point.Z);
@@ -122,20 +122,28 @@ void LidarGetOdomCall::ProcessRequest()
         const FVector AngularVelocity = Lidar->GetPhysicsAngularVelocityInDegrees();
 
         VCCSim::Pose* PoseData = response_.mutable_pose();
-        PoseData->set_x(Location.X);
-        PoseData->set_y(Location.Y);
-        PoseData->set_z(Location.Z);
-        PoseData->set_roll(Rotation.Roll);
-        PoseData->set_pitch(Rotation.Pitch);
-        PoseData->set_yaw(Rotation.Yaw);
+        VCCSim::Vec3f* Position = PoseData->mutable_position();
+        Position->set_x(Location.X);
+        Position->set_y(Location.Y);
+        Position->set_z(Location.Z);
 
-        VCCSim::twist* TwistData = response_.mutable_twist();
-        TwistData->set_linear_x(LinearVelocity.X);
-        TwistData->set_linear_y(LinearVelocity.Y);
-        TwistData->set_linear_z(LinearVelocity.Z);
-        TwistData->set_angular_x(AngularVelocity.X);
-        TwistData->set_angular_y(AngularVelocity.Y);
-        TwistData->set_angular_z(AngularVelocity.Z);
+        VCCSim::Rotation* Rot = PoseData->mutable_rotation();
+        FQuat Quat = Rotation.Quaternion();
+        Rot->set_x(Quat.X);
+        Rot->set_y(Quat.Y);
+        Rot->set_z(Quat.Z);
+        Rot->set_w(Quat.W);
+
+        VCCSim::Twist* TwistData = response_.mutable_twist();
+        VCCSim::Vec3f* LinearVel = TwistData->mutable_linear();
+        LinearVel->set_x(LinearVelocity.X);
+        LinearVel->set_y(LinearVelocity.Y);
+        LinearVel->set_z(LinearVelocity.Z);
+
+        VCCSim::Vec3f* AngularVel = TwistData->mutable_angular();
+        AngularVel->set_x(AngularVelocity.X);
+        AngularVel->set_y(AngularVelocity.Y);
+        AngularVel->set_z(AngularVelocity.Z);
     }
     else
     {
@@ -173,27 +181,35 @@ void LidarGetDataAndOdomCall::ProcessRequest()
         
         for (const auto& Point : DataAndOdom.Key)
         {
-            VCCSim::Point* LidarPoint = response_.mutable_data()->add_data();
+            VCCSim::Vec3f* LidarPoint = response_.mutable_data()->add_data();
             LidarPoint->set_x(Point.X);
             LidarPoint->set_y(Point.Y);
             LidarPoint->set_z(Point.Z);
         }
-        
+
         VCCSim::Pose* PoseData = response_.mutable_odom()->mutable_pose();
-        PoseData->set_x(Odom.Location.X);
-        PoseData->set_y(Odom.Location.Y);
-        PoseData->set_z(Odom.Location.Z);
-        PoseData->set_roll(Odom.Rotation.Roll);
-        PoseData->set_pitch(Odom.Rotation.Pitch);
-        PoseData->set_yaw(Odom.Rotation.Yaw);
-        
-        VCCSim::twist* TwistData = response_.mutable_odom()->mutable_twist();
-        TwistData->set_linear_x(Odom.LinearVelocity.X);
-        TwistData->set_linear_y(Odom.LinearVelocity.Y);
-        TwistData->set_linear_z(Odom.LinearVelocity.Z);
-        TwistData->set_angular_x(Odom.AngularVelocity.X);
-        TwistData->set_angular_y(Odom.AngularVelocity.Y);
-        TwistData->set_angular_z(Odom.AngularVelocity.Z);
+        VCCSim::Vec3f* Position = PoseData->mutable_position();
+        Position->set_x(Odom.Location.X);
+        Position->set_y(Odom.Location.Y);
+        Position->set_z(Odom.Location.Z);
+
+        VCCSim::Rotation* Rot = PoseData->mutable_rotation();
+        FQuat Quat = Odom.Rotation.Quaternion();
+        Rot->set_x(Quat.X);
+        Rot->set_y(Quat.Y);
+        Rot->set_z(Quat.Z);
+        Rot->set_w(Quat.W);
+
+        VCCSim::Twist* TwistData = response_.mutable_odom()->mutable_twist();
+        VCCSim::Vec3f* LinearVel = TwistData->mutable_linear();
+        LinearVel->set_x(Odom.LinearVelocity.X);
+        LinearVel->set_y(Odom.LinearVelocity.Y);
+        LinearVel->set_z(Odom.LinearVelocity.Z);
+
+        VCCSim::Vec3f* AngularVel = TwistData->mutable_angular();
+        AngularVel->set_x(Odom.AngularVelocity.X);
+        AngularVel->set_y(Odom.AngularVelocity.Y);
+        AngularVel->set_z(Odom.AngularVelocity.Z);
     }
     else
     {
@@ -202,66 +218,203 @@ void LidarGetDataAndOdomCall::ProcessRequest()
     }
 }
 
-DepthIndexedCameraPointDataCall::DepthIndexedCameraPointDataCall(
-    VCCSim::DepthCameraService::AsyncService* service,
+/* --------------------------RGBD Camera---------------------------------- */
+
+IImageWrapperModule* RGBDCameraGetRGBDataCall::ImageWrapperModule = nullptr;
+
+RGBDCameraGetRGBDataCall::RGBDCameraGetRGBDataCall(
+    VCCSim::RGBDCameraService::AsyncService* service,
     grpc::ServerCompletionQueue* cq,
-    const std::map<std::string, UDepthCameraComponent*>& rdcmap)
-        : AsyncCallTemplateImage(service, cq, rdcmap)
+    const std::map<std::string, URGBDCameraComponent*>& rrgbdcmap)
+        : AsyncCallTemplateImage(service, cq, rrgbdcmap)
 {
     Proceed(true);
 }
 
-void DepthIndexedCameraPointDataCall::PrepareNextCall()
+void RGBDCameraGetRGBDataCall::PrepareNextCall()
 {
-    new DepthIndexedCameraPointDataCall(service_, cq_, RCMap_);
+    new RGBDCameraGetRGBDataCall(service_, cq_, RCMap_);
 }
 
-void DepthIndexedCameraPointDataCall::InitializeRequest()
+void RGBDCameraGetRGBDataCall::InitializeRequest()
 {
-    service_->RequestGetDepthIndexedCameraPointData(&ctx_, &request_, &responder_, cq_, cq_, this);
+    service_->RequestGetRGBData(&ctx_, &request_, &responder_, cq_, cq_, this);
 }
 
-void DepthIndexedCameraPointDataCall::ProcessRequest()
+void RGBDCameraGetRGBDataCall::ProcessRequest()
 {
     std::string CameraName = request_.robot_name().name() + "^" +
                              std::to_string(request_.index());
 
     if (!RCMap_.contains(CameraName))
     {
-        UE_LOG(LogGRPCCall, Warning, TEXT("DepthIndexedCameraPointDataCall: "
-                                      "DepthCamera component not found!"));
+        UE_LOG(LogGRPCCall, Warning, TEXT("RGBDCameraGetRGBDataCall:"
+                                      " RGBD Camera component not found!"));
         return;
     }
 
-    auto* DepthCamera = RCMap_[CameraName];
-    if (!DepthCamera)
+    auto* RGBDCamera = RCMap_[CameraName];
+    if (!RGBDCamera)
     {
-        UE_LOG(LogGRPCCall, Warning, TEXT("DepthIndexedCameraPointDataCall: "
-                                      "Invalid DepthCamera reference!"));
+        UE_LOG(LogGRPCCall, Warning, TEXT("RGBDCameraGetRGBDataCall:"
+                                      " Invalid RGBD Camera reference!"));
         return;
     }
 
-    // Use the callback version to get point cloud data
-    DepthCamera->AsyncGetPointCloudData(
-        [this, DepthCamera]()
+    RGBDCamera->AsyncGetRGBDImageData(
+        [this, RGBDCamera](const TArray<FLinearColor>& RGBDData)
     {
-        // Process the points in a background thread
         AsyncTask(ENamedThreads::AnyBackgroundHiPriTask,
-            [this, DepthCamera]()
+            [this, RGBDData, RGBDCamera]()
         {
-            const auto PointCloudData = DepthCamera->GeneratePointCloud();
+            response_.set_width(RGBDCamera->Width);
+            response_.set_height(RGBDCamera->Height);
+            response_.set_timestamp(FDateTime::UtcNow().ToUnixTimestamp());
+
+            // Convert FLinearColor to FColor with gamma correction
+            TArray<uint8> RGBBytes;
+            RGBBytes.Reserve(RGBDData.Num() * 4); // RGBA bytes
+
+            for (const FLinearColor& LinearPixel : RGBDData)
+            {
+                // Use ToFColor(true) for proper gamma correction
+                FColor GammaCorrectedPixel = LinearPixel.ToFColor(true);
+                RGBBytes.Add(GammaCorrectedPixel.R);
+                RGBBytes.Add(GammaCorrectedPixel.G);
+                RGBBytes.Add(GammaCorrectedPixel.B);
+                RGBBytes.Add(GammaCorrectedPixel.A);
+            }
+
+            response_.set_data(RGBBytes.GetData(), RGBBytes.Num());
+
+            status_ = FINISH;
+            responder_.Finish(response_, grpc::Status::OK, this);
+        });
+    });
+}
+
+RGBDCameraGetDepthDataCall::RGBDCameraGetDepthDataCall(
+    VCCSim::RGBDCameraService::AsyncService* service,
+    grpc::ServerCompletionQueue* cq,
+    const std::map<std::string, URGBDCameraComponent*>& rrgbdcmap)
+        : AsyncCallTemplateImage(service, cq, rrgbdcmap)
+{
+    Proceed(true);
+}
+
+void RGBDCameraGetDepthDataCall::PrepareNextCall()
+{
+    new RGBDCameraGetDepthDataCall(service_, cq_, RCMap_);
+}
+
+void RGBDCameraGetDepthDataCall::InitializeRequest()
+{
+    service_->RequestGetDepthData(&ctx_, &request_, &responder_, cq_, cq_, this);
+}
+
+void RGBDCameraGetDepthDataCall::ProcessRequest()
+{
+    std::string CameraName = request_.robot_name().name() + "^" +
+                             std::to_string(request_.index());
+
+    if (!RCMap_.contains(CameraName))
+    {
+        UE_LOG(LogGRPCCall, Warning, TEXT("RGBDCameraGetDepthDataCall:"
+                                      " RGBD Camera component not found!"));
+        return;
+    }
+
+    auto* RGBDCamera = RCMap_[CameraName];
+    if (!RGBDCamera)
+    {
+        UE_LOG(LogGRPCCall, Warning, TEXT("RGBDCameraGetDepthDataCall:"
+                                      " Invalid RGBD Camera reference!"));
+        return;
+    }
+
+    RGBDCamera->AsyncGetRGBDImageData(
+        [this, RGBDCamera](const TArray<FLinearColor>& RGBDData)
+    {
+        AsyncTask(ENamedThreads::AnyBackgroundHiPriTask,
+            [this, RGBDData, RGBDCamera]()
+        {
+            response_.set_width(RGBDCamera->Width);
+            response_.set_height(RGBDCamera->Height);
+            response_.set_timestamp(FDateTime::UtcNow().ToUnixTimestamp());
+
+            // Extract depth from alpha channel
+            response_.mutable_data()->Reserve(RGBDData.Num());
+            for (const FLinearColor& Pixel : RGBDData)
+            {
+                response_.add_data(Pixel.A);
+            }
+
+            status_ = FINISH;
+            responder_.Finish(response_, grpc::Status::OK, this);
+        });
+    });
+}
+
+RGBDCameraGetDepthPointCloudCall::RGBDCameraGetDepthPointCloudCall(
+    VCCSim::RGBDCameraService::AsyncService* service,
+    grpc::ServerCompletionQueue* cq,
+    const std::map<std::string, URGBDCameraComponent*>& rrgbdcmap)
+        : AsyncCallTemplateImage(service, cq, rrgbdcmap)
+{
+    Proceed(true);
+}
+
+void RGBDCameraGetDepthPointCloudCall::PrepareNextCall()
+{
+    new RGBDCameraGetDepthPointCloudCall(service_, cq_, RCMap_);
+}
+
+void RGBDCameraGetDepthPointCloudCall::InitializeRequest()
+{
+    service_->RequestGetDepthPointCloud(&ctx_, &request_, &responder_, cq_, cq_, this);
+}
+
+void RGBDCameraGetDepthPointCloudCall::ProcessRequest()
+{
+    std::string CameraName = request_.robot_name().name() + "^" +
+                             std::to_string(request_.index());
+
+    if (!RCMap_.contains(CameraName))
+    {
+        UE_LOG(LogGRPCCall, Warning, TEXT("RGBDCameraGetDepthPointCloudCall:"
+                                      " RGBD Camera component not found!"));
+        return;
+    }
+
+    auto* RGBDCamera = RCMap_[CameraName];
+    if (!RGBDCamera)
+    {
+        UE_LOG(LogGRPCCall, Warning, TEXT("RGBDCameraGetDepthPointCloudCall:"
+                                      " Invalid RGBD Camera reference!"));
+        return;
+    }
+
+    RGBDCamera->AsyncGetPointCloudData(
+        [this, RGBDCamera]()
+    {
+        AsyncTask(ENamedThreads::AnyBackgroundHiPriTask,
+            [this, RGBDCamera]()
+        {
+            const auto PointCloudData = RGBDCamera->GeneratePointCloud();
             if (PointCloudData.Num() == 0)
             {
-                UE_LOG(LogGRPCCall, Warning, TEXT("DepthIndexedCameraPointDataCall: "
-                                              "No point cloud data available!"));
+                UE_LOG(LogGRPCCall, Warning, TEXT("RGBDCameraGetDepthPointCloudCall:"
+                                              " No point cloud data available!"));
                 status_ = FINISH;
                 responder_.Finish(response_, grpc::Status::CANCELLED, this);
                 return;
             }
-            // Add each point to the response
+
+            response_.set_timestamp(FDateTime::UtcNow().ToUnixTimestamp());
+
             for (const FDCPoint& Point : PointCloudData)
             {
-                auto* point = response_.add_data();
+                VCCSim::Vec3f* point = response_.add_data();
                 point->set_x(Point.Location.X);
                 point->set_y(Point.Location.Y);
                 point->set_z(Point.Location.Z);
@@ -273,344 +426,139 @@ void DepthIndexedCameraPointDataCall::ProcessRequest()
     });
 }
 
-DepthIndexedCameraImageSizeCall::DepthIndexedCameraImageSizeCall(
-    VCCSim::DepthCameraService::AsyncService* service,
-    grpc::ServerCompletionQueue* cq, const std::map<std::string,
-    UDepthCameraComponent*>& rdcmap)
-        : AsyncCallTemplateM(service, cq, rdcmap)
-{
-    Proceed(true);
-}
-
-void DepthIndexedCameraImageSizeCall::PrepareNextCall()
-{
-    new DepthIndexedCameraImageSizeCall(service_, cq_, RCMap_);
-}
-
-void DepthIndexedCameraImageSizeCall::InitializeRequest()
-{
-    service_->RequestGetDepthIndexedCameraImageSize(&ctx_, &request_, &responder_, cq_, cq_, this);
-}
-
-void DepthIndexedCameraImageSizeCall::ProcessRequest()
-{
-    if (RCMap_.contains(request_.robot_name().name() + "^" +
-                         std::to_string(request_.index())))
-    {
-        const auto& Size = RCMap_[request_.robot_name().name() + "^" +
-                                 std::to_string(request_.index())]->GetImageSize();
-        response_.set_width(Size.first);
-        response_.set_height(Size.second);
-    }
-    else
-    {
-        UE_LOG(LogGRPCCall, Warning, TEXT("DepthIndexedCameraImageSizeCall: "
-                                      "DepthCamera component not found!"));
-    }
-}
-
-DepthIndexedCameraImageDataCall::DepthIndexedCameraImageDataCall(
-    VCCSim::DepthCameraService::AsyncService* service,
+RGBDCameraGetRGBDDataCall::RGBDCameraGetRGBDDataCall(
+    VCCSim::RGBDCameraService::AsyncService* service,
     grpc::ServerCompletionQueue* cq,
-    const std::map<std::string, UDepthCameraComponent*>& rdcmap)
-        : AsyncCallTemplateImage(service, cq, rdcmap)
+    const std::map<std::string, URGBDCameraComponent*>& rrgbdcmap)
+        : AsyncCallTemplateImage(service, cq, rrgbdcmap)
 {
     Proceed(true);
 }
 
-void DepthIndexedCameraImageDataCall::PrepareNextCall()
+void RGBDCameraGetRGBDDataCall::PrepareNextCall()
 {
-    new DepthIndexedCameraImageDataCall(service_, cq_, RCMap_);
+    new RGBDCameraGetRGBDDataCall(service_, cq_, RCMap_);
 }
 
-void DepthIndexedCameraImageDataCall::InitializeRequest()
+void RGBDCameraGetRGBDDataCall::InitializeRequest()
 {
-    service_->RequestGetDepthIndexedCameraImageData(&ctx_, &request_, &responder_, cq_, cq_, this);
+    service_->RequestGetRGBDData(&ctx_, &request_, &responder_, cq_, cq_, this);
 }
 
-void DepthIndexedCameraImageDataCall::ProcessRequest()
+void RGBDCameraGetRGBDDataCall::ProcessRequest()
 {
     std::string CameraName = request_.robot_name().name() + "^" +
                              std::to_string(request_.index());
 
     if (!RCMap_.contains(CameraName))
     {
-        UE_LOG(LogGRPCCall, Warning, TEXT("DepthIndexedCameraImageDataCall: "
-                                      "DepthCamera component not found!"));
+        UE_LOG(LogGRPCCall, Warning, TEXT("RGBDCameraGetRGBDDataCall:"
+                                      " RGBD Camera component not found!"));
         return;
     }
 
-    auto* DepthCamera = RCMap_[CameraName];
-    if (!DepthCamera)
+    auto* RGBDCamera = RCMap_[CameraName];
+    if (!RGBDCamera)
     {
-        UE_LOG(LogGRPCCall, Warning, TEXT("DepthIndexedCameraImageDataCall: "
-                                      "Invalid DepthCamera reference!"));
+        UE_LOG(LogGRPCCall, Warning, TEXT("RGBDCameraGetRGBDDataCall:"
+                                      " Invalid RGBD Camera reference!"));
         return;
     }
 
-    // Use the callback version to get depth image data
-    DepthCamera->AsyncGetDepthImageData(
-        [this, DepthCamera](const TArray<FFloat16Color>& DepthImageData)
+    RGBDCamera->AsyncGetRGBDImageData(
+        [this, RGBDCamera](const TArray<FLinearColor>& RGBDData)
     {
-        // Process the depth data in a background thread
         AsyncTask(ENamedThreads::AnyBackgroundHiPriTask,
-            [this, DepthImageData, DepthCamera]()
+            [this, RGBDData, RGBDCamera]()
         {
-            response_.mutable_data()->Reserve(DepthImageData.Num());
-            for (const auto& DepthValue : DepthImageData)
-            {
-                response_.add_data(DepthValue.R.GetFloat());
-            }
-
-            status_ = FINISH;
-            responder_.Finish(response_, grpc::Status::OK, this);
-        });
-    });
-}
-
-DepthCameraGetOdomCall::DepthCameraGetOdomCall(
-    VCCSim::DepthCameraService::AsyncService* service,
-    grpc::ServerCompletionQueue* cq,
-    const std::map<std::string, UDepthCameraComponent*>& rdcmap)
-        : AsyncCallTemplateM(service, cq, rdcmap)
-{
-    Proceed(true);
-}
-
-void DepthCameraGetOdomCall::PrepareNextCall()
-{
-    new DepthCameraGetOdomCall(service_, cq_, RCMap_);
-}
-
-void DepthCameraGetOdomCall::InitializeRequest()
-{
-    service_->RequestGetDepthCameraOdom(&ctx_, &request_, &responder_, cq_, cq_, this);
-}
-
-void DepthCameraGetOdomCall::ProcessRequest()
-{
-    if (RCMap_.contains(request_.name()))
-    {
-        const FVector Pose = RCMap_[request_.name()]->GetComponentLocation();
-        const FRotator Rot = RCMap_[request_.name()]->GetComponentRotation();
-        const FVector LinearVelocity =
-            RCMap_[request_.name()]->GetPhysicsLinearVelocity();
-        const FVector AngularVelocity =
-            RCMap_[request_.name()]->GetPhysicsAngularVelocityInDegrees();
-
-        VCCSim::Pose* PoseData = response_.mutable_pose();
-        PoseData->set_x(Pose.X);
-        PoseData->set_y(Pose.Y);
-        PoseData->set_z(Pose.Z);
-        PoseData->set_roll(Rot.Roll);
-        PoseData->set_pitch(Rot.Pitch);
-        PoseData->set_yaw(Rot.Yaw);
-
-        VCCSim::twist* TwistData = response_.mutable_twist();
-        TwistData->set_linear_x(LinearVelocity.X);
-        TwistData->set_linear_y(LinearVelocity.Y);
-        TwistData->set_linear_z(LinearVelocity.Z);
-        TwistData->set_angular_x(AngularVelocity.X);
-        TwistData->set_angular_y(AngularVelocity.Y);
-        TwistData->set_angular_z(AngularVelocity.Z);
-    }
-    else
-    {
-        UE_LOG(LogGRPCCall, Warning, TEXT("DepthCameraGetOdomCall: "
-                                      "DepthCamera component not found!"));
-    }
-}
-
-RGBCameraGetOdomCall::RGBCameraGetOdomCall(
-    VCCSim::RGBCameraService::AsyncService* service,
-    grpc::ServerCompletionQueue* cq,
-    const std::map<std::string, URGBCameraComponent*>& rrgbcmap)
-        : AsyncCallTemplateM(service, cq, rrgbcmap)
-{
-    Proceed(true);
-}
-
-void RGBCameraGetOdomCall::PrepareNextCall()
-{
-    new RGBCameraGetOdomCall(service_, cq_, RCMap_);
-}
-
-void RGBCameraGetOdomCall::InitializeRequest()
-{
-    service_->RequestGetRGBCameraOdom(&ctx_, &request_, &responder_, cq_, cq_, this);
-}
-
-void RGBCameraGetOdomCall::ProcessRequest()
-{
-    if (RCMap_.contains(request_.name()))
-    {
-        const FVector Pose = RCMap_[request_.name()]->GetComponentLocation();
-        const FRotator Rot = RCMap_[request_.name()]->GetComponentRotation();
-        const FVector LinearVelocity =
-            RCMap_[request_.name()]->GetPhysicsLinearVelocity();
-        const FVector AngularVelocity =
-            RCMap_[request_.name()]->GetPhysicsAngularVelocityInDegrees();
-
-        VCCSim::Pose* PoseData = response_.mutable_pose();
-        PoseData->set_x(Pose.X);
-        PoseData->set_y(Pose.Y);
-        PoseData->set_z(Pose.Z);
-        PoseData->set_roll(Rot.Roll);
-        PoseData->set_pitch(Rot.Pitch);
-        PoseData->set_yaw(Rot.Yaw);
-
-        VCCSim::twist* TwistData = response_.mutable_twist();
-        TwistData->set_linear_x(LinearVelocity.X);
-        TwistData->set_linear_y(LinearVelocity.Y);
-        TwistData->set_linear_z(LinearVelocity.Z);
-        TwistData->set_angular_x(AngularVelocity.X);
-        TwistData->set_angular_y(AngularVelocity.Y);
-        TwistData->set_angular_z(AngularVelocity.Z);
-    }
-    else
-    {
-        UE_LOG(LogGRPCCall, Warning, TEXT("RGBCameraGetOdomCall: "
-                                    "RGB Camera component not found!"));
-    }
-}
-
-RGBIndexedCameraImageSizeCall::RGBIndexedCameraImageSizeCall(
-    VCCSim::RGBCameraService::AsyncService* service,
-    grpc::ServerCompletionQueue* cq, const std::map<std::string,
-    URGBCameraComponent*>& rrgbcmap)
-        : AsyncCallTemplateM(service, cq, rrgbcmap)
-{
-    Proceed(true);
-}
-
-void RGBIndexedCameraImageSizeCall::PrepareNextCall()
-{
-    new RGBIndexedCameraImageSizeCall(service_, cq_, RCMap_);
-}
-
-void RGBIndexedCameraImageSizeCall::InitializeRequest()
-{
-    service_->RequestGetRGBIndexedCameraImageSize(
-        &ctx_, &request_, &responder_, cq_, cq_, this);
-}
-
-void RGBIndexedCameraImageSizeCall::ProcessRequest()
-{
-    if (RCMap_.contains(request_.robot_name().name() + "^" +
-                         std::to_string(request_.index())))
-    {
-        const auto& Size = RCMap_[request_.robot_name().name() + "^" +
-                                 std::to_string(request_.index())]->GetImageSize();
-        response_.set_width(Size.first);
-        response_.set_height(Size.second);
-    }
-    else
-    {
-        UE_LOG(LogGRPCCall, Warning, TEXT("RGBIndexedCameraImageSizeCall: "
-                                      "RGB Camera component not found!"));
-    }
-}
-
-IImageWrapperModule* RGBIndexedCameraImageDataCall::ImageWrapperModule = nullptr;
-
-RGBIndexedCameraImageDataCall::RGBIndexedCameraImageDataCall(
-    VCCSim::RGBCameraService::AsyncService* service,
-    grpc::ServerCompletionQueue* cq,
-    const std::map<std::string, URGBCameraComponent*>& rrgbcmap)
-        : AsyncCallTemplateImage(service, cq, rrgbcmap)
-{
-    Proceed(true);
-}
-
-void RGBIndexedCameraImageDataCall::PrepareNextCall()
-{
-    new RGBIndexedCameraImageDataCall(service_, cq_, RCMap_);
-}
-
-void RGBIndexedCameraImageDataCall::InitializeRequest()
-{
-    service_->RequestGetRGBIndexedCameraImageData(
-        &ctx_, &request_, &responder_, cq_, cq_, this);
-}
-
-void RGBIndexedCameraImageDataCall::ProcessRequest()
-{
-    std::string CameraName = request_.robot_name().name() + "^" +
-                             std::to_string(request_.index());
-
-    if (!RCMap_.contains(CameraName))
-    {
-        UE_LOG(LogGRPCCall, Warning, TEXT("RGBCameraGetImageDataCall:"
-                                      " RGB Camera component not found!"));
-        return;
-    }
-
-    auto* RGBCamera = RCMap_[CameraName];
-    if (!RGBCamera)
-    {
-        UE_LOG(LogGRPCCall, Warning, TEXT("RGBCameraGetImageDataCall:"
-                                      " Invalid RGB Camera reference!"));
-        return;
-    }
-
-    // Get the requested format from the client
-    VCCSim::Format requestedFormat = request_.format();
-    
-    // Use the callback version to get image data
-    RGBCamera->AsyncGetRGBImageData(
-        [this, RGBCamera, requestedFormat](const TArray<FColor>& ImageData)
-    {
-        // Process the image in a background thread
-        AsyncTask(ENamedThreads::AnyBackgroundHiPriTask,
-            [this, ImageData, RGBCamera, requestedFormat]()
-        {
-            // Set common properties
-            response_.set_width(RGBCamera->Width);
-            response_.set_height(RGBCamera->Height);
+            response_.set_width(RGBDCamera->Width);
+            response_.set_height(RGBDCamera->Height);
             response_.set_timestamp(FDateTime::UtcNow().ToUnixTimestamp());
-            
-            // Handle different formats
-            switch (requestedFormat)
+
+            // Extract RGB data with gamma correction
+            TArray<uint8> RGBBytes;
+            RGBBytes.Reserve(RGBDData.Num() * 3); // RGB bytes (no alpha)
+
+            // Extract depth data
+            response_.mutable_depth_data()->Reserve(RGBDData.Num());
+
+            for (const FLinearColor& Pixel : RGBDData)
             {
-                case VCCSim::Format::PNG:
-                {
-                    TArray<uint8> PNGData = ConvertToCompressedFormat(
-                        ImageData, RGBCamera->Width, RGBCamera->Height, EImageFormat::PNG);
-                    
-                    response_.set_format(VCCSim::Format::PNG);
-                    response_.set_data(PNGData.GetData(), PNGData.Num());
-                    response_.set_is_compressed(true);
-                    break;
-                }
-                case VCCSim::Format::JPEG:
-                {
-                    TArray<uint8> JPEGData = ConvertToCompressedFormat(
-                        ImageData, RGBCamera->Width, RGBCamera->Height, EImageFormat::JPEG);
-                    
-                    response_.set_format(VCCSim::Format::JPEG);
-                    response_.set_data(JPEGData.GetData(), JPEGData.Num());
-                    response_.set_is_compressed(true);
-                    break;
-                }
-                case VCCSim::Format::RAW:
-                default:
-                {
-                    // Use RGB format for raw data (3 bytes per pixel)
-                    TArray<uint8> RawRGBData = ConvertToRGB(ImageData);
-                    
-                    response_.set_format(VCCSim::Format::RAW);
-                    response_.set_data(RawRGBData.GetData(), RawRGBData.Num());
-                    response_.set_is_compressed(false);
-                    response_.set_bytes_per_pixel(3);  // RGB = 3 bytes
-                    response_.set_stride(RGBCamera->Width * 3);  // Width * 3 bytes per pixel
-                    break;
-                }
+                // RGB with gamma correction
+                FColor GammaCorrectedPixel = Pixel.ToFColor(true);
+                RGBBytes.Add(GammaCorrectedPixel.R);
+                RGBBytes.Add(GammaCorrectedPixel.G);
+                RGBBytes.Add(GammaCorrectedPixel.B);
+
+                // Depth from alpha channel
+                response_.add_depth_data(Pixel.A);
             }
+
+            response_.set_rgb_data(RGBBytes.GetData(), RGBBytes.Num());
 
             status_ = FINISH;
             responder_.Finish(response_, grpc::Status::OK, this);
         });
     });
+}
+
+RGBDCameraGetCameraOdomCall::RGBDCameraGetCameraOdomCall(
+    VCCSim::RGBDCameraService::AsyncService* service,
+    grpc::ServerCompletionQueue* cq,
+    const std::map<std::string, URGBDCameraComponent*>& rrgbdcmap)
+        : AsyncCallTemplateM(service, cq, rrgbdcmap)
+{
+    Proceed(true);
+}
+
+void RGBDCameraGetCameraOdomCall::PrepareNextCall()
+{
+    new RGBDCameraGetCameraOdomCall(service_, cq_, RCMap_);
+}
+
+void RGBDCameraGetCameraOdomCall::InitializeRequest()
+{
+    service_->RequestGetCameraOdom(&ctx_, &request_, &responder_, cq_, cq_, this);
+}
+
+void RGBDCameraGetCameraOdomCall::ProcessRequest()
+{
+    if (RCMap_.contains(request_.name()))
+    {
+        const FVector Location = RCMap_[request_.name()]->GetComponentLocation();
+        const FRotator Rotation = RCMap_[request_.name()]->GetComponentRotation();
+        const FVector LinearVelocity = RCMap_[request_.name()]->GetPhysicsLinearVelocity();
+        const FVector AngularVelocity = RCMap_[request_.name()]->GetPhysicsAngularVelocityInDegrees();
+
+        VCCSim::Pose* PoseData = response_.mutable_pose();
+        VCCSim::Vec3f* Position = PoseData->mutable_position();
+        Position->set_x(Location.X);
+        Position->set_y(Location.Y);
+        Position->set_z(Location.Z);
+
+        VCCSim::Rotation* Rot = PoseData->mutable_rotation();
+        FQuat Quat = Rotation.Quaternion();
+        Rot->set_x(Quat.X);
+        Rot->set_y(Quat.Y);
+        Rot->set_z(Quat.Z);
+        Rot->set_w(Quat.W);
+
+        VCCSim::Twist* TwistData = response_.mutable_twist();
+        VCCSim::Vec3f* LinearVel = TwistData->mutable_linear();
+        LinearVel->set_x(LinearVelocity.X);
+        LinearVel->set_y(LinearVelocity.Y);
+        LinearVel->set_z(LinearVelocity.Z);
+
+        VCCSim::Vec3f* AngularVel = TwistData->mutable_angular();
+        AngularVel->set_x(AngularVelocity.X);
+        AngularVel->set_y(AngularVelocity.Y);
+        AngularVel->set_z(AngularVelocity.Z);
+    }
+    else
+    {
+        UE_LOG(LogGRPCCall, Warning, TEXT("RGBDCameraGetCameraOdomCall:"
+                                      " RGBD Camera component not found!"));
+    }
 }
 
 SegmentCameraGetOdomCall::SegmentCameraGetOdomCall(
@@ -636,28 +584,34 @@ void SegmentCameraGetOdomCall::ProcessRequest()
 {
     if (RCMap_.contains(request_.name()))
     {
-        const FVector Pose = RCMap_[request_.name()]->GetComponentLocation();
-        const FRotator Rot = RCMap_[request_.name()]->GetComponentRotation();
-        const FVector LinearVelocity =
-            RCMap_[request_.name()]->GetPhysicsLinearVelocity();
-        const FVector AngularVelocity =
-            RCMap_[request_.name()]->GetPhysicsAngularVelocityInDegrees();
+        const FVector Location = RCMap_[request_.name()]->GetComponentLocation();
+        const FRotator Rotation = RCMap_[request_.name()]->GetComponentRotation();
+        const FVector LinearVelocity = RCMap_[request_.name()]->GetPhysicsLinearVelocity();
+        const FVector AngularVelocity = RCMap_[request_.name()]->GetPhysicsAngularVelocityInDegrees();
 
         VCCSim::Pose* PoseData = response_.mutable_pose();
-        PoseData->set_x(Pose.X);
-        PoseData->set_y(Pose.Y);
-        PoseData->set_z(Pose.Z);
-        PoseData->set_roll(Rot.Roll);
-        PoseData->set_pitch(Rot.Pitch);
-        PoseData->set_yaw(Rot.Yaw);
+        VCCSim::Vec3f* Position = PoseData->mutable_position();
+        Position->set_x(Location.X);
+        Position->set_y(Location.Y);
+        Position->set_z(Location.Z);
 
-        VCCSim::twist* TwistData = response_.mutable_twist();
-        TwistData->set_linear_x(LinearVelocity.X);
-        TwistData->set_linear_y(LinearVelocity.Y);
-        TwistData->set_linear_z(LinearVelocity.Z);
-        TwistData->set_angular_x(AngularVelocity.X);
-        TwistData->set_angular_y(AngularVelocity.Y);
-        TwistData->set_angular_z(AngularVelocity.Z);
+        VCCSim::Rotation* Rot = PoseData->mutable_rotation();
+        FQuat Quat = Rotation.Quaternion();
+        Rot->set_x(Quat.X);
+        Rot->set_y(Quat.Y);
+        Rot->set_z(Quat.Z);
+        Rot->set_w(Quat.W);
+
+        VCCSim::Twist* TwistData = response_.mutable_twist();
+        VCCSim::Vec3f* LinearVel = TwistData->mutable_linear();
+        LinearVel->set_x(LinearVelocity.X);
+        LinearVel->set_y(LinearVelocity.Y);
+        LinearVel->set_z(LinearVelocity.Z);
+
+        VCCSim::Vec3f* AngularVel = TwistData->mutable_angular();
+        AngularVel->set_x(AngularVelocity.X);
+        AngularVel->set_y(AngularVelocity.Y);
+        AngularVel->set_z(AngularVelocity.Z);
     }
     else
     {
@@ -688,16 +642,19 @@ void SendMeshCall::ProcessRequest()
 {
     if (component_)
     {
-        FTransform MeshTransform(
-            FRotator(
-                request_.transform().roll(),
-                request_.transform().pitch(),
-                request_.transform().yaw()),
-            FVector(
-                request_.transform().x(),
-                request_.transform().y(),
-                request_.transform().z())
+        const VCCSim::Pose& Transform = request_.transform();
+        FVector Location(
+            Transform.position().x(),
+            Transform.position().y(),
+            Transform.position().z()
         );
+        FQuat Quaternion(
+            Transform.rotation().x(),
+            Transform.rotation().y(),
+            Transform.rotation().z(),
+            Transform.rotation().w()
+        );
+        FTransform MeshTransform(Quaternion, Location);
         
         component_->UpdateMeshFromGRPC(
             reinterpret_cast<const uint8*>(request_.data().data()),
@@ -736,16 +693,19 @@ void SendGlobalMeshCall::ProcessRequest()
 {
     if (component_)
     {
-        FTransform MeshTransform(
-            FRotator(
-                request_.transform().roll(),
-                request_.transform().pitch(),
-                request_.transform().yaw()),
-            FVector(
-                request_.transform().x(),
-                request_.transform().y(),
-                request_.transform().z())
+        const VCCSim::Pose& Transform = request_.transform();
+        FVector Location(
+            Transform.position().x(),
+            Transform.position().y(),
+            Transform.position().z()
         );
+        FQuat Quaternion(
+            Transform.rotation().x(),
+            Transform.rotation().y(),
+            Transform.rotation().z(),
+            Transform.rotation().w()
+        );
+        FTransform MeshTransform(Quaternion, Location);
         
         const auto ID = component_->AddGlobalMesh();
         if (component_->UpdateMesh(ID,
@@ -865,15 +825,20 @@ void GetDronePoseCall::ProcessRequest()
     if (RCMap_.contains(request_.name()))
     {
         const auto Drone = RCMap_[request_.name()];
-        const FVector Loc = Drone->GetActorLocation();
-        const FRotator Rot = Drone->GetActorRotation();
+        const FVector Location = Drone->GetActorLocation();
+        const FRotator Rotation = Drone->GetActorRotation();
 
-        response_.set_x(Loc.X);
-        response_.set_y(Loc.Y);
-        response_.set_z(Loc.Z);
-        response_.set_roll(Rot.Roll);
-        response_.set_pitch(Rot.Pitch);
-        response_.set_yaw(Rot.Yaw);
+        VCCSim::Vec3f* Position = response_.mutable_position();
+        Position->set_x(Location.X);
+        Position->set_y(Location.Y);
+        Position->set_z(Location.Z);
+
+        VCCSim::Rotation* Rot = response_.mutable_rotation();
+        FQuat Quat = Rotation.Quaternion();
+        Rot->set_x(Quat.X);
+        Rot->set_y(Quat.Y);
+        Rot->set_z(Quat.Z);
+        Rot->set_w(Quat.W);
     }
     else
     {
@@ -908,16 +873,19 @@ void SendDronePoseCall::ProcessRequest()
     {
         if (ADronePawn* Drone = RCMap_[request_.name()])
         {
+            const VCCSim::Pose& PoseData = request_.pose();
             const FVector TargetLocation(
-                request_.pose().x(),
-                request_.pose().y(),
-                request_.pose().z()
+                PoseData.position().x(),
+                PoseData.position().y(),
+                PoseData.position().z()
             );
-            const FRotator TargetRotation(
-                request_.pose().pitch(),
-                request_.pose().yaw(),
-                request_.pose().roll()
+            const FQuat TargetQuat(
+                PoseData.rotation().x(),
+                PoseData.rotation().y(),
+                PoseData.rotation().z(),
+                PoseData.rotation().w()
             );
+            const FRotator TargetRotation = TargetQuat.Rotator();
             if (!Drone->IfCloseToTarget(TargetLocation, TargetRotation))
             {
                 Drone->SetTarget(TargetLocation, TargetRotation);
@@ -967,10 +935,19 @@ void SendDronePathCall::ProcessRequest()
         {
             TArray<FVector> Positions;
             TArray<FRotator> Rotations;
-            for (const auto& Point : request_.path())
+            for (const auto& PoseData : request_.path())
             {
-                Positions.Add(FVector(Point.x(), Point.y(), Point.z()));
-                Rotations.Add(FRotator(Point.pitch(), Point.yaw(), Point.roll()));
+                Positions.Add(FVector(
+                    PoseData.position().x(),
+                    PoseData.position().y(),
+                    PoseData.position().z()));
+
+                FQuat Quat(
+                    PoseData.rotation().x(),
+                    PoseData.rotation().y(),
+                    PoseData.rotation().z(),
+                    PoseData.rotation().w());
+                Rotations.Add(Quat.Rotator());
             }
             Drone->SetPath(Positions, Rotations);
             response_.set_status(true);
@@ -1022,20 +999,28 @@ void GetCarOdomCall::ProcessRequest()
         const FVector AngularVelocity = Car->GetPhysicsAngularVelocityInDegrees();
 
         VCCSim::Pose* PoseData = response_.mutable_pose();
-        PoseData->set_x(Loc.X);
-        PoseData->set_y(Loc.Y);
-        PoseData->set_z(Loc.Z);
-        PoseData->set_roll(Rot.Roll);
-        PoseData->set_pitch(Rot.Pitch);
-        PoseData->set_yaw(Rot.Yaw);
+        VCCSim::Vec3f* Position = PoseData->mutable_position();
+        Position->set_x(Loc.X);
+        Position->set_y(Loc.Y);
+        Position->set_z(Loc.Z);
 
-        VCCSim::twist* TwistData = response_.mutable_twist();
-        TwistData->set_linear_x(LinearVelocity.X);
-        TwistData->set_linear_y(LinearVelocity.Y);
-        TwistData->set_linear_z(LinearVelocity.Z);
-        TwistData->set_angular_x(AngularVelocity.X);
-        TwistData->set_angular_y(AngularVelocity.Y);
-        TwistData->set_angular_z(AngularVelocity.Z);
+        VCCSim::Rotation* Rotation = PoseData->mutable_rotation();
+        FQuat Quat = Rot.Quaternion();
+        Rotation->set_x(Quat.X);
+        Rotation->set_y(Quat.Y);
+        Rotation->set_z(Quat.Z);
+        Rotation->set_w(Quat.W);
+
+        VCCSim::Twist* TwistData = response_.mutable_twist();
+        VCCSim::Vec3f* LinearVel = TwistData->mutable_linear();
+        LinearVel->set_x(LinearVelocity.X);
+        LinearVel->set_y(LinearVelocity.Y);
+        LinearVel->set_z(LinearVelocity.Z);
+
+        VCCSim::Vec3f* AngularVel = TwistData->mutable_angular();
+        AngularVel->set_x(AngularVelocity.X);
+        AngularVel->set_y(AngularVelocity.Y);
+        AngularVel->set_z(AngularVelocity.Z);
     }
     else
     {
@@ -1071,14 +1056,15 @@ void SendCarPoseCall::ProcessRequest()
     {
         if (ACarPawn* Car = RCMap_[request_.name()])
         {
+            const VCCSim::PoseYawOnly& PoseData = request_.pose();
             const FVector TargetLocation(
-                request_.pose().x(),
-                request_.pose().y(),
-                request_.pose().z()
+                PoseData.position().x(),
+                PoseData.position().y(),
+                PoseData.position().z()
             );
             const FRotator TargetRotation(
                 0.0f,
-                request_.pose().yaw(),
+                PoseData.yaw(),
                 0.0f
             );
             Car->SetTarget(TargetLocation, TargetRotation);
@@ -1127,10 +1113,13 @@ void SendCarPathCall::ProcessRequest()
         {
             TArray<FVector> Positions;
             TArray<FRotator> Rotations;
-            for (const auto& Point : request_.path())
+            for (const auto& PoseData : request_.path())
             {
-                Positions.Add(FVector(Point.x(), Point.y(), Point.z()));
-                Rotations.Add(FRotator(0.0f, Point.yaw(), 0.0f)); // Only Yaw is used
+                Positions.Add(FVector(
+                    PoseData.position().x(),
+                    PoseData.position().y(),
+                    PoseData.position().z()));
+                Rotations.Add(FRotator(0.0f, PoseData.yaw(), 0.0f)); // Only Yaw is used
             }
             Car->SetPath(Positions, Rotations);
             response_.set_status(true);
@@ -1146,222 +1135,6 @@ void SendCarPathCall::ProcessRequest()
     {
         UE_LOG(LogGRPCCall, Warning, TEXT("SendCarPathCall: "
             "Car not found!"));
-        response_.set_status(false);
-    }
-}
-
-GetFlashPoseCall::GetFlashPoseCall(
-    VCCSim::FlashService::AsyncService* service,
-    grpc::ServerCompletionQueue* cq,
-    const std::map<std::string, AFlashPawn*>& rcmap)
-        : AsyncCallTemplateM(service, cq, rcmap)
-{
-    Proceed(true);
-}
-
-void GetFlashPoseCall::PrepareNextCall()
-{
-    new GetFlashPoseCall(service_, cq_, RCMap_);
-}
-
-void GetFlashPoseCall::InitializeRequest()
-{
-    service_->RequestGetFlashPose(
-        &ctx_, &request_, &responder_, cq_, cq_, this);
-}
-
-void GetFlashPoseCall::ProcessRequest()
-{
-    if (RCMap_.contains(request_.name()))
-    {
-        const auto Flash = RCMap_[request_.name()];
-        const FVector Loc = Flash->GetActorLocation();
-        const FRotator Rot = Flash->GetActorRotation();
-
-        response_.set_x(Loc.X);
-        response_.set_y(Loc.Y);
-        response_.set_z(Loc.Z);
-        response_.set_roll(Rot.Roll);
-        response_.set_pitch(Rot.Pitch);
-        response_.set_yaw(Rot.Yaw);
-    }
-    else
-    {
-        UE_LOG(LogGRPCCall, Warning, TEXT("GetFlashPoseCall: "
-                                      "Flash not found!"));
-    }
-}
-
-SendFlashPoseCall::SendFlashPoseCall(
-    VCCSim::FlashService::AsyncService* service,
-    grpc::ServerCompletionQueue* cq,
-    const std::map<std::string, AFlashPawn*>& rcmap)
-        : AsyncCallTemplateM(service, cq, rcmap)
-{
-    Proceed(true);
-}
-
-void SendFlashPoseCall::PrepareNextCall()
-{
-    new SendFlashPoseCall(service_, cq_, RCMap_);
-}
-
-void SendFlashPoseCall::InitializeRequest()
-{
-    service_->RequestSendFlashPose(
-        &ctx_, &request_, &responder_, cq_, cq_, this);
-}
-
-void SendFlashPoseCall::ProcessRequest()
-{
-    if (RCMap_.contains(request_.name()))
-    {
-        if (AFlashPawn* Flash = RCMap_[request_.name()])
-        {
-            const FVector TargetLocation(
-                request_.pose().x(),
-                request_.pose().y(),
-                request_.pose().z()
-            );
-            const FRotator TargetRotation(
-                request_.pose().pitch(),
-                request_.pose().yaw(),
-                request_.pose().roll()
-            );
-            Flash->SetTarget(TargetLocation, TargetRotation);
-            response_.set_status(true);
-        }
-        else
-        {
-            UE_LOG(LogGRPCCall, Warning, TEXT("SendFlashPoseCall: "
-                                          "AFlashPawn* is invalid!"));
-            response_.set_status(false);
-        }
-    }
-    else
-    {
-        UE_LOG(LogGRPCCall, Warning, TEXT("SendFlashPoseCall: "
-                                      "Flash not found!"));
-        response_.set_status(false);
-    }
-}
-
-SendFlashPathCall::SendFlashPathCall(
-    VCCSim::FlashService::AsyncService* service,
-    grpc::ServerCompletionQueue* cq,
-    const std::map<std::string, AFlashPawn*>& rcmap)
-        : AsyncCallTemplateM(service, cq, rcmap)
-{
-    Proceed(true);
-}
-
-void SendFlashPathCall::PrepareNextCall()
-{
-    new SendFlashPathCall(service_, cq_, RCMap_);
-}
-
-void SendFlashPathCall::InitializeRequest()
-{
-    service_->RequestSendFlashPath(
-        &ctx_, &request_, &responder_, cq_, cq_, this);
-}
-
-void SendFlashPathCall::ProcessRequest()
-{
-    if (RCMap_.contains(request_.name()))
-    {
-        if (AFlashPawn* Flash = RCMap_[request_.name()])
-        {
-            TArray<FVector> Positions;
-            TArray<FRotator> Rotations;
-            for (const auto& Point : request_.path())
-            {
-                Positions.Add(FVector(Point.x(), Point.y(), Point.z()));
-                Rotations.Add(FRotator(Point.pitch(), Point.yaw(), Point.roll()));
-            }
-            Flash->SetPath(Positions, Rotations);
-            response_.set_status(true);
-        }
-        else
-        {
-            UE_LOG(LogGRPCCall, Warning, TEXT("SendFlashPathCall: "
-                                          "AFlashPawn* is invalid!"));
-            response_.set_status(false);
-        }
-    }
-    else
-    {
-        UE_LOG(LogGRPCCall, Warning, TEXT("SendFlashPathCall: "
-                                      "Flash not found!"));
-        response_.set_status(false);
-    }
-}
-
-CheckFlashReadyCall::CheckFlashReadyCall(
-    VCCSim::FlashService::AsyncService* service,
-    grpc::ServerCompletionQueue* cq,
-    const std::map<std::string, AFlashPawn*>& rcmap)
-        : AsyncCallTemplateM(service, cq, rcmap)
-{
-    Proceed(true);
-}
-
-void CheckFlashReadyCall::PrepareNextCall()
-{
-    new CheckFlashReadyCall(service_, cq_, RCMap_);
-}
-
-void CheckFlashReadyCall::InitializeRequest()
-{
-    service_->RequestCheckFlashReady(
-        &ctx_, &request_, &responder_, cq_, cq_, this);
-}
-
-void CheckFlashReadyCall::ProcessRequest()
-{
-    if (RCMap_.contains(request_.name()))
-    {
-        response_.set_status(RCMap_[request_.name()]->IsReady());
-    }
-    else
-    {
-        UE_LOG(LogGRPCCall, Warning, TEXT("CheckFlashReadyCall: "
-                                      "Flash not found!"));
-        response_.set_status(false);
-    }
-}
-
-MoveToNextCall::MoveToNextCall(
-    VCCSim::FlashService::AsyncService* service,
-    grpc::ServerCompletionQueue* cq,
-    const std::map<std::string, AFlashPawn*>& rcmap)
-        : AsyncCallTemplateM(service, cq, rcmap)
-{
-    Proceed(true);
-}
-
-void MoveToNextCall::PrepareNextCall()
-{
-    new MoveToNextCall(service_, cq_, RCMap_);
-}
-
-void MoveToNextCall::InitializeRequest()
-{
-    service_->RequestMoveToNext(
-        &ctx_, &request_, &responder_, cq_, cq_, this);
-}
-
-void MoveToNextCall::ProcessRequest()
-{
-    if (RCMap_.contains(request_.name()))
-    {
-        RCMap_[request_.name()]->MoveToNext();
-        response_.set_status(true);
-    }
-    else
-    {
-        UE_LOG(LogGRPCCall, Warning, TEXT("MoveToNextCall: "
-                                      "Flash not found!"));
         response_.set_status(false);
     }
 }

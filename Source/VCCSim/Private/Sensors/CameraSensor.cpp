@@ -18,90 +18,47 @@
 DEFINE_LOG_CATEGORY_STATIC(LogCameraSensor, Log, All);
 
 #include "Sensors/CameraSensor.h"
-#include "DataStructures/RecordData.h"
 #include "Async/AsyncWork.h"
 #include "Windows/WindowsHWrapper.h"
 #include "Utils/InsMeshHolder.h"
-#include "Kismet/GameplayStatics.h"
 #include "Components/InstancedStaticMeshComponent.h"
 
-URGBCameraComponent::URGBCameraComponent()
+URGBDCameraComponent::URGBDCameraComponent()
 {
 }
 
-void URGBCameraComponent::Configure(const FSensorConfig& Config)
+void URGBDCameraComponent::Configure(const FSensorConfig& Config)
 {
     if (!bBPConfigured)
     {
-        const auto RGBConfig = static_cast<const FRGBCameraConfig&>(Config);
-        FOV = RGBConfig.FOV;
-        Width = RGBConfig.Width;
-        Height = RGBConfig.Height;
-        bOrthographic = RGBConfig.bOrthographic;
-        OrthoWidth = RGBConfig.OrthoWidth;
+        const auto RGBDepthConfig = static_cast<const FRGBDCameraConfig&>(Config);
+        FOV = RGBDepthConfig.FOV;
+        Width = RGBDepthConfig.Width;
+        Height = RGBDepthConfig.Height;
+        MaxRange = RGBDepthConfig.MaxRange;
+        MinRange = RGBDepthConfig.MinRange;
+        bSaveRGB = RGBDepthConfig.bSaveRGB;
+        bSaveDepth = RGBDepthConfig.bSaveDepth;
     }
-    
+
     ComputeIntrinsics();
     InitializeRenderTargets();
     SetCaptureComponent();
 }
 
-TFuture<FSensorDataPacket> URGBCameraComponent::CaptureDataAsync()
-{
-    TSharedPtr<TPromise<FSensorDataPacket>> Promise = MakeShared<TPromise<FSensorDataPacket>>();
-    TFuture<FSensorDataPacket> Future = Promise->GetFuture();
-
-    AsyncTask(ENamedThreads::GameThread, [this, Promise]()
-    {
-        FSensorDataPacket Packet;
-        Packet.Type = ESensorType::RGBCamera;
-        Packet.SensorIndex = GetSensorIndex();
-        Packet.OwnerActor = GetOwnerActor();
-        Packet.Timestamp = FPlatformTime::Seconds();
-
-        if (!CheckComponentAndRenderTarget())
-        {
-            Packet.bValid = false;
-            Promise->SetValue(Packet);
-            return;
-        }
-
-        CaptureRGBScene();
-
-        ProcessRGBTextureParam([this, Promise, Packet](const TArray<FColor>& CapturedData) mutable
-        {
-            Async(EAsyncExecution::TaskGraph, [Promise, Packet, CapturedData, Width = this->Width, Height = this->Height]() mutable
-            {
-                auto RGBData = MakeShared<FRGBCameraData>();
-                RGBData->Timestamp = Packet.Timestamp;
-                RGBData->SensorIndex = Packet.SensorIndex;
-                RGBData->Width = Width;
-                RGBData->Height = Height;
-                RGBData->Data = CapturedData;
-
-                Packet.Data = RGBData;
-                Packet.bValid = true;
-                Promise->SetValue(Packet);
-            });
-        });
-    });
-
-    return Future;
-}
-
-void URGBCameraComponent::SetIgnoreLidar(UInsMeshHolder* MeshHolder)
+void URGBDCameraComponent::SetIgnoreLidar(UInsMeshHolder* MeshHolder)
 {
     CaptureComponent->HideComponent(MeshHolder->GetInstancedMeshComponent());
     CaptureComponent->HideComponent(MeshHolder->GetInstancedMeshComponentColor());
 }
 
-void URGBCameraComponent::SetCaptureComponent() const
+void URGBDCameraComponent::SetCaptureComponent() const
 {
     Super::SetCaptureComponent();
 
     if (CaptureComponent)
     {
-        CaptureComponent->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
+        CaptureComponent->CaptureSource = ESceneCaptureSource::SCS_SceneColorSceneDepth;
         CaptureComponent->bCaptureEveryFrame = false;
         CaptureComponent->bCaptureOnMovement = false;
         CaptureComponent->bAlwaysPersistRenderingState = true;
@@ -121,28 +78,28 @@ void URGBCameraComponent::SetCaptureComponent() const
     }
 }
 
-void URGBCameraComponent::InitializeRenderTargets()
+void URGBDCameraComponent::InitializeRenderTargets()
 {
-    RGBRenderTarget = NewObject<UTextureRenderTarget2D>(this);
+    RenderTarget = NewObject<UTextureRenderTarget2D>(this);
 
-    RGBRenderTarget->TargetGamma = GEngine->GetDisplayGamma();
-    RGBRenderTarget->InitCustomFormat(Width, Height,
-        PF_B8G8R8A8, true);
-    RGBRenderTarget->RenderTargetFormat = ETextureRenderTargetFormat::RTF_RGBA8;
-    RGBRenderTarget->bGPUSharedFlag = true;
-    RGBRenderTarget->bAutoGenerateMips = true;
-    
-    RGBRenderTarget->UpdateResource();
+    RenderTarget->TargetGamma = GEngine->GetDisplayGamma();
+    RenderTarget->InitCustomFormat(Width, Height,
+        PF_A32B32G32R32F, true);
+    RenderTarget->RenderTargetFormat = RTF_RGBA32f;
+    RenderTarget->bGPUSharedFlag = true;
+    RenderTarget->bAutoGenerateMips = false;
+
+    RenderTarget->UpdateResource();
 }
 
-void URGBCameraComponent::CaptureRGBScene()
+void URGBDCameraComponent::CaptureRGBDScene()
 {
     if (!CheckComponentAndRenderTarget())
     {
         UE_LOG(LogCameraSensor, Error, TEXT("Component or RenderTarget not valid!"));
         return;
     }
-    
+
     if (IsInGameThread())
     {
         CaptureComponent->CaptureScene();
@@ -156,56 +113,89 @@ void URGBCameraComponent::CaptureRGBScene()
     }
 }
 
-void URGBCameraComponent::AsyncGetRGBImageData(
-    TFunction<void(const TArray<FColor>&)> Callback)
+void URGBDCameraComponent::AsyncGetRGBDImageData(
+    TFunction<void(const TArray<FLinearColor>&)> Callback)
 {
-    AsyncTask(ENamedThreads::GameThread, [this, Callback = MoveTemp(Callback)]()
+    if (!CheckComponentAndRenderTarget())
     {
-        if (!CheckComponentAndRenderTarget())
-        {
-            UE_LOG(LogCameraSensor, Error, TEXT("Component or RenderTarget not valid!"));
-            return;
-        }
-        
-        CaptureComponent->CaptureScene();
-        
-        ProcessRGBTextureParam([Callback](const TArray<FColor>& ColorData)
-        {
-            Callback(ColorData);
-        });
+        UE_LOG(LogCameraSensor, Error, TEXT("Component or RenderTarget not valid!"));
+        return;
+    }
+
+    CaptureRGBDScene();
+
+    ProcessRGBDTextureParam([Callback](const TArray<FLinearColor>& CombinedData)
+    {
+        Callback(CombinedData);
     });
 }
 
-void URGBCameraComponent::ProcessRGBTexture(TFunction<void()> OnComplete)
+
+void URGBDCameraComponent::AsyncGetPointCloudData(TFunction<void()> Callback)
 {
-    ProcessRGBTextureTemplate(std::move(OnComplete));
+    if (!CheckComponentAndRenderTarget())
+    {
+        UE_LOG(LogCameraSensor, Error, TEXT("Component or RenderTarget not valid!"));
+        return;
+    }
+
+    CaptureComponent->CaptureScene();
+
+    ProcessRGBDTexture([this, Callback]()
+    {
+        PointCloudData = GeneratePointCloud();
+        Callback();
+    });
 }
 
-void URGBCameraComponent::ProcessRGBTextureParam(
-    TFunction<void(const TArray<FColor>&)> OnComplete)
+void URGBDCameraComponent::ProcessRGBDTexture(TFunction<void()> OnComplete)
 {
-    ProcessRGBTextureTemplate(std::move(OnComplete));
+    ProcessRGBDepthTextureTemplate(std::move(OnComplete));
 }
 
-void URGBCameraComponent::ContributeToRDGPass(FSensorViewInfo& OutViewInfo)
+void URGBDCameraComponent::ProcessRGBDTextureParam(
+TFunction<void(const TArray<FLinearColor>&)> OnComplete)
 {
-    OutViewInfo.SensorType = ESensorType::RGBCamera;
-    OutViewInfo.MRTSlot = GetMRTSlot();
-
-    FMinimalViewInfo ViewInfo;
-    CaptureComponent->GetCameraView(0.f, ViewInfo);
-    FMatrix ViewMatrix, ProjectionMatrix, ViewProjectionMatrix;
-    UGameplayStatics::GetViewProjectionMatrix(
-        ViewInfo,
-        ViewMatrix,
-        ProjectionMatrix,
-        ViewProjectionMatrix);
-    OutViewInfo.ViewMatrix = ViewMatrix;
-    OutViewInfo.ProjectionMatrix = ProjectionMatrix;OutViewInfo.CaptureSource = ESceneCaptureSource::SCS_Normal;
-
-    OutViewInfo.CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
-    OutViewInfo.Resolution = FIntPoint(Width, Height);
-    OutViewInfo.Provider = this;
-    OutViewInfo.CustomMaterial = nullptr; // Use default rendering
+    ProcessRGBDepthTextureTemplate(std::move(OnComplete));
 }
 
+TArray<FDCPoint> URGBDCameraComponent::GeneratePointCloud()
+{
+    TArray<FDCPoint> Points;
+    if (CombinedData.Num() != Width * Height)
+    {
+        return Points;
+    }
+
+    Points.Reserve(Width * Height);
+
+    const float FocalLengthX = (Width * 0.5f) / FMath::Tan(FMath::DegreesToRadians(FOV * 0.5f));
+    const float FocalLengthY = (Height * 0.5f) / FMath::Tan(FMath::DegreesToRadians(FOV * 0.5f));
+    const float CenterX = Width * 0.5f;
+    const float CenterY = Height * 0.5f;
+
+    for (int32 Y = 0; Y < Height; ++Y)
+    {
+        for (int32 X = 0; X < Width; ++X)
+        {
+            const int32 Index = Y * Width + X;
+            const float Depth = CombinedData[Index].A * MaxRange;
+
+            if (Depth > MinRange && Depth < MaxRange)
+            {
+                FDCPoint Point;
+                Point.Location.X = ((X - CenterX) / FocalLengthX) * Depth;
+                Point.Location.Y = ((Y - CenterY) / FocalLengthY) * Depth;
+                Point.Location.Z = Depth;
+                Points.Add(Point);
+            }
+        }
+    }
+
+    return Points;
+}
+
+void URGBDCameraComponent::VisualizePointCloud()
+{
+    PointCloudData = GeneratePointCloud();
+}

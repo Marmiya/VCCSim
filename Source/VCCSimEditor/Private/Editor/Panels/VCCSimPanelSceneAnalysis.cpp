@@ -453,12 +453,12 @@ TSharedRef<SWidget> FVCCSimPanelSceneAnalysis::CreateSceneOperationButtons()
         .OnClicked_Lambda([this]() {
             if (SceneAnalysisManager.IsValid())
             {
-                URGBCameraComponent* Camera = nullptr;
+                URGBDCameraComponent* Camera = nullptr;
                 if (auto PinnedSelectionManager = SelectionManager.Pin())
                 {
                     if (PinnedSelectionManager->GetSelectedFlashPawn().IsValid())
                     {
-                        Camera = PinnedSelectionManager->GetSelectedFlashPawn()->GetComponentByClass<URGBCameraComponent>();
+                        Camera = PinnedSelectionManager->GetSelectedFlashPawn()->GetComponentByClass<URGBDCameraComponent>();
                     }
                 }
                 if (Camera)

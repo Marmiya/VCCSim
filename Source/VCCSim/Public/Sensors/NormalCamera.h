@@ -49,20 +49,15 @@ public:
     void CaptureNormalScene();
     UFUNCTION(BlueprintCallable, Category = "NormalCamera")
     void CaptureNormalSceneAndProcess();
-    virtual UTextureRenderTarget2D* GetRenderTarget() const override { return NormalRenderTarget; }
+    virtual UTextureRenderTarget2D* GetRenderTarget() const override { return RenderTarget; }
 
     // For grpc server
     void AsyncGetNormalImageData(TFunction<void(const TArray<FLinearColor>&)> Callback);
 
     // ISensorDataProvider interface
-    virtual TFuture<FSensorDataPacket> CaptureDataAsync() override;
     virtual FIntPoint GetResolution() const override { return FIntPoint(Width, Height); }
     virtual ESensorType GetSensorType() const override { return ESensorType::NormalCamera; }
     virtual AActor* GetOwnerActor() const override { return ParentActor; }
-
-    // RDG interface
-    virtual void ContributeToRDGPass(FSensorViewInfo& OutViewInfo) override;
-    virtual int32 GetMRTSlot() const override { return 2; }
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NormalCamera|Config")
     UMaterialInterface* NormalMaterial = Cast<UMaterialInterface>(
@@ -76,9 +71,6 @@ protected:
     void ProcessNormalTexture(TFunction<void()> OnComplete);
     void ProcessNormalTextureParam(TFunction<void(const TArray<FLinearColor>&)> OnComplete);
 
-    UPROPERTY()
-    UTextureRenderTarget2D* NormalRenderTarget = nullptr;
-
 private:    
     TArray<FLinearColor> NormalData;
     bool Dirty = false;
@@ -90,7 +82,7 @@ private:
 template<typename CallbackType>
 void UNormalCameraComponent::ProcessNormalTextureTemplate(CallbackType&& Callback)
 {
-    if (!NormalRenderTarget) { UE_LOG(LogTemp, Error, TEXT("NormalRenderTarget is null!")); return; }
+    if (!RenderTarget) { UE_LOG(LogTemp, Error, TEXT("NormalRenderTarget is null!")); return; }
 
     if (NormalData.Num() != Width * Height)
     {
@@ -105,7 +97,7 @@ void UNormalCameraComponent::ProcessNormalTextureTemplate(CallbackType&& Callbac
 
     auto SharedCallback = MakeShared<std::decay_t<CallbackType>>(std::forward<CallbackType>(Callback));
 
-    UTextureRenderTarget2D* RT = NormalRenderTarget;
+    UTextureRenderTarget2D* RT = RenderTarget;
 
     ENQUEUE_RENDER_COMMAND(ReadNormalSurfaceCommand)(
         [RT, Context, SharedCallback](FRHICommandListImmediate& RHICmdList)
