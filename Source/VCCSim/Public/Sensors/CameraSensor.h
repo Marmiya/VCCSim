@@ -78,7 +78,6 @@ public:
     virtual FIntPoint GetResolution() const override { return FIntPoint(Width, Height); }
     virtual ESensorType GetSensorType() const override { return ESensorType::RGBDCamera; }
     virtual AActor* GetOwnerActor() const override { return ParentActor; }
-
     
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "RGBDCamera|Config")
     float MaxRange = 10000.0f;
@@ -95,6 +94,11 @@ public:
     TArray<FDCPoint> PointCloudData;
 
     const TArray<FLinearColor>& GetCombinedData() const { return CombinedData; }
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "RGBDCamera|Config")
+    UMaterialInterface* RGBDMaterial = Cast<UMaterialInterface>(
+        StaticLoadObject(UMaterialInterface::StaticClass(), nullptr,
+            TEXT("/VCCSim/Materials/M_RGBD.M_RGBD")));
         
 protected:
     virtual void InitializeRenderTargets() override;

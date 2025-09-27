@@ -116,6 +116,11 @@ void USegmentationCameraComponent::ProcessSegTextureTemplate(CallbackType&& Call
                 *Context.OutData,
                 Context.Flags
             );
+            
+            for (auto& Color : *Context.OutData)
+            {
+                Color.A = 255;
+            }
 
             if constexpr (std::is_invocable_v<std::decay_t<CallbackType>>)
             { (*SharedCallback)(); }

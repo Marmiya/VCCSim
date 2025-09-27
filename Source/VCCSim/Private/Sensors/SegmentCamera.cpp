@@ -46,10 +46,7 @@ void USegmentationCameraComponent::Configure(const FSensorConfig& Config)
         {
             GetWorld()->GetTimerManager().SetTimerForNextTick([this]()
             {
-                if (CaptureComponent)
-                {
-                    CaptureComponent->ShowOnlyActors.Empty();
-                }
+                CaptureSegmentationScene();
             });
         });
     }
@@ -60,31 +57,37 @@ void USegmentationCameraComponent::InitializeRenderTargets()
     RenderTarget = NewObject<UTextureRenderTarget2D>(this);
     RenderTarget->InitCustomFormat(Width, Height, PF_B8G8R8A8, true);
     RenderTarget->RenderTargetFormat = RTF_RGBA8;
+    RenderTarget->UpdateResource();
 }
 
 void USegmentationCameraComponent::SetCaptureComponent() const
 {
     Super::SetCaptureComponent();
 
-    if (CaptureComponent)
-    {
-        CaptureComponent->PrimitiveRenderMode = ESceneCapturePrimitiveRenderMode::PRM_RenderScenePrimitives;
-        CaptureComponent->CaptureSource = SCS_FinalColorLDR;
-        CaptureComponent->TextureTarget = RenderTarget;
+    CaptureComponent->CaptureSource = SCS_FinalColorLDR;
 
-        // Apply segmentation material for proper segmentation rendering
-        if (SegmentationMaterial)
-        {
-            CaptureComponent->PostProcessSettings.WeightedBlendables.Array.Empty();
-            FWeightedBlendable WeightedBlendable;
-            WeightedBlendable.Object = SegmentationMaterial;
-            WeightedBlendable.Weight = 1.f;
-            CaptureComponent->PostProcessSettings.WeightedBlendables.Array.Add(WeightedBlendable);
-        }
-        else
-        {
-            UE_LOG(LogSegmentCamera, Error, TEXT("Segmentation material not set!"));
-        }
+    CaptureComponent->ShowFlags.DisableFeaturesForUnlit();
+
+    CaptureComponent->ShowFlags.SetPostProcessing(true); 
+    CaptureComponent->ShowFlags.SetPostProcessMaterial(true);
+    
+    CaptureComponent->ShowFlags.SetAntiAliasing(false);
+    CaptureComponent->ShowFlags.SetMotionBlur(false);
+
+    CaptureComponent->bAlwaysPersistRenderingState = true;
+    
+    CaptureComponent->bCaptureOnMovement = true;
+    if (SegmentationMaterial)
+    {
+        CaptureComponent->PostProcessSettings.WeightedBlendables.Array.Empty();
+        FWeightedBlendable WeightedBlendable;
+        WeightedBlendable.Object = SegmentationMaterial;
+        WeightedBlendable.Weight = 1.f;
+        CaptureComponent->PostProcessSettings.WeightedBlendables.Array.Add(WeightedBlendable);
+    }
+    else
+    {
+        UE_LOG(LogSegmentCamera, Error, TEXT("Segmentation material not set!"));
     }
 }
 
@@ -108,7 +111,8 @@ void USegmentationCameraComponent::CaptureSegmentationScene()
     }
 }
 
-void USegmentationCameraComponent::AsyncGetSegmentationImageData(TFunction<void(const TArray<FColor>&)> Callback)
+void USegmentationCameraComponent::AsyncGetSegmentationImageData(
+    TFunction<void(const TArray<FColor>&)> Callback)
 {
     AsyncTask(ENamedThreads::GameThread, [this, Callback = MoveTemp(Callback)]()
     {

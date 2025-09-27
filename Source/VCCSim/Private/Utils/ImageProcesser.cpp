@@ -158,7 +158,7 @@ void FAsyncNormalEXRSaveTask::DoWork()
     Image.Init(Size.X, Size.Y, ERawImageFormat::RGBA32F);
 
     // Convert FLinearColor to FImage data
-    TArrayView64<FLinearColor> ImageData = Image.AsRGBA32F();
+    TArrayView64<FFloat16Color> ImageData = Image.AsRGBA16F();
 
     if (ImageData.Num() != NormalPixels.Num())
     {

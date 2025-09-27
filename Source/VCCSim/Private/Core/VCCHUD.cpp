@@ -36,14 +36,6 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogVCCHUD, Log, All);
 
-AVCCHUD::AVCCHUD()
-{
-}
-
-AVCCHUD::~AVCCHUD()
-{
-}
-
 void AVCCHUD::BeginPlay()
 {
     Super::BeginPlay();
@@ -67,18 +59,15 @@ void AVCCHUD::BeginPlay()
     
     if (Config.VCCSim.StartWithRecording)
     {
-        UE_LOG(LogVCCHUD, Log, TEXT("Starting recording automatically (StartWithRecording=true)"));
+        UE_LOG(LogVCCHUD, Log, TEXT("Starting recording automatically"));
         Recorder->StartRecording();
-    }
-    else
-    {
-        UE_LOG(LogVCCHUD, Log, TEXT("Recording not started automatically (StartWithRecording=false)"));
     }
 }
 
 void AVCCHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-    UE_LOG(LogVCCHUD, Warning, TEXT("VCCHUD::EndPlay called, reason: %d - Stopping recording"), (int32)EndPlayReason);
+    UE_LOG(LogVCCHUD, Warning, TEXT("VCCHUD::EndPlay called, reason: %d "
+                                    "- Stopping recording"), (int32)EndPlayReason);
 
     // Clean up Recorder FIRST before calling Super::EndPlay
     if (Recorder)

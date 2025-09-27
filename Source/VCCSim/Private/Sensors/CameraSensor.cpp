@@ -56,25 +56,30 @@ void URGBDCameraComponent::SetCaptureComponent() const
 {
     Super::SetCaptureComponent();
 
-    if (CaptureComponent)
-    {
-        CaptureComponent->CaptureSource = ESceneCaptureSource::SCS_SceneColorSceneDepth;
-        CaptureComponent->bCaptureEveryFrame = false;
-        CaptureComponent->bCaptureOnMovement = false;
-        CaptureComponent->bAlwaysPersistRenderingState = true;
-        CaptureComponent->PrimaryComponentTick.bCanEverTick = true;
+    CaptureComponent->CaptureSource = SCS_FinalColorLDR;
+    CaptureComponent->bAlwaysPersistRenderingState = true;
+    CaptureComponent->PrimaryComponentTick.bCanEverTick = true;
+    
+    FEngineShowFlags& ShowFlags = CaptureComponent->ShowFlags;
+    ShowFlags.EnableAdvancedFeatures();
+    ShowFlags.SetPostProcessing(true);
+    ShowFlags.SetTonemapper(true);
+    ShowFlags.SetBloom(true);
+    ShowFlags.SetLumenGlobalIllumination(true);
+    ShowFlags.SetLumenReflections(true);
+    ShowFlags.SetAntiAliasing(true);
 
-        FEngineShowFlags& ShowFlags = CaptureComponent->ShowFlags;
-        ShowFlags.EnableAdvancedFeatures();
-        ShowFlags.SetPostProcessing(true);
-        ShowFlags.SetTonemapper(true);
-        ShowFlags.SetBloom(true);
-        ShowFlags.SetLumenGlobalIllumination(true);
-        ShowFlags.SetLumenReflections(true);
+    if (RGBDMaterial)
+    {
+        CaptureComponent->PostProcessSettings.WeightedBlendables.Array.Empty();
+        FWeightedBlendable WeightedBlendable;
+        WeightedBlendable.Object = RGBDMaterial;
+        WeightedBlendable.Weight = 1.f;
+        CaptureComponent->PostProcessSettings.WeightedBlendables.Array.Add(WeightedBlendable);
     }
     else
     {
-        UE_LOG(LogCameraSensor, Error, TEXT("Capture component not initialized!"));
+        UE_LOG(LogCameraSensor, Error, TEXT("RGBDMaterial material not set!"));
     }
 }
 

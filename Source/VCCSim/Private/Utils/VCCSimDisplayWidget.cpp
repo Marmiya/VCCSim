@@ -743,8 +743,12 @@ void UVCCSIMDisplayWidget::SaveRenderTargetToDisk(
     {
         TArray<FColor> Pixels;
         Pixels.SetNum(Size.X * Size.Y);
-
         bool bReadPixels = RTResource->ReadPixels(Pixels);
+        for (FColor& Color : Pixels)
+        {
+            Color.A = 255;
+        }
+        
         if (!bReadPixels)
         {
             UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("Failed to read pixels from RenderTarget."));

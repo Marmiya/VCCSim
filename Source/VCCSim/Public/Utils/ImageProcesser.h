@@ -99,7 +99,7 @@ class VCCSIM_API FAsyncNormalEXRSaveTask : public FNonAbandonableTask
 {
 public:
     FAsyncNormalEXRSaveTask(
-        const TArray<FLinearColor>& InNormalPixels,
+        const TArray<FFloat16Color>& InNormalPixels,
         FIntPoint InSize,
         const FString& InFilePath)
         : NormalPixels(InNormalPixels)
@@ -116,7 +116,7 @@ public:
     }
 
 private:
-    TArray<FLinearColor> NormalPixels;
+    TArray<FFloat16Color> NormalPixels;
     FIntPoint Size;
     FString FilePath;
 };

@@ -52,27 +52,22 @@ public:
     virtual UTextureRenderTarget2D* GetRenderTarget() const override { return RenderTarget; }
 
     // For grpc server
-    void AsyncGetNormalImageData(TFunction<void(const TArray<FLinearColor>&)> Callback);
+    void AsyncGetNormalImageData(TFunction<void(const TArray<FFloat16Color>&)> Callback);
 
     // ISensorDataProvider interface
     virtual FIntPoint GetResolution() const override { return FIntPoint(Width, Height); }
     virtual ESensorType GetSensorType() const override { return ESensorType::NormalCamera; }
     virtual AActor* GetOwnerActor() const override { return ParentActor; }
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NormalCamera|Config")
-    UMaterialInterface* NormalMaterial = Cast<UMaterialInterface>(
-        StaticLoadObject(UMaterialInterface::StaticClass(), nullptr,
-            TEXT("/VCCSim/Materials/M_Normal.M_Normal")));
-
 protected:
     virtual void InitializeRenderTargets() override;
     virtual void SetCaptureComponent() const override;
 
     void ProcessNormalTexture(TFunction<void()> OnComplete);
-    void ProcessNormalTextureParam(TFunction<void(const TArray<FLinearColor>&)> OnComplete);
+    void ProcessNormalTextureParam(TFunction<void(const TArray<FFloat16Color>&)> OnComplete);
 
 private:    
-    TArray<FLinearColor> NormalData;
+    TArray<FFloat16Color> NormalData;
     bool Dirty = false;
 
     template<typename CallbackType>
@@ -91,7 +86,7 @@ void UNormalCameraComponent::ProcessNormalTextureTemplate(CallbackType&& Callbac
 
     struct FReadSurfaceContext
     {
-        TArray<FLinearColor>* OutData;
+        TArray<FFloat16Color>* OutData;
         FIntRect Rect;
     } Context { &NormalData, FIntRect(0, 0, Width, Height) };
 
@@ -107,7 +102,7 @@ void UNormalCameraComponent::ProcessNormalTextureTemplate(CallbackType&& Callbac
             FTextureRenderTargetResource* RTRes = RT->GetRenderTargetResource();
             if (!RTRes) return;
 
-            RHICmdList.ReadSurfaceData(
+            RHICmdList.ReadSurfaceFloatData(
                 RTRes->GetRenderTargetTexture(),
                 Context.Rect,
                 *Context.OutData,
@@ -116,7 +111,7 @@ void UNormalCameraComponent::ProcessNormalTextureTemplate(CallbackType&& Callbac
 
             if constexpr (std::is_invocable_v<std::decay_t<CallbackType>>)
             { (*SharedCallback)(); }
-            else if constexpr (std::is_invocable_v<std::decay_t<CallbackType>, const TArray<FLinearColor>&>)
+            else if constexpr (std::is_invocable_v<std::decay_t<CallbackType>, const TArray<FFloat16Color>&>)
             { (*SharedCallback)(*Context.OutData); }
         }
     );

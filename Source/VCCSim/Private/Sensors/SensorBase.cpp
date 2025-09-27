@@ -52,6 +52,10 @@ UCameraBaseComponent::UCameraBaseComponent()
 		CaptureComponent->bCaptureEveryFrame = false;
 		CaptureComponent->bCaptureOnMovement = false;
 	}
+	else 
+	{
+		UE_LOG(LogCameraSensor, Error, TEXT("Failed to create CaptureComponent!"));
+	}
 }
 
 void UCameraBaseComponent::SetCaptureComponent() const

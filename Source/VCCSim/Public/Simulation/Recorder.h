@@ -57,8 +57,7 @@ private:
 
     void TickRecording();
     void CollectSensorDataConcurrently();
-    void AddMRTRenderPass(FRDGBuilder& GraphBuilder,
-        const TArray<ISensorDataProvider*>& Sensors, TArray<FRDGTextureRef> MRTTextures);
+    void ProcessSensorsDirectly(FRDGBuilder& GraphBuilder, const TArray<ISensorDataProvider*>& Sensors);
 
     void InitializeAsyncWriter();
     void ShutdownAsyncWriter();

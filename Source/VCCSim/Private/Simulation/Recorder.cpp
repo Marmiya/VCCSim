@@ -246,118 +246,76 @@ void ARecorder::CollectSensorDataConcurrently()
                         }
                         break;
                     default:
-                        UE_LOG(LogRecorder, Warning, TEXT("Unsupported sensor type for MRT: %d"),
+                        UE_LOG(LogRecorder, Warning, TEXT("Unsupported sensor type: %d"),
                             static_cast<int32>(Sensor->GetSensorType()));
                         break;
                 }
             }
         }
 
-        // After scene captures, execute MRT render command
-        ENQUEUE_RENDER_COMMAND(MRTSensorCapture)(
+        ENQUEUE_RENDER_COMMAND(DirectSensorCapture)(
             [this, Sensors](FRHICommandListImmediate& RHICmdList)
             {
                 FRDGBuilder GraphBuilder(RHICmdList);
-                TArray<FRDGTextureRef> MRTTextures;
-
-                for (ISensorDataProvider* Sensor : Sensors)
-                {
-                    FIntPoint Resolution = Sensors[0]->GetResolution();
-                    if (Sensor->GetSensorType() == ESensorType::RGBDCamera)
-                    {
-                        MRTTextures.Add(GraphBuilder.CreateTexture(
-                        FRDGTextureDesc::Create2D(Resolution, PF_A32B32G32R32F, FClearValueBinding::Black,
-                        TexCreate_RenderTargetable | TexCreate_UAV), TEXT("MRT_Normal")));
-                    }
-                    else if (Sensor->GetSensorType() == ESensorType::SegmentationCamera)
-                    {
-                        MRTTextures.Add(GraphBuilder.CreateTexture(
-                        FRDGTextureDesc::Create2D(Resolution, PF_B8G8R8A8, FClearValueBinding::Black,
-                        TexCreate_RenderTargetable | TexCreate_UAV), TEXT("MRT_Segment")));
-                    }
-                    else if (Sensor->GetSensorType() == ESensorType::NormalCamera)
-                    {
-                        MRTTextures.Add(GraphBuilder.CreateTexture(
-                        FRDGTextureDesc::Create2D(Resolution, PF_B8G8R8A8, FClearValueBinding::Black,
-                        TexCreate_RenderTargetable | TexCreate_UAV), TEXT("MRT_Normal")));
-                    }
-                }
-
-                // Copy from sensor render targets to MRT textures
-                AddMRTRenderPass(GraphBuilder, Sensors, MRTTextures);
-
+                ProcessSensorsDirectly(GraphBuilder, Sensors);
                 GraphBuilder.Execute();
             }
         );
     });
 }
 
-void ARecorder::AddMRTRenderPass(FRDGBuilder& GraphBuilder,
-        const TArray<ISensorDataProvider*>& Sensors, TArray<FRDGTextureRef> MRTTextures)
+void ARecorder::ProcessSensorsDirectly(FRDGBuilder& GraphBuilder, const TArray<ISensorDataProvider*>& Sensors)
 {
-    // Copy from sensor render targets to MRT textures
-    for (int i = 0; i < Sensors.Num(); ++i)
-    {
-        ISensorDataProvider* Sensor = Sensors[i];
-        UTextureRenderTarget2D* SensorRT = Sensor->GetRenderTarget();
-        FRDGTextureRef TargetTexture = MRTTextures.IsValidIndex(i) ? MRTTextures[i] : nullptr;
-        if (!TargetTexture) continue;
-        // Register the sensor's render target as external texture
-        FTextureRenderTargetResource* RTResource = SensorRT->GetRenderTargetResource();
-        if (RTResource && RTResource->GetRenderTargetTexture())
-        {
-            FRDGTextureRef SensorTexture = GraphBuilder.RegisterExternalTexture(
-                CreateRenderTarget(RTResource->GetRenderTargetTexture(), TEXT("SensorRT")));
-
-            // Add copy pass from sensor RT to MRT texture
-            AddCopyTexturePass(GraphBuilder, SensorTexture, TargetTexture, FRHICopyTextureInfo());
-        }
-    }
-
-    // Extract data from all textures after copying
     double Timestamp = FPlatformTime::Seconds();
 
-    for (int i = 0; i < Sensors.Num(); ++i)
+    for (ISensorDataProvider* Sensor : Sensors)
     {
-        FIntPoint Resolution = Sensors[i]->GetResolution();
-        ISensorDataProvider* Sensor = Sensors[i];
-        FRDGTextureRef TargetTexture = MRTTextures[i];
+        UTextureRenderTarget2D* SensorRT = Sensor->GetRenderTarget();
+        if (!SensorRT)
+        {
+            UE_LOG(LogRecorder, Warning, TEXT("No render target for sensor type %d"), static_cast<int32>(Sensor->GetSensorType()));
+            continue;
+        }
 
-        FRHIGPUTextureReadback* Readback = new FRHIGPUTextureReadback(TEXT("MRTSensorReadback"));
+        FTextureRenderTargetResource* RTResource = SensorRT->GetRenderTargetResource();
+        if (!RTResource || !RTResource->GetRenderTargetTexture())
+        {
+            UE_LOG(LogRecorder, Warning, TEXT("Invalid render target resource for sensor type %d"), static_cast<int32>(Sensor->GetSensorType()));
+            continue;
+        }
 
-        AddEnqueueCopyPass(GraphBuilder, Readback, TargetTexture, FResolveRect());
+        FRDGTextureRef SensorTexture = GraphBuilder.RegisterExternalTexture(
+            CreateRenderTarget(RTResource->GetRenderTargetTexture(), TEXT("SensorRT")));
 
-        // Store context for later processing after graph execution
+        FIntPoint Resolution = Sensor->GetResolution();
+        FRHIGPUTextureReadback* Readback = new FRHIGPUTextureReadback(TEXT("DirectSensorReadback"));
+
+        AddEnqueueCopyPass(GraphBuilder, Readback, SensorTexture, FResolveRect());
+
         TSharedPtr<FRHIGPUTextureReadback> SharedReadback(Readback);
-
-        // Process readback after render graph executes
         TWeakObjectPtr WeakThis(this);
+
         Async(EAsyncExecution::TaskGraph, [WeakThis, Sensor, SharedReadback, Resolution, Timestamp]()
         {
-            // Wait for readback completion with timeout
             int32 TimeoutCounter = 0;
-            const int32 MaxTimeout = 5000; // 5 seconds
+            const int32 MaxTimeout = 5000;
             while (!SharedReadback->IsReady() && TimeoutCounter < MaxTimeout)
             {
-                FPlatformProcess::Sleep(0.001f); // 1ms
+                FPlatformProcess::Sleep(0.001f);
                 TimeoutCounter++;
             }
 
             if (TimeoutCounter >= MaxTimeout)
             {
-                UE_LOG(LogRecorder, Error, TEXT("Readback timeout for sensor type %d"),
-                       static_cast<int32>(Sensor->GetSensorType()));
+                UE_LOG(LogRecorder, Error, TEXT("Readback timeout for sensor type %d"), static_cast<int32>(Sensor->GetSensorType()));
                 return;
             }
 
-            // Get pixel data with validation
             int32 RowPitchInPixels = 0;
             const void* PixelData = SharedReadback->Lock(RowPitchInPixels);
-
             if (!PixelData)
             {
-                UE_LOG(LogRecorder, Error, TEXT("Failed to lock readback data for sensor type %d"),
-                       static_cast<int32>(Sensor->GetSensorType()));
+                UE_LOG(LogRecorder, Error, TEXT("Failed to lock readback data for sensor type %d"), static_cast<int32>(Sensor->GetSensorType()));
                 return;
             }
 
@@ -365,24 +323,25 @@ void ARecorder::AddMRTRenderPass(FRDGBuilder& GraphBuilder,
             int32 Height = Resolution.Y;
             int32 NumPixels = Width * Height;
 
-            // Validate dimensions
             if (Width <= 0 || Height <= 0 || NumPixels <= 0)
             {
-                UE_LOG(LogRecorder, Error, TEXT("Invalid resolution %dx%d for sensor type %d"),
-                       Width, Height, static_cast<int32>(Sensor->GetSensorType()));
+                UE_LOG(LogRecorder, Error, TEXT("Invalid resolution %dx%d for sensor type %d"), Width, Height, static_cast<int32>(Sensor->GetSensorType()));
+                SharedReadback->Unlock();
+                return;
+            }
+
+            if (!WeakThis.IsValid())
+            {
                 SharedReadback->Unlock();
                 return;
             }
 
             FSensorDataPacket Packet;
             Packet.Type = Sensor->GetSensorType();
+            Packet.SensorIndex = 0;
             if (auto* SensorBase = Cast<USensorBaseComponent>(Sensor))
             {
                 Packet.SensorIndex = SensorBase->GetSensorIndex();
-            }
-            else
-            {
-                Packet.SensorIndex = 0;
             }
             Packet.OwnerActor = Sensor->GetOwnerActor();
             Packet.bValid = true;
@@ -396,7 +355,7 @@ void ARecorder::AddMRTRenderPass(FRDGBuilder& GraphBuilder,
                     NormalData->Width = Width;
                     NormalData->Height = Height;
                     NormalData->SensorIndex = Packet.SensorIndex;
-                    NormalData->Data.SetNumUninitialized(Width * Height);
+                    NormalData->Data.SetNumUninitialized(NumPixels);
                     const FColor* SourceColors = static_cast<const FColor*>(PixelData);
                     for (int32 i = 0; i < NumPixels; i++)
                     {
@@ -417,6 +376,7 @@ void ARecorder::AddMRTRenderPass(FRDGBuilder& GraphBuilder,
                     for (int32 i = 0; i < NumPixels; i++)
                     {
                         SegData->Data[i] = SourceColors[i];
+                        SegData->Data[i].A = 255;
                     }
                     Packet.Data = SegData;
                     break;
@@ -429,23 +389,24 @@ void ARecorder::AddMRTRenderPass(FRDGBuilder& GraphBuilder,
                     RGBDData->Height = Height;
                     RGBDData->SensorIndex = Packet.SensorIndex;
                     URGBDCameraComponent* RGBDCamera = Cast<URGBDCameraComponent>(Sensor);
-                    if (RGBDCamera->bSaveRGB)
+                    if (RGBDCamera && RGBDCamera->bSaveRGB)
                     {
                         RGBDData->RGBData.SetNumUninitialized(NumPixels);
                     }
-                    if (RGBDCamera->bSaveDepth)
+                    if (RGBDCamera && RGBDCamera->bSaveDepth)
                     {
                         RGBDData->DepthData.SetNumUninitialized(NumPixels);
                     }
                     const FLinearColor* SourceColors = static_cast<const FLinearColor*>(PixelData);
                     for (int32 i = 0; i < NumPixels; i++)
                     {
-                        if (RGBDCamera->bSaveRGB)
+                        if (RGBDCamera && RGBDCamera->bSaveRGB)
                         {
                             FColor EncodedColor = SourceColors[i].ToFColor(true);
                             RGBDData->RGBData[i] = EncodedColor;
+                            RGBDData->RGBData[i].A = 255;
                         }
-                        if (RGBDCamera->bSaveDepth)
+                        if (RGBDCamera && RGBDCamera->bSaveDepth)
                         {
                             RGBDData->DepthData[i] = SourceColors[i].A;
                         }
@@ -458,7 +419,7 @@ void ARecorder::AddMRTRenderPass(FRDGBuilder& GraphBuilder,
                     break;
             }
 
-            if (Packet.bValid && WeakThis.Get()->FileWriter.IsValid())
+            if (Packet.bValid && WeakThis.Get() && WeakThis.Get()->FileWriter.IsValid())
             {
                 WeakThis.Get()->FileWriter->WriteDataAsync(Packet);
             }

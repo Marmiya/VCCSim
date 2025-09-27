@@ -979,7 +979,7 @@ void FVCCSimPanelPathImageCapture::SaveNormal(int32 PoseIndex, bool& bAnyCapture
             // Save high precision normals as EXR
             Camera->AsyncGetNormalImageData(
                 [NormalEXRFilename, Size, JobNum = this->JobNum]
-                (const TArray<FLinearColor>& NormalData)
+                (const TArray<FFloat16Color>& NormalData)
                 {
                     (new FAutoDeleteAsyncTask<FAsyncNormalEXRSaveTask>(
                         NormalData, 

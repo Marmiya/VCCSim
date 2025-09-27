@@ -39,8 +39,8 @@ class VCCSIM_API AVCCHUD : public AHUD
 	GENERATED_BODY()
 
 public:
-	AVCCHUD();
-	virtual ~AVCCHUD();
+	AVCCHUD() = default;
+	~AVCCHUD() = default;
 
 	void SetupRecorder(FVCCSimConfig& Config);
 	virtual void BeginPlay() override;

@@ -45,11 +45,12 @@ void UNormalCameraComponent::Configure(const FSensorConfig& Config)
 void UNormalCameraComponent::SetCaptureComponent() const
 {
     Super::SetCaptureComponent();
-
-    if (CaptureComponent)
-    {
-        CaptureComponent->CaptureSource = ESceneCaptureSource::SCS_Normal;
-    }
+    
+    CaptureComponent->CaptureSource = SCS_Normal;
+    
+    CaptureComponent->ShowFlags.DisableFeaturesForUnlit();
+    CaptureComponent->ShowFlags.SetAntiAliasing(false);
+    CaptureComponent->ShowFlags.SetMotionBlur(false);
 }
 
 void UNormalCameraComponent::InitializeRenderTargets()
@@ -94,13 +95,13 @@ void UNormalCameraComponent::ProcessNormalTexture(TFunction<void()> OnComplete)
 }
 
 void UNormalCameraComponent::ProcessNormalTextureParam(
-    TFunction<void(const TArray<FLinearColor>&)> OnComplete)
+    TFunction<void(const TArray<FFloat16Color>&)> OnComplete)
 {
     ProcessNormalTextureTemplate(std::move(OnComplete));
 }
 
 void UNormalCameraComponent::AsyncGetNormalImageData(
-    TFunction<void(const TArray<FLinearColor>&)> Callback)
+    TFunction<void(const TArray<FFloat16Color>&)> Callback)
 {
     AsyncTask(ENamedThreads::GameThread,
         [this, Callback = MoveTemp(Callback)]() {
