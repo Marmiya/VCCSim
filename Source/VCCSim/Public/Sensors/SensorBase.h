@@ -20,13 +20,15 @@
 #include "CoreMinimal.h"
 #include "Components/PrimitiveComponent.h"
 #include "Components/SceneCaptureComponent2D.h"
+#include "DataStructures/RecordData.h"
 #include "SensorBase.generated.h"
 
 
 enum class ESensorType : uint8
 {
 	Lidar = 3,
-	RGBDCamera = 4,
+	RGBCamera = 4,
+	DepthCamera = 5,
 	NormalCamera = 6,
 	SegmentationCamera = 7
 };
@@ -53,6 +55,24 @@ public:
 	int32 Height = 512;
 };
 
+struct VCCSIM_API FSensorDataPacket
+{
+	ESensorType Type;
+	int32 SensorIndex;
+	AActor* OwnerActor;
+	TSharedPtr<FSensorData> Data;
+	bool bValid;
+
+	FSensorDataPacket()
+		: Type(ESensorType::RGBCamera)
+		, SensorIndex(0)
+		, OwnerActor(nullptr)
+		, Data(nullptr)
+		, bValid(false)
+	{
+	}
+};
+
 UCLASS(Abstract, ClassGroup = (VCCSIM), meta = (BlueprintSpawnableComponent))
 class VCCSIM_API USensorBaseComponent : public UPrimitiveComponent
 {
@@ -61,7 +81,8 @@ class VCCSIM_API USensorBaseComponent : public UPrimitiveComponent
 public:
 	USensorBaseComponent();
 
-	virtual ESensorType GetSensorType() const PURE_VIRTUAL(USensorBaseComponent::GetSensorType, return ESensorType::RGBDCamera;);
+	virtual ESensorType GetSensorType() const PURE_VIRTUAL(
+		USensorBaseComponent::GetSensorType, return ESensorType::RGBCamera;);
 
 	UFUNCTION(BlueprintCallable, Category = "Sensor")
 	virtual void SetRecordState(bool RState) { RecordState = RState; }
@@ -73,6 +94,11 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Sensor")
 	virtual int32 GetSensorIndex() const { return SensorIndex; }
+
+	UFUNCTION(BlueprintCallable, Category = "Sensor")
+	virtual float GetRecordInterval() const { return RecordInterval; }
+
+	virtual AActor* GetOwnerActor() const { return ParentActor; }
 
 protected:
 	virtual void BeginPlay() override;
@@ -93,6 +119,7 @@ protected:
 	AActor* ParentActor = nullptr;
 
 	bool RecordState = false;
+	float RecordInterval = 0.2f;
 };
 
 UCLASS(Abstract, ClassGroup = (VCCSIM), meta = (BlueprintSpawnableComponent))
@@ -110,6 +137,10 @@ public:
 
 	void ComputeIntrinsics();
 	FMatrix44f GetCameraIntrinsics() const { return CameraIntrinsics; }
+	double GetLastCaptureTimestamp() const { return LastCaptureTimestamp; }
+
+	virtual UTextureRenderTarget2D* GetRenderTarget() const PURE_VIRTUAL(UCameraBaseComponent::GetRenderTarget, return nullptr;);
+	virtual FIntPoint GetResolution() const { return FIntPoint(Width, Height); }
 
 protected:
 	bool CheckComponentAndRenderTarget() const;
@@ -129,4 +160,5 @@ protected:
 	UTextureRenderTarget2D* RenderTarget = nullptr;
 
 	FMatrix44f CameraIntrinsics;
+	double LastCaptureTimestamp = 0.0;
 };

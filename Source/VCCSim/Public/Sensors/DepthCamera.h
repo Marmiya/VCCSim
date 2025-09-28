@@ -23,76 +23,98 @@
 #include "Engine/TextureRenderTarget2D.h"
 #include "Materials/MaterialInterface.h"
 #include "RHIResources.h"
-#include "NormalCamera.generated.h"
+#include "DepthCamera.generated.h"
 
-class FNormalCameraConfig: public FCameraConfig
+class FDepthCameraConfig: public FCameraConfig
 {
 public:
-    FNormalCameraConfig()
+    
+    float MaxRange = 10000.0f;
+    float MinRange = 0.0f;
+    
+    FDepthCameraConfig()
     {
         Width = 1920;
         Height = 1080;
     }
 };
 
+struct FDCPoint
+{
+    FVector Location;
+    FDCPoint() : Location(FVector::ZeroVector){}
+};
+
 UCLASS(ClassGroup = (VCCSIM), meta = (BlueprintSpawnableComponent))
-class VCCSIM_API UNormalCameraComponent : public UCameraBaseComponent
+class VCCSIM_API UDepthCameraComponent : public UCameraBaseComponent
 {
     GENERATED_BODY()
 
 public:
-    UNormalCameraComponent();
+    UDepthCameraComponent() = default;
     virtual void Configure(const FSensorConfig& Config) override final;
 
-    UFUNCTION(BlueprintCallable, Category = "NormalCamera")
-    void CaptureNormalScene();
-    UFUNCTION(BlueprintCallable, Category = "NormalCamera")
-    void CaptureNormalSceneDeferred();
-    UFUNCTION(BlueprintCallable, Category = "NormalCamera")
-    void CaptureNormalSceneAndProcess();
+    UFUNCTION(BlueprintCallable, Category = "DepthCamera")
+    void CaptureDepthScene();
+    UFUNCTION(BlueprintCallable, Category = "DepthCamera")
+    void CaptureDepthSceneDeferred();
+    UFUNCTION(BlueprintCallable, Category = "DepthCamera")
+    void CaptureDepthSceneAndProcess();
     virtual UTextureRenderTarget2D* GetRenderTarget() const override { return RenderTarget; }
 
     // For grpc server
-    void AsyncGetNormalImageData(TFunction<void(const TArray<FFloat16Color>&)> Callback);
+    void AsyncGetDepthImageData(TFunction<void(const TArray<FFloat16Color>&)> Callback);
+    void AsyncGetPointCloudData(TFunction<void()> Callback);
+    
+    UFUNCTION(BlueprintCallable, Category = "RGBDCamera")
+    void VisualizePointCloud();
+    TArray<FDCPoint> GeneratePointCloud();
 
     // UCameraBaseComponent interface
-    virtual ESensorType GetSensorType() const override { return ESensorType::NormalCamera; }
+    virtual ESensorType GetSensorType() const override { return ESensorType::DepthCamera; }
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthCamera|Config")
+    float MaxRange = 10000.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthCamera|Config")
+    float MinRange = 0.0f;
 
 protected:
     virtual void InitializeRenderTargets() override;
     virtual void SetCaptureComponent() const override;
 
-    void ProcessNormalTexture(TFunction<void()> OnComplete);
-    void ProcessNormalTextureParam(TFunction<void(const TArray<FFloat16Color>&)> OnComplete);
+    void ProcessDepthTexture(TFunction<void()> OnComplete);
+    void ProcessDepthTextureParam(TFunction<void(const TArray<FFloat16Color>&)> OnComplete);
 
 private:    
-    TArray<FFloat16Color> NormalData;
+    TArray<FFloat16Color> DepthData;
+    TArray<FDCPoint> PointCloudData;
 
     template<typename CallbackType>
-    void ProcessNormalTextureTemplate(CallbackType&& Callback);
+    void ProcessDepthTextureTemplate(CallbackType&& Callback);
 };
 
 template<typename CallbackType>
-void UNormalCameraComponent::ProcessNormalTextureTemplate(CallbackType&& Callback)
+void UDepthCameraComponent::ProcessDepthTextureTemplate(CallbackType&& Callback)
 {
-    if (!RenderTarget) { UE_LOG(LogTemp, Error, TEXT("NormalRenderTarget is null!")); return; }
+    if (!RenderTarget) { UE_LOG(LogTemp, Error, TEXT("DepthRenderTarget is null!")); return; }
 
-    if (NormalData.Num() != Width * Height)
+    if (DepthData.Num() != Width * Height)
     {
-        NormalData.SetNumUninitialized(Width * Height);
+        DepthData.SetNumUninitialized(Width * Height);
     }
 
     struct FReadSurfaceContext
     {
         TArray<FFloat16Color>* OutData;
         FIntRect Rect;
-    } Context { &NormalData, FIntRect(0, 0, Width, Height) };
+    } Context { &DepthData, FIntRect(0, 0, Width, Height) };
 
     auto SharedCallback = MakeShared<std::decay_t<CallbackType>>(std::forward<CallbackType>(Callback));
 
     UTextureRenderTarget2D* RT = RenderTarget;
 
-    ENQUEUE_RENDER_COMMAND(ReadNormalSurfaceCommand)(
+    ENQUEUE_RENDER_COMMAND(ReadDepthSurfaceCommand)(
         [RT, Context, SharedCallback](FRHICommandListImmediate& RHICmdList)
         {
             if (!RT) return;

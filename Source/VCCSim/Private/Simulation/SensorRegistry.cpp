@@ -16,7 +16,6 @@
 */
 
 #include "Simulation/SensorRegistry.h"
-#include "Sensors/ISensorDataProvider.h"
 #include "Sensors/CameraSensor.h"
 #include "Sensors/LidarSensor.h"
 #include "Sensors/NormalCamera.h"
@@ -32,48 +31,25 @@ void FSensorRegistry::RegisterSensor(UObject* ProviderComponent)
         return;
     }
 
-    ISensorDataProvider* Provider = nullptr;
-    USensorBaseComponent* SensorBase = nullptr;
-
-    // Try casting to each sensor type that implements ISensorDataProvider
-    if (URGBDCameraComponent* RGBCam = Cast<URGBDCameraComponent>(ProviderComponent))
+    USensorBaseComponent* SensorBase = Cast<USensorBaseComponent>(ProviderComponent);
+    if (!SensorBase)
     {
-        Provider = static_cast<ISensorDataProvider*>(RGBCam);
-        SensorBase = RGBCam;
-    }
-    else if (ULidarComponent* LidarCam = Cast<ULidarComponent>(ProviderComponent))
-    {
-        Provider = static_cast<ISensorDataProvider*>(LidarCam);
-        SensorBase = LidarCam;
-    }
-    else if (UNormalCameraComponent* NormalCam = Cast<UNormalCameraComponent>(ProviderComponent))
-    {
-        Provider = static_cast<ISensorDataProvider*>(NormalCam);
-        SensorBase = NormalCam;
-    }
-    else if (USegmentationCameraComponent* SegCam = Cast<USegmentationCameraComponent>(ProviderComponent))
-    {
-        Provider = static_cast<ISensorDataProvider*>(SegCam);
-        SensorBase = SegCam;
-    }
-
-    if (!Provider || !SensorBase)
-    {
-        UE_LOG(LogSensorRegistry, Warning, TEXT("Object does not implement ISensorDataProvider"));
+        UE_LOG(LogSensorRegistry, Warning, TEXT("Object is not a USensorBaseComponent"));
         return;
     }
 
     FScopeLock Lock(&RegistryLock);
 
-    AActor* OwnerActor = Provider->GetOwnerActor();
+    AActor* OwnerActor = SensorBase->GetOwnerActor();
     if (!OwnerActor)
     {
-        UE_LOG(LogSensorRegistry, Warning, TEXT("Sensor provider has no owner actor"));
+        UE_LOG(LogSensorRegistry, Warning, TEXT("Sensor has no owner actor"));
         return;
     }
 
     int32 SensorIndex = SensorBase->GetSensorIndex();
-    FSensorRegistryEntry Entry(ProviderComponent, Provider->GetSensorType(), SensorIndex, OwnerActor);
+    ESensorType SensorType = SensorBase->GetSensorType();
+    FSensorRegistryEntry Entry(ProviderComponent, SensorType, SensorIndex, OwnerActor);
 
     SensorEntries.Add(Entry);
 
@@ -209,27 +185,13 @@ void FSensorRegistry::RemoveInvalidEntries_Internal()
     }
 }
 
-ISensorDataProvider* FSensorRegistryEntry::GetProvider() const
+
+USensorBaseComponent* FSensorRegistryEntry::GetSensorComponent() const
 {
-    if (UObject* Component = ProviderComponent.Get())
+    if (!ProviderComponent.IsValid())
     {
-        // Try casting to each sensor type that implements ISensorDataProvider
-        if (URGBDCameraComponent* RGBCam = Cast<URGBDCameraComponent>(Component))
-        {
-            return static_cast<ISensorDataProvider*>(RGBCam);
-        }
-        if (ULidarComponent* LidarCam = Cast<ULidarComponent>(Component))
-        {
-            return static_cast<ISensorDataProvider*>(LidarCam);
-        }
-        if (UNormalCameraComponent* NormalCam = Cast<UNormalCameraComponent>(Component))
-        {
-            return static_cast<ISensorDataProvider*>(NormalCam);
-        }
-        if (USegmentationCameraComponent* SegCam = Cast<USegmentationCameraComponent>(Component))
-        {
-            return static_cast<ISensorDataProvider*>(SegCam);
-        }
+        return nullptr;
     }
-    return nullptr;
+
+    return Cast<USensorBaseComponent>(ProviderComponent.Get());
 }

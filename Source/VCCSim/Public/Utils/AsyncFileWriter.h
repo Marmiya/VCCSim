@@ -21,35 +21,88 @@
 #include "HAL/Runnable.h"
 #include "HAL/RunnableThread.h"
 #include "Containers/Queue.h"
-#include "Sensors/ISensorDataProvider.h"
+#include "Async/Async.h"
+#include "Async/AsyncWork.h"
+#include "Sensors/SensorBase.h"
 #include <atomic>
+
+enum class ESensorType : uint8;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogAsyncFileWriter, Log, All);
 
-class VCCSIM_API FAsyncFileWriter : public FRunnable
+
+struct FCompressedImageData
+{
+    TArray64<uint8> CompressedData;
+    FString FilePath;
+    ESensorType SensorType;
+};
+
+class FImageCompressionTask : public FNonAbandonableTask
+{
+public:
+
+    FImageCompressionTask(
+        const FSensorDataPacket& InDataPacket,
+        const FString& InBasePath,
+        TQueue<TSharedPtr<FCompressedImageData>, EQueueMode::Mpsc>& InCompressedDataQueue)
+        : DataPacket(InDataPacket), BasePath(InBasePath),
+            CompressedDataQueue(InCompressedDataQueue){}
+
+    void DoWork();
+
+    FORCEINLINE TStatId GetStatId() const
+    {
+        RETURN_QUICK_DECLARE_CYCLE_STAT(FImageCompressionTask, STATGROUP_ThreadPoolAsyncTasks);
+    }
+
+private:
+    FSensorDataPacket DataPacket;
+    FString BasePath;
+    TQueue<TSharedPtr<FCompressedImageData>, EQueueMode::Mpsc>& CompressedDataQueue;
+
+    void CompressRGBData();
+    void CompressDepthData();
+    void CompressNormalData();
+    void CompressSegmentationData();
+    void CompressLidarData();
+
+    TSharedPtr<FCompressedImageData> CreateCompressedResult(const FString& SubPath, const FString& Extension, double Timestamp);
+    bool CompressImageToPNG(const TArray<FColor>& ImageData, int32 Width, int32 Height, TArray64<uint8>& OutCompressedData);
+    bool CompressImageToEXR(const TArray<FFloat16Color>& ImageData, int32 Width, int32 Height, TArray64<uint8>& OutCompressedData);
+};
+
+class VCCSIM_API FAsyncFileWriter
 {
 public:
     explicit FAsyncFileWriter(const FString& InBasePath);
-    virtual ~FAsyncFileWriter() override;
+    ~FAsyncFileWriter();
 
-    void WriteDataAsync(const FSensorDataPacket& DataPacket);
+    void WriteData(FSensorDataPacket&& DataPacket);
     void Flush();
-
-    virtual bool Init() override;
-    virtual uint32 Run() override;
-    virtual void Stop() override;
-    virtual void Exit() override;
+    int32 GetPendingTaskCount() const { return PendingCompressionTasks.load(); }
 
 private:
-    void ProcessWriteQueue();
-    void WriteDataToFile(const FSensorDataPacket& DataPacket);
-    FString GetFilePathForSensor(const FSensorDataPacket& DataPacket);
+    void WriteCompressedDataToFile(const FCompressedImageData& CompressedData);
 
     FString BasePath;
-    TQueue<FSensorDataPacket, EQueueMode::Mpsc> WriteQueue;
-    TUniquePtr<FRunnableThread> WriterThread;
+    std::atomic<int32> PendingCompressionTasks{0};
+    TQueue<TSharedPtr<FCompressedImageData>, EQueueMode::Mpsc> CompressedDataQueue;
+    TUniquePtr<FRunnableThread> IOThread;
     std::atomic<bool> bShouldStop{false};
 
     mutable FCriticalSection DirectoryCreationLock;
     TSet<FString> CreatedDirectories;
+
+    class FIOWorker : public FRunnable
+    {
+    public:
+        FIOWorker(FAsyncFileWriter* InOwner) : Owner(InOwner) {}
+        virtual uint32 Run() override;
+        virtual void Stop() override { bShouldStop = true; }
+    private:
+        FAsyncFileWriter* Owner;
+        std::atomic<bool> bShouldStop{false};
+    };
+    TUniquePtr<FIOWorker> IOWorker;
 };

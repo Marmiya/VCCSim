@@ -20,8 +20,6 @@
 #include "CoreMinimal.h"
 #include "Sensors/SensorBase.h"
 
-class ISensorDataProvider;
-
 DECLARE_LOG_CATEGORY_EXTERN(LogSensorRegistry, Log, All);
 
 struct VCCSIM_API FSensorRegistryEntry
@@ -46,7 +44,7 @@ struct VCCSIM_API FSensorRegistryEntry
         return ProviderComponent.IsValid() && OwnerActor.IsValid();
     }
 
-    ISensorDataProvider* GetProvider() const;
+    USensorBaseComponent* GetSensorComponent() const;
 };
 
 class VCCSIM_API FSensorRegistry

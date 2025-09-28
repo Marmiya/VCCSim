@@ -36,6 +36,8 @@ void USegmentationCameraComponent::Configure(const FSensorConfig& Config)
         Height = SegConfig.Height;
     }
 
+    RecordInterval = Config.RecordInterval;
+
     ComputeIntrinsics();
     InitializeRenderTargets();
     SetCaptureComponent();
@@ -57,6 +59,7 @@ void USegmentationCameraComponent::InitializeRenderTargets()
     RenderTarget = NewObject<UTextureRenderTarget2D>(this);
     RenderTarget->InitCustomFormat(Width, Height, PF_B8G8R8A8, true);
     RenderTarget->RenderTargetFormat = RTF_RGBA8;
+    RenderTarget->bAutoGenerateMips = false;
     RenderTarget->UpdateResource();
 }
 
@@ -65,18 +68,14 @@ void USegmentationCameraComponent::SetCaptureComponent() const
     Super::SetCaptureComponent();
 
     CaptureComponent->CaptureSource = SCS_FinalColorLDR;
-
-    CaptureComponent->ShowFlags.DisableFeaturesForUnlit();
-
-    CaptureComponent->ShowFlags.SetPostProcessing(true); 
-    CaptureComponent->ShowFlags.SetPostProcessMaterial(true);
-    
-    CaptureComponent->ShowFlags.SetAntiAliasing(false);
-    CaptureComponent->ShowFlags.SetMotionBlur(false);
-
     CaptureComponent->bAlwaysPersistRenderingState = true;
     
-    CaptureComponent->bCaptureOnMovement = true;
+    CaptureComponent->ShowFlags.DisableFeaturesForUnlit();
+    CaptureComponent->ShowFlags.SetPostProcessing(true); 
+    CaptureComponent->ShowFlags.SetPostProcessMaterial(true);
+    CaptureComponent->ShowFlags.SetAntiAliasing(false);
+    CaptureComponent->ShowFlags.SetMotionBlur(false);
+    
     if (SegmentationMaterial)
     {
         CaptureComponent->PostProcessSettings.WeightedBlendables.Array.Empty();
@@ -109,6 +108,18 @@ void USegmentationCameraComponent::CaptureSegmentationScene()
             CaptureComponent->CaptureScene();
         });
     }
+}
+
+void USegmentationCameraComponent::CaptureSegmentationSceneDeferred()
+{
+    if (!CheckComponentAndRenderTarget())
+    {
+        UE_LOG(LogSegmentCamera, Error, TEXT("Component or RenderTarget not valid!"));
+        return;
+    }
+
+    LastCaptureTimestamp = FPlatformTime::Seconds();
+    CaptureComponent->CaptureSceneDeferred();
 }
 
 void USegmentationCameraComponent::AsyncGetSegmentationImageData(

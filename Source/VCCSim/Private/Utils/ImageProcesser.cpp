@@ -16,7 +16,7 @@
 */
 
 #include "Utils/ImageProcesser.h"
-#include "Sensors/CameraSensor.h"
+#include "Sensors/DepthCamera.h"
 #include "ImageUtils.h"
 #include "IImageWrapper.h"
 #include "IImageWrapperModule.h"

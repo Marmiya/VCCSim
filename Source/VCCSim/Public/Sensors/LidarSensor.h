@@ -18,7 +18,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "ISensorDataProvider.h"
 #include "GameFramework/Actor.h"
 #include "SensorBase.h"
 #include "Utils/InsMeshHolder.h"
@@ -38,13 +37,14 @@ public:
 };
 
 UCLASS(ClassGroup = (VCCSIM), meta = (BlueprintSpawnableComponent))
-class VCCSIM_API ULidarComponent : public USensorBaseComponent,  public ISensorDataProvider
+class VCCSIM_API ULidarComponent : public USensorBaseComponent
 {
     GENERATED_BODY()
 
 public:
     ULidarComponent();
     virtual void Configure(const FSensorConfig& Config) override final;
+    virtual ESensorType GetSensorType() const override { return ESensorType::Lidar; }
 
     UFUNCTION(BlueprintCallable, Category = "Lidar")
     void FirstCall();
@@ -56,12 +56,6 @@ public:
     // For grpc server
     TArray<FVector3f> GetPointCloudData();
     TPair<TArray<FVector3f>, FVCCSimOdom> GetPointCloudDataAndOdom();
-
-    // ISensorDataProvider interface
-    virtual ESensorType GetSensorType() const override { return ESensorType::Lidar; }
-    virtual FIntPoint GetResolution() const override { return FIntPoint(NumPoints, NumRays); }
-    virtual AActor* GetOwnerActor() const override { return ParentActor; }
-    virtual UTextureRenderTarget2D* GetRenderTarget() const override { return nullptr; }
 
 protected:
     virtual void BeginPlay() override;

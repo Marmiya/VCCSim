@@ -19,7 +19,6 @@
 
 #include "CoreMinimal.h"
 #include "SensorRegistry.h"
-#include "Sensors/ISensorDataProvider.h"
 #include "Async/Async.h"
 #include "RHICommandList.h"
 #include "Utils/AsyncFileWriter.h"
@@ -39,7 +38,7 @@ public:
     FString RecordingPath;
 
     UPROPERTY(EditAnywhere, Category = "Recording")
-    float RecordingInterval = 0.033f;
+    float RecordingInterval = 1.f/120.f;
     bool RecordState = false;
     FSensorRegistry SensorRegistry;
 
@@ -54,10 +53,17 @@ private:
     bool bIsRecording = false;
     FTimerHandle RecordingTimerHandle;
     TUniquePtr<FAsyncFileWriter> FileWriter;
+    UPROPERTY()
+    TMap<USensorBaseComponent*, double> LastSensorCaptureTimes;
+    UPROPERTY()
+    TSet<USensorBaseComponent*> SensorsToReadThisFrame;
 
     void TickRecording();
-    void CollectSensorDataConcurrently();
-    void ProcessSensorsDirectly(FRDGBuilder& GraphBuilder, const TArray<ISensorDataProvider*>& Sensors);
+    void CollectSensorData();
+    void ProcessCameraResult(FRDGBuilder& GraphBuilder, USensorBaseComponent* Sensor);
+    void ProcessSensorResults(FRDGBuilder& GraphBuilder,
+        const TArray<USensorBaseComponent*>& Sensors);
+    bool ShouldCaptureSensor(USensorBaseComponent* Sensor, double CurrentTime);
 
     void InitializeAsyncWriter();
     void ShutdownAsyncWriter();

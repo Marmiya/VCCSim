@@ -104,9 +104,6 @@ extern PoseDefaultTypeInternal _Pose_default_instance_;
 class PoseYawOnly;
 struct PoseYawOnlyDefaultTypeInternal;
 extern PoseYawOnlyDefaultTypeInternal _PoseYawOnly_default_instance_;
-class RGBDCombinedData;
-struct RGBDCombinedDataDefaultTypeInternal;
-extern RGBDCombinedDataDefaultTypeInternal _RGBDCombinedData_default_instance_;
 class RGBImageData;
 struct RGBImageDataDefaultTypeInternal;
 extern RGBImageDataDefaultTypeInternal _RGBImageData_default_instance_;
@@ -1201,259 +1198,6 @@ class RGBImageData final
 };
 // -------------------------------------------------------------------
 
-class RGBDCombinedData final
-    : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:VCCSim.RGBDCombinedData) */ {
- public:
-  inline RGBDCombinedData() : RGBDCombinedData(nullptr) {}
-  ~RGBDCombinedData() PROTOBUF_FINAL;
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(RGBDCombinedData* msg, std::destroying_delete_t) {
-    SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(RGBDCombinedData));
-  }
-#endif
-
-  template <typename = void>
-  explicit PROTOBUF_CONSTEXPR RGBDCombinedData(
-      ::google::protobuf::internal::ConstantInitialized);
-
-  inline RGBDCombinedData(const RGBDCombinedData& from) : RGBDCombinedData(nullptr, from) {}
-  inline RGBDCombinedData(RGBDCombinedData&& from) noexcept
-      : RGBDCombinedData(nullptr, std::move(from)) {}
-  inline RGBDCombinedData& operator=(const RGBDCombinedData& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline RGBDCombinedData& operator=(RGBDCombinedData&& from) noexcept {
-    if (this == &from) return *this;
-    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
-  }
-  inline ::google::protobuf::UnknownFieldSet* mutable_unknown_fields()
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
-  }
-
-  static const ::google::protobuf::Descriptor* descriptor() {
-    return GetDescriptor();
-  }
-  static const ::google::protobuf::Descriptor* GetDescriptor() {
-    return default_instance().GetMetadata().descriptor;
-  }
-  static const ::google::protobuf::Reflection* GetReflection() {
-    return default_instance().GetMetadata().reflection;
-  }
-  static const RGBDCombinedData& default_instance() {
-    return *internal_default_instance();
-  }
-  static inline const RGBDCombinedData* internal_default_instance() {
-    return reinterpret_cast<const RGBDCombinedData*>(
-        &_RGBDCombinedData_default_instance_);
-  }
-  static constexpr int kIndexInFileMessages = 17;
-  friend void swap(RGBDCombinedData& a, RGBDCombinedData& b) { a.Swap(&b); }
-  inline void Swap(RGBDCombinedData* other) {
-    if (other == this) return;
-    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
-      InternalSwap(other);
-    } else {
-      ::google::protobuf::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(RGBDCombinedData* other) {
-    if (other == this) return;
-    ABSL_DCHECK(GetArena() == other->GetArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  RGBDCombinedData* New(::google::protobuf::Arena* arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<RGBDCombinedData>(arena);
-  }
-  using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const RGBDCombinedData& from);
-  using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const RGBDCombinedData& from) { RGBDCombinedData::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(
-      ::google::protobuf::MessageLite& to_msg,
-      const ::google::protobuf::MessageLite& from_msg);
-
-  public:
-  bool IsInitialized() const {
-    return true;
-  }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  static ::uint8_t* _InternalSerialize(
-      const MessageLite& msg, ::uint8_t* target,
-      ::google::protobuf::io::EpsCopyOutputStream* stream);
-
-  public:
-  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  ::uint8_t* _InternalSerialize(
-      ::uint8_t* target,
-      ::google::protobuf::io::EpsCopyOutputStream* stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  ::size_t ByteSizeLong() const final;
-  ::uint8_t* _InternalSerialize(
-      ::uint8_t* target,
-      ::google::protobuf::io::EpsCopyOutputStream* stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(RGBDCombinedData* other);
- private:
-  template <typename T>
-  friend ::absl::string_view(
-      ::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "VCCSim.RGBDCombinedData"; }
-
- protected:
-  explicit RGBDCombinedData(::google::protobuf::Arena* arena);
-  RGBDCombinedData(::google::protobuf::Arena* arena, const RGBDCombinedData& from);
-  RGBDCombinedData(::google::protobuf::Arena* arena, RGBDCombinedData&& from) noexcept
-      : RGBDCombinedData(arena) {
-    *this = ::std::move(from);
-  }
-  const ::google::protobuf::internal::ClassData* GetClassData() const PROTOBUF_FINAL;
-  static void* PlacementNew_(const void*, void* mem,
-                             ::google::protobuf::Arena* arena);
-  static constexpr auto InternalNewImpl_();
-  static const ::google::protobuf::internal::ClassDataFull _class_data_;
-
- public:
-  ::google::protobuf::Metadata GetMetadata() const;
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-  enum : int {
-    kDepthDataFieldNumber = 5,
-    kRgbDataFieldNumber = 4,
-    kWidthFieldNumber = 1,
-    kHeightFieldNumber = 2,
-    kTimestampFieldNumber = 3,
-  };
-  // repeated float depth_data = 5;
-  int depth_data_size() const;
-  private:
-  int _internal_depth_data_size() const;
-
-  public:
-  void clear_depth_data() ;
-  float depth_data(int index) const;
-  void set_depth_data(int index, float value);
-  void add_depth_data(float value);
-  const ::google::protobuf::RepeatedField<float>& depth_data() const;
-  ::google::protobuf::RepeatedField<float>* mutable_depth_data();
-
-  private:
-  const ::google::protobuf::RepeatedField<float>& _internal_depth_data() const;
-  ::google::protobuf::RepeatedField<float>* _internal_mutable_depth_data();
-
-  public:
-  // bytes rgb_data = 4;
-  void clear_rgb_data() ;
-  const std::string& rgb_data() const;
-  template <typename Arg_ = const std::string&, typename... Args_>
-  void set_rgb_data(Arg_&& arg, Args_... args);
-  std::string* mutable_rgb_data();
-  PROTOBUF_NODISCARD std::string* release_rgb_data();
-  void set_allocated_rgb_data(std::string* value);
-
-  private:
-  const std::string& _internal_rgb_data() const;
-  inline PROTOBUF_ALWAYS_INLINE void _internal_set_rgb_data(
-      const std::string& value);
-  std::string* _internal_mutable_rgb_data();
-
-  public:
-  // uint32 width = 1;
-  void clear_width() ;
-  ::uint32_t width() const;
-  void set_width(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_width() const;
-  void _internal_set_width(::uint32_t value);
-
-  public:
-  // uint32 height = 2;
-  void clear_height() ;
-  ::uint32_t height() const;
-  void set_height(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_height() const;
-  void _internal_set_height(::uint32_t value);
-
-  public:
-  // uint32 timestamp = 3;
-  void clear_timestamp() ;
-  ::uint32_t timestamp() const;
-  void set_timestamp(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_timestamp() const;
-  void _internal_set_timestamp(::uint32_t value);
-
-  public:
-  // @@protoc_insertion_point(class_scope:VCCSim.RGBDCombinedData)
- private:
-  class _Internal;
-  friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<
-      3, 5, 0,
-      0, 2>
-      _table_;
-
-  friend class ::google::protobuf::MessageLite;
-  friend class ::google::protobuf::Arena;
-  template <typename T>
-  friend class ::google::protobuf::Arena::InternalHelper;
-  using InternalArenaConstructable_ = void;
-  using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(
-        ::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
-                          ::google::protobuf::Arena* arena);
-    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
-                          ::google::protobuf::Arena* arena, const Impl_& from,
-                          const RGBDCombinedData& from_msg);
-    ::google::protobuf::RepeatedField<float> depth_data_;
-    ::google::protobuf::internal::ArenaStringPtr rgb_data_;
-    ::uint32_t width_;
-    ::uint32_t height_;
-    ::uint32_t timestamp_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_VCCSim_2eproto;
-};
-// -------------------------------------------------------------------
-
 class MeshID final
     : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:VCCSim.MeshID) */ {
@@ -1514,7 +1258,7 @@ class MeshID final
     return reinterpret_cast<const MeshID*>(
         &_MeshID_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 23;
+  static constexpr int kIndexInFileMessages = 22;
   friend void swap(MeshID& a, MeshID& b) { a.Swap(&b); }
   inline void Swap(MeshID* other) {
     if (other == this) return;
@@ -3961,7 +3705,7 @@ class MeshData final
     return reinterpret_cast<const MeshData*>(
         &_MeshData_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 22;
+  static constexpr int kIndexInFileMessages = 21;
   friend void swap(MeshData& a, MeshData& b) { a.Swap(&b); }
   inline void Swap(MeshData* other) {
     if (other == this) return;
@@ -4212,7 +3956,7 @@ class DronePose final
     return reinterpret_cast<const DronePose*>(
         &_DronePose_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 18;
+  static constexpr int kIndexInFileMessages = 17;
   friend void swap(DronePose& a, DronePose& b) { a.Swap(&b); }
   inline void Swap(DronePose* other) {
     if (other == this) return;
@@ -4427,7 +4171,7 @@ class DronePath final
     return reinterpret_cast<const DronePath*>(
         &_DronePath_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 19;
+  static constexpr int kIndexInFileMessages = 18;
   friend void swap(DronePath& a, DronePath& b) { a.Swap(&b); }
   inline void Swap(DronePath* other) {
     if (other == this) return;
@@ -4643,7 +4387,7 @@ class CarPose final
     return reinterpret_cast<const CarPose*>(
         &_CarPose_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 20;
+  static constexpr int kIndexInFileMessages = 19;
   friend void swap(CarPose& a, CarPose& b) { a.Swap(&b); }
   inline void Swap(CarPose* other) {
     if (other == this) return;
@@ -4858,7 +4602,7 @@ class CarPath final
     return reinterpret_cast<const CarPath*>(
         &_CarPath_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 21;
+  static constexpr int kIndexInFileMessages = 20;
   friend void swap(CarPath& a, CarPath& b) { a.Swap(&b); }
   inline void Swap(CarPath* other) {
     if (other == this) return;
@@ -7045,169 +6789,6 @@ inline ::uint32_t DepthPointCloudData::_internal_timestamp() const {
 inline void DepthPointCloudData::_internal_set_timestamp(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.timestamp_ = value;
-}
-
-// -------------------------------------------------------------------
-
-// RGBDCombinedData
-
-// uint32 width = 1;
-inline void RGBDCombinedData::clear_width() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.width_ = 0u;
-}
-inline ::uint32_t RGBDCombinedData::width() const {
-  // @@protoc_insertion_point(field_get:VCCSim.RGBDCombinedData.width)
-  return _internal_width();
-}
-inline void RGBDCombinedData::set_width(::uint32_t value) {
-  _internal_set_width(value);
-  // @@protoc_insertion_point(field_set:VCCSim.RGBDCombinedData.width)
-}
-inline ::uint32_t RGBDCombinedData::_internal_width() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.width_;
-}
-inline void RGBDCombinedData::_internal_set_width(::uint32_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.width_ = value;
-}
-
-// uint32 height = 2;
-inline void RGBDCombinedData::clear_height() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.height_ = 0u;
-}
-inline ::uint32_t RGBDCombinedData::height() const {
-  // @@protoc_insertion_point(field_get:VCCSim.RGBDCombinedData.height)
-  return _internal_height();
-}
-inline void RGBDCombinedData::set_height(::uint32_t value) {
-  _internal_set_height(value);
-  // @@protoc_insertion_point(field_set:VCCSim.RGBDCombinedData.height)
-}
-inline ::uint32_t RGBDCombinedData::_internal_height() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.height_;
-}
-inline void RGBDCombinedData::_internal_set_height(::uint32_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.height_ = value;
-}
-
-// uint32 timestamp = 3;
-inline void RGBDCombinedData::clear_timestamp() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.timestamp_ = 0u;
-}
-inline ::uint32_t RGBDCombinedData::timestamp() const {
-  // @@protoc_insertion_point(field_get:VCCSim.RGBDCombinedData.timestamp)
-  return _internal_timestamp();
-}
-inline void RGBDCombinedData::set_timestamp(::uint32_t value) {
-  _internal_set_timestamp(value);
-  // @@protoc_insertion_point(field_set:VCCSim.RGBDCombinedData.timestamp)
-}
-inline ::uint32_t RGBDCombinedData::_internal_timestamp() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.timestamp_;
-}
-inline void RGBDCombinedData::_internal_set_timestamp(::uint32_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.timestamp_ = value;
-}
-
-// bytes rgb_data = 4;
-inline void RGBDCombinedData::clear_rgb_data() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.rgb_data_.ClearToEmpty();
-}
-inline const std::string& RGBDCombinedData::rgb_data() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:VCCSim.RGBDCombinedData.rgb_data)
-  return _internal_rgb_data();
-}
-template <typename Arg_, typename... Args_>
-inline PROTOBUF_ALWAYS_INLINE void RGBDCombinedData::set_rgb_data(Arg_&& arg,
-                                                     Args_... args) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.rgb_data_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
-  // @@protoc_insertion_point(field_set:VCCSim.RGBDCombinedData.rgb_data)
-}
-inline std::string* RGBDCombinedData::mutable_rgb_data() ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  std::string* _s = _internal_mutable_rgb_data();
-  // @@protoc_insertion_point(field_mutable:VCCSim.RGBDCombinedData.rgb_data)
-  return _s;
-}
-inline const std::string& RGBDCombinedData::_internal_rgb_data() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.rgb_data_.Get();
-}
-inline void RGBDCombinedData::_internal_set_rgb_data(const std::string& value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.rgb_data_.Set(value, GetArena());
-}
-inline std::string* RGBDCombinedData::_internal_mutable_rgb_data() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  return _impl_.rgb_data_.Mutable( GetArena());
-}
-inline std::string* RGBDCombinedData::release_rgb_data() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:VCCSim.RGBDCombinedData.rgb_data)
-  return _impl_.rgb_data_.Release();
-}
-inline void RGBDCombinedData::set_allocated_rgb_data(std::string* value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.rgb_data_.SetAllocated(value, GetArena());
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.rgb_data_.IsDefault()) {
-    _impl_.rgb_data_.Set("", GetArena());
-  }
-  // @@protoc_insertion_point(field_set_allocated:VCCSim.RGBDCombinedData.rgb_data)
-}
-
-// repeated float depth_data = 5;
-inline int RGBDCombinedData::_internal_depth_data_size() const {
-  return _internal_depth_data().size();
-}
-inline int RGBDCombinedData::depth_data_size() const {
-  return _internal_depth_data_size();
-}
-inline void RGBDCombinedData::clear_depth_data() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.depth_data_.Clear();
-}
-inline float RGBDCombinedData::depth_data(int index) const {
-  // @@protoc_insertion_point(field_get:VCCSim.RGBDCombinedData.depth_data)
-  return _internal_depth_data().Get(index);
-}
-inline void RGBDCombinedData::set_depth_data(int index, float value) {
-  _internal_mutable_depth_data()->Set(index, value);
-  // @@protoc_insertion_point(field_set:VCCSim.RGBDCombinedData.depth_data)
-}
-inline void RGBDCombinedData::add_depth_data(float value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _internal_mutable_depth_data()->Add(value);
-  // @@protoc_insertion_point(field_add:VCCSim.RGBDCombinedData.depth_data)
-}
-inline const ::google::protobuf::RepeatedField<float>& RGBDCombinedData::depth_data() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_list:VCCSim.RGBDCombinedData.depth_data)
-  return _internal_depth_data();
-}
-inline ::google::protobuf::RepeatedField<float>* RGBDCombinedData::mutable_depth_data()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_mutable_list:VCCSim.RGBDCombinedData.depth_data)
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  return _internal_mutable_depth_data();
-}
-inline const ::google::protobuf::RepeatedField<float>&
-RGBDCombinedData::_internal_depth_data() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.depth_data_;
-}
-inline ::google::protobuf::RepeatedField<float>* RGBDCombinedData::_internal_mutable_depth_data() {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return &_impl_.depth_data_;
 }
 
 // -------------------------------------------------------------------

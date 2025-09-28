@@ -30,318 +30,330 @@ DEFINE_LOG_CATEGORY(LogAsyncFileWriter);
 FAsyncFileWriter::FAsyncFileWriter(const FString& InBasePath)
     : BasePath(InBasePath)
 {
-    // Ensure BasePath is absolute
     if (FPaths::IsRelative(BasePath))
     {
         BasePath = FPaths::ConvertRelativePathToFull(BasePath);
     }
 
-    WriterThread.Reset(FRunnableThread::Create(this, TEXT("AsyncFileWriter"), 0, TPri_BelowNormal));
-    UE_LOG(LogAsyncFileWriter, Log, TEXT("AsyncFileWriter initialized with base path: %s"), *BasePath);
+    IOWorker = MakeUnique<FIOWorker>(this);
+    IOThread.Reset(FRunnableThread::Create(IOWorker.Get(),
+        TEXT("AsyncFileWriter_IO"), 0, TPri_Normal));
+    UE_LOG(LogAsyncFileWriter, Log, TEXT("AsyncFileWriter initialized "
+                                         "with parallel compression"));
 }
 
 FAsyncFileWriter::~FAsyncFileWriter()
 {
-    Stop();
-    if (WriterThread.IsValid())
+    bShouldStop.store(true);
+    if (IOWorker.IsValid())
     {
-        WriterThread->WaitForCompletion();
-        WriterThread.Reset();
+        IOWorker->Stop();
     }
+    if (IOThread.IsValid())
+    {
+        IOThread->WaitForCompletion();
+        IOThread.Reset();
+    }
+    IOWorker.Reset();
     UE_LOG(LogAsyncFileWriter, Log, TEXT("AsyncFileWriter destroyed"));
 }
 
-void FAsyncFileWriter::WriteDataAsync(const FSensorDataPacket& DataPacket)
+void FAsyncFileWriter::WriteData(FSensorDataPacket&& DataPacket)
 {
     if (bShouldStop.load())
     {
-        UE_LOG(LogAsyncFileWriter, Warning, TEXT("WriteDataAsync: Writer is stopped, ignoring packet"));
+        UE_LOG(LogAsyncFileWriter, Warning, TEXT("WriteDataBatch: Writer "
+                                                 "is stopped, ignoring packets"));
         return;
     }
-
+    
     if (!DataPacket.Data.IsValid())
     {
-        UE_LOG(LogAsyncFileWriter, Warning, TEXT("Invalid data packet Data received for writing"));
+        UE_LOG(LogAsyncFileWriter, Warning, TEXT("Invalid data packet received"));
         return;
     }
 
-    WriteQueue.Enqueue(DataPacket);
+    PendingCompressionTasks.fetch_add(1);
+
+    AsyncTask(ENamedThreads::AnyThread, [this, DataPacket]()
+    {
+        MakeUnique<FAsyncTask<FImageCompressionTask>>(DataPacket, BasePath,
+            CompressedDataQueue)->StartSynchronousTask();
+        PendingCompressionTasks.fetch_sub(1);
+    });
 }
-
-
 void FAsyncFileWriter::Flush()
 {
-    while (!WriteQueue.IsEmpty())
+    while (PendingCompressionTasks.load() > 0 || !CompressedDataQueue.IsEmpty())
     {
         FPlatformProcess::Sleep(0.001f);
     }
+    UE_LOG(LogAsyncFileWriter, Log, TEXT("Flush completed - all tasks finished"));
 }
 
-bool FAsyncFileWriter::Init()
-{
-    UE_LOG(LogAsyncFileWriter, Log, TEXT("AsyncFileWriter thread initialized"));
-    return true;
-}
 
-uint32 FAsyncFileWriter::Run()
+uint32 FAsyncFileWriter::FIOWorker::Run()
 {
     while (!bShouldStop.load())
     {
-        ProcessWriteQueue();
+        TSharedPtr<FCompressedImageData> CompressedData;
+        while (Owner->CompressedDataQueue.Dequeue(CompressedData))
+        {
+            if (CompressedData.IsValid())
+            {
+                Owner->WriteCompressedDataToFile(*CompressedData);
+            }
+        }
         FPlatformProcess::Sleep(0.001f);
     }
 
-    ProcessWriteQueue();
-    UE_LOG(LogAsyncFileWriter, Log, TEXT("AsyncFileWriter thread finished"));
+    TSharedPtr<FCompressedImageData> CompressedData;
+    while (Owner->CompressedDataQueue.Dequeue(CompressedData))
+    {
+        if (CompressedData.IsValid())
+        {
+            Owner->WriteCompressedDataToFile(*CompressedData);
+        }
+    }
+
+    UE_LOG(LogAsyncFileWriter, Log, TEXT("I/O worker finished"));
     return 0;
 }
 
-void FAsyncFileWriter::Stop()
+void FAsyncFileWriter::WriteCompressedDataToFile(const FCompressedImageData& CompressedData)
 {
-    bShouldStop.store(true);
-    UE_LOG(LogAsyncFileWriter, Log, TEXT("AsyncFileWriter stop requested"));
-}
-
-void FAsyncFileWriter::Exit()
-{
-    UE_LOG(LogAsyncFileWriter, Log, TEXT("AsyncFileWriter thread exit"));
-}
-
-void FAsyncFileWriter::ProcessWriteQueue()
-{
-    FSensorDataPacket DataPacket;
-    while (WriteQueue.Dequeue(DataPacket))
+    // Ensure directory exists
+    FString Directory = FPaths::GetPath(CompressedData.FilePath);
+    IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
+    if (!PlatformFile.DirectoryExists(*Directory))
     {
-        WriteDataToFile(DataPacket);
+        PlatformFile.CreateDirectoryTree(*Directory);
+    }
+
+    if (!FFileHelper::SaveArrayToFile(CompressedData.CompressedData, *CompressedData.FilePath))
+    {
+        UE_LOG(LogAsyncFileWriter, Error, TEXT("Failed to save file: %s"),
+            *CompressedData.FilePath);
     }
 }
 
-void FAsyncFileWriter::WriteDataToFile(const FSensorDataPacket& DataPacket)
+// ================== FImageCompressionTask Implementation ==================
+
+void FImageCompressionTask::DoWork()
 {
-    if (!DataPacket.bValid || !DataPacket.Data.IsValid() || !DataPacket.OwnerActor)
+    if (!DataPacket.Data.IsValid() || !DataPacket.OwnerActor)
     {
         UE_LOG(LogAsyncFileWriter, Warning,
-            TEXT("WriteDataToFile: Invalid packet - Valid: %s, Data: %s, Actor: %s"),
-               DataPacket.bValid ? TEXT("true") : TEXT("false"),
-               DataPacket.Data.IsValid() ? TEXT("valid") : TEXT("invalid"),
-               DataPacket.OwnerActor ? TEXT("valid") : TEXT("null"));
+            TEXT("Invalid data packet in compression task"));
         return;
     }
 
     switch (DataPacket.Type)
     {
-        case ESensorType::RGBDCamera:
-        {
-            if (const FRGBDCameraData* RGBData = static_cast<const FRGBDCameraData*>(DataPacket.Data.Get()))
-            {
-                if (RGBData->RGBData.Num() != 0)
-                {
-                    TArray64<uint8> CompressedBitmap;
-                    FImageUtils::PNGCompressImageArray(RGBData->Width, RGBData->Height, RGBData->RGBData, CompressedBitmap);
-
-                    FString FileName = FString::Printf(TEXT("%.9f%s"), DataPacket.Data->Timestamp, *FString(".png"));
-                    
-                    FFileHelper::SaveArrayToFile(CompressedBitmap,
-                        *FPaths::Combine(BasePath, DataPacket.OwnerActor->GetName(), "RGB", FileName));
-                }
-                if (RGBData->DepthData.Num() != 0)
-                {
-                    // Convert FLinearColor depth data to 16-bit grayscale
-                    TArray<uint16> DepthData16;
-                    DepthData16.Reserve(RGBData->DepthData.Num());
-
-                    for (const float& DepthPixel : RGBData->DepthData)
-                    {
-                        uint16 Depth16 = FMath::Clamp(
-                            FMath::RoundToInt(DepthPixel),
-                            0,
-                            65535
-                        );
-                        DepthData16.Add(Depth16);
-                    }
-                    
-                    // Get image wrapper module
-                    IImageWrapperModule& ImageWrapperModule =
-                        FModuleManager::LoadModuleChecked<IImageWrapperModule>(FName("ImageWrapper"));
-                    TSharedPtr<IImageWrapper> ImageWrapper =
-                        ImageWrapperModule.CreateImageWrapper(EImageFormat::PNG);
-                    
-                    TArray<uint8> RawData;
-                    RawData.Reserve(DepthData16.Num() * 2);
-                    
-                    for (uint16 Value : DepthData16)
-                    {
-                        RawData.Add(Value & 0xFF);        // Low byte
-                        RawData.Add((Value >> 8) & 0xFF); // High byte
-                    }
-                    
-                    if (ImageWrapper->SetRaw(
-                        RawData.GetData(), 
-                        RawData.Num(), 
-                        RGBData->Width,
-                        RGBData->Height, 
-                        ERGBFormat::Gray, 
-                        16))
-                    {
-                        // Get compressed PNG data
-                        TArray64<uint8> CompressedData = ImageWrapper->GetCompressed();
-                        
-                        // Save to file
-                        FString FileName = FString::Printf(TEXT("%.9f%s"), DataPacket.Data->Timestamp, *FString(".png"));
-                        FFileHelper::SaveArrayToFile(CompressedData, 
-                            *FPaths::Combine(BasePath, DataPacket.OwnerActor->GetName(), "Depth", FileName));
-                    }
-                }
-            }
+        case ESensorType::RGBCamera:
+            CompressRGBData();
             break;
-        }
-        
+        case ESensorType::DepthCamera:
+            CompressDepthData();
+            break;
         case ESensorType::NormalCamera:
-        {
-            if (const FNormalCameraData* NormalData = static_cast<const FNormalCameraData*>(DataPacket.Data.Get()))
-            {
-                // Use modern UE image API with FImage for EXR
-                FImage Image;
-                Image.Init(NormalData->Width, NormalData->Height, ERawImageFormat::RGBA32F);
-
-                // Convert FLinearColor to FImage data
-                TArrayView64<FLinearColor> ImageData = Image.AsRGBA32F();
-
-                if (ImageData.Num() == NormalData->Data.Num())
-                {
-                    // Copy normal data to image
-                    for (int32 i = 0; i < NormalData->Data.Num(); ++i)
-                    {
-                        ImageData[i] = NormalData->Data[i];
-                    }
-
-                    // Get image wrapper module
-                    IImageWrapperModule& ImageWrapperModule =
-                        FModuleManager::LoadModuleChecked<IImageWrapperModule>(FName("ImageWrapper"));
-
-                    // Compress image using modern API
-                    TArray64<uint8> CompressedData;
-                    bool bSuccess = ImageWrapperModule.CompressImage(
-                        CompressedData,
-                        EImageFormat::EXR,
-                        Image,
-                        100
-                    );
-
-                    if (bSuccess && CompressedData.Num() > 0)
-                    {
-                        FString FilePath = GetFilePathForSensor(DataPacket);
-                        if (!FFileHelper::SaveArrayToFile(CompressedData, *FilePath))
-                        {
-                            UE_LOG(LogAsyncFileWriter, Error, TEXT("Failed to save normal EXR image to file: %s"), *FilePath);
-                        }
-                    }
-                    else
-                    {
-                        UE_LOG(LogAsyncFileWriter, Error, TEXT("Failed to compress normal image to EXR format"));
-                    }
-                }
-            }
+            CompressNormalData();
             break;
-        }
-
         case ESensorType::SegmentationCamera:
-        {
-            if (const FSegmentationCameraData* SegData = static_cast<const FSegmentationCameraData*>(DataPacket.Data.Get()))
-            {
-                // Use proper PNG compression for segmentation data
-                TArray64<uint8> CompressedBitmap;
-                FImageUtils::PNGCompressImageArray(SegData->Width, SegData->Height, SegData->Data, CompressedBitmap);
-
-                FString FilePath = GetFilePathForSensor(DataPacket);
-                if (!FFileHelper::SaveArrayToFile(CompressedBitmap, *FilePath))
-                {
-                    UE_LOG(LogAsyncFileWriter, Error, TEXT("Failed to save segmentation image to file: %s"), *FilePath);
-                }
-            }
+            CompressSegmentationData();
             break;
+        case ESensorType::Lidar:
+            CompressLidarData();
+            break;
+        default:
+            UE_LOG(LogAsyncFileWriter, Warning,
+                TEXT("Unknown sensor type for compression"));
+            break;
+    }
+}
+
+TSharedPtr<FCompressedImageData> FImageCompressionTask::CreateCompressedResult(
+    const FString& SubPath, const FString& Extension, double Timestamp)
+{
+    auto Result = MakeShared<FCompressedImageData>();
+    Result->SensorType = DataPacket.Type;
+
+    FString FileName = FString::Printf(TEXT("%.9f.%s"), Timestamp, *Extension);
+    Result->FilePath = FPaths::Combine(BasePath, DataPacket.OwnerActor->GetName(), SubPath, FileName);
+
+    return Result;
+}
+
+bool FImageCompressionTask::CompressImageToPNG(
+    const TArray<FColor>& ImageData, int32 Width, int32 Height, TArray64<uint8>& OutCompressedData)
+{
+    IImageWrapperModule& ImageWrapperModule = FModuleManager::LoadModuleChecked<IImageWrapperModule>(FName("ImageWrapper"));
+
+    FImage Image;
+    Image.Init(Width, Height, ERawImageFormat::BGRA8);
+    TArrayView64<FColor> ImageView = Image.AsBGRA8();
+
+    if (ImageView.Num() == ImageData.Num())
+    {
+        for (int32 i = 0; i < ImageData.Num(); ++i)
+        {
+            ImageView[i] = ImageData[i];
         }
 
-        case ESensorType::Lidar:
+        return ImageWrapperModule.CompressImage(OutCompressedData, EImageFormat::PNG, Image, 100);
+    }
+
+    return false;
+}
+
+bool FImageCompressionTask::CompressImageToEXR(
+    const TArray<FFloat16Color>& ImageData, int32 Width, int32 Height, TArray64<uint8>& OutCompressedData)
+{
+    IImageWrapperModule& ImageWrapperModule = FModuleManager::LoadModuleChecked<IImageWrapperModule>(FName("ImageWrapper"));
+
+    FImage Image;
+    Image.Init(Width, Height, ERawImageFormat::RGBA16F);
+    TArrayView64<FFloat16Color> ImageView = Image.AsRGBA16F();
+
+    if (ImageView.Num() == ImageData.Num())
+    {
+        for (int32 i = 0; i < ImageData.Num(); ++i)
         {
-            if (const FLiDARData* LidarData = static_cast<const FLiDARData*>(DataPacket.Data.Get()))
+            ImageView[i] = ImageData[i];
+        }
+
+        return ImageWrapperModule.CompressImage(OutCompressedData, EImageFormat::EXR, Image, 100);
+    }
+
+    return false;
+}
+
+void FImageCompressionTask::CompressRGBData()
+{
+    const FRGBCameraData* RGBData = static_cast<const FRGBCameraData*>(DataPacket.Data.Get());
+
+    if (RGBData && RGBData->RGBData.Num() > 0)
+    {
+        auto RGBResult =
+            CreateCompressedResult(TEXT("RGB"), TEXT("png"), DataPacket.Data->Timestamp);
+        CompressImageToPNG(RGBData->RGBData, RGBData->Width, RGBData->Height, RGBResult->CompressedData);
+        CompressedDataQueue.Enqueue(RGBResult);
+    }
+    else
+    {
+        UE_LOG(LogAsyncFileWriter, Error, TEXT("No RGB data to compress for actor: %s"),
+            *DataPacket.OwnerActor->GetName());
+    }
+}
+
+void FImageCompressionTask::CompressDepthData()
+{
+    const FDepthCameraData* DepthData = static_cast<const FDepthCameraData*>(DataPacket.Data.Get());
+
+    if (DepthData && DepthData->DepthData.Num() > 0)
+    {
+        auto DepthResult =
+            CreateCompressedResult(TEXT("Depth"), TEXT("png"), DataPacket.Data->Timestamp);
+
+        // Convert float depth to 16-bit depth
+        TArray<uint16> DepthData16;
+        DepthData16.Reserve(DepthData->DepthData.Num());
+
+        for (const float& DepthPixel : DepthData->DepthData)
+        {
+            uint16 Depth16 = FMath::Clamp(FMath::RoundToInt(DepthPixel), 0, 65535);
+            DepthData16.Add(Depth16);
+        }
+
+        // Compress depth using modern API
+        IImageWrapperModule& ImageWrapperModule = FModuleManager::LoadModuleChecked<IImageWrapperModule>(FName("ImageWrapper"));
+
+        FImage DepthImage;
+        DepthImage.Init(DepthData->Width, DepthData->Height, ERawImageFormat::G16);
+        TArrayView64<uint16> DepthImageView = DepthImage.AsG16();
+
+        if (DepthImageView.Num() == DepthData16.Num())
+        {
+            for (int32 i = 0; i < DepthData16.Num(); ++i)
             {
-                // Save as PLY point cloud format
-                if (LidarData->Data.Num() > 0)
-                {
-                    FString PLYContent;
-
-                    // PLY header
-                    PLYContent += TEXT("ply\n");
-                    PLYContent += TEXT("format ascii 1.0\n");
-                    PLYContent += FString::Printf(TEXT("comment LiDAR Point Cloud generated by VCCSim - %s\n"),
-                        *FDateTime::Now().ToString());
-                    PLYContent += TEXT("comment UE Coordinate System: X=Forward, Y=Right, Z=Up (left-handed)\n");
-                    PLYContent += TEXT("comment Units: centimeters\n");
-                    PLYContent += FString::Printf(TEXT("element vertex %d\n"), LidarData->Data.Num());
-                    PLYContent += TEXT("property float x\n");
-                    PLYContent += TEXT("property float y\n");
-                    PLYContent += TEXT("property float z\n");
-                    PLYContent += TEXT("property uchar red\n");
-                    PLYContent += TEXT("property uchar green\n");
-                    PLYContent += TEXT("property uchar blue\n");
-                    PLYContent += TEXT("end_header\n");
-
-                    // Write vertex data with default white color
-                    for (const FVector3f& Point : LidarData->Data)
-                    {
-                        PLYContent += FString::Printf(TEXT("%.6f %.6f %.6f 255 255 255\n"),
-                            Point.X, Point.Y, Point.Z);
-                    }
-
-                    // Save to file
-                    FString FilePath = GetFilePathForSensor(DataPacket);
-                    if (!FFileHelper::SaveStringToFile(PLYContent, *FilePath))
-                    {
-                        UE_LOG(LogAsyncFileWriter, Error, TEXT("Failed to save LiDAR PLY file: %s"), *FilePath);
-                    }
-                    else
-                    {
-                        UE_LOG(LogAsyncFileWriter, Log, TEXT("Successfully saved %d LiDAR points to PLY: %s"),
-                            LidarData->Data.Num(), *FilePath);
-                    }
-                }
-                else
-                {
-                    UE_LOG(LogAsyncFileWriter, Warning, TEXT("No LiDAR points to save"));
-                }
+                DepthImageView[i] = DepthData16[i];
             }
-            break;
+            ImageWrapperModule.CompressImage(DepthResult->CompressedData,
+                EImageFormat::PNG, DepthImage, 100);
+            CompressedDataQueue.Enqueue(DepthResult);
         }
     }
 }
 
-FString FAsyncFileWriter::GetFilePathForSensor(const FSensorDataPacket& DataPacket)
+void FImageCompressionTask::CompressNormalData()
 {
-    FString ActorName = DataPacket.OwnerActor->GetName();
-    FString SensorTypeStr;
-    FString FileExtension;
-
-    switch (DataPacket.Type)
+    const FNormalCameraData* NormalData = static_cast<const FNormalCameraData*>(DataPacket.Data.Get());
+    if (NormalData || NormalData->Data.Num() > 0)
     {
-        case ESensorType::NormalCamera:
-            SensorTypeStr = TEXT("Normal");
-            FileExtension = TEXT(".exr");
-            break;
-        case ESensorType::SegmentationCamera:
-            SensorTypeStr = TEXT("Segmentation");
-            FileExtension = TEXT(".png");
-            break;
-        case ESensorType::Lidar:
-            SensorTypeStr = TEXT("Lidar");
-            FileExtension = TEXT(".ply");
-            break;
-        default:
-            SensorTypeStr = TEXT("Unknown");
-            FileExtension = TEXT(".data");
-            break;
+        auto Result =
+            CreateCompressedResult(TEXT("Normal"), TEXT("exr"), DataPacket.Data->Timestamp);
+        CompressImageToEXR(NormalData->Data, NormalData->Width,
+            NormalData->Height, Result->CompressedData);
+        CompressedDataQueue.Enqueue(Result);
+    }
+    else 
+    {
+        UE_LOG(LogAsyncFileWriter, Error, TEXT("No Normal data to compress for actor: %s"),
+            *DataPacket.OwnerActor->GetName());
+    }
+}
+
+void FImageCompressionTask::CompressSegmentationData()
+{
+    const FSegmentationCameraData* SegData =
+        static_cast<const FSegmentationCameraData*>(DataPacket.Data.Get());
+    if (SegData && SegData->Data.Num() > 0)
+    {
+        auto Result =
+            CreateCompressedResult(TEXT("Segmentation"), TEXT("png"), DataPacket.Data->Timestamp);
+        CompressImageToPNG(SegData->Data, SegData->Width, SegData->Height, Result->CompressedData);
+        CompressedDataQueue.Enqueue(Result);
+    }
+    else
+    {
+        UE_LOG(LogAsyncFileWriter, Error, TEXT("No Segmentation data to compress for actor: %s"),
+            *DataPacket.OwnerActor->GetName());
+    }
+}
+
+void FImageCompressionTask::CompressLidarData()
+{
+    const FLiDARData* LidarData = static_cast<const FLiDARData*>(DataPacket.Data.Get());
+    if (!LidarData || LidarData->Data.Num() == 0)
+    {
+        return;
     }
 
-    FString FileName = FString::Printf(TEXT("%.9f%s"), DataPacket.Data->Timestamp, *FileExtension);
-    return FPaths::Combine(BasePath, ActorName, SensorTypeStr, FileName);
+    auto Result = CreateCompressedResult(TEXT("Lidar"), TEXT("ply"), DataPacket.Data->Timestamp);
+
+    FString PLYContent;
+    PLYContent += TEXT("ply\n");
+    PLYContent += TEXT("format ascii 1.0\n");
+    PLYContent += FString::Printf(TEXT("comment LiDAR Point Cloud generated by VCCSim - %s\n"), *FDateTime::Now().ToString());
+    PLYContent += FString::Printf(TEXT("element vertex %d\n"), LidarData->Data.Num());
+    PLYContent += TEXT("property float x\n");
+    PLYContent += TEXT("property float y\n");
+    PLYContent += TEXT("property float z\n");
+    PLYContent += TEXT("property uchar red\n");
+    PLYContent += TEXT("property uchar green\n");
+    PLYContent += TEXT("property uchar blue\n");
+    PLYContent += TEXT("end_header\n");
+
+    for (const FVector3f& Point : LidarData->Data)
+    {
+        PLYContent += FString::Printf(TEXT("%.6f %.6f %.6f 255 255 255\n"),
+            Point.X, Point.Y, Point.Z);
+    }
+
+    FTCHARToUTF8 UTF8String(*PLYContent);
+    TArray64<uint8> UTF8Data;
+    UTF8Data.Append(reinterpret_cast<const uint8*>(UTF8String.Get()), UTF8String.Length());
+
+    Result->CompressedData = MoveTemp(UTF8Data);
+    CompressedDataQueue.Enqueue(Result);
 }

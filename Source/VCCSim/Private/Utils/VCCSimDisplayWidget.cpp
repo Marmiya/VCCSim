@@ -32,6 +32,7 @@
 
 #include "Windows/WindowsHWrapper.h" // Deal with UpdateResourceW error
 #include "HAL/FileManagerGeneric.h"
+#include "Sensors/DepthCamera.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogVCCSimDisplayWidget, Log, All);
 
@@ -402,12 +403,12 @@ void UVCCSIMDisplayWidget::SetCameraContext(EVCCSimViewType ViewType,
     }
 }
 
-void UVCCSIMDisplayWidget::SetDepthContext(UTextureRenderTarget2D* DepthTexture, URGBDCameraComponent* InCamera)
+void UVCCSIMDisplayWidget::SetDepthContext(UTextureRenderTarget2D* DepthTexture, UDepthCameraComponent* InCamera)
 {
     SetCameraContext(EVCCSimViewType::Depth, DepthTexture, InCamera);
 }
 
-void UVCCSIMDisplayWidget::SetRGBContext(UTextureRenderTarget2D* RGBTexture, URGBDCameraComponent* InCamera)
+void UVCCSIMDisplayWidget::SetRGBContext(UTextureRenderTarget2D* RGBTexture, URGBCameraComponent* InCamera)
 {
     SetCameraContext(EVCCSimViewType::RGB, RGBTexture, InCamera);
 }
@@ -622,7 +623,7 @@ void UVCCSIMDisplayWidget::UpdateViewImage(EVCCSimViewType ViewType, float InDel
     const float ViewportFOV = PlayerController->PlayerCameraManager->GetFOVAngle();
     ViewData->SceneCapture->FOVAngle = ViewportFOV;
 
-    ViewData->SceneCapture->CaptureScene();
+    ViewData->SceneCapture->CaptureSceneDeferred();
 }
 
 void UVCCSIMDisplayWidget::ProcessCapture(const int32 ID)
@@ -645,16 +646,16 @@ void UVCCSIMDisplayWidget::ProcessCaptureByType(EVCCSimViewType ViewType)
     switch (ViewType)
     {
     case EVCCSimViewType::RGB:
-        if (auto* RGBCamera = Cast<URGBDCameraComponent>(ViewData->CameraComponent))
+        if (auto* RGBCamera = Cast<URGBCameraComponent>(ViewData->CameraComponent))
         {
-            RGBCamera->CaptureRGBDScene();
+            RGBCamera->CaptureRGBScene();
         }
         CaptureTypeName = TEXT("RGBCapture");
         break;
     case EVCCSimViewType::Depth:
-        if (auto* DepthCamera = Cast<URGBDCameraComponent>(ViewData->CameraComponent))
+        if (auto* DepthCamera = Cast<UDepthCameraComponent>(ViewData->CameraComponent))
         {
-            DepthCamera->CaptureRGBDScene();
+            DepthCamera->CaptureDepthScene();
         }
         CaptureTypeName = TEXT("DepthCapture");
         break;
@@ -720,10 +721,10 @@ void UVCCSIMDisplayWidget::SaveRenderTargetToDisk(
 
     if (ViewType == EVCCSimViewType::Depth)
     {
-        TArray<FLinearColor> DepthPixels;
+        TArray<FFloat16Color> DepthPixels;
         DepthPixels.SetNum(Size.X * Size.Y);
 
-        bool bReadDepthPixels = RTResource->ReadLinearColorPixels(DepthPixels);
+        bool bReadDepthPixels = RTResource->ReadFloat16Pixels(DepthPixels);
         if (!bReadDepthPixels)
         {
             UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("Failed to read depth pixels from RenderTarget."));
@@ -734,7 +735,7 @@ void UVCCSIMDisplayWidget::SaveRenderTargetToDisk(
         DepthPixelsFloat.SetNum(Size.X * Size.Y);
         for (int32 i = 0; i < DepthPixels.Num(); ++i)
         {
-            DepthPixelsFloat[i] = DepthPixels[i].A;
+            DepthPixelsFloat[i] = DepthPixels[i].R.GetFloat();
         }
         (new FAutoDeleteAsyncTask<FAsyncDepthSaveTask>(
             DepthPixelsFloat, Size, FilePath))->StartBackgroundTask();

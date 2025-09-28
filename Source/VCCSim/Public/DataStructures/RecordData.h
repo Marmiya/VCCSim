@@ -17,12 +17,19 @@ struct FLiDARData final : public FSensorData
 	TArray<FVector3f> Data;
 };
 
-struct FRGBDCameraData final : public FSensorData
+struct FRGBCameraData final : public FSensorData
 {
 	int32 Width;
 	int32 Height;
 	int32 SensorIndex;
 	TArray<FColor> RGBData;
+};
+
+struct FDepthCameraData final : public FSensorData
+{
+	int32 Width;
+	int32 Height;
+	int32 SensorIndex;
 	TArray<float> DepthData;
 };
 
@@ -39,5 +46,5 @@ struct FNormalCameraData final : public FSensorData
 	int32 Width;
 	int32 Height;
 	int32 SensorIndex;
-	TArray<FColor> Data;
+	TArray<FFloat16Color> Data;
 };

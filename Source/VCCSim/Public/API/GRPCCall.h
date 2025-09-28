@@ -19,15 +19,13 @@
 
 #include "CoreMinimal.h"
 #include <grpcpp/grpcpp.h>
-#include <ThirdParty/ShaderConductor/ShaderConductor/External/DirectXShaderCompiler/include/dxc/DXIL/DxilConstants.h>
-
-#include "IImageWrapper.h"
-#include "IImageWrapperModule.h"
 #include "API/VCCSim.grpc.pb.h"
 
 class ULidarComponent;
-class URGBDCameraComponent;
-class URGBDCameraComponent;
+class URGBCameraComponent;
+class UDepthCameraComponent;
+class USegmentationCameraComponent;
+class UNormalCameraComponent;
 class UMeshHandlerComponent;
 class UInsMeshHolder;
 class ADronePawn;
@@ -47,10 +45,10 @@ template <typename RequestType, typename ResponseType,
 class AsyncCallTemplateSimple : public AsyncCall
 {
 public:
-    AsyncCallTemplateSimple(ServiceType *service,
-        grpc::ServerCompletionQueue* cq);
+    AsyncCallTemplateSimple(ServiceType *Service,
+        grpc::ServerCompletionQueue* CompletionQueue);
 
-    virtual void Proceed(bool ok) override final;
+    virtual void Proceed(bool OK) override final;
     virtual void Shutdown() override final;
 
 protected:
@@ -229,164 +227,85 @@ protected:
     virtual void ProcessRequest() override final;
 };
 
-/* --------------------------RGBD Camera---------------------------------- */
+/* --------------------------RGB Camera---------------------------------- */
 
-class RGBDCameraGetRGBDataCall : public AsyncCallTemplateImage<
+class RGBCameraGetRGBDataCall : public AsyncCallTemplateImage<
     VCCSim::IndexedCamera, VCCSim::RGBImageData,
-    VCCSim::RGBDCameraService::AsyncService,
-    std::map<std::string, URGBDCameraComponent*>>
+    VCCSim::RGBCameraService::AsyncService,
+    std::map<std::string, URGBCameraComponent*>>
 {
 public:
-    RGBDCameraGetRGBDataCall(
-        VCCSim::RGBDCameraService::AsyncService* service,
-        grpc::ServerCompletionQueue* cq,
-        const std::map<std::string, URGBDCameraComponent*>& rrgbdcmap);
+    RGBCameraGetRGBDataCall(
+        VCCSim::RGBCameraService::AsyncService* Service,
+        grpc::ServerCompletionQueue* CompletionQueue,
+        const std::map<std::string, URGBCameraComponent*>& RGBComponentMap);
 
-    static void InitializeImageModule()
-    {
-        if (!ImageWrapperModule)
-        {
-            ImageWrapperModule = &FModuleManager::LoadModuleChecked<
-                IImageWrapperModule>(FName("ImageWrapper"));
-        }
-    }
-
-protected:
-    virtual void PrepareNextCall() override final;
-    virtual void InitializeRequest() override final;
-    virtual void ProcessRequest() override final;
-
-private:
-    static IImageWrapperModule* ImageWrapperModule;
-    TSharedPtr<IImageWrapper> ImageWrapper;
-
-    TArray<uint8> ConvertToBGRA(
-        const TArray<FColor>& ImageData, int32 Width, int32 Height)
-    {
-        TArray<uint8> RawBGRA;
-        RawBGRA.SetNum(ImageData.Num() * 4);
-
-        for (int32 i = 0; i < ImageData.Num(); i++)
-        {
-            RawBGRA[4*i] = ImageData[i].B;
-            RawBGRA[4*i + 1] = ImageData[i].G;
-            RawBGRA[4*i + 2] = ImageData[i].R;
-            RawBGRA[4*i + 3] = ImageData[i].A;
-        }
-
-        return RawBGRA;
-    }
-
-    TArray<uint8> ConvertToRGB(const TArray<FColor>& ImageData)
-    {
-        TArray<uint8> RawRGB;
-        RawRGB.SetNum(ImageData.Num() * 3);
-
-        for (int32 i = 0; i < ImageData.Num(); i++)
-        {
-            RawRGB[3 * i] = ImageData[i].R;
-            RawRGB[3 * i + 1] = ImageData[i].G;
-            RawRGB[3 * i + 2] = ImageData[i].B;
-        }
-
-        return RawRGB;
-    }
-
-    TArray<uint8> ConvertToCompressedFormat(
-        const TArray<FColor>& ImageData,
-        int32 Width,
-        int32 Height,
-        EImageFormat Format)
-    {
-        TArray<uint8> CompressedData;
-
-        TSharedPtr<IImageWrapper> FormatWrapper =
-            ImageWrapperModule->CreateImageWrapper(Format);
-
-        if (FormatWrapper.IsValid())
-        {
-            TArray<uint8> RawBGRA = ConvertToBGRA(ImageData, Width, Height);
-
-            if (FormatWrapper->SetRaw(RawBGRA.GetData(), RawBGRA.Num(),
-                Width, Height, ERGBFormat::BGRA, 8))
-            {
-                const TArray64<uint8>& TempCompressedData = FormatWrapper->GetCompressed();
-                CompressedData.Append(TempCompressedData.GetData(), TempCompressedData.Num());
-            }
-            else
-            {
-                UE_LOG(LogTemp, Error, TEXT("RGBDCameraGetRGBDataCall:"
-                                            " Failed to set raw image data for compression"));
-            }
-        }
-        else
-        {
-            UE_LOG(LogTemp, Error, TEXT("RGBDCameraGetRGBDataCall:"
-                                        " Failed to create image wrapper"));
-        }
-
-        return CompressedData;
-    }
-};
-
-class RGBDCameraGetDepthDataCall : public AsyncCallTemplateImage<
-    VCCSim::IndexedCamera, VCCSim::DepthImageData,
-    VCCSim::RGBDCameraService::AsyncService,
-    std::map<std::string, URGBDCameraComponent*>>
-{
-public:
-    RGBDCameraGetDepthDataCall(
-        VCCSim::RGBDCameraService::AsyncService* service,
-        grpc::ServerCompletionQueue* cq,
-        const std::map<std::string, URGBDCameraComponent*>& rrgbdcmap);
 protected:
     virtual void PrepareNextCall() override final;
     virtual void InitializeRequest() override final;
     virtual void ProcessRequest() override final;
 };
 
-class RGBDCameraGetDepthPointCloudCall : public AsyncCallTemplateImage<
-    VCCSim::IndexedCamera, VCCSim::DepthPointCloudData,
-    VCCSim::RGBDCameraService::AsyncService,
-    std::map<std::string, URGBDCameraComponent*>>
-{
-public:
-    RGBDCameraGetDepthPointCloudCall(
-        VCCSim::RGBDCameraService::AsyncService* service,
-        grpc::ServerCompletionQueue* cq,
-        const std::map<std::string, URGBDCameraComponent*>& rrgbdcmap);
-protected:
-    virtual void PrepareNextCall() override final;
-    virtual void InitializeRequest() override final;
-    virtual void ProcessRequest() override final;
-};
-
-class RGBDCameraGetRGBDDataCall : public AsyncCallTemplateImage<
-    VCCSim::IndexedCamera, VCCSim::RGBDCombinedData,
-    VCCSim::RGBDCameraService::AsyncService,
-    std::map<std::string, URGBDCameraComponent*>>
-{
-public:
-    RGBDCameraGetRGBDDataCall(
-        VCCSim::RGBDCameraService::AsyncService* service,
-        grpc::ServerCompletionQueue* cq,
-        const std::map<std::string, URGBDCameraComponent*>& rrgbdcmap);
-protected:
-    virtual void PrepareNextCall() override final;
-    virtual void InitializeRequest() override final;
-    virtual void ProcessRequest() override final;
-};
-
-class RGBDCameraGetCameraOdomCall : public AsyncCallTemplateM<
+class RGBCameraGetCameraOdomCall : public AsyncCallTemplateM<
     VCCSim::RobotName, VCCSim::Odometry,
-    VCCSim::RGBDCameraService::AsyncService,
-    std::map<std::string, URGBDCameraComponent*>>
+    VCCSim::RGBCameraService::AsyncService,
+    std::map<std::string, URGBCameraComponent*>>
 {
 public:
-    RGBDCameraGetCameraOdomCall(
-        VCCSim::RGBDCameraService::AsyncService* service,
-        grpc::ServerCompletionQueue* cq,
-        const std::map<std::string, URGBDCameraComponent*>& rrgbdcmap);
+    RGBCameraGetCameraOdomCall(
+        VCCSim::RGBCameraService::AsyncService* Service,
+        grpc::ServerCompletionQueue* CompletionQueue,
+        const std::map<std::string, URGBCameraComponent*>& RGBComponentMap);
+protected:
+    virtual void PrepareNextCall() override final;
+    virtual void InitializeRequest() override final;
+    virtual void ProcessRequest() override final;
+};
+
+/* --------------------------Depth Camera---------------------------------- */
+
+class DepthCameraGetDepthDataCall : public AsyncCallTemplateImage<
+    VCCSim::IndexedCamera, VCCSim::DepthImageData,
+    VCCSim::DepthCameraService::AsyncService,
+    std::map<std::string, UDepthCameraComponent*>>
+{
+public:
+    DepthCameraGetDepthDataCall(
+        VCCSim::DepthCameraService::AsyncService* Service,
+        grpc::ServerCompletionQueue* CompletionQueue,
+        const std::map<std::string, UDepthCameraComponent*>& DepthComponentMap);
+protected:
+    virtual void PrepareNextCall() override final;
+    virtual void InitializeRequest() override final;
+    virtual void ProcessRequest() override final;
+};
+
+class DepthCameraGetDepthPointCloudCall : public AsyncCallTemplateImage<
+    VCCSim::IndexedCamera, VCCSim::DepthPointCloudData,
+    VCCSim::DepthCameraService::AsyncService,
+    std::map<std::string, UDepthCameraComponent*>>
+{
+public:
+    DepthCameraGetDepthPointCloudCall(
+        VCCSim::DepthCameraService::AsyncService* Service,
+        grpc::ServerCompletionQueue* CompletionQueue,
+        const std::map<std::string, UDepthCameraComponent*>& DepthComponentMap);
+protected:
+    virtual void PrepareNextCall() override final;
+    virtual void InitializeRequest() override final;
+    virtual void ProcessRequest() override final;
+};
+
+class DepthCameraGetCameraOdomCall : public AsyncCallTemplateM<
+    VCCSim::RobotName, VCCSim::Odometry,
+    VCCSim::DepthCameraService::AsyncService,
+    std::map<std::string, UDepthCameraComponent*>>
+{
+public:
+    DepthCameraGetCameraOdomCall(
+        VCCSim::DepthCameraService::AsyncService* Service,
+        grpc::ServerCompletionQueue* CompletionQueue,
+        const std::map<std::string, UDepthCameraComponent*>& DepthComponentMap);
 protected:
     virtual void PrepareNextCall() override final;
     virtual void InitializeRequest() override final;
@@ -394,8 +313,6 @@ protected:
 };
 
 /* --------------------------Segment Camera--------------------------------- */
-
-class USegmentationCameraComponent;
 
 class SegmentCameraGetOdomCall : public AsyncCallTemplateM<
     VCCSim::RobotName, VCCSim::Odometry,
@@ -561,13 +478,13 @@ protected:
 
 template <typename RequestType, typename ResponseType, typename ServiceType>
 AsyncCallTemplateSimple<RequestType, ResponseType, ServiceType>::
-AsyncCallTemplateSimple(ServiceType* service,
-    grpc::ServerCompletionQueue* cq)
-        : responder_(&ctx_), status_(CREATE), service_(service),
-          cq_(cq) {}
+AsyncCallTemplateSimple(ServiceType* Service,
+    grpc::ServerCompletionQueue* CompletionQueue)
+        : responder_(&ctx_), status_(CREATE), service_(Service),
+          cq_(CompletionQueue) {}
 
 template <typename RequestType, typename ResponseType, typename ServiceType>
-void AsyncCallTemplateSimple<RequestType, ResponseType, ServiceType>::Proceed(bool ok)
+void AsyncCallTemplateSimple<RequestType, ResponseType, ServiceType>::Proceed(bool OK)
 {
     if (status_ == CREATE) {
         status_ = PROCESS;

@@ -20,6 +20,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogGRPCCall, Log, All);
 #include "API/GRPCCall.h"
 #include "Sensors/LidarSensor.h"
 #include "Sensors/CameraSensor.h"
+#include "Sensors/DepthCamera.h"
 #include "Sensors/SegmentCamera.h"
 #include "Sensors/NormalCamera.h"
 #include "Utils/MeshHandlerComponent.h"
@@ -218,30 +219,28 @@ void LidarGetDataAndOdomCall::ProcessRequest()
     }
 }
 
-/* --------------------------RGBD Camera---------------------------------- */
+/* --------------------------RGB Camera---------------------------------- */
 
-IImageWrapperModule* RGBDCameraGetRGBDataCall::ImageWrapperModule = nullptr;
-
-RGBDCameraGetRGBDataCall::RGBDCameraGetRGBDataCall(
-    VCCSim::RGBDCameraService::AsyncService* service,
-    grpc::ServerCompletionQueue* cq,
-    const std::map<std::string, URGBDCameraComponent*>& rrgbdcmap)
-        : AsyncCallTemplateImage(service, cq, rrgbdcmap)
+RGBCameraGetRGBDataCall::RGBCameraGetRGBDataCall(
+    VCCSim::RGBCameraService::AsyncService* Service,
+    grpc::ServerCompletionQueue* CompletionQueue,
+    const std::map<std::string, URGBCameraComponent*>& RGBComponentMap)
+        : AsyncCallTemplateImage(Service, CompletionQueue, RGBComponentMap)
 {
     Proceed(true);
 }
 
-void RGBDCameraGetRGBDataCall::PrepareNextCall()
+void RGBCameraGetRGBDataCall::PrepareNextCall()
 {
-    new RGBDCameraGetRGBDataCall(service_, cq_, RCMap_);
+    new RGBCameraGetRGBDataCall(service_, cq_, RCMap_);
 }
 
-void RGBDCameraGetRGBDataCall::InitializeRequest()
+void RGBCameraGetRGBDataCall::InitializeRequest()
 {
     service_->RequestGetRGBData(&ctx_, &request_, &responder_, cq_, cq_, this);
 }
 
-void RGBDCameraGetRGBDataCall::ProcessRequest()
+void RGBCameraGetRGBDataCall::ProcessRequest()
 {
     std::string CameraName = request_.robot_name().name() + "^" +
                              std::to_string(request_.index());
@@ -253,66 +252,111 @@ void RGBDCameraGetRGBDataCall::ProcessRequest()
         return;
     }
 
-    auto* RGBDCamera = RCMap_[CameraName];
-    if (!RGBDCamera)
+    auto* RGBCamera = RCMap_[CameraName];
+    if (!RGBCamera)
     {
         UE_LOG(LogGRPCCall, Warning, TEXT("RGBDCameraGetRGBDataCall:"
                                       " Invalid RGBD Camera reference!"));
         return;
     }
 
-    RGBDCamera->AsyncGetRGBDImageData(
-        [this, RGBDCamera](const TArray<FLinearColor>& RGBDData)
+    RGBCamera->AsyncGetRGBImageData(
+        [this, RGBCamera](const TArray<FColor>& RGBData)
     {
         AsyncTask(ENamedThreads::AnyBackgroundHiPriTask,
-            [this, RGBDData, RGBDCamera]()
+            [this, RGBData, RGBCamera]()
         {
-            response_.set_width(RGBDCamera->Width);
-            response_.set_height(RGBDCamera->Height);
+            response_.set_width(RGBCamera->Width);
+            response_.set_height(RGBCamera->Height);
             response_.set_timestamp(FDateTime::UtcNow().ToUnixTimestamp());
-
-            // Convert FLinearColor to FColor with gamma correction
-            TArray<uint8> RGBBytes;
-            RGBBytes.Reserve(RGBDData.Num() * 4); // RGBA bytes
-
-            for (const FLinearColor& LinearPixel : RGBDData)
-            {
-                // Use ToFColor(true) for proper gamma correction
-                FColor GammaCorrectedPixel = LinearPixel.ToFColor(true);
-                RGBBytes.Add(GammaCorrectedPixel.R);
-                RGBBytes.Add(GammaCorrectedPixel.G);
-                RGBBytes.Add(GammaCorrectedPixel.B);
-                RGBBytes.Add(GammaCorrectedPixel.A);
-            }
-
-            response_.set_data(RGBBytes.GetData(), RGBBytes.Num());
-
+            response_.set_data(RGBData.GetData(), RGBData.Num());
             status_ = FINISH;
             responder_.Finish(response_, grpc::Status::OK, this);
         });
     });
 }
 
-RGBDCameraGetDepthDataCall::RGBDCameraGetDepthDataCall(
-    VCCSim::RGBDCameraService::AsyncService* service,
-    grpc::ServerCompletionQueue* cq,
-    const std::map<std::string, URGBDCameraComponent*>& rrgbdcmap)
-        : AsyncCallTemplateImage(service, cq, rrgbdcmap)
+RGBCameraGetCameraOdomCall::RGBCameraGetCameraOdomCall(
+    VCCSim::RGBCameraService::AsyncService* Service,
+    grpc::ServerCompletionQueue* CompletionQueue,
+    const std::map<std::string, URGBCameraComponent*>& RGBComponentMap)
+        : AsyncCallTemplateM(Service, CompletionQueue, RGBComponentMap)
 {
     Proceed(true);
 }
 
-void RGBDCameraGetDepthDataCall::PrepareNextCall()
+void RGBCameraGetCameraOdomCall::PrepareNextCall()
 {
-    new RGBDCameraGetDepthDataCall(service_, cq_, RCMap_);
+    new RGBCameraGetCameraOdomCall(service_, cq_, RCMap_);
 }
 
-void RGBDCameraGetDepthDataCall::InitializeRequest()
+void RGBCameraGetCameraOdomCall::InitializeRequest()
 {
-    service_->RequestGetDepthData(&ctx_, &request_, &responder_, cq_, cq_, this);
+    service_->RequestGetCameraOdom(&ctx_, &request_, &responder_, cq_, cq_, this);
 }
 
-void RGBDCameraGetDepthDataCall::ProcessRequest()
+void RGBCameraGetCameraOdomCall::ProcessRequest()
+{
+    if (RCMap_.contains(request_.name()))
+    {
+        const FVector Location = RCMap_[request_.name()]->GetComponentLocation();
+        const FRotator Rotation = RCMap_[request_.name()]->GetComponentRotation();
+        const FVector LinearVelocity = RCMap_[request_.name()]->GetPhysicsLinearVelocity();
+        const FVector AngularVelocity = RCMap_[request_.name()]->GetPhysicsAngularVelocityInDegrees();
+
+        VCCSim::Pose* PoseData = response_.mutable_pose();
+        VCCSim::Vec3f* Position = PoseData->mutable_position();
+        Position->set_x(Location.X);
+        Position->set_y(Location.Y);
+        Position->set_z(Location.Z);
+
+        VCCSim::Rotation* Rot = PoseData->mutable_rotation();
+        FQuat Quat = Rotation.Quaternion();
+        Rot->set_x(Quat.X);
+        Rot->set_y(Quat.Y);
+        Rot->set_z(Quat.Z);
+        Rot->set_w(Quat.W);
+
+        VCCSim::Twist* TwistData = response_.mutable_twist();
+        VCCSim::Vec3f* LinearVel = TwistData->mutable_linear();
+        LinearVel->set_x(LinearVelocity.X);
+        LinearVel->set_y(LinearVelocity.Y);
+        LinearVel->set_z(LinearVelocity.Z);
+
+        VCCSim::Vec3f* AngularVel = TwistData->mutable_angular();
+        AngularVel->set_x(AngularVelocity.X);
+        AngularVel->set_y(AngularVelocity.Y);
+        AngularVel->set_z(AngularVelocity.Z);
+    }
+    else
+    {
+        UE_LOG(LogGRPCCall, Warning, TEXT("RGBDCameraGetCameraOdomCall:"
+                                      " RGBD Camera component not found!"));
+    }
+}
+
+// --------------------------Depth Camera---------------------------------- //
+
+DepthCameraGetDepthDataCall::DepthCameraGetDepthDataCall(
+    VCCSim::DepthCameraService::AsyncService* Service,
+    grpc::ServerCompletionQueue* CompletionQueue,
+    const std::map<std::string, UDepthCameraComponent*>& DepthComponentMap)
+        : AsyncCallTemplateImage(Service, CompletionQueue, DepthComponentMap)
+{
+    Proceed(true);
+}
+
+void DepthCameraGetDepthDataCall::PrepareNextCall()
+{
+    new DepthCameraGetDepthDataCall(service_, cq_, RCMap_);
+}
+
+void DepthCameraGetDepthDataCall::InitializeRequest()
+{
+    service_->RequestGetDepthCameraImageData(&ctx_, &request_, &responder_, cq_, cq_, this);
+}
+
+void DepthCameraGetDepthDataCall::ProcessRequest()
 {
     std::string CameraName = request_.robot_name().name() + "^" +
                              std::to_string(request_.index());
@@ -332,8 +376,8 @@ void RGBDCameraGetDepthDataCall::ProcessRequest()
         return;
     }
 
-    RGBDCamera->AsyncGetRGBDImageData(
-        [this, RGBDCamera](const TArray<FLinearColor>& RGBDData)
+    RGBDCamera->AsyncGetDepthImageData(
+        [this, RGBDCamera](const TArray<FFloat16Color>& RGBDData)
     {
         AsyncTask(ENamedThreads::AnyBackgroundHiPriTask,
             [this, RGBDData, RGBDCamera]()
@@ -344,7 +388,7 @@ void RGBDCameraGetDepthDataCall::ProcessRequest()
 
             // Extract depth from alpha channel
             response_.mutable_data()->Reserve(RGBDData.Num());
-            for (const FLinearColor& Pixel : RGBDData)
+            for (const FFloat16Color& Pixel : RGBDData)
             {
                 response_.add_data(Pixel.A);
             }
@@ -355,26 +399,26 @@ void RGBDCameraGetDepthDataCall::ProcessRequest()
     });
 }
 
-RGBDCameraGetDepthPointCloudCall::RGBDCameraGetDepthPointCloudCall(
-    VCCSim::RGBDCameraService::AsyncService* service,
-    grpc::ServerCompletionQueue* cq,
-    const std::map<std::string, URGBDCameraComponent*>& rrgbdcmap)
-        : AsyncCallTemplateImage(service, cq, rrgbdcmap)
+DepthCameraGetDepthPointCloudCall::DepthCameraGetDepthPointCloudCall(
+    VCCSim::DepthCameraService::AsyncService* Service,
+    grpc::ServerCompletionQueue* CompletionQueue,
+    const std::map<std::string, UDepthCameraComponent*>& DepthComponentMap)
+        : AsyncCallTemplateImage(Service, CompletionQueue, DepthComponentMap)
 {
     Proceed(true);
 }
 
-void RGBDCameraGetDepthPointCloudCall::PrepareNextCall()
+void DepthCameraGetDepthPointCloudCall::PrepareNextCall()
 {
-    new RGBDCameraGetDepthPointCloudCall(service_, cq_, RCMap_);
+    new DepthCameraGetDepthPointCloudCall(service_, cq_, RCMap_);
 }
 
-void RGBDCameraGetDepthPointCloudCall::InitializeRequest()
+void DepthCameraGetDepthPointCloudCall::InitializeRequest()
 {
     service_->RequestGetDepthPointCloud(&ctx_, &request_, &responder_, cq_, cq_, this);
 }
 
-void RGBDCameraGetDepthPointCloudCall::ProcessRequest()
+void DepthCameraGetDepthPointCloudCall::ProcessRequest()
 {
     std::string CameraName = request_.robot_name().name() + "^" +
                              std::to_string(request_.index());
@@ -426,102 +470,26 @@ void RGBDCameraGetDepthPointCloudCall::ProcessRequest()
     });
 }
 
-RGBDCameraGetRGBDDataCall::RGBDCameraGetRGBDDataCall(
-    VCCSim::RGBDCameraService::AsyncService* service,
-    grpc::ServerCompletionQueue* cq,
-    const std::map<std::string, URGBDCameraComponent*>& rrgbdcmap)
-        : AsyncCallTemplateImage(service, cq, rrgbdcmap)
+DepthCameraGetCameraOdomCall::DepthCameraGetCameraOdomCall(
+    VCCSim::DepthCameraService::AsyncService* Service,
+    grpc::ServerCompletionQueue* CompletionQueue,
+    const std::map<std::string, UDepthCameraComponent*>& DepthComponentMap)
+        : AsyncCallTemplateM(Service, CompletionQueue, DepthComponentMap)
 {
     Proceed(true);
 }
 
-void RGBDCameraGetRGBDDataCall::PrepareNextCall()
+void DepthCameraGetCameraOdomCall::PrepareNextCall()
 {
-    new RGBDCameraGetRGBDDataCall(service_, cq_, RCMap_);
+    new DepthCameraGetCameraOdomCall(service_, cq_, RCMap_);
 }
 
-void RGBDCameraGetRGBDDataCall::InitializeRequest()
+void DepthCameraGetCameraOdomCall::InitializeRequest()
 {
-    service_->RequestGetRGBDData(&ctx_, &request_, &responder_, cq_, cq_, this);
+    service_->RequestGetDepthCameraOdom(&ctx_, &request_, &responder_, cq_, cq_, this);
 }
 
-void RGBDCameraGetRGBDDataCall::ProcessRequest()
-{
-    std::string CameraName = request_.robot_name().name() + "^" +
-                             std::to_string(request_.index());
-
-    if (!RCMap_.contains(CameraName))
-    {
-        UE_LOG(LogGRPCCall, Warning, TEXT("RGBDCameraGetRGBDDataCall:"
-                                      " RGBD Camera component not found!"));
-        return;
-    }
-
-    auto* RGBDCamera = RCMap_[CameraName];
-    if (!RGBDCamera)
-    {
-        UE_LOG(LogGRPCCall, Warning, TEXT("RGBDCameraGetRGBDDataCall:"
-                                      " Invalid RGBD Camera reference!"));
-        return;
-    }
-
-    RGBDCamera->AsyncGetRGBDImageData(
-        [this, RGBDCamera](const TArray<FLinearColor>& RGBDData)
-    {
-        AsyncTask(ENamedThreads::AnyBackgroundHiPriTask,
-            [this, RGBDData, RGBDCamera]()
-        {
-            response_.set_width(RGBDCamera->Width);
-            response_.set_height(RGBDCamera->Height);
-            response_.set_timestamp(FDateTime::UtcNow().ToUnixTimestamp());
-
-            // Extract RGB data with gamma correction
-            TArray<uint8> RGBBytes;
-            RGBBytes.Reserve(RGBDData.Num() * 3); // RGB bytes (no alpha)
-
-            // Extract depth data
-            response_.mutable_depth_data()->Reserve(RGBDData.Num());
-
-            for (const FLinearColor& Pixel : RGBDData)
-            {
-                // RGB with gamma correction
-                FColor GammaCorrectedPixel = Pixel.ToFColor(true);
-                RGBBytes.Add(GammaCorrectedPixel.R);
-                RGBBytes.Add(GammaCorrectedPixel.G);
-                RGBBytes.Add(GammaCorrectedPixel.B);
-
-                // Depth from alpha channel
-                response_.add_depth_data(Pixel.A);
-            }
-
-            response_.set_rgb_data(RGBBytes.GetData(), RGBBytes.Num());
-
-            status_ = FINISH;
-            responder_.Finish(response_, grpc::Status::OK, this);
-        });
-    });
-}
-
-RGBDCameraGetCameraOdomCall::RGBDCameraGetCameraOdomCall(
-    VCCSim::RGBDCameraService::AsyncService* service,
-    grpc::ServerCompletionQueue* cq,
-    const std::map<std::string, URGBDCameraComponent*>& rrgbdcmap)
-        : AsyncCallTemplateM(service, cq, rrgbdcmap)
-{
-    Proceed(true);
-}
-
-void RGBDCameraGetCameraOdomCall::PrepareNextCall()
-{
-    new RGBDCameraGetCameraOdomCall(service_, cq_, RCMap_);
-}
-
-void RGBDCameraGetCameraOdomCall::InitializeRequest()
-{
-    service_->RequestGetCameraOdom(&ctx_, &request_, &responder_, cq_, cq_, this);
-}
-
-void RGBDCameraGetCameraOdomCall::ProcessRequest()
+void DepthCameraGetCameraOdomCall::ProcessRequest()
 {
     if (RCMap_.contains(request_.name()))
     {

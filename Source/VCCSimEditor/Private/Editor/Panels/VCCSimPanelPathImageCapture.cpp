@@ -22,6 +22,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogPathImageCapture, Log, All);
 #include "Utils/VCCSimUIHelpers.h"
 #include "Pawns/FlashPawn.h"
 #include "Sensors/CameraSensor.h"
+#include "Sensors/DepthCamera.h"
 #include "Sensors/SegmentCamera.h"
 #include "Sensors/NormalCamera.h"
 #include "Simulation/PathPlanner.h"
@@ -735,8 +736,8 @@ void FVCCSimPanelPathImageCapture::SaveRGB(int32 PoseIndex, bool& bAnyCaptured)
     }
     
     // Get the RGB cameras
-    TArray<URGBDCameraComponent*> RGBCameras;
-    SelectedFlashPawn->GetComponents<URGBDCameraComponent>(RGBCameras);
+    TArray<URGBCameraComponent*> RGBCameras;
+    SelectedFlashPawn->GetComponents<URGBCameraComponent>(RGBCameras);
     *JobNum += RGBCameras.Num();
     
     // Get the editor viewport
@@ -759,7 +760,7 @@ void FVCCSimPanelPathImageCapture::SaveRGB(int32 PoseIndex, bool& bAnyCaptured)
     
     for (int32 i = 0; i < RGBCameras.Num(); ++i)
     {
-        URGBDCameraComponent* Camera = RGBCameras[i];
+        URGBCameraComponent* Camera = RGBCameras[i];
         
         if (Camera)
         {
@@ -822,13 +823,13 @@ void FVCCSimPanelPathImageCapture::SaveDepth(int32 PoseIndex, bool& bAnyCaptured
         return;
     }
     
-    TArray<URGBDCameraComponent*> DepthCameras;
-    SelectedFlashPawn->GetComponents<URGBDCameraComponent>(DepthCameras);
+    TArray<UDepthCameraComponent*> DepthCameras;
+    SelectedFlashPawn->GetComponents<UDepthCameraComponent>(DepthCameras);
     *JobNum += DepthCameras.Num();
 
     for (int32 i = 0; i < DepthCameras.Num(); ++i)
     {
-        URGBDCameraComponent* Camera = DepthCameras[i];
+        UDepthCameraComponent* Camera = DepthCameras[i];
         
         if (Camera)
         {
@@ -851,9 +852,9 @@ void FVCCSimPanelPathImageCapture::SaveDepth(int32 PoseIndex, bool& bAnyCaptured
             FIntPoint Size = {Camera->GetImageSize().first,
                 Camera->GetImageSize().second};
 
-            Camera->AsyncGetRGBDImageData(
+            Camera->AsyncGetDepthImageData(
            [DepthFilename, Size, JobNum = this->JobNum]
-           (const TArray<FLinearColor>& ImageData)
+           (const TArray<FFloat16Color>& ImageData)
            {
                TArray<float> DepthValues;
                DepthValues.SetNum(ImageData.Num());

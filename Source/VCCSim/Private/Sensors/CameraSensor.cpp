@@ -23,36 +23,30 @@ DEFINE_LOG_CATEGORY_STATIC(LogCameraSensor, Log, All);
 #include "Utils/InsMeshHolder.h"
 #include "Components/InstancedStaticMeshComponent.h"
 
-URGBDCameraComponent::URGBDCameraComponent()
-{
-}
-
-void URGBDCameraComponent::Configure(const FSensorConfig& Config)
+void URGBCameraComponent::Configure(const FSensorConfig& Config)
 {
     if (!bBPConfigured)
     {
-        const auto RGBDepthConfig = static_cast<const FRGBDCameraConfig&>(Config);
+        const auto RGBDepthConfig = static_cast<const FRGBCameraConfig&>(Config);
         FOV = RGBDepthConfig.FOV;
         Width = RGBDepthConfig.Width;
         Height = RGBDepthConfig.Height;
-        MaxRange = RGBDepthConfig.MaxRange;
-        MinRange = RGBDepthConfig.MinRange;
-        bSaveRGB = RGBDepthConfig.bSaveRGB;
-        bSaveDepth = RGBDepthConfig.bSaveDepth;
     }
+
+    RecordInterval = Config.RecordInterval;
 
     ComputeIntrinsics();
     InitializeRenderTargets();
     SetCaptureComponent();
 }
 
-void URGBDCameraComponent::SetIgnoreLidar(UInsMeshHolder* MeshHolder)
+void URGBCameraComponent::SetIgnoreLidar(UInsMeshHolder* MeshHolder)
 {
     CaptureComponent->HideComponent(MeshHolder->GetInstancedMeshComponent());
     CaptureComponent->HideComponent(MeshHolder->GetInstancedMeshComponentColor());
 }
 
-void URGBDCameraComponent::SetCaptureComponent() const
+void URGBCameraComponent::SetCaptureComponent() const
 {
     Super::SetCaptureComponent();
 
@@ -68,36 +62,23 @@ void URGBDCameraComponent::SetCaptureComponent() const
     ShowFlags.SetLumenGlobalIllumination(true);
     ShowFlags.SetLumenReflections(true);
     ShowFlags.SetAntiAliasing(true);
-
-    if (RGBDMaterial)
-    {
-        CaptureComponent->PostProcessSettings.WeightedBlendables.Array.Empty();
-        FWeightedBlendable WeightedBlendable;
-        WeightedBlendable.Object = RGBDMaterial;
-        WeightedBlendable.Weight = 1.f;
-        CaptureComponent->PostProcessSettings.WeightedBlendables.Array.Add(WeightedBlendable);
-    }
-    else
-    {
-        UE_LOG(LogCameraSensor, Error, TEXT("RGBDMaterial material not set!"));
-    }
 }
 
-void URGBDCameraComponent::InitializeRenderTargets()
+void URGBCameraComponent::InitializeRenderTargets()
 {
     RenderTarget = NewObject<UTextureRenderTarget2D>(this);
 
     RenderTarget->TargetGamma = GEngine->GetDisplayGamma();
     RenderTarget->InitCustomFormat(Width, Height,
-        PF_A32B32G32R32F, true);
-    RenderTarget->RenderTargetFormat = RTF_RGBA32f;
+        PF_B8G8R8A8, true);
+    RenderTarget->RenderTargetFormat = RTF_RGBA8;
     RenderTarget->bGPUSharedFlag = true;
     RenderTarget->bAutoGenerateMips = false;
 
     RenderTarget->UpdateResource();
 }
 
-void URGBDCameraComponent::CaptureRGBDScene()
+void URGBCameraComponent::CaptureRGBScene()
 {
     if (!CheckComponentAndRenderTarget())
     {
@@ -118,8 +99,7 @@ void URGBDCameraComponent::CaptureRGBDScene()
     }
 }
 
-void URGBDCameraComponent::AsyncGetRGBDImageData(
-    TFunction<void(const TArray<FLinearColor>&)> Callback)
+void URGBCameraComponent::CaptureRGBSceneDeferred()
 {
     if (!CheckComponentAndRenderTarget())
     {
@@ -127,80 +107,35 @@ void URGBDCameraComponent::AsyncGetRGBDImageData(
         return;
     }
 
-    CaptureRGBDScene();
+    LastCaptureTimestamp = FPlatformTime::Seconds();
+    CaptureComponent->CaptureSceneDeferred();
+}
 
-    ProcessRGBDTextureParam([Callback](const TArray<FLinearColor>& CombinedData)
+void URGBCameraComponent::AsyncGetRGBImageData(
+    TFunction<void(const TArray<FColor>&)> Callback)
+{
+    if (!CheckComponentAndRenderTarget())
+    {
+        UE_LOG(LogCameraSensor, Error, TEXT("Component or RenderTarget not valid!"));
+        return;
+    }
+
+    CaptureRGBScene();
+
+    ProcessRGBTextureParam([Callback](const TArray<FColor>& CombinedData)
     {
         Callback(CombinedData);
     });
 }
 
 
-void URGBDCameraComponent::AsyncGetPointCloudData(TFunction<void()> Callback)
+void URGBCameraComponent::ProcessRGBTexture(TFunction<void()> OnComplete)
 {
-    if (!CheckComponentAndRenderTarget())
-    {
-        UE_LOG(LogCameraSensor, Error, TEXT("Component or RenderTarget not valid!"));
-        return;
-    }
-
-    CaptureComponent->CaptureScene();
-
-    ProcessRGBDTexture([this, Callback]()
-    {
-        PointCloudData = GeneratePointCloud();
-        Callback();
-    });
+    ProcessRGBTextureTemplate(std::move(OnComplete));
 }
 
-void URGBDCameraComponent::ProcessRGBDTexture(TFunction<void()> OnComplete)
+void URGBCameraComponent::ProcessRGBTextureParam(
+TFunction<void(const TArray<FColor>&)> OnComplete)
 {
-    ProcessRGBDepthTextureTemplate(std::move(OnComplete));
-}
-
-void URGBDCameraComponent::ProcessRGBDTextureParam(
-TFunction<void(const TArray<FLinearColor>&)> OnComplete)
-{
-    ProcessRGBDepthTextureTemplate(std::move(OnComplete));
-}
-
-TArray<FDCPoint> URGBDCameraComponent::GeneratePointCloud()
-{
-    TArray<FDCPoint> Points;
-    if (CombinedData.Num() != Width * Height)
-    {
-        return Points;
-    }
-
-    Points.Reserve(Width * Height);
-
-    const float FocalLengthX = (Width * 0.5f) / FMath::Tan(FMath::DegreesToRadians(FOV * 0.5f));
-    const float FocalLengthY = (Height * 0.5f) / FMath::Tan(FMath::DegreesToRadians(FOV * 0.5f));
-    const float CenterX = Width * 0.5f;
-    const float CenterY = Height * 0.5f;
-
-    for (int32 Y = 0; Y < Height; ++Y)
-    {
-        for (int32 X = 0; X < Width; ++X)
-        {
-            const int32 Index = Y * Width + X;
-            const float Depth = CombinedData[Index].A * MaxRange;
-
-            if (Depth > MinRange && Depth < MaxRange)
-            {
-                FDCPoint Point;
-                Point.Location.X = ((X - CenterX) / FocalLengthX) * Depth;
-                Point.Location.Y = ((Y - CenterY) / FocalLengthY) * Depth;
-                Point.Location.Z = Depth;
-                Points.Add(Point);
-            }
-        }
-    }
-
-    return Points;
-}
-
-void URGBDCameraComponent::VisualizePointCloud()
-{
-    PointCloudData = GeneratePointCloud();
+    ProcessRGBTextureTemplate(std::move(OnComplete));
 }

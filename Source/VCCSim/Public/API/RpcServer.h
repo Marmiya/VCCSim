@@ -22,7 +22,8 @@
 
 class FGrpcServerTask;
 class ULidarComponent;
-class URGBDCameraComponent;
+class URGBCameraComponent;
+class UDepthCameraComponent;
 class USegmentationCameraComponent;
 class UNormalCameraComponent;
 class UFMeshManager;
@@ -33,10 +34,11 @@ struct FRobotGrpcMaps
 {
 	struct FRobotComponentMaps
 	{
-		std::map<std::string, ULidarComponent*> RLMap;
-		std::map<std::string, URGBDCameraComponent*> RGBDCMap;
-		std::map<std::string, USegmentationCameraComponent*> RSegMap;
-		std::map<std::string, UNormalCameraComponent*> RNormalMap;
+		std::map<std::string, ULidarComponent*> LiDARMap;
+		std::map<std::string, URGBCameraComponent*> RGBMap;
+		std::map<std::string, UDepthCameraComponent*> DepthMap;
+		std::map<std::string, USegmentationCameraComponent*> SegMap;
+		std::map<std::string, UNormalCameraComponent*> NormalMap;
 	};
 
 	struct FRobotMaps
@@ -45,8 +47,8 @@ struct FRobotGrpcMaps
 		std::map<std::string, AActor*> CarMap;
 	};
 
-	FRobotComponentMaps RCMaps;
-	FRobotMaps RMaps;
+	FRobotComponentMaps RCMaps; // Robot Component Maps
+	FRobotMaps RMaps; // Robot Maps
 };
 
 

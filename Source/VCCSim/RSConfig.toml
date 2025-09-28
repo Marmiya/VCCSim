@@ -46,18 +46,22 @@ RecordInterval = 0.033333
 #ScannerAngleDown = 45
 #bVisualizePoints = false
 
-[Robots.ComponentConfigs.RGBDCamera]
+[Robots.ComponentConfigs.RGBCamera]
+RecordInterval = 0.033333
+FOV = 90
+Width = 1280
+Height = 720
+
+[Robots.ComponentConfigs.DepthCamera]
 RecordInterval = 0.033333
 FOV = 90
 Width = 1280
 Height = 720
 MaxRange = 10000.0
 MinRange = 0.0
-bSaveRGB = true
-bSaveDepth = true
 
 [Robots.ComponentConfigs.NormalCamera]
-RecordInterval = 0.033333
+RecordInterval = 0.1
 FOV = 90
 Width = 1280
 Height = 720
@@ -68,23 +72,28 @@ FOV = 90
 Width = 1280
 Height = 720
 
+
 [[Robots]]
 UETag = "QAQ"
 Type = "Drone"
 RecordInterval = 0.033333
 
-[Robots.ComponentConfigs.RGBDCamera]
+[Robots.ComponentConfigs.RGBCamera]
+RecordInterval = 0.033333
+FOV = 90
+Width = 1280
+Height = 720
+
+[Robots.ComponentConfigs.DepthCamera]
 RecordInterval = 0.033333
 FOV = 90
 Width = 1280
 Height = 720
 MaxRange = 10000.0
 MinRange = 0.0
-bSaveRGB = true
-bSaveDepth = true
 
 [Robots.ComponentConfigs.NormalCamera]
-RecordInterval = 0.033333
+RecordInterval = 0.1
 FOV = 90
 Width = 1280
 Height = 720

@@ -271,7 +271,7 @@ void ASceneAnalysisManager::ScanSceneImpl(const TOptional<FBox>& RegionBounds)
     InitializeUnifiedGrid();
 }
 
-void ASceneAnalysisManager::RegisterCamera(URGBDCameraComponent* CameraComponent)
+void ASceneAnalysisManager::RegisterCamera(URGBCameraComponent* CameraComponent)
 {
     CameraIntrinsics.Add(CameraComponent->CameraName,
     CameraComponent->GetCameraIntrinsics());

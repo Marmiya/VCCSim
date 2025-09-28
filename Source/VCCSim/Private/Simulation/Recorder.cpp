@@ -19,7 +19,6 @@
 #include "Sensors/CameraSensor.h"
 #include "Sensors/NormalCamera.h"
 #include "Sensors/SegmentCamera.h"
-#include "Utils/AsyncFileWriter.h"
 #include "Engine/World.h"
 #include "Misc/Paths.h"
 #include "TimerManager.h"
@@ -32,6 +31,7 @@
 #include "RHI.h"
 #include "RHIGPUReadback.h"
 #include "RendererInterface.h"
+#include "Sensors/DepthCamera.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogRecorder, Log, All);
 
@@ -109,6 +109,7 @@ void ARecorder::StartRecording()
     );
 
     bIsRecording = true;
+    SensorsToReadThisFrame.Empty();
     RecordState = true;
 }
 
@@ -131,6 +132,8 @@ void ARecorder::StopRecording()
 
     bIsRecording = false;
     RecordState = false;
+    LastSensorCaptureTimes.Empty();
+    SensorsToReadThisFrame.Empty();
 
     UE_LOG(LogRecorder, Log, TEXT("Recording stopped"));
 }
@@ -156,7 +159,7 @@ void ARecorder::TickRecording()
     }
 
     SensorRegistry.CleanupInvalidEntries();
-    CollectSensorDataConcurrently();
+    CollectSensorData();
 }
 
 void ARecorder::CreateActorDirectories(const FString& ActorName, TSet<ESensorType>&& SensorTypes)
@@ -176,9 +179,11 @@ void ARecorder::CreateActorDirectories(const FString& ActorName, TSet<ESensorTyp
         FString SensorDir;
         switch (SensorType)
         {
-            case ESensorType::RGBDCamera:
+            case ESensorType::RGBCamera:
                 SensorDir = FPaths::Combine(ActorDir, TEXT("RGB"));
                 PlatformFile.CreateDirectoryTree(*SensorDir);
+                break;
+            case ESensorType::DepthCamera:
                 SensorDir = FPaths::Combine(ActorDir, TEXT("Depth"));
                 PlatformFile.CreateDirectoryTree(*SensorDir);
                 break;
@@ -198,7 +203,7 @@ void ARecorder::CreateActorDirectories(const FString& ActorName, TSet<ESensorTyp
     }
 }
 
-void ARecorder::CollectSensorDataConcurrently()
+void ARecorder::CollectSensorData()
 {
     TArray<FSensorRegistryEntry> AllSensorEntries = SensorRegistry.GetAllSensors();
     if (AllSensorEntries.Num() == 0)
@@ -207,224 +212,264 @@ void ARecorder::CollectSensorDataConcurrently()
         return;
     }
 
-    TArray<ISensorDataProvider*> Sensors;
+    TArray<USensorBaseComponent*> Sensors;
     for (const FSensorRegistryEntry& Entry : AllSensorEntries)
     {
         if (Entry.IsValid())
         {
-            if (ISensorDataProvider* Provider = Entry.GetProvider())
+            if (USensorBaseComponent* SensorBase = Entry.GetSensorComponent())
             {
-                Sensors.Add(Provider);
+                Sensors.Add(SensorBase);
             }
         }
     }
 
     AsyncTask(ENamedThreads::GameThread, [this, Sensors]()
     {
-        for (ISensorDataProvider* Sensor : Sensors)
+        TArray<USensorBaseComponent*> SensorsToRead;
+        if (SensorsToReadThisFrame.Num() > 0)
+        {
+            SensorsToRead = SensorsToReadThisFrame.Array();
+            SensorsToReadThisFrame.Empty();
+        
+            ENQUEUE_RENDER_COMMAND(DirectSensorCapture)(
+                [this, SensorsToRead](FRHICommandListImmediate& RHICmdList)
+                {
+                    FRDGBuilder GraphBuilder(RHICmdList);
+                    ProcessSensorResults(GraphBuilder, SensorsToRead);
+                    GraphBuilder.Execute();
+                }
+            );
+        }
+
+        double CurrentTime = FPlatformTime::Seconds();
+        for (USensorBaseComponent* Sensor : Sensors)
         {
             if (auto* CameraBase = Cast<UCameraBaseComponent>(Sensor))
             {
-                switch (Sensor->GetSensorType())
+                if (ShouldCaptureSensor(Sensor, CurrentTime))
                 {
-                    case ESensorType::RGBDCamera:
-                        if (auto* RGBDCamera = Cast<URGBDCameraComponent>(CameraBase))
-                        {
-                            RGBDCamera->CaptureRGBDScene();
-                        }
-                        break;
-                    case ESensorType::NormalCamera:
-                        if (auto* NormalCamera = Cast<UNormalCameraComponent>(CameraBase))
-                        {
-                            NormalCamera->CaptureNormalScene();
-                        }
-                        break;
-                    case ESensorType::SegmentationCamera:
-                        if (auto* SegCamera = Cast<USegmentationCameraComponent>(CameraBase))
-                        {
-                            SegCamera->CaptureSegmentationScene();
-                        }
-                        break;
-                    default:
-                        UE_LOG(LogRecorder, Warning, TEXT("Unsupported sensor type: %d"),
-                            static_cast<int32>(Sensor->GetSensorType()));
-                        break;
+                    switch (Sensor->GetSensorType())
+                    {
+                        case ESensorType::RGBCamera:
+                            if (auto* RGBCamera = Cast<URGBCameraComponent>(CameraBase))
+                            {
+                                RGBCamera->CaptureRGBSceneDeferred();
+                            }
+                            break;
+                        case ESensorType::DepthCamera:
+                            if (auto* DepthCamera = Cast<UDepthCameraComponent>(CameraBase))
+                            {
+                                DepthCamera->CaptureDepthSceneDeferred();
+                            }
+                            break;
+                        case ESensorType::NormalCamera:
+                            if (auto* NormalCamera = Cast<UNormalCameraComponent>(CameraBase))
+                            {
+                                NormalCamera->CaptureNormalSceneDeferred();
+                            }
+                            break;
+                        case ESensorType::SegmentationCamera:
+                            if (auto* SegCamera = Cast<USegmentationCameraComponent>(CameraBase))
+                            {
+                                SegCamera->CaptureSegmentationSceneDeferred();
+                            }
+                            break;
+                        default:
+                            UE_LOG(LogRecorder, Warning, TEXT("Unsupported sensor type: %d"),
+                                static_cast<int32>(Sensor->GetSensorType()));
+                            break;
+                    }
                 }
             }
         }
-
-        ENQUEUE_RENDER_COMMAND(DirectSensorCapture)(
-            [this, Sensors](FRHICommandListImmediate& RHICmdList)
-            {
-                FRDGBuilder GraphBuilder(RHICmdList);
-                ProcessSensorsDirectly(GraphBuilder, Sensors);
-                GraphBuilder.Execute();
-            }
-        );
     });
 }
 
-void ARecorder::ProcessSensorsDirectly(FRDGBuilder& GraphBuilder, const TArray<ISensorDataProvider*>& Sensors)
+void ARecorder::ProcessCameraResult(FRDGBuilder& GraphBuilder, USensorBaseComponent* Sensor)
 {
-    double Timestamp = FPlatformTime::Seconds();
-
-    for (ISensorDataProvider* Sensor : Sensors)
+    auto* CameraBase = Cast<UCameraBaseComponent>(Sensor);
+    FTextureRenderTargetResource* RTResource =
+        CameraBase->GetRenderTarget()->GetRenderTargetResource();
+    if (!RTResource || !RTResource->GetRenderTargetTexture())
     {
-        UTextureRenderTarget2D* SensorRT = Sensor->GetRenderTarget();
-        if (!SensorRT)
-        {
-            UE_LOG(LogRecorder, Warning, TEXT("No render target for sensor type %d"), static_cast<int32>(Sensor->GetSensorType()));
-            continue;
-        }
-
-        FTextureRenderTargetResource* RTResource = SensorRT->GetRenderTargetResource();
-        if (!RTResource || !RTResource->GetRenderTargetTexture())
-        {
-            UE_LOG(LogRecorder, Warning, TEXT("Invalid render target resource for sensor type %d"), static_cast<int32>(Sensor->GetSensorType()));
-            continue;
-        }
-
-        FRDGTextureRef SensorTexture = GraphBuilder.RegisterExternalTexture(
-            CreateRenderTarget(RTResource->GetRenderTargetTexture(), TEXT("SensorRT")));
-
-        FIntPoint Resolution = Sensor->GetResolution();
-        FRHIGPUTextureReadback* Readback = new FRHIGPUTextureReadback(TEXT("DirectSensorReadback"));
-
-        AddEnqueueCopyPass(GraphBuilder, Readback, SensorTexture, FResolveRect());
-
-        TSharedPtr<FRHIGPUTextureReadback> SharedReadback(Readback);
-        TWeakObjectPtr WeakThis(this);
-
-        Async(EAsyncExecution::TaskGraph, [WeakThis, Sensor, SharedReadback, Resolution, Timestamp]()
-        {
-            int32 TimeoutCounter = 0;
-            const int32 MaxTimeout = 5000;
-            while (!SharedReadback->IsReady() && TimeoutCounter < MaxTimeout)
-            {
-                FPlatformProcess::Sleep(0.001f);
-                TimeoutCounter++;
-            }
-
-            if (TimeoutCounter >= MaxTimeout)
-            {
-                UE_LOG(LogRecorder, Error, TEXT("Readback timeout for sensor type %d"), static_cast<int32>(Sensor->GetSensorType()));
-                return;
-            }
-
-            int32 RowPitchInPixels = 0;
-            const void* PixelData = SharedReadback->Lock(RowPitchInPixels);
-            if (!PixelData)
-            {
-                UE_LOG(LogRecorder, Error, TEXT("Failed to lock readback data for sensor type %d"), static_cast<int32>(Sensor->GetSensorType()));
-                return;
-            }
-
-            int32 Width = Resolution.X;
-            int32 Height = Resolution.Y;
-            int32 NumPixels = Width * Height;
-
-            if (Width <= 0 || Height <= 0 || NumPixels <= 0)
-            {
-                UE_LOG(LogRecorder, Error, TEXT("Invalid resolution %dx%d for sensor type %d"), Width, Height, static_cast<int32>(Sensor->GetSensorType()));
-                SharedReadback->Unlock();
-                return;
-            }
-
-            if (!WeakThis.IsValid())
-            {
-                SharedReadback->Unlock();
-                return;
-            }
-
-            FSensorDataPacket Packet;
-            Packet.Type = Sensor->GetSensorType();
-            Packet.SensorIndex = 0;
-            if (auto* SensorBase = Cast<USensorBaseComponent>(Sensor))
-            {
-                Packet.SensorIndex = SensorBase->GetSensorIndex();
-            }
-            Packet.OwnerActor = Sensor->GetOwnerActor();
-            Packet.bValid = true;
-
-            switch (Sensor->GetSensorType())
-            {
-                case ESensorType::NormalCamera:
-                {
-                    auto NormalData = MakeShared<FNormalCameraData>();
-                    NormalData->Timestamp = Timestamp;
-                    NormalData->Width = Width;
-                    NormalData->Height = Height;
-                    NormalData->SensorIndex = Packet.SensorIndex;
-                    NormalData->Data.SetNumUninitialized(NumPixels);
-                    const FColor* SourceColors = static_cast<const FColor*>(PixelData);
-                    for (int32 i = 0; i < NumPixels; i++)
-                    {
-                        NormalData->Data[i] = SourceColors[i];
-                    }
-                    Packet.Data = NormalData;
-                    break;
-                }
-                case ESensorType::SegmentationCamera:
-                {
-                    auto SegData = MakeShared<FSegmentationCameraData>();
-                    SegData->Timestamp = Timestamp;
-                    SegData->Width = Width;
-                    SegData->Height = Height;
-                    SegData->SensorIndex = Packet.SensorIndex;
-                    SegData->Data.SetNumUninitialized(NumPixels);
-                    const FColor* SourceColors = static_cast<const FColor*>(PixelData);
-                    for (int32 i = 0; i < NumPixels; i++)
-                    {
-                        SegData->Data[i] = SourceColors[i];
-                        SegData->Data[i].A = 255;
-                    }
-                    Packet.Data = SegData;
-                    break;
-                }
-                case ESensorType::RGBDCamera:
-                {
-                    auto RGBDData = MakeShared<FRGBDCameraData>();
-                    RGBDData->Timestamp = Timestamp;
-                    RGBDData->Width = Width;
-                    RGBDData->Height = Height;
-                    RGBDData->SensorIndex = Packet.SensorIndex;
-                    URGBDCameraComponent* RGBDCamera = Cast<URGBDCameraComponent>(Sensor);
-                    if (RGBDCamera && RGBDCamera->bSaveRGB)
-                    {
-                        RGBDData->RGBData.SetNumUninitialized(NumPixels);
-                    }
-                    if (RGBDCamera && RGBDCamera->bSaveDepth)
-                    {
-                        RGBDData->DepthData.SetNumUninitialized(NumPixels);
-                    }
-                    const FLinearColor* SourceColors = static_cast<const FLinearColor*>(PixelData);
-                    for (int32 i = 0; i < NumPixels; i++)
-                    {
-                        if (RGBDCamera && RGBDCamera->bSaveRGB)
-                        {
-                            FColor EncodedColor = SourceColors[i].ToFColor(true);
-                            RGBDData->RGBData[i] = EncodedColor;
-                            RGBDData->RGBData[i].A = 255;
-                        }
-                        if (RGBDCamera && RGBDCamera->bSaveDepth)
-                        {
-                            RGBDData->DepthData[i] = SourceColors[i].A;
-                        }
-                    }
-                    Packet.Data = RGBDData;
-                    break;
-                }
-                default:
-                    Packet.bValid = false;
-                    break;
-            }
-
-            if (Packet.bValid && WeakThis.Get() && WeakThis.Get()->FileWriter.IsValid())
-            {
-                WeakThis.Get()->FileWriter->WriteDataAsync(Packet);
-            }
-
-            SharedReadback->Unlock();
-        });
+        UE_LOG(LogRecorder, Error,
+            TEXT("Invalid render target resource for sensor type %d"),
+            static_cast<int32>(Sensor->GetSensorType()));
     }
+
+    FRDGTextureRef SensorTexture = GraphBuilder.RegisterExternalTexture(
+        CreateRenderTarget(RTResource->GetRenderTargetTexture(), TEXT("SensorRT")));
+
+    FRHIGPUTextureReadback* Readback = new FRHIGPUTextureReadback(TEXT("DirectSensorReadback"));
+
+    AddEnqueueCopyPass(GraphBuilder, Readback, SensorTexture, FResolveRect());
+
+    TSharedPtr<FRHIGPUTextureReadback> SharedReadback(Readback);
+
+    double CaptureTimestamp = CameraBase->GetLastCaptureTimestamp();
+
+    Async(EAsyncExecution::TaskGraph,
+          [CameraBase, SharedReadback, CaptureTimestamp, this]()
+          {
+              int32 TimeoutCounter = 0;
+              constexpr int32 MaxTimeout = 1000;
+              while (!SharedReadback->IsReady() && TimeoutCounter < MaxTimeout)
+              {
+                  FPlatformProcess::Sleep(0.001f);
+                  TimeoutCounter++;
+              }
+              if (TimeoutCounter >= MaxTimeout)
+              {
+                  UE_LOG(LogRecorder, Error, TEXT("Readback timeout for sensor type %d"),
+                     static_cast<int32>(CameraBase->GetSensorType()));
+                  return;
+              }
+
+              int32 RowPitchInPixels = 0;
+              const void* PixelData = SharedReadback->Lock(RowPitchInPixels);
+              if (!PixelData)
+              {
+                  UE_LOG(LogRecorder, Error,
+                      TEXT("Failed to lock readback data for sensor type %d"),
+                      static_cast<int32>(CameraBase->GetSensorType()));
+                  return;
+              }
+
+              const FIntPoint Resolution = CameraBase->GetResolution();
+              const int32 NumPixels = Resolution.X * Resolution.Y;
+
+              FSensorDataPacket Packet;
+              Packet.Type = CameraBase->GetSensorType();
+              Packet.SensorIndex = CameraBase->GetSensorIndex();
+              Packet.OwnerActor = CameraBase->GetOwnerActor();
+              Packet.bValid = true;
+
+              switch (Packet.Type)
+              {
+              case ESensorType::NormalCamera:
+                  {
+                      auto NormalData = MakeShared<FNormalCameraData>();
+                      NormalData->Timestamp = CaptureTimestamp;
+                      NormalData->Width = Resolution.X;
+                      NormalData->Height = Resolution.Y;
+                      NormalData->SensorIndex = Packet.SensorIndex;
+                      NormalData->Data.SetNumUninitialized(NumPixels);
+                      const FFloat16Color* SourceColors = static_cast<const FFloat16Color*>(PixelData);
+                      for (int32 i = 0; i < NumPixels; i++)
+                      {
+                          NormalData->Data[i] = SourceColors[i];
+                      }
+                      Packet.Data = NormalData;
+                      break;
+                  }
+              case ESensorType::SegmentationCamera:
+                  {
+                      auto SegData = MakeShared<FSegmentationCameraData>();
+                      SegData->Timestamp = CaptureTimestamp;
+                      SegData->Width = Resolution.X;
+                      SegData->Height = Resolution.Y;
+                      SegData->SensorIndex = Packet.SensorIndex;
+                      SegData->Data.SetNumUninitialized(NumPixels);
+                      const FColor* SourceColors = static_cast<const FColor*>(PixelData);
+                      for (int32 i = 0; i < NumPixels; i++)
+                      {
+                          SegData->Data[i] = SourceColors[i];
+                          SegData->Data[i].A = 255;
+                      }
+                      Packet.Data = SegData;
+                      break;
+                  }
+              case ESensorType::RGBCamera:
+                  {
+                      auto RGBData = MakeShared<FRGBCameraData>();
+                      RGBData->Timestamp = CaptureTimestamp;
+                      RGBData->Width = Resolution.X;
+                      RGBData->Height = Resolution.Y;
+                      RGBData->SensorIndex = Packet.SensorIndex;
+                      RGBData->RGBData.SetNumUninitialized(NumPixels);
+                      
+                      const FColor* SourceColors = static_cast<const FColor*>(PixelData);
+                      for (int32 i = 0; i < NumPixels; i++)
+                      {
+                          RGBData->RGBData[i] = SourceColors[i];
+                          
+                      }
+                      Packet.Data = RGBData;
+                      break;
+                  }
+              case ESensorType::DepthCamera:
+                  {
+                      auto DepthData = MakeShared<FDepthCameraData>();
+                      DepthData->Timestamp = CaptureTimestamp;
+                      DepthData->Width = Resolution.X;
+                      DepthData->Height = Resolution.Y;
+                      DepthData->SensorIndex = Packet.SensorIndex;
+                      DepthData->DepthData.SetNumUninitialized(NumPixels);
+                      
+                      const FFloat16Color* SourceColors = static_cast<const FFloat16Color*>(PixelData);
+                      for (int32 i = 0; i < NumPixels; i++)
+                      {
+                          DepthData->DepthData[i] = SourceColors[i].R.GetFloat();
+                      }
+                      Packet.Data = DepthData;
+                      break;
+                  }
+              default:
+                  Packet.bValid = false;
+                  break;
+              }
+
+              if (Packet.bValid)
+              {
+                  this->FileWriter->WriteData(MoveTemp(Packet));
+              }
+              SharedReadback->Unlock();
+          });
+}
+
+void ARecorder::ProcessSensorResults(
+    FRDGBuilder& GraphBuilder, const TArray<USensorBaseComponent*>& Sensors)
+{
+    for (USensorBaseComponent* Sensor : Sensors)
+    {
+        ESensorType SensorType = Sensor->GetSensorType();
+        // Camera sensor
+        if (SensorType == ESensorType::NormalCamera ||
+            SensorType == ESensorType::SegmentationCamera ||
+            SensorType == ESensorType::RGBCamera ||
+            SensorType == ESensorType::DepthCamera)
+        {
+            ProcessCameraResult(GraphBuilder, Sensor);
+        }
+        // Non-camera sensor (e.g., LiDAR)
+        else
+        {
+            
+        }
+    }
+}
+
+bool ARecorder::ShouldCaptureSensor(USensorBaseComponent* Sensor, double CurrentTime)
+{
+    double SensorInterval = Sensor->GetRecordInterval();
+
+    if (!LastSensorCaptureTimes.Contains(Sensor))
+    {
+        LastSensorCaptureTimes.Add(Sensor, CurrentTime);
+        SensorsToReadThisFrame.Add(Sensor);
+        return true;
+    }
+
+    double LastCaptureTime = LastSensorCaptureTimes[Sensor];
+    double TimeSinceLastCapture = CurrentTime - LastCaptureTime;
+
+    if (TimeSinceLastCapture >= SensorInterval)
+    {
+        LastSensorCaptureTimes[Sensor] = CurrentTime;
+        SensorsToReadThisFrame.Add(Sensor);
+        return true;
+    }
+
+    return false;
 }

@@ -21,7 +21,7 @@
 #include "DataStructures/Mesh.h"
 #include "SceneAnalysisManager.generated.h"
 
-class URGBDCameraComponent;
+class URGBCameraComponent;
 class USemanticAnalyzer;
 class USafeZoneAnalyzer;
 class UComplexityAnalyzer;
@@ -38,7 +38,7 @@ public:
     void ScanScene();
     void ScanSceneRegion3D(float MinX, float MaxX, float MinY,
         float MaxY, float MinZ, float MaxZ);
-    void RegisterCamera(URGBDCameraComponent* CameraComponent);
+    void RegisterCamera(URGBCameraComponent* CameraComponent);
     
     UPROPERTY(EditAnywhere, Category = "SceneAnalysis")
     float GridResolution = 50.0f;

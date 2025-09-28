@@ -32,6 +32,7 @@
 #include "LevelSequencePlayer.h"
 #include "LevelSequenceActor.h"
 #include "Kismet/GameplayStatics.h"
+#include "Sensors/DepthCamera.h"
 #include "Simulation/SemanticAnalyzer.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogVCCHUD, Log, All);
@@ -324,22 +325,32 @@ void AVCCHUD::SetupMainCharacter(const FVCCSimConfig& Config, TArray<AActor*> Fo
     
     for (const auto& Component : MainRobotConfig.ComponentConfigs)
     {
-        if (Component.Get<0>() == ESensorType::RGBDCamera)
+        if (Component.Get<0>() == ESensorType::RGBCamera)
         {
-            if (URGBDCameraComponent* RGBDCameraComponent =
-                MainCharacter->FindComponentByClass<URGBDCameraComponent>())
+            if (URGBCameraComponent* RGBCameraComponent =
+                MainCharacter->FindComponentByClass<URGBCameraComponent>())
             {
-                WidgetInstance->SetDepthContext(
-                    RGBDCameraComponent->GetRenderTarget(), 
-                    RGBDCameraComponent);
                 WidgetInstance->SetRGBContext(
-                    RGBDCameraComponent->GetRenderTarget(),
-                    RGBDCameraComponent);
+                    RGBCameraComponent->GetRenderTarget(),
+                    RGBCameraComponent);
             }
             else
             {
-                UE_LOG(LogVCCHUD, Warning, TEXT("AVCCHUD: "
-                                              "RGBDCamera component not found!"));
+                UE_LOG(LogVCCHUD, Warning, TEXT("RGBDCamera component not found!"));
+            }
+        }
+        if (Component.Get<0>() == ESensorType::DepthCamera)
+        {
+            if (UDepthCameraComponent* DepthCameraComponent =
+                MainCharacter->FindComponentByClass<UDepthCameraComponent>())
+            {
+                WidgetInstance->SetDepthContext(
+                    DepthCameraComponent->GetRenderTarget(), 
+                    DepthCameraComponent);
+            }
+            else
+            {
+                UE_LOG(LogVCCHUD, Warning, TEXT("DepthCamera component not found!"));
             }
         }
         if (Component.Get<0>() == ESensorType::SegmentationCamera)
@@ -440,7 +451,7 @@ FRobotGrpcMaps AVCCHUD::SetupActors(const FVCCSimConfig& Config)
                 {
                     LidarComponent->Configure(*SensorConfig);
                     LidarComponent->MeshHolder = Holder->FindComponentByClass<UInsMeshHolder>();
-                    RGrpcMaps.RCMaps.RLMap[RobotTagStd] = LidarComponent;
+                    RGrpcMaps.RCMaps.LiDARMap[RobotTagStd] = LidarComponent;
                     Objects.Add(LidarComponent);
                 }
                 else
@@ -449,25 +460,45 @@ FRobotGrpcMaps AVCCHUD::SetupActors(const FVCCSimConfig& Config)
                         TEXT("LidarComponent not found on robot %s"), *Robot.UETag);
                 }
             }
-            else if (Component.Get<0>() == ESensorType::RGBDCamera)
+            else if (Component.Get<0>() == ESensorType::RGBCamera)
             {
-                TArray<URGBDCameraComponent*> RGBDCameras;
-                RobotPawn->GetComponents<URGBDCameraComponent>(RGBDCameras);
-                if (RGBDCameras.Num() == 0)
+                TArray<URGBCameraComponent*> RGBCameras;
+                RobotPawn->GetComponents<URGBCameraComponent>(RGBCameras);
+                if (RGBCameras.Num() == 0)
                 {
                     UE_LOG(LogVCCHUD, Warning,
-                        TEXT("No RGBDCameraComponent found on robot %s"), *Robot.UETag);
+                        TEXT("No RGBCameraComponent found on robot %s"), *Robot.UETag);
                     continue;
                 }
 
-                for (auto* RGBDCam : RGBDCameras)
+                for (auto* RGBCam : RGBCameras)
                 {
-                    RGBDCam->Configure(*SensorConfig);
+                    RGBCam->Configure(*SensorConfig);
                     FString CameraKey = FString::Printf(TEXT("%s^%d"),
-                        *Robot.UETag, RGBDCam->GetSensorIndex());
-                    RGrpcMaps.RCMaps.RGBDCMap[TCHAR_TO_UTF8(*CameraKey)] = RGBDCam;
-                    RGBDCam->CameraName = CameraKey;
-                    Objects.Add(RGBDCam);
+                        *Robot.UETag, RGBCam->GetSensorIndex());
+                    RGrpcMaps.RCMaps.RGBMap[TCHAR_TO_UTF8(*CameraKey)] = RGBCam;
+                    RGBCam->CameraName = CameraKey;
+                    Objects.Add(RGBCam);
+                }
+            }
+            else if (Component.Get<0>() == ESensorType::DepthCamera)
+            {
+                TArray<UDepthCameraComponent*> DepthCameras;
+                RobotPawn->GetComponents<UDepthCameraComponent>(DepthCameras);
+                if (DepthCameras.Num() == 0)
+                {
+                    UE_LOG(LogVCCHUD, Warning,
+                        TEXT("No UDepthCameraComponent found on robot %s"), *Robot.UETag);
+                    continue;
+                }
+
+                for (auto* DepthCam : DepthCameras)
+                {
+                    DepthCam->Configure(*SensorConfig);
+                    FString CameraKey = FString::Printf(TEXT("%s^%d"),
+                        *Robot.UETag, DepthCam->GetSensorIndex());
+                    RGrpcMaps.RCMaps.DepthMap[TCHAR_TO_UTF8(*CameraKey)] = DepthCam;
+                    Objects.Add(DepthCam);
                 }
             }
             else if (Component.Get<0>() == ESensorType::SegmentationCamera)
@@ -486,7 +517,7 @@ FRobotGrpcMaps AVCCHUD::SetupActors(const FVCCSimConfig& Config)
                     SegCam->Configure(*SensorConfig);
                     FString CameraKey = FString::Printf(TEXT("%s^%d"),
                         *Robot.UETag, SegCam->GetSensorIndex());
-                    RGrpcMaps.RCMaps.RSegMap[TCHAR_TO_UTF8(*CameraKey)] = SegCam;
+                    RGrpcMaps.RCMaps.SegMap[TCHAR_TO_UTF8(*CameraKey)] = SegCam;
                     Objects.Add(SegCam);
                 }
             }
@@ -506,7 +537,7 @@ FRobotGrpcMaps AVCCHUD::SetupActors(const FVCCSimConfig& Config)
                     NormalCam->Configure(*SensorConfig);
                     FString CameraKey = FString::Printf(TEXT("%s^%d"),
                         *Robot.UETag, NormalCam->GetSensorIndex());
-                    RGrpcMaps.RCMaps.RNormalMap[TCHAR_TO_UTF8(*CameraKey)] = NormalCam;
+                    RGrpcMaps.RCMaps.NormalMap[TCHAR_TO_UTF8(*CameraKey)] = NormalCam;
                     Objects.Add(NormalCam);
                 }
             }
@@ -526,15 +557,15 @@ FRobotGrpcMaps AVCCHUD::SetupActors(const FVCCSimConfig& Config)
             }
         }
 
-        if (SensorTypes.Find(ESensorType::Lidar) && SensorTypes.Find(ESensorType::RGBDCamera))
+        if (SensorTypes.Find(ESensorType::Lidar) && SensorTypes.Find(ESensorType::RGBCamera))
         {
-            TArray<URGBDCameraComponent*> RGBDCameras;
-            RobotPawn->GetComponents<URGBDCameraComponent>(RGBDCameras);
+            TArray<URGBCameraComponent*> RGBCameras;
+            RobotPawn->GetComponents<URGBCameraComponent>(RGBCameras);
             ULidarComponent* LidarComponent = RobotPawn->FindComponentByClass<ULidarComponent>();
 
-            for (auto* RGBDCam : RGBDCameras)
+            for (auto* RGBCam : RGBCameras)
             {
-                RGBDCam->SetIgnoreLidar(LidarComponent->MeshHolder);
+                RGBCam->SetIgnoreLidar(LidarComponent->MeshHolder);
             }
         }
         Recorder->CreateActorDirectories(RobotPawn->GetName(), std::move(SensorTypes));

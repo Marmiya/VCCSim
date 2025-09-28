@@ -30,12 +30,14 @@ UNormalCameraComponent::UNormalCameraComponent()
 void UNormalCameraComponent::Configure(const FSensorConfig& Config)
 {
     if (!bBPConfigured)
-    {       
+    {
         const auto NormalConfig = static_cast<const FNormalCameraConfig&>(Config);
         FOV = NormalConfig.FOV;
         Width = NormalConfig.Width;
         Height = NormalConfig.Height;
     }
+
+    RecordInterval = Config.RecordInterval;
 
     ComputeIntrinsics();
     InitializeRenderTargets();
@@ -57,7 +59,7 @@ void UNormalCameraComponent::InitializeRenderTargets()
 {
     RenderTarget = NewObject<UTextureRenderTarget2D>(this);
     RenderTarget->InitCustomFormat(Width, Height,
-        PF_B8G8R8A8, true);
+        PF_A16B16G16R16, true);
     RenderTarget->UpdateResource();
 }
 
@@ -79,6 +81,18 @@ void UNormalCameraComponent::CaptureNormalScene()
             CaptureComponent->CaptureScene();
         });
     }
+}
+
+void UNormalCameraComponent::CaptureNormalSceneDeferred()
+{
+    if (!CheckComponentAndRenderTarget())
+    {
+        UE_LOG(LogNormalCamera, Error, TEXT("Component or RenderTarget not valid!"));
+        return;
+    }
+
+    LastCaptureTimestamp = FPlatformTime::Seconds();
+    CaptureComponent->CaptureSceneDeferred();
 }
 
 void UNormalCameraComponent::CaptureNormalSceneAndProcess()

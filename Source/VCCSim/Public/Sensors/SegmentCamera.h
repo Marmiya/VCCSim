@@ -18,7 +18,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "ISensorDataProvider.h"
 #include "GameFramework/Actor.h"
 #include "SensorBase.h"
 #include "Engine/TextureRenderTarget2D.h"
@@ -39,7 +38,7 @@ public:
 };
 
 UCLASS(ClassGroup = (VCCSIM), meta = (BlueprintSpawnableComponent))
-class VCCSIM_API USegmentationCameraComponent : public UCameraBaseComponent, public ISensorDataProvider
+class VCCSIM_API USegmentationCameraComponent : public UCameraBaseComponent
 {
     GENERATED_BODY()
 
@@ -50,6 +49,8 @@ public:
     
     UFUNCTION(BlueprintCallable, Category = "SegmentationCamera")
     void CaptureSegmentationScene();
+    UFUNCTION(BlueprintCallable, Category = "SegmentationCamera")
+    void CaptureSegmentationSceneDeferred();
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SegmentationCamera|Config")
     UMaterialInterface* SegmentationMaterial = Cast<UMaterialInterface>(
@@ -61,10 +62,8 @@ public:
     // For GRPC call
     void AsyncGetSegmentationImageData(TFunction<void(const TArray<FColor>&)> Callback);
 
-    // ISensorDataProvider interface
-    virtual FIntPoint GetResolution() const override { return FIntPoint(Width, Height); }
+    // UCameraBaseComponent interface
     virtual ESensorType GetSensorType() const override { return ESensorType::SegmentationCamera; }
-    virtual AActor* GetOwnerActor() const override { return ParentActor; }
 
 protected:
     virtual void InitializeRenderTargets() override;

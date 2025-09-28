@@ -95,14 +95,6 @@ message DepthPointCloudData {
   uint32 timestamp = 2;
 }
 
-message RGBDCombinedData {
-  uint32 width = 1;
-  uint32 height = 2;
-  uint32 timestamp = 3;
-  bytes rgb_data = 4;
-  repeated float depth_data = 5;
-}
-
 // ===== ROBOT CONTROL MESSAGES =====
 
 // Drone (6DOF - full pose with quaternion rotation)
@@ -138,12 +130,15 @@ service LidarService {
   rpc GetLiDARDataAndOdom (RobotName) returns (LidarDataAndOdom);
 }
 
-service RGBDCameraService {
+service RGBCameraService {
   rpc GetRGBData (IndexedCamera) returns (RGBImageData);
-  rpc GetDepthData (IndexedCamera) returns (DepthImageData);
-  rpc GetDepthPointCloud (IndexedCamera) returns (DepthPointCloudData);
-  rpc GetRGBDData (IndexedCamera) returns (RGBDCombinedData);
   rpc GetCameraOdom (RobotName) returns (Odometry);
+}
+
+service DepthCameraService {
+  rpc GetDepthCameraOdom (RobotName) returns (Odometry);
+  rpc GetDepthCameraImageData (IndexedCamera) returns (DepthImageData);
+  rpc GetDepthPointCloud (IndexedCamera) returns (DepthPointCloudData);
 }
 
 service SegmentationCameraService {
