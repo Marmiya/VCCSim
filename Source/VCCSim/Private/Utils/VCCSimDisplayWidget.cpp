@@ -56,15 +56,6 @@ void UVCCSIMDisplayWidget::InitializeViewData()
     ViewDataMap.Add(EVCCSimViewType::PointCloud, FVCCSimViewData());
     ViewDataMap.Add(EVCCSimViewType::Unit, FVCCSimViewData());
 
-    // Initialize depth-specific settings
-    if (FVCCSimViewData* DepthData = GetViewData(EVCCSimViewType::Depth))
-    {
-        DepthData->MinDepth = 0.0f;
-        DepthData->MaxDepth = 5000.0f;
-        DepthData->Contrast = 1.2f;
-        DepthData->Brightness = 1.0f;
-    }
-
     // Initialize render settings for scene capture views
     if (FVCCSimViewData* LitData = GetViewData(EVCCSimViewType::Lit))
     {
@@ -126,16 +117,9 @@ void UVCCSIMDisplayWidget::SetupViewBindings()
 
         if (ViewData.VisualizationMaterial && ViewData.ImageDisplay)
         {
-            ViewData.MaterialInstance = UMaterialInstanceDynamic::Create(ViewData.VisualizationMaterial, this);
+            ViewData.MaterialInstance =
+                UMaterialInstanceDynamic::Create(ViewData.VisualizationMaterial, this);
             ViewData.ImageDisplay->SetBrushFromMaterial(ViewData.MaterialInstance);
-
-            if (ViewType == EVCCSimViewType::Depth && ViewData.MaterialInstance)
-            {
-                ViewData.MaterialInstance->SetScalarParameterValue("MinDepth", ViewData.MinDepth);
-                ViewData.MaterialInstance->SetScalarParameterValue("MaxDepth", ViewData.MaxDepth);
-                ViewData.MaterialInstance->SetScalarParameterValue("Contrast", ViewData.Contrast);
-                ViewData.MaterialInstance->SetScalarParameterValue("Brightness", ViewData.Brightness);
-            }
         }
     }
 }
@@ -413,7 +397,7 @@ void UVCCSIMDisplayWidget::SetRGBContext(UTextureRenderTarget2D* RGBTexture, URG
     SetCameraContext(EVCCSimViewType::RGB, RGBTexture, InCamera);
 }
 
-void UVCCSIMDisplayWidget::SetSegContext(UTextureRenderTarget2D* SegTexture, USegmentationCameraComponent* InCamera)
+void UVCCSIMDisplayWidget::SetSegContext(UTextureRenderTarget2D* SegTexture, USegCameraComponent* InCamera)
 {
     SetCameraContext(EVCCSimViewType::Segmentation, SegTexture, InCamera);
 }
@@ -667,7 +651,7 @@ void UVCCSIMDisplayWidget::ProcessCaptureByType(EVCCSimViewType ViewType)
         CaptureTypeName = TEXT("NormalCapture");
         break;
     case EVCCSimViewType::Segmentation:
-        if (auto* SegCamera = Cast<USegmentationCameraComponent>(ViewData->CameraComponent))
+        if (auto* SegCamera = Cast<USegCameraComponent>(ViewData->CameraComponent))
         {
             SegCamera->CaptureSegmentationScene();
         }

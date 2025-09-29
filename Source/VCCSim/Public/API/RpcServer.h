@@ -24,7 +24,7 @@ class FGrpcServerTask;
 class ULidarComponent;
 class URGBCameraComponent;
 class UDepthCameraComponent;
-class USegmentationCameraComponent;
+class USegCameraComponent;
 class UNormalCameraComponent;
 class UFMeshManager;
 class ARecorder;
@@ -37,7 +37,7 @@ struct FRobotGrpcMaps
 		std::map<std::string, ULidarComponent*> LiDARMap;
 		std::map<std::string, URGBCameraComponent*> RGBMap;
 		std::map<std::string, UDepthCameraComponent*> DepthMap;
-		std::map<std::string, USegmentationCameraComponent*> SegMap;
+		std::map<std::string, USegCameraComponent*> SegMap;
 		std::map<std::string, UNormalCameraComponent*> NormalMap;
 	};
 

@@ -632,12 +632,12 @@ void FVCCSimPanelSelection::RefreshCameraAvailability()
     // Check for camera components
     TArray<URGBCameraComponent*> RGBCameras;
     TArray<UDepthCameraComponent*> DepthCameras;
-    TArray<USegmentationCameraComponent*> SegmentationCameras;
+    TArray<USegCameraComponent*> SegmentationCameras;
     TArray<UNormalCameraComponent*> NormalCameras;
     
     SelectedFlashPawn->GetComponents<URGBCameraComponent>(RGBCameras);
     SelectedFlashPawn->GetComponents<UDepthCameraComponent>(DepthCameras);
-    SelectedFlashPawn->GetComponents<USegmentationCameraComponent>(SegmentationCameras);
+    SelectedFlashPawn->GetComponents<USegCameraComponent>(SegmentationCameras);
     SelectedFlashPawn->GetComponents<UNormalCameraComponent>(NormalCameras);
     
     bHasRGBCamera = (RGBCameras.Num() > 0);
@@ -702,8 +702,8 @@ float FVCCSimPanelSelection::GetActiveCameraFOV() const
     
     if (bHasSegmentationCamera && bUseSegmentationCamera)
     {
-        TArray<USegmentationCameraComponent*> SegmentationCameras;
-        SelectedFlashPawn->GetComponents<USegmentationCameraComponent>(SegmentationCameras);
+        TArray<USegCameraComponent*> SegmentationCameras;
+        SelectedFlashPawn->GetComponents<USegCameraComponent>(SegmentationCameras);
         if (SegmentationCameras.Num() > 0 && SegmentationCameras[0])
         {
             return SegmentationCameras[0]->FOV;
@@ -753,8 +753,8 @@ FIntPoint FVCCSimPanelSelection::GetActiveCameraResolution() const
     
     if (bHasSegmentationCamera && bUseSegmentationCamera)
     {
-        TArray<USegmentationCameraComponent*> SegmentationCameras;
-        SelectedFlashPawn->GetComponents<USegmentationCameraComponent>(SegmentationCameras);
+        TArray<USegCameraComponent*> SegmentationCameras;
+        SelectedFlashPawn->GetComponents<USegCameraComponent>(SegmentationCameras);
         if (SegmentationCameras.Num() > 0 && SegmentationCameras[0])
         {
             return FIntPoint(SegmentationCameras[0]->Width, SegmentationCameras[0]->Height);

@@ -25,7 +25,7 @@
 class UMeshHandlerComponent;
 class URGBCameraComponent;
 class UDepthCameraComponent;
-class USegmentationCameraComponent;
+class USegCameraComponent;
 class UNormalCameraComponent;
 
 UENUM(BlueprintType)
@@ -75,18 +75,6 @@ struct FVCCSimViewData
     UPROPERTY(EditAnywhere, Category = "View Settings")
     float UpdateInterval = 0.1f;
 
-    UPROPERTY(EditAnywhere, Category = "Depth Settings")
-    float MinDepth = 0.0f;
-
-    UPROPERTY(EditAnywhere, Category = "Depth Settings")
-    float MaxDepth = 5000.0f;
-
-    UPROPERTY(EditAnywhere, Category = "Depth Settings", meta = (ClampMin = "0.1", ClampMax = "5.0"))
-    float Contrast = 1.2f;
-
-    UPROPERTY(EditAnywhere, Category = "Depth Settings", meta = (ClampMin = "0.1", ClampMax = "5.0"))
-    float Brightness = 1.0f;
-
     float UpdateTimer = 0.0f;
 };
 
@@ -109,7 +97,7 @@ public:
 
     void SetDepthContext(UTextureRenderTarget2D* DepthTexture, UDepthCameraComponent* InCamera);
     void SetRGBContext(UTextureRenderTarget2D* RGBTexture, URGBCameraComponent* InCamera);
-    void SetSegContext(UTextureRenderTarget2D* SegTexture, USegmentationCameraComponent* InCamera);
+    void SetSegContext(UTextureRenderTarget2D* SegTexture, USegCameraComponent* InCamera);
     void SetNormalContext(UTextureRenderTarget2D* NormalTexture, UNormalCameraComponent* InCamera);
     
     UFUNCTION(BlueprintCallable, Category = "LitView")

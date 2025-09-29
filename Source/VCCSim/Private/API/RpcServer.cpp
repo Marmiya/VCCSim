@@ -64,8 +64,7 @@ public:
     	VCCSim::DroneService::AsyncService DroneService;
         VCCSim::CarService::AsyncService CarService;
     	VCCSim::LidarService::AsyncService LidarService;
-    	VCCSim::RGBCameraService::AsyncService RGBCameraService;
-    	VCCSim::DepthCameraService::AsyncService DepthCameraService;
+    	VCCSim::CameraService::AsyncService CameraService;
     	VCCSim::MeshService::AsyncService MeshService;
     	VCCSim::PointCloudService::AsyncService PointCloudService;
     	VCCSim::RecordingService::AsyncService RecordingService;
@@ -83,14 +82,11 @@ public:
     	{
     		Builder.RegisterService(&LidarService);
     	}
-    	if (!RGrpcMaps.RCMaps.RGBMap.empty())
+    	if (!RGrpcMaps.RCMaps.RGBMap.empty() || !RGrpcMaps.RCMaps.DepthMap.empty() ||
+            !RGrpcMaps.RCMaps.SegMap.empty() || !RGrpcMaps.RCMaps.NormalMap.empty())
     	{
-    		Builder.RegisterService(&RGBCameraService);
+    		Builder.RegisterService(&CameraService);
     	}
-    	if (!RGrpcMaps.RCMaps.DepthMap.empty())
-		{
-			Builder.RegisterService(&DepthCameraService);
-		}
 
     	Builder.RegisterService(&RecordingService);
         Builder.RegisterService(&MeshService);
@@ -135,21 +131,31 @@ public:
         		new LidarGetDataAndOdomCall(&LidarService, CompletionQueue.get(),
 					RGrpcMaps.RCMaps.LiDARMap);
         	}
-        	if (!RGrpcMaps.RCMaps.RGBMap.empty())
+        	if (!RGrpcMaps.RCMaps.RGBMap.empty() || !RGrpcMaps.RCMaps.DepthMap.empty() ||
+                !RGrpcMaps.RCMaps.SegMap.empty() || !RGrpcMaps.RCMaps.NormalMap.empty())
         	{
-        		new RGBCameraGetRGBDataCall(&RGBCameraService,
-					CompletionQueue.get(), RGrpcMaps.RCMaps.RGBMap);
-        		new RGBCameraGetCameraOdomCall(&RGBCameraService,
-					CompletionQueue.get(), RGrpcMaps.RCMaps.RGBMap);
-        	}
-        	if (!RGrpcMaps.RCMaps.DepthMap.empty())
-        	{
-        		new DepthCameraGetDepthDataCall(&DepthCameraService,
-        		CompletionQueue.get(), RGrpcMaps.RCMaps.DepthMap);
-        		new DepthCameraGetCameraOdomCall(&DepthCameraService,
-        		CompletionQueue.get(), RGrpcMaps.RCMaps.DepthMap);
-        		new DepthCameraGetDepthPointCloudCall(&DepthCameraService,
-				CompletionQueue.get(), RGrpcMaps.RCMaps.DepthMap);
+                if (!RGrpcMaps.RCMaps.RGBMap.empty())
+                {
+        		    new CameraGetRGBDataCall(&CameraService,
+				        CompletionQueue.get(), RGrpcMaps.RCMaps.RGBMap);
+                }
+                if (!RGrpcMaps.RCMaps.DepthMap.empty())
+                {
+        		    new CameraGetDepthDataCall(&CameraService,
+        		        CompletionQueue.get(), RGrpcMaps.RCMaps.DepthMap);
+        		    new CameraGetDepthPointCloudCall(&CameraService,
+			        CompletionQueue.get(), RGrpcMaps.RCMaps.DepthMap);
+                }
+                if (!RGrpcMaps.RCMaps.SegMap.empty())
+                {
+        		    new CameraGetSegmentDataCall(&CameraService,
+        		        CompletionQueue.get(), RGrpcMaps.RCMaps.SegMap);
+                }
+                if (!RGrpcMaps.RCMaps.NormalMap.empty())
+                {
+        		    new CameraGetNormalDataCall(&CameraService,
+        		        CompletionQueue.get(), RGrpcMaps.RCMaps.NormalMap);
+                }
         	}
 
         	new SimRecording(&RecordingService, CompletionQueue.get(), Recorder);

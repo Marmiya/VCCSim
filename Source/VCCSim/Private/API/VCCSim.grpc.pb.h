@@ -756,69 +756,129 @@ class LidarService final {
   typedef WithStreamedUnaryMethod_GetLiDARData<WithStreamedUnaryMethod_GetLiDAROdom<WithStreamedUnaryMethod_GetLiDARDataAndOdom<Service > > > StreamedService;
 };
 
-class RGBCameraService final {
+class CameraService final {
  public:
   static constexpr char const* service_full_name() {
-    return "VCCSim.RGBCameraService";
+    return "VCCSim.CameraService";
   }
   class StubInterface {
    public:
     virtual ~StubInterface() {}
-    virtual ::grpc::Status GetRGBData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::VCCSim::RGBImageData* response) = 0;
-    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::RGBImageData>> AsyncGetRGBData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::RGBImageData>>(AsyncGetRGBDataRaw(context, request, cq));
+    virtual ::grpc::Status GetRGBData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::VCCSim::RGBData* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::RGBData>> AsyncGetRGBData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::RGBData>>(AsyncGetRGBDataRaw(context, request, cq));
     }
-    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::RGBImageData>> PrepareAsyncGetRGBData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::RGBImageData>>(PrepareAsyncGetRGBDataRaw(context, request, cq));
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::RGBData>> PrepareAsyncGetRGBData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::RGBData>>(PrepareAsyncGetRGBDataRaw(context, request, cq));
     }
-    virtual ::grpc::Status GetCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::VCCSim::Odometry* response) = 0;
-    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Odometry>> AsyncGetCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Odometry>>(AsyncGetCameraOdomRaw(context, request, cq));
+    virtual ::grpc::Status GetDepthData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::VCCSim::DepthData* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::DepthData>> AsyncGetDepthData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::DepthData>>(AsyncGetDepthDataRaw(context, request, cq));
     }
-    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Odometry>> PrepareAsyncGetCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Odometry>>(PrepareAsyncGetCameraOdomRaw(context, request, cq));
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::DepthData>> PrepareAsyncGetDepthData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::DepthData>>(PrepareAsyncGetDepthDataRaw(context, request, cq));
+    }
+    virtual ::grpc::Status GetDepthPointCloud(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::VCCSim::TPointCloud* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::TPointCloud>> AsyncGetDepthPointCloud(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::TPointCloud>>(AsyncGetDepthPointCloudRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::TPointCloud>> PrepareAsyncGetDepthPointCloud(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::TPointCloud>>(PrepareAsyncGetDepthPointCloudRaw(context, request, cq));
+    }
+    virtual ::grpc::Status GetSegData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::VCCSim::RGBData* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::RGBData>> AsyncGetSegData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::RGBData>>(AsyncGetSegDataRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::RGBData>> PrepareAsyncGetSegData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::RGBData>>(PrepareAsyncGetSegDataRaw(context, request, cq));
+    }
+    virtual ::grpc::Status GetNormalData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::VCCSim::NormalData* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::NormalData>> AsyncGetNormalData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::NormalData>>(AsyncGetNormalDataRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::NormalData>> PrepareAsyncGetNormalData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::NormalData>>(PrepareAsyncGetNormalDataRaw(context, request, cq));
     }
     class async_interface {
      public:
       virtual ~async_interface() {}
-      virtual void GetRGBData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::RGBImageData* response, std::function<void(::grpc::Status)>) = 0;
-      virtual void GetRGBData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::RGBImageData* response, ::grpc::ClientUnaryReactor* reactor) = 0;
-      virtual void GetCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Odometry* response, std::function<void(::grpc::Status)>) = 0;
-      virtual void GetCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Odometry* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      virtual void GetRGBData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::RGBData* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void GetRGBData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::RGBData* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      virtual void GetDepthData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::DepthData* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void GetDepthData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::DepthData* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      virtual void GetDepthPointCloud(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::TPointCloud* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void GetDepthPointCloud(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::TPointCloud* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      virtual void GetSegData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::RGBData* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void GetSegData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::RGBData* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      virtual void GetNormalData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::NormalData* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void GetNormalData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::NormalData* response, ::grpc::ClientUnaryReactor* reactor) = 0;
     };
     typedef class async_interface experimental_async_interface;
     virtual class async_interface* async() { return nullptr; }
     class async_interface* experimental_async() { return async(); }
    private:
-    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::RGBImageData>* AsyncGetRGBDataRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) = 0;
-    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::RGBImageData>* PrepareAsyncGetRGBDataRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) = 0;
-    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Odometry>* AsyncGetCameraOdomRaw(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) = 0;
-    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Odometry>* PrepareAsyncGetCameraOdomRaw(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::RGBData>* AsyncGetRGBDataRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::RGBData>* PrepareAsyncGetRGBDataRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::DepthData>* AsyncGetDepthDataRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::DepthData>* PrepareAsyncGetDepthDataRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::TPointCloud>* AsyncGetDepthPointCloudRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::TPointCloud>* PrepareAsyncGetDepthPointCloudRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::RGBData>* AsyncGetSegDataRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::RGBData>* PrepareAsyncGetSegDataRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::NormalData>* AsyncGetNormalDataRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::NormalData>* PrepareAsyncGetNormalDataRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) = 0;
   };
   class Stub final : public StubInterface {
    public:
     Stub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options = ::grpc::StubOptions());
-    ::grpc::Status GetRGBData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::VCCSim::RGBImageData* response) override;
-    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::RGBImageData>> AsyncGetRGBData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::RGBImageData>>(AsyncGetRGBDataRaw(context, request, cq));
+    ::grpc::Status GetRGBData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::VCCSim::RGBData* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::RGBData>> AsyncGetRGBData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::RGBData>>(AsyncGetRGBDataRaw(context, request, cq));
     }
-    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::RGBImageData>> PrepareAsyncGetRGBData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::RGBImageData>>(PrepareAsyncGetRGBDataRaw(context, request, cq));
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::RGBData>> PrepareAsyncGetRGBData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::RGBData>>(PrepareAsyncGetRGBDataRaw(context, request, cq));
     }
-    ::grpc::Status GetCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::VCCSim::Odometry* response) override;
-    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Odometry>> AsyncGetCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Odometry>>(AsyncGetCameraOdomRaw(context, request, cq));
+    ::grpc::Status GetDepthData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::VCCSim::DepthData* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::DepthData>> AsyncGetDepthData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::DepthData>>(AsyncGetDepthDataRaw(context, request, cq));
     }
-    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Odometry>> PrepareAsyncGetCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Odometry>>(PrepareAsyncGetCameraOdomRaw(context, request, cq));
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::DepthData>> PrepareAsyncGetDepthData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::DepthData>>(PrepareAsyncGetDepthDataRaw(context, request, cq));
+    }
+    ::grpc::Status GetDepthPointCloud(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::VCCSim::TPointCloud* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::TPointCloud>> AsyncGetDepthPointCloud(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::TPointCloud>>(AsyncGetDepthPointCloudRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::TPointCloud>> PrepareAsyncGetDepthPointCloud(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::TPointCloud>>(PrepareAsyncGetDepthPointCloudRaw(context, request, cq));
+    }
+    ::grpc::Status GetSegData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::VCCSim::RGBData* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::RGBData>> AsyncGetSegData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::RGBData>>(AsyncGetSegDataRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::RGBData>> PrepareAsyncGetSegData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::RGBData>>(PrepareAsyncGetSegDataRaw(context, request, cq));
+    }
+    ::grpc::Status GetNormalData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::VCCSim::NormalData* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::NormalData>> AsyncGetNormalData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::NormalData>>(AsyncGetNormalDataRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::NormalData>> PrepareAsyncGetNormalData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::NormalData>>(PrepareAsyncGetNormalDataRaw(context, request, cq));
     }
     class async final :
       public StubInterface::async_interface {
      public:
-      void GetRGBData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::RGBImageData* response, std::function<void(::grpc::Status)>) override;
-      void GetRGBData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::RGBImageData* response, ::grpc::ClientUnaryReactor* reactor) override;
-      void GetCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Odometry* response, std::function<void(::grpc::Status)>) override;
-      void GetCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Odometry* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void GetRGBData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::RGBData* response, std::function<void(::grpc::Status)>) override;
+      void GetRGBData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::RGBData* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void GetDepthData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::DepthData* response, std::function<void(::grpc::Status)>) override;
+      void GetDepthData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::DepthData* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void GetDepthPointCloud(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::TPointCloud* response, std::function<void(::grpc::Status)>) override;
+      void GetDepthPointCloud(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::TPointCloud* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void GetSegData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::RGBData* response, std::function<void(::grpc::Status)>) override;
+      void GetSegData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::RGBData* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void GetNormalData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::NormalData* response, std::function<void(::grpc::Status)>) override;
+      void GetNormalData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::NormalData* response, ::grpc::ClientUnaryReactor* reactor) override;
      private:
       friend class Stub;
       explicit async(Stub* stub): stub_(stub) { }
@@ -830,12 +890,21 @@ class RGBCameraService final {
    private:
     std::shared_ptr< ::grpc::ChannelInterface> channel_;
     class async async_stub_{this};
-    ::grpc::ClientAsyncResponseReader< ::VCCSim::RGBImageData>* AsyncGetRGBDataRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) override;
-    ::grpc::ClientAsyncResponseReader< ::VCCSim::RGBImageData>* PrepareAsyncGetRGBDataRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) override;
-    ::grpc::ClientAsyncResponseReader< ::VCCSim::Odometry>* AsyncGetCameraOdomRaw(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) override;
-    ::grpc::ClientAsyncResponseReader< ::VCCSim::Odometry>* PrepareAsyncGetCameraOdomRaw(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::VCCSim::RGBData>* AsyncGetRGBDataRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::VCCSim::RGBData>* PrepareAsyncGetRGBDataRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::VCCSim::DepthData>* AsyncGetDepthDataRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::VCCSim::DepthData>* PrepareAsyncGetDepthDataRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::VCCSim::TPointCloud>* AsyncGetDepthPointCloudRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::VCCSim::TPointCloud>* PrepareAsyncGetDepthPointCloudRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::VCCSim::RGBData>* AsyncGetSegDataRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::VCCSim::RGBData>* PrepareAsyncGetSegDataRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::VCCSim::NormalData>* AsyncGetNormalDataRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::VCCSim::NormalData>* PrepareAsyncGetNormalDataRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) override;
     const ::grpc::internal::RpcMethod rpcmethod_GetRGBData_;
-    const ::grpc::internal::RpcMethod rpcmethod_GetCameraOdom_;
+    const ::grpc::internal::RpcMethod rpcmethod_GetDepthData_;
+    const ::grpc::internal::RpcMethod rpcmethod_GetDepthPointCloud_;
+    const ::grpc::internal::RpcMethod rpcmethod_GetSegData_;
+    const ::grpc::internal::RpcMethod rpcmethod_GetNormalData_;
   };
   static std::unique_ptr<Stub> NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options = ::grpc::StubOptions());
 
@@ -843,8 +912,11 @@ class RGBCameraService final {
    public:
     Service();
     virtual ~Service();
-    virtual ::grpc::Status GetRGBData(::grpc::ServerContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::RGBImageData* response);
-    virtual ::grpc::Status GetCameraOdom(::grpc::ServerContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Odometry* response);
+    virtual ::grpc::Status GetRGBData(::grpc::ServerContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::RGBData* response);
+    virtual ::grpc::Status GetDepthData(::grpc::ServerContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::DepthData* response);
+    virtual ::grpc::Status GetDepthPointCloud(::grpc::ServerContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::TPointCloud* response);
+    virtual ::grpc::Status GetSegData(::grpc::ServerContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::RGBData* response);
+    virtual ::grpc::Status GetNormalData(::grpc::ServerContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::NormalData* response);
   };
   template <class BaseClass>
   class WithAsyncMethod_GetRGBData : public BaseClass {
@@ -858,35 +930,95 @@ class RGBCameraService final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status GetRGBData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::RGBImageData* /*response*/) override {
+    ::grpc::Status GetRGBData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::RGBData* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
-    void RequestGetRGBData(::grpc::ServerContext* context, ::VCCSim::IndexedCamera* request, ::grpc::ServerAsyncResponseWriter< ::VCCSim::RGBImageData>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+    void RequestGetRGBData(::grpc::ServerContext* context, ::VCCSim::IndexedCamera* request, ::grpc::ServerAsyncResponseWriter< ::VCCSim::RGBData>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
       ::grpc::Service::RequestAsyncUnary(0, context, request, response, new_call_cq, notification_cq, tag);
     }
   };
   template <class BaseClass>
-  class WithAsyncMethod_GetCameraOdom : public BaseClass {
+  class WithAsyncMethod_GetDepthData : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
-    WithAsyncMethod_GetCameraOdom() {
+    WithAsyncMethod_GetDepthData() {
       ::grpc::Service::MarkMethodAsync(1);
     }
-    ~WithAsyncMethod_GetCameraOdom() override {
+    ~WithAsyncMethod_GetDepthData() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status GetCameraOdom(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Odometry* /*response*/) override {
+    ::grpc::Status GetDepthData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::DepthData* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
-    void RequestGetCameraOdom(::grpc::ServerContext* context, ::VCCSim::RobotName* request, ::grpc::ServerAsyncResponseWriter< ::VCCSim::Odometry>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+    void RequestGetDepthData(::grpc::ServerContext* context, ::VCCSim::IndexedCamera* request, ::grpc::ServerAsyncResponseWriter< ::VCCSim::DepthData>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
       ::grpc::Service::RequestAsyncUnary(1, context, request, response, new_call_cq, notification_cq, tag);
     }
   };
-  typedef WithAsyncMethod_GetRGBData<WithAsyncMethod_GetCameraOdom<Service > > AsyncService;
+  template <class BaseClass>
+  class WithAsyncMethod_GetDepthPointCloud : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_GetDepthPointCloud() {
+      ::grpc::Service::MarkMethodAsync(2);
+    }
+    ~WithAsyncMethod_GetDepthPointCloud() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status GetDepthPointCloud(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::TPointCloud* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestGetDepthPointCloud(::grpc::ServerContext* context, ::VCCSim::IndexedCamera* request, ::grpc::ServerAsyncResponseWriter< ::VCCSim::TPointCloud>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(2, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_GetSegData : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_GetSegData() {
+      ::grpc::Service::MarkMethodAsync(3);
+    }
+    ~WithAsyncMethod_GetSegData() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status GetSegData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::RGBData* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestGetSegData(::grpc::ServerContext* context, ::VCCSim::IndexedCamera* request, ::grpc::ServerAsyncResponseWriter< ::VCCSim::RGBData>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(3, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_GetNormalData : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_GetNormalData() {
+      ::grpc::Service::MarkMethodAsync(4);
+    }
+    ~WithAsyncMethod_GetNormalData() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status GetNormalData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::NormalData* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestGetNormalData(::grpc::ServerContext* context, ::VCCSim::IndexedCamera* request, ::grpc::ServerAsyncResponseWriter< ::VCCSim::NormalData>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(4, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  typedef WithAsyncMethod_GetRGBData<WithAsyncMethod_GetDepthData<WithAsyncMethod_GetDepthPointCloud<WithAsyncMethod_GetSegData<WithAsyncMethod_GetNormalData<Service > > > > > AsyncService;
   template <class BaseClass>
   class WithCallbackMethod_GetRGBData : public BaseClass {
    private:
@@ -894,54 +1026,135 @@ class RGBCameraService final {
    public:
     WithCallbackMethod_GetRGBData() {
       ::grpc::Service::MarkMethodCallback(0,
-          new ::grpc::internal::CallbackUnaryHandler< ::VCCSim::IndexedCamera, ::VCCSim::RGBImageData>(
+          new ::grpc::internal::CallbackUnaryHandler< ::VCCSim::IndexedCamera, ::VCCSim::RGBData>(
             [this](
-                   ::grpc::CallbackServerContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::RGBImageData* response) { return this->GetRGBData(context, request, response); }));}
+                   ::grpc::CallbackServerContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::RGBData* response) { return this->GetRGBData(context, request, response); }));}
     void SetMessageAllocatorFor_GetRGBData(
-        ::grpc::MessageAllocator< ::VCCSim::IndexedCamera, ::VCCSim::RGBImageData>* allocator) {
+        ::grpc::MessageAllocator< ::VCCSim::IndexedCamera, ::VCCSim::RGBData>* allocator) {
       ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(0);
-      static_cast<::grpc::internal::CallbackUnaryHandler< ::VCCSim::IndexedCamera, ::VCCSim::RGBImageData>*>(handler)
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::VCCSim::IndexedCamera, ::VCCSim::RGBData>*>(handler)
               ->SetMessageAllocator(allocator);
     }
     ~WithCallbackMethod_GetRGBData() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status GetRGBData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::RGBImageData* /*response*/) override {
+    ::grpc::Status GetRGBData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::RGBData* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
     virtual ::grpc::ServerUnaryReactor* GetRGBData(
-      ::grpc::CallbackServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::RGBImageData* /*response*/)  { return nullptr; }
+      ::grpc::CallbackServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::RGBData* /*response*/)  { return nullptr; }
   };
   template <class BaseClass>
-  class WithCallbackMethod_GetCameraOdom : public BaseClass {
+  class WithCallbackMethod_GetDepthData : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
-    WithCallbackMethod_GetCameraOdom() {
+    WithCallbackMethod_GetDepthData() {
       ::grpc::Service::MarkMethodCallback(1,
-          new ::grpc::internal::CallbackUnaryHandler< ::VCCSim::RobotName, ::VCCSim::Odometry>(
+          new ::grpc::internal::CallbackUnaryHandler< ::VCCSim::IndexedCamera, ::VCCSim::DepthData>(
             [this](
-                   ::grpc::CallbackServerContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Odometry* response) { return this->GetCameraOdom(context, request, response); }));}
-    void SetMessageAllocatorFor_GetCameraOdom(
-        ::grpc::MessageAllocator< ::VCCSim::RobotName, ::VCCSim::Odometry>* allocator) {
+                   ::grpc::CallbackServerContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::DepthData* response) { return this->GetDepthData(context, request, response); }));}
+    void SetMessageAllocatorFor_GetDepthData(
+        ::grpc::MessageAllocator< ::VCCSim::IndexedCamera, ::VCCSim::DepthData>* allocator) {
       ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(1);
-      static_cast<::grpc::internal::CallbackUnaryHandler< ::VCCSim::RobotName, ::VCCSim::Odometry>*>(handler)
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::VCCSim::IndexedCamera, ::VCCSim::DepthData>*>(handler)
               ->SetMessageAllocator(allocator);
     }
-    ~WithCallbackMethod_GetCameraOdom() override {
+    ~WithCallbackMethod_GetDepthData() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status GetCameraOdom(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Odometry* /*response*/) override {
+    ::grpc::Status GetDepthData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::DepthData* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
-    virtual ::grpc::ServerUnaryReactor* GetCameraOdom(
-      ::grpc::CallbackServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Odometry* /*response*/)  { return nullptr; }
+    virtual ::grpc::ServerUnaryReactor* GetDepthData(
+      ::grpc::CallbackServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::DepthData* /*response*/)  { return nullptr; }
   };
-  typedef WithCallbackMethod_GetRGBData<WithCallbackMethod_GetCameraOdom<Service > > CallbackService;
+  template <class BaseClass>
+  class WithCallbackMethod_GetDepthPointCloud : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_GetDepthPointCloud() {
+      ::grpc::Service::MarkMethodCallback(2,
+          new ::grpc::internal::CallbackUnaryHandler< ::VCCSim::IndexedCamera, ::VCCSim::TPointCloud>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::TPointCloud* response) { return this->GetDepthPointCloud(context, request, response); }));}
+    void SetMessageAllocatorFor_GetDepthPointCloud(
+        ::grpc::MessageAllocator< ::VCCSim::IndexedCamera, ::VCCSim::TPointCloud>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(2);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::VCCSim::IndexedCamera, ::VCCSim::TPointCloud>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_GetDepthPointCloud() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status GetDepthPointCloud(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::TPointCloud* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* GetDepthPointCloud(
+      ::grpc::CallbackServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::TPointCloud* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_GetSegData : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_GetSegData() {
+      ::grpc::Service::MarkMethodCallback(3,
+          new ::grpc::internal::CallbackUnaryHandler< ::VCCSim::IndexedCamera, ::VCCSim::RGBData>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::RGBData* response) { return this->GetSegData(context, request, response); }));}
+    void SetMessageAllocatorFor_GetSegData(
+        ::grpc::MessageAllocator< ::VCCSim::IndexedCamera, ::VCCSim::RGBData>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(3);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::VCCSim::IndexedCamera, ::VCCSim::RGBData>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_GetSegData() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status GetSegData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::RGBData* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* GetSegData(
+      ::grpc::CallbackServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::RGBData* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_GetNormalData : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_GetNormalData() {
+      ::grpc::Service::MarkMethodCallback(4,
+          new ::grpc::internal::CallbackUnaryHandler< ::VCCSim::IndexedCamera, ::VCCSim::NormalData>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::NormalData* response) { return this->GetNormalData(context, request, response); }));}
+    void SetMessageAllocatorFor_GetNormalData(
+        ::grpc::MessageAllocator< ::VCCSim::IndexedCamera, ::VCCSim::NormalData>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(4);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::VCCSim::IndexedCamera, ::VCCSim::NormalData>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_GetNormalData() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status GetNormalData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::NormalData* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* GetNormalData(
+      ::grpc::CallbackServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::NormalData* /*response*/)  { return nullptr; }
+  };
+  typedef WithCallbackMethod_GetRGBData<WithCallbackMethod_GetDepthData<WithCallbackMethod_GetDepthPointCloud<WithCallbackMethod_GetSegData<WithCallbackMethod_GetNormalData<Service > > > > > CallbackService;
   typedef CallbackService ExperimentalCallbackService;
   template <class BaseClass>
   class WithGenericMethod_GetRGBData : public BaseClass {
@@ -955,24 +1168,75 @@ class RGBCameraService final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status GetRGBData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::RGBImageData* /*response*/) override {
+    ::grpc::Status GetRGBData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::RGBData* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
   };
   template <class BaseClass>
-  class WithGenericMethod_GetCameraOdom : public BaseClass {
+  class WithGenericMethod_GetDepthData : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
-    WithGenericMethod_GetCameraOdom() {
+    WithGenericMethod_GetDepthData() {
       ::grpc::Service::MarkMethodGeneric(1);
     }
-    ~WithGenericMethod_GetCameraOdom() override {
+    ~WithGenericMethod_GetDepthData() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status GetCameraOdom(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Odometry* /*response*/) override {
+    ::grpc::Status GetDepthData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::DepthData* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_GetDepthPointCloud : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_GetDepthPointCloud() {
+      ::grpc::Service::MarkMethodGeneric(2);
+    }
+    ~WithGenericMethod_GetDepthPointCloud() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status GetDepthPointCloud(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::TPointCloud* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_GetSegData : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_GetSegData() {
+      ::grpc::Service::MarkMethodGeneric(3);
+    }
+    ~WithGenericMethod_GetSegData() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status GetSegData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::RGBData* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_GetNormalData : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_GetNormalData() {
+      ::grpc::Service::MarkMethodGeneric(4);
+    }
+    ~WithGenericMethod_GetNormalData() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status GetNormalData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::NormalData* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -989,7 +1253,7 @@ class RGBCameraService final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status GetRGBData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::RGBImageData* /*response*/) override {
+    ::grpc::Status GetRGBData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::RGBData* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -998,23 +1262,83 @@ class RGBCameraService final {
     }
   };
   template <class BaseClass>
-  class WithRawMethod_GetCameraOdom : public BaseClass {
+  class WithRawMethod_GetDepthData : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
-    WithRawMethod_GetCameraOdom() {
+    WithRawMethod_GetDepthData() {
       ::grpc::Service::MarkMethodRaw(1);
     }
-    ~WithRawMethod_GetCameraOdom() override {
+    ~WithRawMethod_GetDepthData() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status GetCameraOdom(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Odometry* /*response*/) override {
+    ::grpc::Status GetDepthData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::DepthData* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
-    void RequestGetCameraOdom(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+    void RequestGetDepthData(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
       ::grpc::Service::RequestAsyncUnary(1, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_GetDepthPointCloud : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_GetDepthPointCloud() {
+      ::grpc::Service::MarkMethodRaw(2);
+    }
+    ~WithRawMethod_GetDepthPointCloud() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status GetDepthPointCloud(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::TPointCloud* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestGetDepthPointCloud(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(2, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_GetSegData : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_GetSegData() {
+      ::grpc::Service::MarkMethodRaw(3);
+    }
+    ~WithRawMethod_GetSegData() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status GetSegData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::RGBData* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestGetSegData(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(3, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_GetNormalData : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_GetNormalData() {
+      ::grpc::Service::MarkMethodRaw(4);
+    }
+    ~WithRawMethod_GetNormalData() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status GetNormalData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::NormalData* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestGetNormalData(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(4, context, request, response, new_call_cq, notification_cq, tag);
     }
   };
   template <class BaseClass>
@@ -1032,7 +1356,7 @@ class RGBCameraService final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status GetRGBData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::RGBImageData* /*response*/) override {
+    ::grpc::Status GetRGBData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::RGBData* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -1040,497 +1364,25 @@ class RGBCameraService final {
       ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
   };
   template <class BaseClass>
-  class WithRawCallbackMethod_GetCameraOdom : public BaseClass {
+  class WithRawCallbackMethod_GetDepthData : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
-    WithRawCallbackMethod_GetCameraOdom() {
+    WithRawCallbackMethod_GetDepthData() {
       ::grpc::Service::MarkMethodRawCallback(1,
           new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
             [this](
-                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->GetCameraOdom(context, request, response); }));
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->GetDepthData(context, request, response); }));
     }
-    ~WithRawCallbackMethod_GetCameraOdom() override {
+    ~WithRawCallbackMethod_GetDepthData() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status GetCameraOdom(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Odometry* /*response*/) override {
+    ::grpc::Status GetDepthData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::DepthData* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
-    virtual ::grpc::ServerUnaryReactor* GetCameraOdom(
-      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
-  };
-  template <class BaseClass>
-  class WithStreamedUnaryMethod_GetRGBData : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithStreamedUnaryMethod_GetRGBData() {
-      ::grpc::Service::MarkMethodStreamed(0,
-        new ::grpc::internal::StreamedUnaryHandler<
-          ::VCCSim::IndexedCamera, ::VCCSim::RGBImageData>(
-            [this](::grpc::ServerContext* context,
-                   ::grpc::ServerUnaryStreamer<
-                     ::VCCSim::IndexedCamera, ::VCCSim::RGBImageData>* streamer) {
-                       return this->StreamedGetRGBData(context,
-                         streamer);
-                  }));
-    }
-    ~WithStreamedUnaryMethod_GetRGBData() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable regular version of this method
-    ::grpc::Status GetRGBData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::RGBImageData* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    // replace default version of method with streamed unary
-    virtual ::grpc::Status StreamedGetRGBData(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::VCCSim::IndexedCamera,::VCCSim::RGBImageData>* server_unary_streamer) = 0;
-  };
-  template <class BaseClass>
-  class WithStreamedUnaryMethod_GetCameraOdom : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithStreamedUnaryMethod_GetCameraOdom() {
-      ::grpc::Service::MarkMethodStreamed(1,
-        new ::grpc::internal::StreamedUnaryHandler<
-          ::VCCSim::RobotName, ::VCCSim::Odometry>(
-            [this](::grpc::ServerContext* context,
-                   ::grpc::ServerUnaryStreamer<
-                     ::VCCSim::RobotName, ::VCCSim::Odometry>* streamer) {
-                       return this->StreamedGetCameraOdom(context,
-                         streamer);
-                  }));
-    }
-    ~WithStreamedUnaryMethod_GetCameraOdom() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable regular version of this method
-    ::grpc::Status GetCameraOdom(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Odometry* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    // replace default version of method with streamed unary
-    virtual ::grpc::Status StreamedGetCameraOdom(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::VCCSim::RobotName,::VCCSim::Odometry>* server_unary_streamer) = 0;
-  };
-  typedef WithStreamedUnaryMethod_GetRGBData<WithStreamedUnaryMethod_GetCameraOdom<Service > > StreamedUnaryService;
-  typedef Service SplitStreamedService;
-  typedef WithStreamedUnaryMethod_GetRGBData<WithStreamedUnaryMethod_GetCameraOdom<Service > > StreamedService;
-};
-
-class DepthCameraService final {
- public:
-  static constexpr char const* service_full_name() {
-    return "VCCSim.DepthCameraService";
-  }
-  class StubInterface {
-   public:
-    virtual ~StubInterface() {}
-    virtual ::grpc::Status GetDepthCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::VCCSim::Odometry* response) = 0;
-    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Odometry>> AsyncGetDepthCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Odometry>>(AsyncGetDepthCameraOdomRaw(context, request, cq));
-    }
-    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Odometry>> PrepareAsyncGetDepthCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Odometry>>(PrepareAsyncGetDepthCameraOdomRaw(context, request, cq));
-    }
-    virtual ::grpc::Status GetDepthCameraImageData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::VCCSim::DepthImageData* response) = 0;
-    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::DepthImageData>> AsyncGetDepthCameraImageData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::DepthImageData>>(AsyncGetDepthCameraImageDataRaw(context, request, cq));
-    }
-    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::DepthImageData>> PrepareAsyncGetDepthCameraImageData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::DepthImageData>>(PrepareAsyncGetDepthCameraImageDataRaw(context, request, cq));
-    }
-    virtual ::grpc::Status GetDepthPointCloud(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::VCCSim::DepthPointCloudData* response) = 0;
-    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::DepthPointCloudData>> AsyncGetDepthPointCloud(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::DepthPointCloudData>>(AsyncGetDepthPointCloudRaw(context, request, cq));
-    }
-    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::DepthPointCloudData>> PrepareAsyncGetDepthPointCloud(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::DepthPointCloudData>>(PrepareAsyncGetDepthPointCloudRaw(context, request, cq));
-    }
-    class async_interface {
-     public:
-      virtual ~async_interface() {}
-      virtual void GetDepthCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Odometry* response, std::function<void(::grpc::Status)>) = 0;
-      virtual void GetDepthCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Odometry* response, ::grpc::ClientUnaryReactor* reactor) = 0;
-      virtual void GetDepthCameraImageData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::DepthImageData* response, std::function<void(::grpc::Status)>) = 0;
-      virtual void GetDepthCameraImageData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::DepthImageData* response, ::grpc::ClientUnaryReactor* reactor) = 0;
-      virtual void GetDepthPointCloud(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::DepthPointCloudData* response, std::function<void(::grpc::Status)>) = 0;
-      virtual void GetDepthPointCloud(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::DepthPointCloudData* response, ::grpc::ClientUnaryReactor* reactor) = 0;
-    };
-    typedef class async_interface experimental_async_interface;
-    virtual class async_interface* async() { return nullptr; }
-    class async_interface* experimental_async() { return async(); }
-   private:
-    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Odometry>* AsyncGetDepthCameraOdomRaw(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) = 0;
-    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Odometry>* PrepareAsyncGetDepthCameraOdomRaw(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) = 0;
-    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::DepthImageData>* AsyncGetDepthCameraImageDataRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) = 0;
-    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::DepthImageData>* PrepareAsyncGetDepthCameraImageDataRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) = 0;
-    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::DepthPointCloudData>* AsyncGetDepthPointCloudRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) = 0;
-    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::DepthPointCloudData>* PrepareAsyncGetDepthPointCloudRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) = 0;
-  };
-  class Stub final : public StubInterface {
-   public:
-    Stub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options = ::grpc::StubOptions());
-    ::grpc::Status GetDepthCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::VCCSim::Odometry* response) override;
-    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Odometry>> AsyncGetDepthCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Odometry>>(AsyncGetDepthCameraOdomRaw(context, request, cq));
-    }
-    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Odometry>> PrepareAsyncGetDepthCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Odometry>>(PrepareAsyncGetDepthCameraOdomRaw(context, request, cq));
-    }
-    ::grpc::Status GetDepthCameraImageData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::VCCSim::DepthImageData* response) override;
-    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::DepthImageData>> AsyncGetDepthCameraImageData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::DepthImageData>>(AsyncGetDepthCameraImageDataRaw(context, request, cq));
-    }
-    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::DepthImageData>> PrepareAsyncGetDepthCameraImageData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::DepthImageData>>(PrepareAsyncGetDepthCameraImageDataRaw(context, request, cq));
-    }
-    ::grpc::Status GetDepthPointCloud(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::VCCSim::DepthPointCloudData* response) override;
-    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::DepthPointCloudData>> AsyncGetDepthPointCloud(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::DepthPointCloudData>>(AsyncGetDepthPointCloudRaw(context, request, cq));
-    }
-    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::DepthPointCloudData>> PrepareAsyncGetDepthPointCloud(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::DepthPointCloudData>>(PrepareAsyncGetDepthPointCloudRaw(context, request, cq));
-    }
-    class async final :
-      public StubInterface::async_interface {
-     public:
-      void GetDepthCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Odometry* response, std::function<void(::grpc::Status)>) override;
-      void GetDepthCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Odometry* response, ::grpc::ClientUnaryReactor* reactor) override;
-      void GetDepthCameraImageData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::DepthImageData* response, std::function<void(::grpc::Status)>) override;
-      void GetDepthCameraImageData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::DepthImageData* response, ::grpc::ClientUnaryReactor* reactor) override;
-      void GetDepthPointCloud(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::DepthPointCloudData* response, std::function<void(::grpc::Status)>) override;
-      void GetDepthPointCloud(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::DepthPointCloudData* response, ::grpc::ClientUnaryReactor* reactor) override;
-     private:
-      friend class Stub;
-      explicit async(Stub* stub): stub_(stub) { }
-      Stub* stub() { return stub_; }
-      Stub* stub_;
-    };
-    class async* async() override { return &async_stub_; }
-
-   private:
-    std::shared_ptr< ::grpc::ChannelInterface> channel_;
-    class async async_stub_{this};
-    ::grpc::ClientAsyncResponseReader< ::VCCSim::Odometry>* AsyncGetDepthCameraOdomRaw(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) override;
-    ::grpc::ClientAsyncResponseReader< ::VCCSim::Odometry>* PrepareAsyncGetDepthCameraOdomRaw(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) override;
-    ::grpc::ClientAsyncResponseReader< ::VCCSim::DepthImageData>* AsyncGetDepthCameraImageDataRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) override;
-    ::grpc::ClientAsyncResponseReader< ::VCCSim::DepthImageData>* PrepareAsyncGetDepthCameraImageDataRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) override;
-    ::grpc::ClientAsyncResponseReader< ::VCCSim::DepthPointCloudData>* AsyncGetDepthPointCloudRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) override;
-    ::grpc::ClientAsyncResponseReader< ::VCCSim::DepthPointCloudData>* PrepareAsyncGetDepthPointCloudRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) override;
-    const ::grpc::internal::RpcMethod rpcmethod_GetDepthCameraOdom_;
-    const ::grpc::internal::RpcMethod rpcmethod_GetDepthCameraImageData_;
-    const ::grpc::internal::RpcMethod rpcmethod_GetDepthPointCloud_;
-  };
-  static std::unique_ptr<Stub> NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options = ::grpc::StubOptions());
-
-  class Service : public ::grpc::Service {
-   public:
-    Service();
-    virtual ~Service();
-    virtual ::grpc::Status GetDepthCameraOdom(::grpc::ServerContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Odometry* response);
-    virtual ::grpc::Status GetDepthCameraImageData(::grpc::ServerContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::DepthImageData* response);
-    virtual ::grpc::Status GetDepthPointCloud(::grpc::ServerContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::DepthPointCloudData* response);
-  };
-  template <class BaseClass>
-  class WithAsyncMethod_GetDepthCameraOdom : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithAsyncMethod_GetDepthCameraOdom() {
-      ::grpc::Service::MarkMethodAsync(0);
-    }
-    ~WithAsyncMethod_GetDepthCameraOdom() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status GetDepthCameraOdom(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Odometry* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    void RequestGetDepthCameraOdom(::grpc::ServerContext* context, ::VCCSim::RobotName* request, ::grpc::ServerAsyncResponseWriter< ::VCCSim::Odometry>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
-      ::grpc::Service::RequestAsyncUnary(0, context, request, response, new_call_cq, notification_cq, tag);
-    }
-  };
-  template <class BaseClass>
-  class WithAsyncMethod_GetDepthCameraImageData : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithAsyncMethod_GetDepthCameraImageData() {
-      ::grpc::Service::MarkMethodAsync(1);
-    }
-    ~WithAsyncMethod_GetDepthCameraImageData() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status GetDepthCameraImageData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::DepthImageData* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    void RequestGetDepthCameraImageData(::grpc::ServerContext* context, ::VCCSim::IndexedCamera* request, ::grpc::ServerAsyncResponseWriter< ::VCCSim::DepthImageData>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
-      ::grpc::Service::RequestAsyncUnary(1, context, request, response, new_call_cq, notification_cq, tag);
-    }
-  };
-  template <class BaseClass>
-  class WithAsyncMethod_GetDepthPointCloud : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithAsyncMethod_GetDepthPointCloud() {
-      ::grpc::Service::MarkMethodAsync(2);
-    }
-    ~WithAsyncMethod_GetDepthPointCloud() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status GetDepthPointCloud(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::DepthPointCloudData* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    void RequestGetDepthPointCloud(::grpc::ServerContext* context, ::VCCSim::IndexedCamera* request, ::grpc::ServerAsyncResponseWriter< ::VCCSim::DepthPointCloudData>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
-      ::grpc::Service::RequestAsyncUnary(2, context, request, response, new_call_cq, notification_cq, tag);
-    }
-  };
-  typedef WithAsyncMethod_GetDepthCameraOdom<WithAsyncMethod_GetDepthCameraImageData<WithAsyncMethod_GetDepthPointCloud<Service > > > AsyncService;
-  template <class BaseClass>
-  class WithCallbackMethod_GetDepthCameraOdom : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithCallbackMethod_GetDepthCameraOdom() {
-      ::grpc::Service::MarkMethodCallback(0,
-          new ::grpc::internal::CallbackUnaryHandler< ::VCCSim::RobotName, ::VCCSim::Odometry>(
-            [this](
-                   ::grpc::CallbackServerContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Odometry* response) { return this->GetDepthCameraOdom(context, request, response); }));}
-    void SetMessageAllocatorFor_GetDepthCameraOdom(
-        ::grpc::MessageAllocator< ::VCCSim::RobotName, ::VCCSim::Odometry>* allocator) {
-      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(0);
-      static_cast<::grpc::internal::CallbackUnaryHandler< ::VCCSim::RobotName, ::VCCSim::Odometry>*>(handler)
-              ->SetMessageAllocator(allocator);
-    }
-    ~WithCallbackMethod_GetDepthCameraOdom() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status GetDepthCameraOdom(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Odometry* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    virtual ::grpc::ServerUnaryReactor* GetDepthCameraOdom(
-      ::grpc::CallbackServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Odometry* /*response*/)  { return nullptr; }
-  };
-  template <class BaseClass>
-  class WithCallbackMethod_GetDepthCameraImageData : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithCallbackMethod_GetDepthCameraImageData() {
-      ::grpc::Service::MarkMethodCallback(1,
-          new ::grpc::internal::CallbackUnaryHandler< ::VCCSim::IndexedCamera, ::VCCSim::DepthImageData>(
-            [this](
-                   ::grpc::CallbackServerContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::DepthImageData* response) { return this->GetDepthCameraImageData(context, request, response); }));}
-    void SetMessageAllocatorFor_GetDepthCameraImageData(
-        ::grpc::MessageAllocator< ::VCCSim::IndexedCamera, ::VCCSim::DepthImageData>* allocator) {
-      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(1);
-      static_cast<::grpc::internal::CallbackUnaryHandler< ::VCCSim::IndexedCamera, ::VCCSim::DepthImageData>*>(handler)
-              ->SetMessageAllocator(allocator);
-    }
-    ~WithCallbackMethod_GetDepthCameraImageData() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status GetDepthCameraImageData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::DepthImageData* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    virtual ::grpc::ServerUnaryReactor* GetDepthCameraImageData(
-      ::grpc::CallbackServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::DepthImageData* /*response*/)  { return nullptr; }
-  };
-  template <class BaseClass>
-  class WithCallbackMethod_GetDepthPointCloud : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithCallbackMethod_GetDepthPointCloud() {
-      ::grpc::Service::MarkMethodCallback(2,
-          new ::grpc::internal::CallbackUnaryHandler< ::VCCSim::IndexedCamera, ::VCCSim::DepthPointCloudData>(
-            [this](
-                   ::grpc::CallbackServerContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::DepthPointCloudData* response) { return this->GetDepthPointCloud(context, request, response); }));}
-    void SetMessageAllocatorFor_GetDepthPointCloud(
-        ::grpc::MessageAllocator< ::VCCSim::IndexedCamera, ::VCCSim::DepthPointCloudData>* allocator) {
-      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(2);
-      static_cast<::grpc::internal::CallbackUnaryHandler< ::VCCSim::IndexedCamera, ::VCCSim::DepthPointCloudData>*>(handler)
-              ->SetMessageAllocator(allocator);
-    }
-    ~WithCallbackMethod_GetDepthPointCloud() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status GetDepthPointCloud(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::DepthPointCloudData* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    virtual ::grpc::ServerUnaryReactor* GetDepthPointCloud(
-      ::grpc::CallbackServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::DepthPointCloudData* /*response*/)  { return nullptr; }
-  };
-  typedef WithCallbackMethod_GetDepthCameraOdom<WithCallbackMethod_GetDepthCameraImageData<WithCallbackMethod_GetDepthPointCloud<Service > > > CallbackService;
-  typedef CallbackService ExperimentalCallbackService;
-  template <class BaseClass>
-  class WithGenericMethod_GetDepthCameraOdom : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithGenericMethod_GetDepthCameraOdom() {
-      ::grpc::Service::MarkMethodGeneric(0);
-    }
-    ~WithGenericMethod_GetDepthCameraOdom() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status GetDepthCameraOdom(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Odometry* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-  };
-  template <class BaseClass>
-  class WithGenericMethod_GetDepthCameraImageData : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithGenericMethod_GetDepthCameraImageData() {
-      ::grpc::Service::MarkMethodGeneric(1);
-    }
-    ~WithGenericMethod_GetDepthCameraImageData() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status GetDepthCameraImageData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::DepthImageData* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-  };
-  template <class BaseClass>
-  class WithGenericMethod_GetDepthPointCloud : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithGenericMethod_GetDepthPointCloud() {
-      ::grpc::Service::MarkMethodGeneric(2);
-    }
-    ~WithGenericMethod_GetDepthPointCloud() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status GetDepthPointCloud(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::DepthPointCloudData* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-  };
-  template <class BaseClass>
-  class WithRawMethod_GetDepthCameraOdom : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithRawMethod_GetDepthCameraOdom() {
-      ::grpc::Service::MarkMethodRaw(0);
-    }
-    ~WithRawMethod_GetDepthCameraOdom() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status GetDepthCameraOdom(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Odometry* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    void RequestGetDepthCameraOdom(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
-      ::grpc::Service::RequestAsyncUnary(0, context, request, response, new_call_cq, notification_cq, tag);
-    }
-  };
-  template <class BaseClass>
-  class WithRawMethod_GetDepthCameraImageData : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithRawMethod_GetDepthCameraImageData() {
-      ::grpc::Service::MarkMethodRaw(1);
-    }
-    ~WithRawMethod_GetDepthCameraImageData() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status GetDepthCameraImageData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::DepthImageData* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    void RequestGetDepthCameraImageData(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
-      ::grpc::Service::RequestAsyncUnary(1, context, request, response, new_call_cq, notification_cq, tag);
-    }
-  };
-  template <class BaseClass>
-  class WithRawMethod_GetDepthPointCloud : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithRawMethod_GetDepthPointCloud() {
-      ::grpc::Service::MarkMethodRaw(2);
-    }
-    ~WithRawMethod_GetDepthPointCloud() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status GetDepthPointCloud(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::DepthPointCloudData* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    void RequestGetDepthPointCloud(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
-      ::grpc::Service::RequestAsyncUnary(2, context, request, response, new_call_cq, notification_cq, tag);
-    }
-  };
-  template <class BaseClass>
-  class WithRawCallbackMethod_GetDepthCameraOdom : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithRawCallbackMethod_GetDepthCameraOdom() {
-      ::grpc::Service::MarkMethodRawCallback(0,
-          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
-            [this](
-                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->GetDepthCameraOdom(context, request, response); }));
-    }
-    ~WithRawCallbackMethod_GetDepthCameraOdom() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status GetDepthCameraOdom(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Odometry* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    virtual ::grpc::ServerUnaryReactor* GetDepthCameraOdom(
-      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
-  };
-  template <class BaseClass>
-  class WithRawCallbackMethod_GetDepthCameraImageData : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithRawCallbackMethod_GetDepthCameraImageData() {
-      ::grpc::Service::MarkMethodRawCallback(1,
-          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
-            [this](
-                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->GetDepthCameraImageData(context, request, response); }));
-    }
-    ~WithRawCallbackMethod_GetDepthCameraImageData() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status GetDepthCameraImageData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::DepthImageData* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    virtual ::grpc::ServerUnaryReactor* GetDepthCameraImageData(
+    virtual ::grpc::ServerUnaryReactor* GetDepthData(
       ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
   };
   template <class BaseClass>
@@ -1548,7 +1400,7 @@ class DepthCameraService final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status GetDepthPointCloud(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::DepthPointCloudData* /*response*/) override {
+    ::grpc::Status GetDepthPointCloud(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::TPointCloud* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -1556,58 +1408,102 @@ class DepthCameraService final {
       ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
   };
   template <class BaseClass>
-  class WithStreamedUnaryMethod_GetDepthCameraOdom : public BaseClass {
+  class WithRawCallbackMethod_GetSegData : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
-    WithStreamedUnaryMethod_GetDepthCameraOdom() {
-      ::grpc::Service::MarkMethodStreamed(0,
-        new ::grpc::internal::StreamedUnaryHandler<
-          ::VCCSim::RobotName, ::VCCSim::Odometry>(
-            [this](::grpc::ServerContext* context,
-                   ::grpc::ServerUnaryStreamer<
-                     ::VCCSim::RobotName, ::VCCSim::Odometry>* streamer) {
-                       return this->StreamedGetDepthCameraOdom(context,
-                         streamer);
-                  }));
+    WithRawCallbackMethod_GetSegData() {
+      ::grpc::Service::MarkMethodRawCallback(3,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->GetSegData(context, request, response); }));
     }
-    ~WithStreamedUnaryMethod_GetDepthCameraOdom() override {
+    ~WithRawCallbackMethod_GetSegData() override {
       BaseClassMustBeDerivedFromService(this);
     }
-    // disable regular version of this method
-    ::grpc::Status GetDepthCameraOdom(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Odometry* /*response*/) override {
+    // disable synchronous version of this method
+    ::grpc::Status GetSegData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::RGBData* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
-    // replace default version of method with streamed unary
-    virtual ::grpc::Status StreamedGetDepthCameraOdom(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::VCCSim::RobotName,::VCCSim::Odometry>* server_unary_streamer) = 0;
+    virtual ::grpc::ServerUnaryReactor* GetSegData(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
   };
   template <class BaseClass>
-  class WithStreamedUnaryMethod_GetDepthCameraImageData : public BaseClass {
+  class WithRawCallbackMethod_GetNormalData : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
-    WithStreamedUnaryMethod_GetDepthCameraImageData() {
-      ::grpc::Service::MarkMethodStreamed(1,
+    WithRawCallbackMethod_GetNormalData() {
+      ::grpc::Service::MarkMethodRawCallback(4,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->GetNormalData(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_GetNormalData() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status GetNormalData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::NormalData* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* GetNormalData(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_GetRGBData : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_GetRGBData() {
+      ::grpc::Service::MarkMethodStreamed(0,
         new ::grpc::internal::StreamedUnaryHandler<
-          ::VCCSim::IndexedCamera, ::VCCSim::DepthImageData>(
+          ::VCCSim::IndexedCamera, ::VCCSim::RGBData>(
             [this](::grpc::ServerContext* context,
                    ::grpc::ServerUnaryStreamer<
-                     ::VCCSim::IndexedCamera, ::VCCSim::DepthImageData>* streamer) {
-                       return this->StreamedGetDepthCameraImageData(context,
+                     ::VCCSim::IndexedCamera, ::VCCSim::RGBData>* streamer) {
+                       return this->StreamedGetRGBData(context,
                          streamer);
                   }));
     }
-    ~WithStreamedUnaryMethod_GetDepthCameraImageData() override {
+    ~WithStreamedUnaryMethod_GetRGBData() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable regular version of this method
-    ::grpc::Status GetDepthCameraImageData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::DepthImageData* /*response*/) override {
+    ::grpc::Status GetRGBData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::RGBData* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
     // replace default version of method with streamed unary
-    virtual ::grpc::Status StreamedGetDepthCameraImageData(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::VCCSim::IndexedCamera,::VCCSim::DepthImageData>* server_unary_streamer) = 0;
+    virtual ::grpc::Status StreamedGetRGBData(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::VCCSim::IndexedCamera,::VCCSim::RGBData>* server_unary_streamer) = 0;
+  };
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_GetDepthData : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_GetDepthData() {
+      ::grpc::Service::MarkMethodStreamed(1,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::VCCSim::IndexedCamera, ::VCCSim::DepthData>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::VCCSim::IndexedCamera, ::VCCSim::DepthData>* streamer) {
+                       return this->StreamedGetDepthData(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_GetDepthData() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status GetDepthData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::DepthData* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedGetDepthData(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::VCCSim::IndexedCamera,::VCCSim::DepthData>* server_unary_streamer) = 0;
   };
   template <class BaseClass>
   class WithStreamedUnaryMethod_GetDepthPointCloud : public BaseClass {
@@ -1617,10 +1513,10 @@ class DepthCameraService final {
     WithStreamedUnaryMethod_GetDepthPointCloud() {
       ::grpc::Service::MarkMethodStreamed(2,
         new ::grpc::internal::StreamedUnaryHandler<
-          ::VCCSim::IndexedCamera, ::VCCSim::DepthPointCloudData>(
+          ::VCCSim::IndexedCamera, ::VCCSim::TPointCloud>(
             [this](::grpc::ServerContext* context,
                    ::grpc::ServerUnaryStreamer<
-                     ::VCCSim::IndexedCamera, ::VCCSim::DepthPointCloudData>* streamer) {
+                     ::VCCSim::IndexedCamera, ::VCCSim::TPointCloud>* streamer) {
                        return this->StreamedGetDepthPointCloud(context,
                          streamer);
                   }));
@@ -1629,747 +1525,70 @@ class DepthCameraService final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable regular version of this method
-    ::grpc::Status GetDepthPointCloud(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::DepthPointCloudData* /*response*/) override {
+    ::grpc::Status GetDepthPointCloud(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::TPointCloud* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
     // replace default version of method with streamed unary
-    virtual ::grpc::Status StreamedGetDepthPointCloud(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::VCCSim::IndexedCamera,::VCCSim::DepthPointCloudData>* server_unary_streamer) = 0;
+    virtual ::grpc::Status StreamedGetDepthPointCloud(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::VCCSim::IndexedCamera,::VCCSim::TPointCloud>* server_unary_streamer) = 0;
   };
-  typedef WithStreamedUnaryMethod_GetDepthCameraOdom<WithStreamedUnaryMethod_GetDepthCameraImageData<WithStreamedUnaryMethod_GetDepthPointCloud<Service > > > StreamedUnaryService;
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_GetSegData : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_GetSegData() {
+      ::grpc::Service::MarkMethodStreamed(3,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::VCCSim::IndexedCamera, ::VCCSim::RGBData>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::VCCSim::IndexedCamera, ::VCCSim::RGBData>* streamer) {
+                       return this->StreamedGetSegData(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_GetSegData() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status GetSegData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::RGBData* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedGetSegData(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::VCCSim::IndexedCamera,::VCCSim::RGBData>* server_unary_streamer) = 0;
+  };
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_GetNormalData : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_GetNormalData() {
+      ::grpc::Service::MarkMethodStreamed(4,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::VCCSim::IndexedCamera, ::VCCSim::NormalData>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::VCCSim::IndexedCamera, ::VCCSim::NormalData>* streamer) {
+                       return this->StreamedGetNormalData(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_GetNormalData() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status GetNormalData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::NormalData* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedGetNormalData(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::VCCSim::IndexedCamera,::VCCSim::NormalData>* server_unary_streamer) = 0;
+  };
+  typedef WithStreamedUnaryMethod_GetRGBData<WithStreamedUnaryMethod_GetDepthData<WithStreamedUnaryMethod_GetDepthPointCloud<WithStreamedUnaryMethod_GetSegData<WithStreamedUnaryMethod_GetNormalData<Service > > > > > StreamedUnaryService;
   typedef Service SplitStreamedService;
-  typedef WithStreamedUnaryMethod_GetDepthCameraOdom<WithStreamedUnaryMethod_GetDepthCameraImageData<WithStreamedUnaryMethod_GetDepthPointCloud<Service > > > StreamedService;
-};
-
-class SegmentationCameraService final {
- public:
-  static constexpr char const* service_full_name() {
-    return "VCCSim.SegmentationCameraService";
-  }
-  class StubInterface {
-   public:
-    virtual ~StubInterface() {}
-    virtual ::grpc::Status GetSegmentationCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::VCCSim::Odometry* response) = 0;
-    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Odometry>> AsyncGetSegmentationCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Odometry>>(AsyncGetSegmentationCameraOdomRaw(context, request, cq));
-    }
-    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Odometry>> PrepareAsyncGetSegmentationCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Odometry>>(PrepareAsyncGetSegmentationCameraOdomRaw(context, request, cq));
-    }
-    virtual ::grpc::Status GetSegmentationCameraImageData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::VCCSim::RGBImageData* response) = 0;
-    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::RGBImageData>> AsyncGetSegmentationCameraImageData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::RGBImageData>>(AsyncGetSegmentationCameraImageDataRaw(context, request, cq));
-    }
-    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::RGBImageData>> PrepareAsyncGetSegmentationCameraImageData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::RGBImageData>>(PrepareAsyncGetSegmentationCameraImageDataRaw(context, request, cq));
-    }
-    class async_interface {
-     public:
-      virtual ~async_interface() {}
-      virtual void GetSegmentationCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Odometry* response, std::function<void(::grpc::Status)>) = 0;
-      virtual void GetSegmentationCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Odometry* response, ::grpc::ClientUnaryReactor* reactor) = 0;
-      virtual void GetSegmentationCameraImageData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::RGBImageData* response, std::function<void(::grpc::Status)>) = 0;
-      virtual void GetSegmentationCameraImageData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::RGBImageData* response, ::grpc::ClientUnaryReactor* reactor) = 0;
-    };
-    typedef class async_interface experimental_async_interface;
-    virtual class async_interface* async() { return nullptr; }
-    class async_interface* experimental_async() { return async(); }
-   private:
-    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Odometry>* AsyncGetSegmentationCameraOdomRaw(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) = 0;
-    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Odometry>* PrepareAsyncGetSegmentationCameraOdomRaw(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) = 0;
-    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::RGBImageData>* AsyncGetSegmentationCameraImageDataRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) = 0;
-    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::RGBImageData>* PrepareAsyncGetSegmentationCameraImageDataRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) = 0;
-  };
-  class Stub final : public StubInterface {
-   public:
-    Stub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options = ::grpc::StubOptions());
-    ::grpc::Status GetSegmentationCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::VCCSim::Odometry* response) override;
-    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Odometry>> AsyncGetSegmentationCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Odometry>>(AsyncGetSegmentationCameraOdomRaw(context, request, cq));
-    }
-    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Odometry>> PrepareAsyncGetSegmentationCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Odometry>>(PrepareAsyncGetSegmentationCameraOdomRaw(context, request, cq));
-    }
-    ::grpc::Status GetSegmentationCameraImageData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::VCCSim::RGBImageData* response) override;
-    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::RGBImageData>> AsyncGetSegmentationCameraImageData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::RGBImageData>>(AsyncGetSegmentationCameraImageDataRaw(context, request, cq));
-    }
-    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::RGBImageData>> PrepareAsyncGetSegmentationCameraImageData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::RGBImageData>>(PrepareAsyncGetSegmentationCameraImageDataRaw(context, request, cq));
-    }
-    class async final :
-      public StubInterface::async_interface {
-     public:
-      void GetSegmentationCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Odometry* response, std::function<void(::grpc::Status)>) override;
-      void GetSegmentationCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Odometry* response, ::grpc::ClientUnaryReactor* reactor) override;
-      void GetSegmentationCameraImageData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::RGBImageData* response, std::function<void(::grpc::Status)>) override;
-      void GetSegmentationCameraImageData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::RGBImageData* response, ::grpc::ClientUnaryReactor* reactor) override;
-     private:
-      friend class Stub;
-      explicit async(Stub* stub): stub_(stub) { }
-      Stub* stub() { return stub_; }
-      Stub* stub_;
-    };
-    class async* async() override { return &async_stub_; }
-
-   private:
-    std::shared_ptr< ::grpc::ChannelInterface> channel_;
-    class async async_stub_{this};
-    ::grpc::ClientAsyncResponseReader< ::VCCSim::Odometry>* AsyncGetSegmentationCameraOdomRaw(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) override;
-    ::grpc::ClientAsyncResponseReader< ::VCCSim::Odometry>* PrepareAsyncGetSegmentationCameraOdomRaw(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) override;
-    ::grpc::ClientAsyncResponseReader< ::VCCSim::RGBImageData>* AsyncGetSegmentationCameraImageDataRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) override;
-    ::grpc::ClientAsyncResponseReader< ::VCCSim::RGBImageData>* PrepareAsyncGetSegmentationCameraImageDataRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) override;
-    const ::grpc::internal::RpcMethod rpcmethod_GetSegmentationCameraOdom_;
-    const ::grpc::internal::RpcMethod rpcmethod_GetSegmentationCameraImageData_;
-  };
-  static std::unique_ptr<Stub> NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options = ::grpc::StubOptions());
-
-  class Service : public ::grpc::Service {
-   public:
-    Service();
-    virtual ~Service();
-    virtual ::grpc::Status GetSegmentationCameraOdom(::grpc::ServerContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Odometry* response);
-    virtual ::grpc::Status GetSegmentationCameraImageData(::grpc::ServerContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::RGBImageData* response);
-  };
-  template <class BaseClass>
-  class WithAsyncMethod_GetSegmentationCameraOdom : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithAsyncMethod_GetSegmentationCameraOdom() {
-      ::grpc::Service::MarkMethodAsync(0);
-    }
-    ~WithAsyncMethod_GetSegmentationCameraOdom() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status GetSegmentationCameraOdom(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Odometry* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    void RequestGetSegmentationCameraOdom(::grpc::ServerContext* context, ::VCCSim::RobotName* request, ::grpc::ServerAsyncResponseWriter< ::VCCSim::Odometry>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
-      ::grpc::Service::RequestAsyncUnary(0, context, request, response, new_call_cq, notification_cq, tag);
-    }
-  };
-  template <class BaseClass>
-  class WithAsyncMethod_GetSegmentationCameraImageData : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithAsyncMethod_GetSegmentationCameraImageData() {
-      ::grpc::Service::MarkMethodAsync(1);
-    }
-    ~WithAsyncMethod_GetSegmentationCameraImageData() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status GetSegmentationCameraImageData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::RGBImageData* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    void RequestGetSegmentationCameraImageData(::grpc::ServerContext* context, ::VCCSim::IndexedCamera* request, ::grpc::ServerAsyncResponseWriter< ::VCCSim::RGBImageData>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
-      ::grpc::Service::RequestAsyncUnary(1, context, request, response, new_call_cq, notification_cq, tag);
-    }
-  };
-  typedef WithAsyncMethod_GetSegmentationCameraOdom<WithAsyncMethod_GetSegmentationCameraImageData<Service > > AsyncService;
-  template <class BaseClass>
-  class WithCallbackMethod_GetSegmentationCameraOdom : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithCallbackMethod_GetSegmentationCameraOdom() {
-      ::grpc::Service::MarkMethodCallback(0,
-          new ::grpc::internal::CallbackUnaryHandler< ::VCCSim::RobotName, ::VCCSim::Odometry>(
-            [this](
-                   ::grpc::CallbackServerContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Odometry* response) { return this->GetSegmentationCameraOdom(context, request, response); }));}
-    void SetMessageAllocatorFor_GetSegmentationCameraOdom(
-        ::grpc::MessageAllocator< ::VCCSim::RobotName, ::VCCSim::Odometry>* allocator) {
-      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(0);
-      static_cast<::grpc::internal::CallbackUnaryHandler< ::VCCSim::RobotName, ::VCCSim::Odometry>*>(handler)
-              ->SetMessageAllocator(allocator);
-    }
-    ~WithCallbackMethod_GetSegmentationCameraOdom() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status GetSegmentationCameraOdom(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Odometry* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    virtual ::grpc::ServerUnaryReactor* GetSegmentationCameraOdom(
-      ::grpc::CallbackServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Odometry* /*response*/)  { return nullptr; }
-  };
-  template <class BaseClass>
-  class WithCallbackMethod_GetSegmentationCameraImageData : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithCallbackMethod_GetSegmentationCameraImageData() {
-      ::grpc::Service::MarkMethodCallback(1,
-          new ::grpc::internal::CallbackUnaryHandler< ::VCCSim::IndexedCamera, ::VCCSim::RGBImageData>(
-            [this](
-                   ::grpc::CallbackServerContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::RGBImageData* response) { return this->GetSegmentationCameraImageData(context, request, response); }));}
-    void SetMessageAllocatorFor_GetSegmentationCameraImageData(
-        ::grpc::MessageAllocator< ::VCCSim::IndexedCamera, ::VCCSim::RGBImageData>* allocator) {
-      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(1);
-      static_cast<::grpc::internal::CallbackUnaryHandler< ::VCCSim::IndexedCamera, ::VCCSim::RGBImageData>*>(handler)
-              ->SetMessageAllocator(allocator);
-    }
-    ~WithCallbackMethod_GetSegmentationCameraImageData() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status GetSegmentationCameraImageData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::RGBImageData* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    virtual ::grpc::ServerUnaryReactor* GetSegmentationCameraImageData(
-      ::grpc::CallbackServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::RGBImageData* /*response*/)  { return nullptr; }
-  };
-  typedef WithCallbackMethod_GetSegmentationCameraOdom<WithCallbackMethod_GetSegmentationCameraImageData<Service > > CallbackService;
-  typedef CallbackService ExperimentalCallbackService;
-  template <class BaseClass>
-  class WithGenericMethod_GetSegmentationCameraOdom : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithGenericMethod_GetSegmentationCameraOdom() {
-      ::grpc::Service::MarkMethodGeneric(0);
-    }
-    ~WithGenericMethod_GetSegmentationCameraOdom() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status GetSegmentationCameraOdom(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Odometry* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-  };
-  template <class BaseClass>
-  class WithGenericMethod_GetSegmentationCameraImageData : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithGenericMethod_GetSegmentationCameraImageData() {
-      ::grpc::Service::MarkMethodGeneric(1);
-    }
-    ~WithGenericMethod_GetSegmentationCameraImageData() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status GetSegmentationCameraImageData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::RGBImageData* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-  };
-  template <class BaseClass>
-  class WithRawMethod_GetSegmentationCameraOdom : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithRawMethod_GetSegmentationCameraOdom() {
-      ::grpc::Service::MarkMethodRaw(0);
-    }
-    ~WithRawMethod_GetSegmentationCameraOdom() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status GetSegmentationCameraOdom(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Odometry* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    void RequestGetSegmentationCameraOdom(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
-      ::grpc::Service::RequestAsyncUnary(0, context, request, response, new_call_cq, notification_cq, tag);
-    }
-  };
-  template <class BaseClass>
-  class WithRawMethod_GetSegmentationCameraImageData : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithRawMethod_GetSegmentationCameraImageData() {
-      ::grpc::Service::MarkMethodRaw(1);
-    }
-    ~WithRawMethod_GetSegmentationCameraImageData() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status GetSegmentationCameraImageData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::RGBImageData* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    void RequestGetSegmentationCameraImageData(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
-      ::grpc::Service::RequestAsyncUnary(1, context, request, response, new_call_cq, notification_cq, tag);
-    }
-  };
-  template <class BaseClass>
-  class WithRawCallbackMethod_GetSegmentationCameraOdom : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithRawCallbackMethod_GetSegmentationCameraOdom() {
-      ::grpc::Service::MarkMethodRawCallback(0,
-          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
-            [this](
-                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->GetSegmentationCameraOdom(context, request, response); }));
-    }
-    ~WithRawCallbackMethod_GetSegmentationCameraOdom() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status GetSegmentationCameraOdom(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Odometry* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    virtual ::grpc::ServerUnaryReactor* GetSegmentationCameraOdom(
-      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
-  };
-  template <class BaseClass>
-  class WithRawCallbackMethod_GetSegmentationCameraImageData : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithRawCallbackMethod_GetSegmentationCameraImageData() {
-      ::grpc::Service::MarkMethodRawCallback(1,
-          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
-            [this](
-                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->GetSegmentationCameraImageData(context, request, response); }));
-    }
-    ~WithRawCallbackMethod_GetSegmentationCameraImageData() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status GetSegmentationCameraImageData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::RGBImageData* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    virtual ::grpc::ServerUnaryReactor* GetSegmentationCameraImageData(
-      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
-  };
-  template <class BaseClass>
-  class WithStreamedUnaryMethod_GetSegmentationCameraOdom : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithStreamedUnaryMethod_GetSegmentationCameraOdom() {
-      ::grpc::Service::MarkMethodStreamed(0,
-        new ::grpc::internal::StreamedUnaryHandler<
-          ::VCCSim::RobotName, ::VCCSim::Odometry>(
-            [this](::grpc::ServerContext* context,
-                   ::grpc::ServerUnaryStreamer<
-                     ::VCCSim::RobotName, ::VCCSim::Odometry>* streamer) {
-                       return this->StreamedGetSegmentationCameraOdom(context,
-                         streamer);
-                  }));
-    }
-    ~WithStreamedUnaryMethod_GetSegmentationCameraOdom() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable regular version of this method
-    ::grpc::Status GetSegmentationCameraOdom(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Odometry* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    // replace default version of method with streamed unary
-    virtual ::grpc::Status StreamedGetSegmentationCameraOdom(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::VCCSim::RobotName,::VCCSim::Odometry>* server_unary_streamer) = 0;
-  };
-  template <class BaseClass>
-  class WithStreamedUnaryMethod_GetSegmentationCameraImageData : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithStreamedUnaryMethod_GetSegmentationCameraImageData() {
-      ::grpc::Service::MarkMethodStreamed(1,
-        new ::grpc::internal::StreamedUnaryHandler<
-          ::VCCSim::IndexedCamera, ::VCCSim::RGBImageData>(
-            [this](::grpc::ServerContext* context,
-                   ::grpc::ServerUnaryStreamer<
-                     ::VCCSim::IndexedCamera, ::VCCSim::RGBImageData>* streamer) {
-                       return this->StreamedGetSegmentationCameraImageData(context,
-                         streamer);
-                  }));
-    }
-    ~WithStreamedUnaryMethod_GetSegmentationCameraImageData() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable regular version of this method
-    ::grpc::Status GetSegmentationCameraImageData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::RGBImageData* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    // replace default version of method with streamed unary
-    virtual ::grpc::Status StreamedGetSegmentationCameraImageData(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::VCCSim::IndexedCamera,::VCCSim::RGBImageData>* server_unary_streamer) = 0;
-  };
-  typedef WithStreamedUnaryMethod_GetSegmentationCameraOdom<WithStreamedUnaryMethod_GetSegmentationCameraImageData<Service > > StreamedUnaryService;
-  typedef Service SplitStreamedService;
-  typedef WithStreamedUnaryMethod_GetSegmentationCameraOdom<WithStreamedUnaryMethod_GetSegmentationCameraImageData<Service > > StreamedService;
-};
-
-class NormalCameraService final {
- public:
-  static constexpr char const* service_full_name() {
-    return "VCCSim.NormalCameraService";
-  }
-  class StubInterface {
-   public:
-    virtual ~StubInterface() {}
-    virtual ::grpc::Status GetNormalCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::VCCSim::Odometry* response) = 0;
-    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Odometry>> AsyncGetNormalCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Odometry>>(AsyncGetNormalCameraOdomRaw(context, request, cq));
-    }
-    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Odometry>> PrepareAsyncGetNormalCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Odometry>>(PrepareAsyncGetNormalCameraOdomRaw(context, request, cq));
-    }
-    virtual ::grpc::Status GetNormalCameraImageData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::VCCSim::RGBImageData* response) = 0;
-    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::RGBImageData>> AsyncGetNormalCameraImageData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::RGBImageData>>(AsyncGetNormalCameraImageDataRaw(context, request, cq));
-    }
-    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::RGBImageData>> PrepareAsyncGetNormalCameraImageData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::RGBImageData>>(PrepareAsyncGetNormalCameraImageDataRaw(context, request, cq));
-    }
-    // todo: change type
-    class async_interface {
-     public:
-      virtual ~async_interface() {}
-      virtual void GetNormalCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Odometry* response, std::function<void(::grpc::Status)>) = 0;
-      virtual void GetNormalCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Odometry* response, ::grpc::ClientUnaryReactor* reactor) = 0;
-      virtual void GetNormalCameraImageData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::RGBImageData* response, std::function<void(::grpc::Status)>) = 0;
-      virtual void GetNormalCameraImageData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::RGBImageData* response, ::grpc::ClientUnaryReactor* reactor) = 0;
-      // todo: change type
-    };
-    typedef class async_interface experimental_async_interface;
-    virtual class async_interface* async() { return nullptr; }
-    class async_interface* experimental_async() { return async(); }
-   private:
-    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Odometry>* AsyncGetNormalCameraOdomRaw(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) = 0;
-    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Odometry>* PrepareAsyncGetNormalCameraOdomRaw(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) = 0;
-    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::RGBImageData>* AsyncGetNormalCameraImageDataRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) = 0;
-    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::RGBImageData>* PrepareAsyncGetNormalCameraImageDataRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) = 0;
-  };
-  class Stub final : public StubInterface {
-   public:
-    Stub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options = ::grpc::StubOptions());
-    ::grpc::Status GetNormalCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::VCCSim::Odometry* response) override;
-    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Odometry>> AsyncGetNormalCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Odometry>>(AsyncGetNormalCameraOdomRaw(context, request, cq));
-    }
-    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Odometry>> PrepareAsyncGetNormalCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Odometry>>(PrepareAsyncGetNormalCameraOdomRaw(context, request, cq));
-    }
-    ::grpc::Status GetNormalCameraImageData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::VCCSim::RGBImageData* response) override;
-    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::RGBImageData>> AsyncGetNormalCameraImageData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::RGBImageData>>(AsyncGetNormalCameraImageDataRaw(context, request, cq));
-    }
-    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::RGBImageData>> PrepareAsyncGetNormalCameraImageData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::RGBImageData>>(PrepareAsyncGetNormalCameraImageDataRaw(context, request, cq));
-    }
-    class async final :
-      public StubInterface::async_interface {
-     public:
-      void GetNormalCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Odometry* response, std::function<void(::grpc::Status)>) override;
-      void GetNormalCameraOdom(::grpc::ClientContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Odometry* response, ::grpc::ClientUnaryReactor* reactor) override;
-      void GetNormalCameraImageData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::RGBImageData* response, std::function<void(::grpc::Status)>) override;
-      void GetNormalCameraImageData(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::RGBImageData* response, ::grpc::ClientUnaryReactor* reactor) override;
-     private:
-      friend class Stub;
-      explicit async(Stub* stub): stub_(stub) { }
-      Stub* stub() { return stub_; }
-      Stub* stub_;
-    };
-    class async* async() override { return &async_stub_; }
-
-   private:
-    std::shared_ptr< ::grpc::ChannelInterface> channel_;
-    class async async_stub_{this};
-    ::grpc::ClientAsyncResponseReader< ::VCCSim::Odometry>* AsyncGetNormalCameraOdomRaw(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) override;
-    ::grpc::ClientAsyncResponseReader< ::VCCSim::Odometry>* PrepareAsyncGetNormalCameraOdomRaw(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) override;
-    ::grpc::ClientAsyncResponseReader< ::VCCSim::RGBImageData>* AsyncGetNormalCameraImageDataRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) override;
-    ::grpc::ClientAsyncResponseReader< ::VCCSim::RGBImageData>* PrepareAsyncGetNormalCameraImageDataRaw(::grpc::ClientContext* context, const ::VCCSim::IndexedCamera& request, ::grpc::CompletionQueue* cq) override;
-    const ::grpc::internal::RpcMethod rpcmethod_GetNormalCameraOdom_;
-    const ::grpc::internal::RpcMethod rpcmethod_GetNormalCameraImageData_;
-  };
-  static std::unique_ptr<Stub> NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options = ::grpc::StubOptions());
-
-  class Service : public ::grpc::Service {
-   public:
-    Service();
-    virtual ~Service();
-    virtual ::grpc::Status GetNormalCameraOdom(::grpc::ServerContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Odometry* response);
-    virtual ::grpc::Status GetNormalCameraImageData(::grpc::ServerContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::RGBImageData* response);
-    // todo: change type
-  };
-  template <class BaseClass>
-  class WithAsyncMethod_GetNormalCameraOdom : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithAsyncMethod_GetNormalCameraOdom() {
-      ::grpc::Service::MarkMethodAsync(0);
-    }
-    ~WithAsyncMethod_GetNormalCameraOdom() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status GetNormalCameraOdom(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Odometry* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    void RequestGetNormalCameraOdom(::grpc::ServerContext* context, ::VCCSim::RobotName* request, ::grpc::ServerAsyncResponseWriter< ::VCCSim::Odometry>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
-      ::grpc::Service::RequestAsyncUnary(0, context, request, response, new_call_cq, notification_cq, tag);
-    }
-  };
-  template <class BaseClass>
-  class WithAsyncMethod_GetNormalCameraImageData : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithAsyncMethod_GetNormalCameraImageData() {
-      ::grpc::Service::MarkMethodAsync(1);
-    }
-    ~WithAsyncMethod_GetNormalCameraImageData() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status GetNormalCameraImageData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::RGBImageData* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    void RequestGetNormalCameraImageData(::grpc::ServerContext* context, ::VCCSim::IndexedCamera* request, ::grpc::ServerAsyncResponseWriter< ::VCCSim::RGBImageData>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
-      ::grpc::Service::RequestAsyncUnary(1, context, request, response, new_call_cq, notification_cq, tag);
-    }
-  };
-  typedef WithAsyncMethod_GetNormalCameraOdom<WithAsyncMethod_GetNormalCameraImageData<Service > > AsyncService;
-  template <class BaseClass>
-  class WithCallbackMethod_GetNormalCameraOdom : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithCallbackMethod_GetNormalCameraOdom() {
-      ::grpc::Service::MarkMethodCallback(0,
-          new ::grpc::internal::CallbackUnaryHandler< ::VCCSim::RobotName, ::VCCSim::Odometry>(
-            [this](
-                   ::grpc::CallbackServerContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Odometry* response) { return this->GetNormalCameraOdom(context, request, response); }));}
-    void SetMessageAllocatorFor_GetNormalCameraOdom(
-        ::grpc::MessageAllocator< ::VCCSim::RobotName, ::VCCSim::Odometry>* allocator) {
-      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(0);
-      static_cast<::grpc::internal::CallbackUnaryHandler< ::VCCSim::RobotName, ::VCCSim::Odometry>*>(handler)
-              ->SetMessageAllocator(allocator);
-    }
-    ~WithCallbackMethod_GetNormalCameraOdom() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status GetNormalCameraOdom(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Odometry* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    virtual ::grpc::ServerUnaryReactor* GetNormalCameraOdom(
-      ::grpc::CallbackServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Odometry* /*response*/)  { return nullptr; }
-  };
-  template <class BaseClass>
-  class WithCallbackMethod_GetNormalCameraImageData : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithCallbackMethod_GetNormalCameraImageData() {
-      ::grpc::Service::MarkMethodCallback(1,
-          new ::grpc::internal::CallbackUnaryHandler< ::VCCSim::IndexedCamera, ::VCCSim::RGBImageData>(
-            [this](
-                   ::grpc::CallbackServerContext* context, const ::VCCSim::IndexedCamera* request, ::VCCSim::RGBImageData* response) { return this->GetNormalCameraImageData(context, request, response); }));}
-    void SetMessageAllocatorFor_GetNormalCameraImageData(
-        ::grpc::MessageAllocator< ::VCCSim::IndexedCamera, ::VCCSim::RGBImageData>* allocator) {
-      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(1);
-      static_cast<::grpc::internal::CallbackUnaryHandler< ::VCCSim::IndexedCamera, ::VCCSim::RGBImageData>*>(handler)
-              ->SetMessageAllocator(allocator);
-    }
-    ~WithCallbackMethod_GetNormalCameraImageData() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status GetNormalCameraImageData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::RGBImageData* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    virtual ::grpc::ServerUnaryReactor* GetNormalCameraImageData(
-      ::grpc::CallbackServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::RGBImageData* /*response*/)  { return nullptr; }
-  };
-  typedef WithCallbackMethod_GetNormalCameraOdom<WithCallbackMethod_GetNormalCameraImageData<Service > > CallbackService;
-  typedef CallbackService ExperimentalCallbackService;
-  template <class BaseClass>
-  class WithGenericMethod_GetNormalCameraOdom : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithGenericMethod_GetNormalCameraOdom() {
-      ::grpc::Service::MarkMethodGeneric(0);
-    }
-    ~WithGenericMethod_GetNormalCameraOdom() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status GetNormalCameraOdom(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Odometry* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-  };
-  template <class BaseClass>
-  class WithGenericMethod_GetNormalCameraImageData : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithGenericMethod_GetNormalCameraImageData() {
-      ::grpc::Service::MarkMethodGeneric(1);
-    }
-    ~WithGenericMethod_GetNormalCameraImageData() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status GetNormalCameraImageData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::RGBImageData* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-  };
-  template <class BaseClass>
-  class WithRawMethod_GetNormalCameraOdom : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithRawMethod_GetNormalCameraOdom() {
-      ::grpc::Service::MarkMethodRaw(0);
-    }
-    ~WithRawMethod_GetNormalCameraOdom() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status GetNormalCameraOdom(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Odometry* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    void RequestGetNormalCameraOdom(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
-      ::grpc::Service::RequestAsyncUnary(0, context, request, response, new_call_cq, notification_cq, tag);
-    }
-  };
-  template <class BaseClass>
-  class WithRawMethod_GetNormalCameraImageData : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithRawMethod_GetNormalCameraImageData() {
-      ::grpc::Service::MarkMethodRaw(1);
-    }
-    ~WithRawMethod_GetNormalCameraImageData() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status GetNormalCameraImageData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::RGBImageData* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    void RequestGetNormalCameraImageData(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
-      ::grpc::Service::RequestAsyncUnary(1, context, request, response, new_call_cq, notification_cq, tag);
-    }
-  };
-  template <class BaseClass>
-  class WithRawCallbackMethod_GetNormalCameraOdom : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithRawCallbackMethod_GetNormalCameraOdom() {
-      ::grpc::Service::MarkMethodRawCallback(0,
-          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
-            [this](
-                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->GetNormalCameraOdom(context, request, response); }));
-    }
-    ~WithRawCallbackMethod_GetNormalCameraOdom() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status GetNormalCameraOdom(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Odometry* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    virtual ::grpc::ServerUnaryReactor* GetNormalCameraOdom(
-      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
-  };
-  template <class BaseClass>
-  class WithRawCallbackMethod_GetNormalCameraImageData : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithRawCallbackMethod_GetNormalCameraImageData() {
-      ::grpc::Service::MarkMethodRawCallback(1,
-          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
-            [this](
-                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->GetNormalCameraImageData(context, request, response); }));
-    }
-    ~WithRawCallbackMethod_GetNormalCameraImageData() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status GetNormalCameraImageData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::RGBImageData* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    virtual ::grpc::ServerUnaryReactor* GetNormalCameraImageData(
-      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
-  };
-  template <class BaseClass>
-  class WithStreamedUnaryMethod_GetNormalCameraOdom : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithStreamedUnaryMethod_GetNormalCameraOdom() {
-      ::grpc::Service::MarkMethodStreamed(0,
-        new ::grpc::internal::StreamedUnaryHandler<
-          ::VCCSim::RobotName, ::VCCSim::Odometry>(
-            [this](::grpc::ServerContext* context,
-                   ::grpc::ServerUnaryStreamer<
-                     ::VCCSim::RobotName, ::VCCSim::Odometry>* streamer) {
-                       return this->StreamedGetNormalCameraOdom(context,
-                         streamer);
-                  }));
-    }
-    ~WithStreamedUnaryMethod_GetNormalCameraOdom() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable regular version of this method
-    ::grpc::Status GetNormalCameraOdom(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Odometry* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    // replace default version of method with streamed unary
-    virtual ::grpc::Status StreamedGetNormalCameraOdom(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::VCCSim::RobotName,::VCCSim::Odometry>* server_unary_streamer) = 0;
-  };
-  template <class BaseClass>
-  class WithStreamedUnaryMethod_GetNormalCameraImageData : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithStreamedUnaryMethod_GetNormalCameraImageData() {
-      ::grpc::Service::MarkMethodStreamed(1,
-        new ::grpc::internal::StreamedUnaryHandler<
-          ::VCCSim::IndexedCamera, ::VCCSim::RGBImageData>(
-            [this](::grpc::ServerContext* context,
-                   ::grpc::ServerUnaryStreamer<
-                     ::VCCSim::IndexedCamera, ::VCCSim::RGBImageData>* streamer) {
-                       return this->StreamedGetNormalCameraImageData(context,
-                         streamer);
-                  }));
-    }
-    ~WithStreamedUnaryMethod_GetNormalCameraImageData() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable regular version of this method
-    ::grpc::Status GetNormalCameraImageData(::grpc::ServerContext* /*context*/, const ::VCCSim::IndexedCamera* /*request*/, ::VCCSim::RGBImageData* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    // replace default version of method with streamed unary
-    virtual ::grpc::Status StreamedGetNormalCameraImageData(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::VCCSim::IndexedCamera,::VCCSim::RGBImageData>* server_unary_streamer) = 0;
-  };
-  typedef WithStreamedUnaryMethod_GetNormalCameraOdom<WithStreamedUnaryMethod_GetNormalCameraImageData<Service > > StreamedUnaryService;
-  typedef Service SplitStreamedService;
-  typedef WithStreamedUnaryMethod_GetNormalCameraOdom<WithStreamedUnaryMethod_GetNormalCameraImageData<Service > > StreamedService;
+  typedef WithStreamedUnaryMethod_GetRGBData<WithStreamedUnaryMethod_GetDepthData<WithStreamedUnaryMethod_GetDepthPointCloud<WithStreamedUnaryMethod_GetSegData<WithStreamedUnaryMethod_GetNormalData<Service > > > > > StreamedService;
 };
 
 class DroneService final {
@@ -4260,41 +3479,41 @@ class PointCloudService final {
   class StubInterface {
    public:
     virtual ~StubInterface() {}
-    virtual ::grpc::Status SendPointCloudWithColor(::grpc::ClientContext* context, const ::VCCSim::PointCloudWithColor& request, ::VCCSim::Status* response) = 0;
-    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Status>> AsyncSendPointCloudWithColor(::grpc::ClientContext* context, const ::VCCSim::PointCloudWithColor& request, ::grpc::CompletionQueue* cq) {
+    virtual ::grpc::Status SendPointCloudWithColor(::grpc::ClientContext* context, const ::VCCSim::ColoredPointCloud& request, ::VCCSim::Status* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Status>> AsyncSendPointCloudWithColor(::grpc::ClientContext* context, const ::VCCSim::ColoredPointCloud& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Status>>(AsyncSendPointCloudWithColorRaw(context, request, cq));
     }
-    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Status>> PrepareAsyncSendPointCloudWithColor(::grpc::ClientContext* context, const ::VCCSim::PointCloudWithColor& request, ::grpc::CompletionQueue* cq) {
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Status>> PrepareAsyncSendPointCloudWithColor(::grpc::ClientContext* context, const ::VCCSim::ColoredPointCloud& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Status>>(PrepareAsyncSendPointCloudWithColorRaw(context, request, cq));
     }
     class async_interface {
      public:
       virtual ~async_interface() {}
-      virtual void SendPointCloudWithColor(::grpc::ClientContext* context, const ::VCCSim::PointCloudWithColor* request, ::VCCSim::Status* response, std::function<void(::grpc::Status)>) = 0;
-      virtual void SendPointCloudWithColor(::grpc::ClientContext* context, const ::VCCSim::PointCloudWithColor* request, ::VCCSim::Status* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      virtual void SendPointCloudWithColor(::grpc::ClientContext* context, const ::VCCSim::ColoredPointCloud* request, ::VCCSim::Status* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void SendPointCloudWithColor(::grpc::ClientContext* context, const ::VCCSim::ColoredPointCloud* request, ::VCCSim::Status* response, ::grpc::ClientUnaryReactor* reactor) = 0;
     };
     typedef class async_interface experimental_async_interface;
     virtual class async_interface* async() { return nullptr; }
     class async_interface* experimental_async() { return async(); }
    private:
-    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Status>* AsyncSendPointCloudWithColorRaw(::grpc::ClientContext* context, const ::VCCSim::PointCloudWithColor& request, ::grpc::CompletionQueue* cq) = 0;
-    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Status>* PrepareAsyncSendPointCloudWithColorRaw(::grpc::ClientContext* context, const ::VCCSim::PointCloudWithColor& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Status>* AsyncSendPointCloudWithColorRaw(::grpc::ClientContext* context, const ::VCCSim::ColoredPointCloud& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Status>* PrepareAsyncSendPointCloudWithColorRaw(::grpc::ClientContext* context, const ::VCCSim::ColoredPointCloud& request, ::grpc::CompletionQueue* cq) = 0;
   };
   class Stub final : public StubInterface {
    public:
     Stub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options = ::grpc::StubOptions());
-    ::grpc::Status SendPointCloudWithColor(::grpc::ClientContext* context, const ::VCCSim::PointCloudWithColor& request, ::VCCSim::Status* response) override;
-    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Status>> AsyncSendPointCloudWithColor(::grpc::ClientContext* context, const ::VCCSim::PointCloudWithColor& request, ::grpc::CompletionQueue* cq) {
+    ::grpc::Status SendPointCloudWithColor(::grpc::ClientContext* context, const ::VCCSim::ColoredPointCloud& request, ::VCCSim::Status* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Status>> AsyncSendPointCloudWithColor(::grpc::ClientContext* context, const ::VCCSim::ColoredPointCloud& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Status>>(AsyncSendPointCloudWithColorRaw(context, request, cq));
     }
-    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Status>> PrepareAsyncSendPointCloudWithColor(::grpc::ClientContext* context, const ::VCCSim::PointCloudWithColor& request, ::grpc::CompletionQueue* cq) {
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Status>> PrepareAsyncSendPointCloudWithColor(::grpc::ClientContext* context, const ::VCCSim::ColoredPointCloud& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Status>>(PrepareAsyncSendPointCloudWithColorRaw(context, request, cq));
     }
     class async final :
       public StubInterface::async_interface {
      public:
-      void SendPointCloudWithColor(::grpc::ClientContext* context, const ::VCCSim::PointCloudWithColor* request, ::VCCSim::Status* response, std::function<void(::grpc::Status)>) override;
-      void SendPointCloudWithColor(::grpc::ClientContext* context, const ::VCCSim::PointCloudWithColor* request, ::VCCSim::Status* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void SendPointCloudWithColor(::grpc::ClientContext* context, const ::VCCSim::ColoredPointCloud* request, ::VCCSim::Status* response, std::function<void(::grpc::Status)>) override;
+      void SendPointCloudWithColor(::grpc::ClientContext* context, const ::VCCSim::ColoredPointCloud* request, ::VCCSim::Status* response, ::grpc::ClientUnaryReactor* reactor) override;
      private:
       friend class Stub;
       explicit async(Stub* stub): stub_(stub) { }
@@ -4306,8 +3525,8 @@ class PointCloudService final {
    private:
     std::shared_ptr< ::grpc::ChannelInterface> channel_;
     class async async_stub_{this};
-    ::grpc::ClientAsyncResponseReader< ::VCCSim::Status>* AsyncSendPointCloudWithColorRaw(::grpc::ClientContext* context, const ::VCCSim::PointCloudWithColor& request, ::grpc::CompletionQueue* cq) override;
-    ::grpc::ClientAsyncResponseReader< ::VCCSim::Status>* PrepareAsyncSendPointCloudWithColorRaw(::grpc::ClientContext* context, const ::VCCSim::PointCloudWithColor& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::VCCSim::Status>* AsyncSendPointCloudWithColorRaw(::grpc::ClientContext* context, const ::VCCSim::ColoredPointCloud& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::VCCSim::Status>* PrepareAsyncSendPointCloudWithColorRaw(::grpc::ClientContext* context, const ::VCCSim::ColoredPointCloud& request, ::grpc::CompletionQueue* cq) override;
     const ::grpc::internal::RpcMethod rpcmethod_SendPointCloudWithColor_;
   };
   static std::unique_ptr<Stub> NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options = ::grpc::StubOptions());
@@ -4316,7 +3535,7 @@ class PointCloudService final {
    public:
     Service();
     virtual ~Service();
-    virtual ::grpc::Status SendPointCloudWithColor(::grpc::ServerContext* context, const ::VCCSim::PointCloudWithColor* request, ::VCCSim::Status* response);
+    virtual ::grpc::Status SendPointCloudWithColor(::grpc::ServerContext* context, const ::VCCSim::ColoredPointCloud* request, ::VCCSim::Status* response);
   };
   template <class BaseClass>
   class WithAsyncMethod_SendPointCloudWithColor : public BaseClass {
@@ -4330,11 +3549,11 @@ class PointCloudService final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status SendPointCloudWithColor(::grpc::ServerContext* /*context*/, const ::VCCSim::PointCloudWithColor* /*request*/, ::VCCSim::Status* /*response*/) override {
+    ::grpc::Status SendPointCloudWithColor(::grpc::ServerContext* /*context*/, const ::VCCSim::ColoredPointCloud* /*request*/, ::VCCSim::Status* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
-    void RequestSendPointCloudWithColor(::grpc::ServerContext* context, ::VCCSim::PointCloudWithColor* request, ::grpc::ServerAsyncResponseWriter< ::VCCSim::Status>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+    void RequestSendPointCloudWithColor(::grpc::ServerContext* context, ::VCCSim::ColoredPointCloud* request, ::grpc::ServerAsyncResponseWriter< ::VCCSim::Status>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
       ::grpc::Service::RequestAsyncUnary(0, context, request, response, new_call_cq, notification_cq, tag);
     }
   };
@@ -4346,25 +3565,25 @@ class PointCloudService final {
    public:
     WithCallbackMethod_SendPointCloudWithColor() {
       ::grpc::Service::MarkMethodCallback(0,
-          new ::grpc::internal::CallbackUnaryHandler< ::VCCSim::PointCloudWithColor, ::VCCSim::Status>(
+          new ::grpc::internal::CallbackUnaryHandler< ::VCCSim::ColoredPointCloud, ::VCCSim::Status>(
             [this](
-                   ::grpc::CallbackServerContext* context, const ::VCCSim::PointCloudWithColor* request, ::VCCSim::Status* response) { return this->SendPointCloudWithColor(context, request, response); }));}
+                   ::grpc::CallbackServerContext* context, const ::VCCSim::ColoredPointCloud* request, ::VCCSim::Status* response) { return this->SendPointCloudWithColor(context, request, response); }));}
     void SetMessageAllocatorFor_SendPointCloudWithColor(
-        ::grpc::MessageAllocator< ::VCCSim::PointCloudWithColor, ::VCCSim::Status>* allocator) {
+        ::grpc::MessageAllocator< ::VCCSim::ColoredPointCloud, ::VCCSim::Status>* allocator) {
       ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(0);
-      static_cast<::grpc::internal::CallbackUnaryHandler< ::VCCSim::PointCloudWithColor, ::VCCSim::Status>*>(handler)
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::VCCSim::ColoredPointCloud, ::VCCSim::Status>*>(handler)
               ->SetMessageAllocator(allocator);
     }
     ~WithCallbackMethod_SendPointCloudWithColor() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status SendPointCloudWithColor(::grpc::ServerContext* /*context*/, const ::VCCSim::PointCloudWithColor* /*request*/, ::VCCSim::Status* /*response*/) override {
+    ::grpc::Status SendPointCloudWithColor(::grpc::ServerContext* /*context*/, const ::VCCSim::ColoredPointCloud* /*request*/, ::VCCSim::Status* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
     virtual ::grpc::ServerUnaryReactor* SendPointCloudWithColor(
-      ::grpc::CallbackServerContext* /*context*/, const ::VCCSim::PointCloudWithColor* /*request*/, ::VCCSim::Status* /*response*/)  { return nullptr; }
+      ::grpc::CallbackServerContext* /*context*/, const ::VCCSim::ColoredPointCloud* /*request*/, ::VCCSim::Status* /*response*/)  { return nullptr; }
   };
   typedef WithCallbackMethod_SendPointCloudWithColor<Service > CallbackService;
   typedef CallbackService ExperimentalCallbackService;
@@ -4380,7 +3599,7 @@ class PointCloudService final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status SendPointCloudWithColor(::grpc::ServerContext* /*context*/, const ::VCCSim::PointCloudWithColor* /*request*/, ::VCCSim::Status* /*response*/) override {
+    ::grpc::Status SendPointCloudWithColor(::grpc::ServerContext* /*context*/, const ::VCCSim::ColoredPointCloud* /*request*/, ::VCCSim::Status* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -4397,7 +3616,7 @@ class PointCloudService final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status SendPointCloudWithColor(::grpc::ServerContext* /*context*/, const ::VCCSim::PointCloudWithColor* /*request*/, ::VCCSim::Status* /*response*/) override {
+    ::grpc::Status SendPointCloudWithColor(::grpc::ServerContext* /*context*/, const ::VCCSim::ColoredPointCloud* /*request*/, ::VCCSim::Status* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -4420,7 +3639,7 @@ class PointCloudService final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status SendPointCloudWithColor(::grpc::ServerContext* /*context*/, const ::VCCSim::PointCloudWithColor* /*request*/, ::VCCSim::Status* /*response*/) override {
+    ::grpc::Status SendPointCloudWithColor(::grpc::ServerContext* /*context*/, const ::VCCSim::ColoredPointCloud* /*request*/, ::VCCSim::Status* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -4435,10 +3654,10 @@ class PointCloudService final {
     WithStreamedUnaryMethod_SendPointCloudWithColor() {
       ::grpc::Service::MarkMethodStreamed(0,
         new ::grpc::internal::StreamedUnaryHandler<
-          ::VCCSim::PointCloudWithColor, ::VCCSim::Status>(
+          ::VCCSim::ColoredPointCloud, ::VCCSim::Status>(
             [this](::grpc::ServerContext* context,
                    ::grpc::ServerUnaryStreamer<
-                     ::VCCSim::PointCloudWithColor, ::VCCSim::Status>* streamer) {
+                     ::VCCSim::ColoredPointCloud, ::VCCSim::Status>* streamer) {
                        return this->StreamedSendPointCloudWithColor(context,
                          streamer);
                   }));
@@ -4447,12 +3666,12 @@ class PointCloudService final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable regular version of this method
-    ::grpc::Status SendPointCloudWithColor(::grpc::ServerContext* /*context*/, const ::VCCSim::PointCloudWithColor* /*request*/, ::VCCSim::Status* /*response*/) override {
+    ::grpc::Status SendPointCloudWithColor(::grpc::ServerContext* /*context*/, const ::VCCSim::ColoredPointCloud* /*request*/, ::VCCSim::Status* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
     // replace default version of method with streamed unary
-    virtual ::grpc::Status StreamedSendPointCloudWithColor(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::VCCSim::PointCloudWithColor,::VCCSim::Status>* server_unary_streamer) = 0;
+    virtual ::grpc::Status StreamedSendPointCloudWithColor(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::VCCSim::ColoredPointCloud,::VCCSim::Status>* server_unary_streamer) = 0;
   };
   typedef WithStreamedUnaryMethod_SendPointCloudWithColor<Service > StreamedUnaryService;
   typedef Service SplitStreamedService;

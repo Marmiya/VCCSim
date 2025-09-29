@@ -31,16 +31,6 @@ message PoseYawOnly {
   float yaw = 2;
 }
 
-// ===== POINT CLOUD TYPES =====
-message PointWithColor {
-  Vec3f point = 1;
-  uint32 color = 2;
-}
-
-message PointCloudWithColor {
-  repeated PointWithColor data = 1;
-}
-
 message Twist {
   Vec3f linear = 1;   // Linear velocity (x, y, z)
   Vec3f angular = 2;  // Angular velocity (x, y, z)
@@ -49,6 +39,21 @@ message Twist {
 message Odometry {
   Pose pose = 1;
   Twist twist = 2;
+}
+
+// ===== POINT CLOUD TYPES =====
+
+message PointCloud {
+  repeated Vec3f data = 1;
+}
+
+message ColoredPoint {
+  Vec3f point = 1;
+  uint32 color = 2;
+}
+
+message ColoredPointCloud {
+  repeated ColoredPoint data = 1;
 }
 
 // ===== COMMON TYPES =====
@@ -76,23 +81,30 @@ message LidarDataAndOdom {
   Odometry odom = 2;
 }
 
-message RGBImageData {
+message RGBData {
   uint32 width = 1;
   uint32 height = 2;
   bytes data = 3;
   uint32 timestamp = 5;
 }
 
-message DepthImageData {
+message DepthData {
   uint32 width = 1;
   uint32 height = 2;
   repeated float data = 3;
   uint32 timestamp = 4;
 }
 
-message DepthPointCloudData {
-  repeated Vec3f data = 1;
+message TPointCloud {
+  PointCloud data = 1;
   uint32 timestamp = 2;
+}
+
+message NormalData {
+  uint32 width = 1;
+  uint32 height = 2;
+  repeated Vec3f data = 3;
+  uint32 timestamp = 4;
 }
 
 // ===== ROBOT CONTROL MESSAGES =====
@@ -130,25 +142,12 @@ service LidarService {
   rpc GetLiDARDataAndOdom (RobotName) returns (LidarDataAndOdom);
 }
 
-service RGBCameraService {
-  rpc GetRGBData (IndexedCamera) returns (RGBImageData);
-  rpc GetCameraOdom (RobotName) returns (Odometry);
-}
-
-service DepthCameraService {
-  rpc GetDepthCameraOdom (RobotName) returns (Odometry);
-  rpc GetDepthCameraImageData (IndexedCamera) returns (DepthImageData);
-  rpc GetDepthPointCloud (IndexedCamera) returns (DepthPointCloudData);
-}
-
-service SegmentationCameraService {
-  rpc GetSegmentationCameraOdom (RobotName) returns (Odometry);
-  rpc GetSegmentationCameraImageData (IndexedCamera) returns (RGBImageData);
-}
-
-service NormalCameraService {
-  rpc GetNormalCameraOdom (RobotName) returns (Odometry);
-  rpc GetNormalCameraImageData (IndexedCamera) returns (RGBImageData); //todo: change type
+service CameraService {
+  rpc GetRGBData (IndexedCamera) returns (RGBData);
+  rpc GetDepthData (IndexedCamera) returns (DepthData);
+  rpc GetDepthPointCloud (IndexedCamera) returns (TPointCloud);
+  rpc GetSegData (IndexedCamera) returns (RGBData);
+  rpc GetNormalData (IndexedCamera) returns (NormalData);
 }
 
 service DroneService {
@@ -184,7 +183,7 @@ service MeshService {
 }
 
 service PointCloudService {
-  rpc SendPointCloudWithColor (PointCloudWithColor) returns (Status);
+  rpc SendPointCloudWithColor (ColoredPointCloud) returns (Status);
 }
 
 service SafeCheckService {

@@ -22,11 +22,11 @@ DEFINE_LOG_CATEGORY_STATIC(LogSegmentCamera, Log, All);
 #include "Async/AsyncWork.h"
 #include "Windows/WindowsHWrapper.h"
 
-USegmentationCameraComponent::USegmentationCameraComponent()
+USegCameraComponent::USegCameraComponent()
 {
 }
 
-void USegmentationCameraComponent::Configure(const FSensorConfig& Config)
+void USegCameraComponent::Configure(const FSensorConfig& Config)
 {
     if (!bBPConfigured)
     {
@@ -54,7 +54,7 @@ void USegmentationCameraComponent::Configure(const FSensorConfig& Config)
     }
 }
 
-void USegmentationCameraComponent::InitializeRenderTargets()
+void USegCameraComponent::InitializeRenderTargets()
 {
     RenderTarget = NewObject<UTextureRenderTarget2D>(this);
     RenderTarget->InitCustomFormat(Width, Height, PF_B8G8R8A8, true);
@@ -63,7 +63,7 @@ void USegmentationCameraComponent::InitializeRenderTargets()
     RenderTarget->UpdateResource();
 }
 
-void USegmentationCameraComponent::SetCaptureComponent() const
+void USegCameraComponent::SetCaptureComponent() const
 {
     Super::SetCaptureComponent();
 
@@ -90,7 +90,7 @@ void USegmentationCameraComponent::SetCaptureComponent() const
     }
 }
 
-void USegmentationCameraComponent::CaptureSegmentationScene()
+void USegCameraComponent::CaptureSegmentationScene()
 {
     if (!CheckComponentAndRenderTarget())
     {
@@ -110,7 +110,7 @@ void USegmentationCameraComponent::CaptureSegmentationScene()
     }
 }
 
-void USegmentationCameraComponent::CaptureSegmentationSceneDeferred()
+void USegCameraComponent::CaptureSegmentationSceneDeferred()
 {
     if (!CheckComponentAndRenderTarget())
     {
@@ -122,7 +122,7 @@ void USegmentationCameraComponent::CaptureSegmentationSceneDeferred()
     CaptureComponent->CaptureSceneDeferred();
 }
 
-void USegmentationCameraComponent::AsyncGetSegmentationImageData(
+void USegCameraComponent::AsyncGetSegmentationImageData(
     TFunction<void(const TArray<FColor>&)> Callback)
 {
     AsyncTask(ENamedThreads::GameThread, [this, Callback = MoveTemp(Callback)]()
@@ -141,12 +141,12 @@ void USegmentationCameraComponent::AsyncGetSegmentationImageData(
     });
 }
 
-void USegmentationCameraComponent::ProcessSegmentationTexture(TFunction<void()> OnComplete)
+void USegCameraComponent::ProcessSegmentationTexture(TFunction<void()> OnComplete)
 {
     ProcessSegTextureTemplate(std::move(OnComplete));
 }
 
-void USegmentationCameraComponent::ProcessSegmentationTextureParam(
+void USegCameraComponent::ProcessSegmentationTextureParam(
     TFunction<void(const TArray<FColor>&)> OnComplete)
 {
     ProcessSegTextureTemplate(std::move(OnComplete));

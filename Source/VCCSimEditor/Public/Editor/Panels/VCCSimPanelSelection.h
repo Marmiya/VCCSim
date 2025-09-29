@@ -25,7 +25,7 @@
 
 class AFlashPawn;
 class URGBDCameraComponent;
-class USegmentationCameraComponent;
+class USegCameraComponent;
 class UNormalCameraComponent;
 
 /**

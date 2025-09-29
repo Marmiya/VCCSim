@@ -38,12 +38,12 @@ public:
 };
 
 UCLASS(ClassGroup = (VCCSIM), meta = (BlueprintSpawnableComponent))
-class VCCSIM_API USegmentationCameraComponent : public UCameraBaseComponent
+class VCCSIM_API USegCameraComponent : public UCameraBaseComponent
 {
     GENERATED_BODY()
 
 public:
-    USegmentationCameraComponent();
+    USegCameraComponent();
     virtual void Configure(const FSensorConfig& Config) override final;
     FString CameraName;
     
@@ -80,7 +80,7 @@ private:
 };
 
 template<typename CallbackType>
-void USegmentationCameraComponent::ProcessSegTextureTemplate(CallbackType&& Callback)
+void USegCameraComponent::ProcessSegTextureTemplate(CallbackType&& Callback)
 {
     if (!RenderTarget) { UE_LOG(LogTemp, Error, TEXT("SegmentationRenderTarget is null!")); return; }
 

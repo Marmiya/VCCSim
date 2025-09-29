@@ -891,13 +891,13 @@ void FVCCSimPanelPathImageCapture::SaveSeg(int32 PoseIndex, bool& bAnyCaptured)
         return;
     }
     
-    TArray<USegmentationCameraComponent*> SegmentationCameras;
-    SelectedFlashPawn->GetComponents<USegmentationCameraComponent>(SegmentationCameras);
+    TArray<USegCameraComponent*> SegmentationCameras;
+    SelectedFlashPawn->GetComponents<USegCameraComponent>(SegmentationCameras);
     *JobNum += SegmentationCameras.Num();
 
     for (int32 i = 0; i < SegmentationCameras.Num(); ++i)
     {
-        USegmentationCameraComponent* Camera = SegmentationCameras[i];
+        USegCameraComponent* Camera = SegmentationCameras[i];
         
         if (Camera)
         {

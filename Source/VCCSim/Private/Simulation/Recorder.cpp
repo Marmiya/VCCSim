@@ -224,66 +224,67 @@ void ARecorder::CollectSensorData()
         }
     }
 
-    AsyncTask(ENamedThreads::GameThread, [this, Sensors]()
-    {
-        TArray<USensorBaseComponent*> SensorsToRead;
-        if (SensorsToReadThisFrame.Num() > 0)
+    TArray<USensorBaseComponent*> SensorsToRead = SensorsToReadThisFrame.Array();
+    SensorsToReadThisFrame.Empty();
+    
+    AsyncTask(ENamedThreads::AnyThread,
+        [this, SensorsToRead]()
         {
-            SensorsToRead = SensorsToReadThisFrame.Array();
-            SensorsToReadThisFrame.Empty();
-        
-            ENQUEUE_RENDER_COMMAND(DirectSensorCapture)(
-                [this, SensorsToRead](FRHICommandListImmediate& RHICmdList)
-                {
-                    FRDGBuilder GraphBuilder(RHICmdList);
-                    ProcessSensorResults(GraphBuilder, SensorsToRead);
-                    GraphBuilder.Execute();
-                }
-            );
-        }
-
-        double CurrentTime = FPlatformTime::Seconds();
-        for (USensorBaseComponent* Sensor : Sensors)
-        {
-            if (auto* CameraBase = Cast<UCameraBaseComponent>(Sensor))
+            if (SensorsToReadThisFrame.Num() > 0)
             {
-                if (ShouldCaptureSensor(Sensor, CurrentTime))
-                {
-                    switch (Sensor->GetSensorType())
+                ENQUEUE_RENDER_COMMAND(DirectSensorCapture)(
+                    [this, SensorsToRead](FRHICommandListImmediate& RHICmdList)
                     {
-                        case ESensorType::RGBCamera:
-                            if (auto* RGBCamera = Cast<URGBCameraComponent>(CameraBase))
-                            {
-                                RGBCamera->CaptureRGBSceneDeferred();
-                            }
-                            break;
-                        case ESensorType::DepthCamera:
-                            if (auto* DepthCamera = Cast<UDepthCameraComponent>(CameraBase))
-                            {
-                                DepthCamera->CaptureDepthSceneDeferred();
-                            }
-                            break;
-                        case ESensorType::NormalCamera:
-                            if (auto* NormalCamera = Cast<UNormalCameraComponent>(CameraBase))
-                            {
-                                NormalCamera->CaptureNormalSceneDeferred();
-                            }
-                            break;
-                        case ESensorType::SegmentationCamera:
-                            if (auto* SegCamera = Cast<USegmentationCameraComponent>(CameraBase))
-                            {
-                                SegCamera->CaptureSegmentationSceneDeferred();
-                            }
-                            break;
-                        default:
-                            UE_LOG(LogRecorder, Warning, TEXT("Unsupported sensor type: %d"),
-                                static_cast<int32>(Sensor->GetSensorType()));
-                            break;
+                        FRDGBuilder GraphBuilder(RHICmdList);
+                        ProcessSensorResults(GraphBuilder, SensorsToRead);
+                        GraphBuilder.Execute();
                     }
+                );
+            }
+        });
+    
+
+    double CurrentTime = FPlatformTime::Seconds();
+    for (USensorBaseComponent* Sensor : Sensors)
+    {
+        if (auto* CameraBase = Cast<UCameraBaseComponent>(Sensor))
+        {
+            if (ShouldCaptureSensor(Sensor, CurrentTime))
+            {
+                switch (Sensor->GetSensorType())
+                {
+                    case ESensorType::RGBCamera:
+                        if (auto* RGBCamera = Cast<URGBCameraComponent>(CameraBase))
+                        {
+                            RGBCamera->CaptureRGBSceneDeferred();
+                        }
+                        break;
+                    case ESensorType::DepthCamera:
+                        if (auto* DepthCamera = Cast<UDepthCameraComponent>(CameraBase))
+                        {
+                            DepthCamera->CaptureDepthSceneDeferred();
+                        }
+                        break;
+                    case ESensorType::NormalCamera:
+                        if (auto* NormalCamera = Cast<UNormalCameraComponent>(CameraBase))
+                        {
+                            NormalCamera->CaptureNormalSceneDeferred();
+                        }
+                        break;
+                    case ESensorType::SegmentationCamera:
+                        if (auto* SegCamera = Cast<USegCameraComponent>(CameraBase))
+                        {
+                            SegCamera->CaptureSegmentationSceneDeferred();
+                        }
+                        break;
+                    default:
+                        UE_LOG(LogRecorder, Warning, TEXT("Unsupported sensor type: %d"),
+                            static_cast<int32>(Sensor->GetSensorType()));
+                        break;
                 }
             }
         }
-    });
+    }
 }
 
 void ARecorder::ProcessCameraResult(FRDGBuilder& GraphBuilder, USensorBaseComponent* Sensor)

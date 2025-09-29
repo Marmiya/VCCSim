@@ -59,12 +59,15 @@ extern CarPathDefaultTypeInternal _CarPath_default_instance_;
 class CarPose;
 struct CarPoseDefaultTypeInternal;
 extern CarPoseDefaultTypeInternal _CarPose_default_instance_;
-class DepthImageData;
-struct DepthImageDataDefaultTypeInternal;
-extern DepthImageDataDefaultTypeInternal _DepthImageData_default_instance_;
-class DepthPointCloudData;
-struct DepthPointCloudDataDefaultTypeInternal;
-extern DepthPointCloudDataDefaultTypeInternal _DepthPointCloudData_default_instance_;
+class ColoredPoint;
+struct ColoredPointDefaultTypeInternal;
+extern ColoredPointDefaultTypeInternal _ColoredPoint_default_instance_;
+class ColoredPointCloud;
+struct ColoredPointCloudDefaultTypeInternal;
+extern ColoredPointCloudDefaultTypeInternal _ColoredPointCloud_default_instance_;
+class DepthData;
+struct DepthDataDefaultTypeInternal;
+extern DepthDataDefaultTypeInternal _DepthData_default_instance_;
 class DronePath;
 struct DronePathDefaultTypeInternal;
 extern DronePathDefaultTypeInternal _DronePath_default_instance_;
@@ -89,24 +92,24 @@ extern MeshDataDefaultTypeInternal _MeshData_default_instance_;
 class MeshID;
 struct MeshIDDefaultTypeInternal;
 extern MeshIDDefaultTypeInternal _MeshID_default_instance_;
+class NormalData;
+struct NormalDataDefaultTypeInternal;
+extern NormalDataDefaultTypeInternal _NormalData_default_instance_;
 class Odometry;
 struct OdometryDefaultTypeInternal;
 extern OdometryDefaultTypeInternal _Odometry_default_instance_;
-class PointCloudWithColor;
-struct PointCloudWithColorDefaultTypeInternal;
-extern PointCloudWithColorDefaultTypeInternal _PointCloudWithColor_default_instance_;
-class PointWithColor;
-struct PointWithColorDefaultTypeInternal;
-extern PointWithColorDefaultTypeInternal _PointWithColor_default_instance_;
+class PointCloud;
+struct PointCloudDefaultTypeInternal;
+extern PointCloudDefaultTypeInternal _PointCloud_default_instance_;
 class Pose;
 struct PoseDefaultTypeInternal;
 extern PoseDefaultTypeInternal _Pose_default_instance_;
 class PoseYawOnly;
 struct PoseYawOnlyDefaultTypeInternal;
 extern PoseYawOnlyDefaultTypeInternal _PoseYawOnly_default_instance_;
-class RGBImageData;
-struct RGBImageDataDefaultTypeInternal;
-extern RGBImageDataDefaultTypeInternal _RGBImageData_default_instance_;
+class RGBData;
+struct RGBDataDefaultTypeInternal;
+extern RGBDataDefaultTypeInternal _RGBData_default_instance_;
 class RobotName;
 struct RobotNameDefaultTypeInternal;
 extern RobotNameDefaultTypeInternal _RobotName_default_instance_;
@@ -116,6 +119,9 @@ extern RotationDefaultTypeInternal _Rotation_default_instance_;
 class Status;
 struct StatusDefaultTypeInternal;
 extern StatusDefaultTypeInternal _Status_default_instance_;
+class TPointCloud;
+struct TPointCloudDefaultTypeInternal;
+extern TPointCloudDefaultTypeInternal _TPointCloud_default_instance_;
 class Twist;
 struct TwistDefaultTypeInternal;
 extern TwistDefaultTypeInternal _Twist_default_instance_;
@@ -410,7 +416,7 @@ class Status final
     return reinterpret_cast<const Status*>(
         &_Status_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 9;
+  static constexpr int kIndexInFileMessages = 10;
   friend void swap(Status& a, Status& b) { a.Swap(&b); }
   inline void Swap(Status* other) {
     if (other == this) return;
@@ -828,7 +834,7 @@ class RobotName final
     return reinterpret_cast<const RobotName*>(
         &_RobotName_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 10;
+  static constexpr int kIndexInFileMessages = 11;
   friend void swap(RobotName& a, RobotName& b) { a.Swap(&b); }
   inline void Swap(RobotName* other) {
     if (other == this) return;
@@ -965,32 +971,32 @@ class RobotName final
 };
 // -------------------------------------------------------------------
 
-class RGBImageData final
+class RGBData final
     : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:VCCSim.RGBImageData) */ {
+/* @@protoc_insertion_point(class_definition:VCCSim.RGBData) */ {
  public:
-  inline RGBImageData() : RGBImageData(nullptr) {}
-  ~RGBImageData() PROTOBUF_FINAL;
+  inline RGBData() : RGBData(nullptr) {}
+  ~RGBData() PROTOBUF_FINAL;
 
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(RGBImageData* msg, std::destroying_delete_t) {
+  void operator delete(RGBData* msg, std::destroying_delete_t) {
     SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(RGBImageData));
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(RGBData));
   }
 #endif
 
   template <typename = void>
-  explicit PROTOBUF_CONSTEXPR RGBImageData(
+  explicit PROTOBUF_CONSTEXPR RGBData(
       ::google::protobuf::internal::ConstantInitialized);
 
-  inline RGBImageData(const RGBImageData& from) : RGBImageData(nullptr, from) {}
-  inline RGBImageData(RGBImageData&& from) noexcept
-      : RGBImageData(nullptr, std::move(from)) {}
-  inline RGBImageData& operator=(const RGBImageData& from) {
+  inline RGBData(const RGBData& from) : RGBData(nullptr, from) {}
+  inline RGBData(RGBData&& from) noexcept
+      : RGBData(nullptr, std::move(from)) {}
+  inline RGBData& operator=(const RGBData& from) {
     CopyFrom(from);
     return *this;
   }
-  inline RGBImageData& operator=(RGBImageData&& from) noexcept {
+  inline RGBData& operator=(RGBData&& from) noexcept {
     if (this == &from) return *this;
     if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
       InternalSwap(&from);
@@ -1018,16 +1024,16 @@ class RGBImageData final
   static const ::google::protobuf::Reflection* GetReflection() {
     return default_instance().GetMetadata().reflection;
   }
-  static const RGBImageData& default_instance() {
+  static const RGBData& default_instance() {
     return *internal_default_instance();
   }
-  static inline const RGBImageData* internal_default_instance() {
-    return reinterpret_cast<const RGBImageData*>(
-        &_RGBImageData_default_instance_);
+  static inline const RGBData* internal_default_instance() {
+    return reinterpret_cast<const RGBData*>(
+        &_RGBData_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 14;
-  friend void swap(RGBImageData& a, RGBImageData& b) { a.Swap(&b); }
-  inline void Swap(RGBImageData* other) {
+  static constexpr int kIndexInFileMessages = 15;
+  friend void swap(RGBData& a, RGBData& b) { a.Swap(&b); }
+  inline void Swap(RGBData* other) {
     if (other == this) return;
     if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
       InternalSwap(other);
@@ -1035,7 +1041,7 @@ class RGBImageData final
       ::google::protobuf::internal::GenericSwap(this, other);
     }
   }
-  void UnsafeArenaSwap(RGBImageData* other) {
+  void UnsafeArenaSwap(RGBData* other) {
     if (other == this) return;
     ABSL_DCHECK(GetArena() == other->GetArena());
     InternalSwap(other);
@@ -1043,13 +1049,13 @@ class RGBImageData final
 
   // implements Message ----------------------------------------------
 
-  RGBImageData* New(::google::protobuf::Arena* arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<RGBImageData>(arena);
+  RGBData* New(::google::protobuf::Arena* arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<RGBData>(arena);
   }
   using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const RGBImageData& from);
+  void CopyFrom(const RGBData& from);
   using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const RGBImageData& from) { RGBImageData::MergeImpl(*this, from); }
+  void MergeFrom(const RGBData& from) { RGBData::MergeImpl(*this, from); }
 
   private:
   static void MergeImpl(
@@ -1086,18 +1092,18 @@ class RGBImageData final
   private:
   void SharedCtor(::google::protobuf::Arena* arena);
   static void SharedDtor(MessageLite& self);
-  void InternalSwap(RGBImageData* other);
+  void InternalSwap(RGBData* other);
  private:
   template <typename T>
   friend ::absl::string_view(
       ::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "VCCSim.RGBImageData"; }
+  static ::absl::string_view FullMessageName() { return "VCCSim.RGBData"; }
 
  protected:
-  explicit RGBImageData(::google::protobuf::Arena* arena);
-  RGBImageData(::google::protobuf::Arena* arena, const RGBImageData& from);
-  RGBImageData(::google::protobuf::Arena* arena, RGBImageData&& from) noexcept
-      : RGBImageData(arena) {
+  explicit RGBData(::google::protobuf::Arena* arena);
+  RGBData(::google::protobuf::Arena* arena, const RGBData& from);
+  RGBData(::google::protobuf::Arena* arena, RGBData&& from) noexcept
+      : RGBData(arena) {
     *this = ::std::move(from);
   }
   const ::google::protobuf::internal::ClassData* GetClassData() const PROTOBUF_FINAL;
@@ -1163,7 +1169,7 @@ class RGBImageData final
   void _internal_set_timestamp(::uint32_t value);
 
   public:
-  // @@protoc_insertion_point(class_scope:VCCSim.RGBImageData)
+  // @@protoc_insertion_point(class_scope:VCCSim.RGBData)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
@@ -1185,7 +1191,7 @@ class RGBImageData final
                           ::google::protobuf::Arena* arena);
     inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
                           ::google::protobuf::Arena* arena, const Impl_& from,
-                          const RGBImageData& from_msg);
+                          const RGBData& from_msg);
     ::google::protobuf::internal::ArenaStringPtr data_;
     ::uint32_t width_;
     ::uint32_t height_;
@@ -1258,7 +1264,7 @@ class MeshID final
     return reinterpret_cast<const MeshID*>(
         &_MeshID_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 22;
+  static constexpr int kIndexInFileMessages = 24;
   friend void swap(MeshID& a, MeshID& b) { a.Swap(&b); }
   inline void Swap(MeshID* other) {
     if (other == this) return;
@@ -1535,32 +1541,32 @@ class EmptyRequest final
 };
 // -------------------------------------------------------------------
 
-class DepthImageData final
+class DepthData final
     : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:VCCSim.DepthImageData) */ {
+/* @@protoc_insertion_point(class_definition:VCCSim.DepthData) */ {
  public:
-  inline DepthImageData() : DepthImageData(nullptr) {}
-  ~DepthImageData() PROTOBUF_FINAL;
+  inline DepthData() : DepthData(nullptr) {}
+  ~DepthData() PROTOBUF_FINAL;
 
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(DepthImageData* msg, std::destroying_delete_t) {
+  void operator delete(DepthData* msg, std::destroying_delete_t) {
     SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(DepthImageData));
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(DepthData));
   }
 #endif
 
   template <typename = void>
-  explicit PROTOBUF_CONSTEXPR DepthImageData(
+  explicit PROTOBUF_CONSTEXPR DepthData(
       ::google::protobuf::internal::ConstantInitialized);
 
-  inline DepthImageData(const DepthImageData& from) : DepthImageData(nullptr, from) {}
-  inline DepthImageData(DepthImageData&& from) noexcept
-      : DepthImageData(nullptr, std::move(from)) {}
-  inline DepthImageData& operator=(const DepthImageData& from) {
+  inline DepthData(const DepthData& from) : DepthData(nullptr, from) {}
+  inline DepthData(DepthData&& from) noexcept
+      : DepthData(nullptr, std::move(from)) {}
+  inline DepthData& operator=(const DepthData& from) {
     CopyFrom(from);
     return *this;
   }
-  inline DepthImageData& operator=(DepthImageData&& from) noexcept {
+  inline DepthData& operator=(DepthData&& from) noexcept {
     if (this == &from) return *this;
     if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
       InternalSwap(&from);
@@ -1588,16 +1594,16 @@ class DepthImageData final
   static const ::google::protobuf::Reflection* GetReflection() {
     return default_instance().GetMetadata().reflection;
   }
-  static const DepthImageData& default_instance() {
+  static const DepthData& default_instance() {
     return *internal_default_instance();
   }
-  static inline const DepthImageData* internal_default_instance() {
-    return reinterpret_cast<const DepthImageData*>(
-        &_DepthImageData_default_instance_);
+  static inline const DepthData* internal_default_instance() {
+    return reinterpret_cast<const DepthData*>(
+        &_DepthData_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 15;
-  friend void swap(DepthImageData& a, DepthImageData& b) { a.Swap(&b); }
-  inline void Swap(DepthImageData* other) {
+  static constexpr int kIndexInFileMessages = 16;
+  friend void swap(DepthData& a, DepthData& b) { a.Swap(&b); }
+  inline void Swap(DepthData* other) {
     if (other == this) return;
     if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
       InternalSwap(other);
@@ -1605,7 +1611,7 @@ class DepthImageData final
       ::google::protobuf::internal::GenericSwap(this, other);
     }
   }
-  void UnsafeArenaSwap(DepthImageData* other) {
+  void UnsafeArenaSwap(DepthData* other) {
     if (other == this) return;
     ABSL_DCHECK(GetArena() == other->GetArena());
     InternalSwap(other);
@@ -1613,13 +1619,13 @@ class DepthImageData final
 
   // implements Message ----------------------------------------------
 
-  DepthImageData* New(::google::protobuf::Arena* arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<DepthImageData>(arena);
+  DepthData* New(::google::protobuf::Arena* arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<DepthData>(arena);
   }
   using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const DepthImageData& from);
+  void CopyFrom(const DepthData& from);
   using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const DepthImageData& from) { DepthImageData::MergeImpl(*this, from); }
+  void MergeFrom(const DepthData& from) { DepthData::MergeImpl(*this, from); }
 
   private:
   static void MergeImpl(
@@ -1656,18 +1662,18 @@ class DepthImageData final
   private:
   void SharedCtor(::google::protobuf::Arena* arena);
   static void SharedDtor(MessageLite& self);
-  void InternalSwap(DepthImageData* other);
+  void InternalSwap(DepthData* other);
  private:
   template <typename T>
   friend ::absl::string_view(
       ::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "VCCSim.DepthImageData"; }
+  static ::absl::string_view FullMessageName() { return "VCCSim.DepthData"; }
 
  protected:
-  explicit DepthImageData(::google::protobuf::Arena* arena);
-  DepthImageData(::google::protobuf::Arena* arena, const DepthImageData& from);
-  DepthImageData(::google::protobuf::Arena* arena, DepthImageData&& from) noexcept
-      : DepthImageData(arena) {
+  explicit DepthData(::google::protobuf::Arena* arena);
+  DepthData(::google::protobuf::Arena* arena, const DepthData& from);
+  DepthData(::google::protobuf::Arena* arena, DepthData&& from) noexcept
+      : DepthData(arena) {
     *this = ::std::move(from);
   }
   const ::google::protobuf::internal::ClassData* GetClassData() const PROTOBUF_FINAL;
@@ -1735,7 +1741,7 @@ class DepthImageData final
   void _internal_set_timestamp(::uint32_t value);
 
   public:
-  // @@protoc_insertion_point(class_scope:VCCSim.DepthImageData)
+  // @@protoc_insertion_point(class_scope:VCCSim.DepthData)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
@@ -1757,7 +1763,7 @@ class DepthImageData final
                           ::google::protobuf::Arena* arena);
     inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
                           ::google::protobuf::Arena* arena, const Impl_& from,
-                          const DepthImageData& from_msg);
+                          const DepthData& from_msg);
     ::google::protobuf::RepeatedField<float> data_;
     ::uint32_t width_;
     ::uint32_t height_;
@@ -1830,7 +1836,7 @@ class Twist final
     return reinterpret_cast<const Twist*>(
         &_Twist_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 7;
+  static constexpr int kIndexInFileMessages = 5;
   friend void swap(Twist& a, Twist& b) { a.Swap(&b); }
   inline void Swap(Twist* other) {
     if (other == this) return;
@@ -2407,32 +2413,32 @@ class Pose final
 };
 // -------------------------------------------------------------------
 
-class PointWithColor final
+class PointCloud final
     : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:VCCSim.PointWithColor) */ {
+/* @@protoc_insertion_point(class_definition:VCCSim.PointCloud) */ {
  public:
-  inline PointWithColor() : PointWithColor(nullptr) {}
-  ~PointWithColor() PROTOBUF_FINAL;
+  inline PointCloud() : PointCloud(nullptr) {}
+  ~PointCloud() PROTOBUF_FINAL;
 
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(PointWithColor* msg, std::destroying_delete_t) {
+  void operator delete(PointCloud* msg, std::destroying_delete_t) {
     SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(PointWithColor));
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(PointCloud));
   }
 #endif
 
   template <typename = void>
-  explicit PROTOBUF_CONSTEXPR PointWithColor(
+  explicit PROTOBUF_CONSTEXPR PointCloud(
       ::google::protobuf::internal::ConstantInitialized);
 
-  inline PointWithColor(const PointWithColor& from) : PointWithColor(nullptr, from) {}
-  inline PointWithColor(PointWithColor&& from) noexcept
-      : PointWithColor(nullptr, std::move(from)) {}
-  inline PointWithColor& operator=(const PointWithColor& from) {
+  inline PointCloud(const PointCloud& from) : PointCloud(nullptr, from) {}
+  inline PointCloud(PointCloud&& from) noexcept
+      : PointCloud(nullptr, std::move(from)) {}
+  inline PointCloud& operator=(const PointCloud& from) {
     CopyFrom(from);
     return *this;
   }
-  inline PointWithColor& operator=(PointWithColor&& from) noexcept {
+  inline PointCloud& operator=(PointCloud&& from) noexcept {
     if (this == &from) return *this;
     if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
       InternalSwap(&from);
@@ -2460,16 +2466,16 @@ class PointWithColor final
   static const ::google::protobuf::Reflection* GetReflection() {
     return default_instance().GetMetadata().reflection;
   }
-  static const PointWithColor& default_instance() {
+  static const PointCloud& default_instance() {
     return *internal_default_instance();
   }
-  static inline const PointWithColor* internal_default_instance() {
-    return reinterpret_cast<const PointWithColor*>(
-        &_PointWithColor_default_instance_);
+  static inline const PointCloud* internal_default_instance() {
+    return reinterpret_cast<const PointCloud*>(
+        &_PointCloud_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 5;
-  friend void swap(PointWithColor& a, PointWithColor& b) { a.Swap(&b); }
-  inline void Swap(PointWithColor* other) {
+  static constexpr int kIndexInFileMessages = 7;
+  friend void swap(PointCloud& a, PointCloud& b) { a.Swap(&b); }
+  inline void Swap(PointCloud* other) {
     if (other == this) return;
     if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
       InternalSwap(other);
@@ -2477,7 +2483,7 @@ class PointWithColor final
       ::google::protobuf::internal::GenericSwap(this, other);
     }
   }
-  void UnsafeArenaSwap(PointWithColor* other) {
+  void UnsafeArenaSwap(PointCloud* other) {
     if (other == this) return;
     ABSL_DCHECK(GetArena() == other->GetArena());
     InternalSwap(other);
@@ -2485,13 +2491,13 @@ class PointWithColor final
 
   // implements Message ----------------------------------------------
 
-  PointWithColor* New(::google::protobuf::Arena* arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<PointWithColor>(arena);
+  PointCloud* New(::google::protobuf::Arena* arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<PointCloud>(arena);
   }
   using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const PointWithColor& from);
+  void CopyFrom(const PointCloud& from);
   using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const PointWithColor& from) { PointWithColor::MergeImpl(*this, from); }
+  void MergeFrom(const PointCloud& from) { PointCloud::MergeImpl(*this, from); }
 
   private:
   static void MergeImpl(
@@ -2528,18 +2534,18 @@ class PointWithColor final
   private:
   void SharedCtor(::google::protobuf::Arena* arena);
   static void SharedDtor(MessageLite& self);
-  void InternalSwap(PointWithColor* other);
+  void InternalSwap(PointCloud* other);
  private:
   template <typename T>
   friend ::absl::string_view(
       ::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "VCCSim.PointWithColor"; }
+  static ::absl::string_view FullMessageName() { return "VCCSim.PointCloud"; }
 
  protected:
-  explicit PointWithColor(::google::protobuf::Arena* arena);
-  PointWithColor(::google::protobuf::Arena* arena, const PointWithColor& from);
-  PointWithColor(::google::protobuf::Arena* arena, PointWithColor&& from) noexcept
-      : PointWithColor(arena) {
+  explicit PointCloud(::google::protobuf::Arena* arena);
+  PointCloud(::google::protobuf::Arena* arena, const PointCloud& from);
+  PointCloud(::google::protobuf::Arena* arena, PointCloud&& from) noexcept
+      : PointCloud(arena) {
     *this = ::std::move(from);
   }
   const ::google::protobuf::internal::ClassData* GetClassData() const PROTOBUF_FINAL;
@@ -2554,40 +2560,31 @@ class PointWithColor final
 
   // accessors -------------------------------------------------------
   enum : int {
-    kPointFieldNumber = 1,
-    kColorFieldNumber = 2,
+    kDataFieldNumber = 1,
   };
-  // .VCCSim.Vec3f point = 1;
-  bool has_point() const;
-  void clear_point() ;
-  const ::VCCSim::Vec3f& point() const;
-  PROTOBUF_NODISCARD ::VCCSim::Vec3f* release_point();
-  ::VCCSim::Vec3f* mutable_point();
-  void set_allocated_point(::VCCSim::Vec3f* value);
-  void unsafe_arena_set_allocated_point(::VCCSim::Vec3f* value);
-  ::VCCSim::Vec3f* unsafe_arena_release_point();
-
+  // repeated .VCCSim.Vec3f data = 1;
+  int data_size() const;
   private:
-  const ::VCCSim::Vec3f& _internal_point() const;
-  ::VCCSim::Vec3f* _internal_mutable_point();
+  int _internal_data_size() const;
 
   public:
-  // uint32 color = 2;
-  void clear_color() ;
-  ::uint32_t color() const;
-  void set_color(::uint32_t value);
+  void clear_data() ;
+  ::VCCSim::Vec3f* mutable_data(int index);
+  ::google::protobuf::RepeatedPtrField<::VCCSim::Vec3f>* mutable_data();
 
   private:
-  ::uint32_t _internal_color() const;
-  void _internal_set_color(::uint32_t value);
-
+  const ::google::protobuf::RepeatedPtrField<::VCCSim::Vec3f>& _internal_data() const;
+  ::google::protobuf::RepeatedPtrField<::VCCSim::Vec3f>* _internal_mutable_data();
   public:
-  // @@protoc_insertion_point(class_scope:VCCSim.PointWithColor)
+  const ::VCCSim::Vec3f& data(int index) const;
+  ::VCCSim::Vec3f* add_data();
+  const ::google::protobuf::RepeatedPtrField<::VCCSim::Vec3f>& data() const;
+  // @@protoc_insertion_point(class_scope:VCCSim.PointCloud)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
   static const ::google::protobuf::internal::TcParseTable<
-      1, 2, 1,
+      0, 1, 1,
       0, 2>
       _table_;
 
@@ -2604,11 +2601,243 @@ class PointWithColor final
                           ::google::protobuf::Arena* arena);
     inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
                           ::google::protobuf::Arena* arena, const Impl_& from,
-                          const PointWithColor& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
+                          const PointCloud& from_msg);
+    ::google::protobuf::RepeatedPtrField< ::VCCSim::Vec3f > data_;
     ::google::protobuf::internal::CachedSize _cached_size_;
-    ::VCCSim::Vec3f* point_;
-    ::uint32_t color_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_VCCSim_2eproto;
+};
+// -------------------------------------------------------------------
+
+class NormalData final
+    : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:VCCSim.NormalData) */ {
+ public:
+  inline NormalData() : NormalData(nullptr) {}
+  ~NormalData() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(NormalData* msg, std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(NormalData));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR NormalData(
+      ::google::protobuf::internal::ConstantInitialized);
+
+  inline NormalData(const NormalData& from) : NormalData(nullptr, from) {}
+  inline NormalData(NormalData&& from) noexcept
+      : NormalData(nullptr, std::move(from)) {}
+  inline NormalData& operator=(const NormalData& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline NormalData& operator=(NormalData&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const NormalData& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const NormalData* internal_default_instance() {
+    return reinterpret_cast<const NormalData*>(
+        &_NormalData_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 18;
+  friend void swap(NormalData& a, NormalData& b) { a.Swap(&b); }
+  inline void Swap(NormalData* other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(NormalData* other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  NormalData* New(::google::protobuf::Arena* arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<NormalData>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const NormalData& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const NormalData& from) { NormalData::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(
+      ::google::protobuf::MessageLite& to_msg,
+      const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* _InternalSerialize(
+      const MessageLite& msg, ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* _InternalSerialize(
+      ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* _InternalSerialize(
+      ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(NormalData* other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(
+      ::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "VCCSim.NormalData"; }
+
+ protected:
+  explicit NormalData(::google::protobuf::Arena* arena);
+  NormalData(::google::protobuf::Arena* arena, const NormalData& from);
+  NormalData(::google::protobuf::Arena* arena, NormalData&& from) noexcept
+      : NormalData(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* GetClassData() const PROTOBUF_FINAL;
+  static void* PlacementNew_(const void*, void* mem,
+                             ::google::protobuf::Arena* arena);
+  static constexpr auto InternalNewImpl_();
+  static const ::google::protobuf::internal::ClassDataFull _class_data_;
+
+ public:
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kDataFieldNumber = 3,
+    kWidthFieldNumber = 1,
+    kHeightFieldNumber = 2,
+    kTimestampFieldNumber = 4,
+  };
+  // repeated .VCCSim.Vec3f data = 3;
+  int data_size() const;
+  private:
+  int _internal_data_size() const;
+
+  public:
+  void clear_data() ;
+  ::VCCSim::Vec3f* mutable_data(int index);
+  ::google::protobuf::RepeatedPtrField<::VCCSim::Vec3f>* mutable_data();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::VCCSim::Vec3f>& _internal_data() const;
+  ::google::protobuf::RepeatedPtrField<::VCCSim::Vec3f>* _internal_mutable_data();
+  public:
+  const ::VCCSim::Vec3f& data(int index) const;
+  ::VCCSim::Vec3f* add_data();
+  const ::google::protobuf::RepeatedPtrField<::VCCSim::Vec3f>& data() const;
+  // uint32 width = 1;
+  void clear_width() ;
+  ::uint32_t width() const;
+  void set_width(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_width() const;
+  void _internal_set_width(::uint32_t value);
+
+  public:
+  // uint32 height = 2;
+  void clear_height() ;
+  ::uint32_t height() const;
+  void set_height(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_height() const;
+  void _internal_set_height(::uint32_t value);
+
+  public:
+  // uint32 timestamp = 4;
+  void clear_timestamp() ;
+  ::uint32_t timestamp() const;
+  void set_timestamp(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_timestamp() const;
+  void _internal_set_timestamp(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:VCCSim.NormalData)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<
+      2, 4, 1,
+      0, 2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(
+        ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                          ::google::protobuf::Arena* arena);
+    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                          ::google::protobuf::Arena* arena, const Impl_& from,
+                          const NormalData& from_msg);
+    ::google::protobuf::RepeatedPtrField< ::VCCSim::Vec3f > data_;
+    ::uint32_t width_;
+    ::uint32_t height_;
+    ::uint32_t timestamp_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2676,7 +2905,7 @@ class LidarData final
     return reinterpret_cast<const LidarData*>(
         &_LidarData_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 12;
+  static constexpr int kIndexInFileMessages = 13;
   friend void swap(LidarData& a, LidarData& b) { a.Swap(&b); }
   inline void Swap(LidarData* other) {
     if (other == this) return;
@@ -2874,7 +3103,7 @@ class IndexedCamera final
     return reinterpret_cast<const IndexedCamera*>(
         &_IndexedCamera_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 11;
+  static constexpr int kIndexInFileMessages = 12;
   friend void swap(IndexedCamera& a, IndexedCamera& b) { a.Swap(&b); }
   inline void Swap(IndexedCamera* other) {
     if (other == this) return;
@@ -3023,32 +3252,32 @@ class IndexedCamera final
 };
 // -------------------------------------------------------------------
 
-class DepthPointCloudData final
+class ColoredPoint final
     : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:VCCSim.DepthPointCloudData) */ {
+/* @@protoc_insertion_point(class_definition:VCCSim.ColoredPoint) */ {
  public:
-  inline DepthPointCloudData() : DepthPointCloudData(nullptr) {}
-  ~DepthPointCloudData() PROTOBUF_FINAL;
+  inline ColoredPoint() : ColoredPoint(nullptr) {}
+  ~ColoredPoint() PROTOBUF_FINAL;
 
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(DepthPointCloudData* msg, std::destroying_delete_t) {
+  void operator delete(ColoredPoint* msg, std::destroying_delete_t) {
     SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(DepthPointCloudData));
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ColoredPoint));
   }
 #endif
 
   template <typename = void>
-  explicit PROTOBUF_CONSTEXPR DepthPointCloudData(
+  explicit PROTOBUF_CONSTEXPR ColoredPoint(
       ::google::protobuf::internal::ConstantInitialized);
 
-  inline DepthPointCloudData(const DepthPointCloudData& from) : DepthPointCloudData(nullptr, from) {}
-  inline DepthPointCloudData(DepthPointCloudData&& from) noexcept
-      : DepthPointCloudData(nullptr, std::move(from)) {}
-  inline DepthPointCloudData& operator=(const DepthPointCloudData& from) {
+  inline ColoredPoint(const ColoredPoint& from) : ColoredPoint(nullptr, from) {}
+  inline ColoredPoint(ColoredPoint&& from) noexcept
+      : ColoredPoint(nullptr, std::move(from)) {}
+  inline ColoredPoint& operator=(const ColoredPoint& from) {
     CopyFrom(from);
     return *this;
   }
-  inline DepthPointCloudData& operator=(DepthPointCloudData&& from) noexcept {
+  inline ColoredPoint& operator=(ColoredPoint&& from) noexcept {
     if (this == &from) return *this;
     if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
       InternalSwap(&from);
@@ -3076,16 +3305,16 @@ class DepthPointCloudData final
   static const ::google::protobuf::Reflection* GetReflection() {
     return default_instance().GetMetadata().reflection;
   }
-  static const DepthPointCloudData& default_instance() {
+  static const ColoredPoint& default_instance() {
     return *internal_default_instance();
   }
-  static inline const DepthPointCloudData* internal_default_instance() {
-    return reinterpret_cast<const DepthPointCloudData*>(
-        &_DepthPointCloudData_default_instance_);
+  static inline const ColoredPoint* internal_default_instance() {
+    return reinterpret_cast<const ColoredPoint*>(
+        &_ColoredPoint_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 16;
-  friend void swap(DepthPointCloudData& a, DepthPointCloudData& b) { a.Swap(&b); }
-  inline void Swap(DepthPointCloudData* other) {
+  static constexpr int kIndexInFileMessages = 8;
+  friend void swap(ColoredPoint& a, ColoredPoint& b) { a.Swap(&b); }
+  inline void Swap(ColoredPoint* other) {
     if (other == this) return;
     if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
       InternalSwap(other);
@@ -3093,7 +3322,7 @@ class DepthPointCloudData final
       ::google::protobuf::internal::GenericSwap(this, other);
     }
   }
-  void UnsafeArenaSwap(DepthPointCloudData* other) {
+  void UnsafeArenaSwap(ColoredPoint* other) {
     if (other == this) return;
     ABSL_DCHECK(GetArena() == other->GetArena());
     InternalSwap(other);
@@ -3101,13 +3330,13 @@ class DepthPointCloudData final
 
   // implements Message ----------------------------------------------
 
-  DepthPointCloudData* New(::google::protobuf::Arena* arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<DepthPointCloudData>(arena);
+  ColoredPoint* New(::google::protobuf::Arena* arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ColoredPoint>(arena);
   }
   using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const DepthPointCloudData& from);
+  void CopyFrom(const ColoredPoint& from);
   using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const DepthPointCloudData& from) { DepthPointCloudData::MergeImpl(*this, from); }
+  void MergeFrom(const ColoredPoint& from) { ColoredPoint::MergeImpl(*this, from); }
 
   private:
   static void MergeImpl(
@@ -3144,18 +3373,18 @@ class DepthPointCloudData final
   private:
   void SharedCtor(::google::protobuf::Arena* arena);
   static void SharedDtor(MessageLite& self);
-  void InternalSwap(DepthPointCloudData* other);
+  void InternalSwap(ColoredPoint* other);
  private:
   template <typename T>
   friend ::absl::string_view(
       ::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "VCCSim.DepthPointCloudData"; }
+  static ::absl::string_view FullMessageName() { return "VCCSim.ColoredPoint"; }
 
  protected:
-  explicit DepthPointCloudData(::google::protobuf::Arena* arena);
-  DepthPointCloudData(::google::protobuf::Arena* arena, const DepthPointCloudData& from);
-  DepthPointCloudData(::google::protobuf::Arena* arena, DepthPointCloudData&& from) noexcept
-      : DepthPointCloudData(arena) {
+  explicit ColoredPoint(::google::protobuf::Arena* arena);
+  ColoredPoint(::google::protobuf::Arena* arena, const ColoredPoint& from);
+  ColoredPoint(::google::protobuf::Arena* arena, ColoredPoint&& from) noexcept
+      : ColoredPoint(arena) {
     *this = ::std::move(from);
   }
   const ::google::protobuf::internal::ClassData* GetClassData() const PROTOBUF_FINAL;
@@ -3170,37 +3399,35 @@ class DepthPointCloudData final
 
   // accessors -------------------------------------------------------
   enum : int {
-    kDataFieldNumber = 1,
-    kTimestampFieldNumber = 2,
+    kPointFieldNumber = 1,
+    kColorFieldNumber = 2,
   };
-  // repeated .VCCSim.Vec3f data = 1;
-  int data_size() const;
-  private:
-  int _internal_data_size() const;
-
-  public:
-  void clear_data() ;
-  ::VCCSim::Vec3f* mutable_data(int index);
-  ::google::protobuf::RepeatedPtrField<::VCCSim::Vec3f>* mutable_data();
-
-  private:
-  const ::google::protobuf::RepeatedPtrField<::VCCSim::Vec3f>& _internal_data() const;
-  ::google::protobuf::RepeatedPtrField<::VCCSim::Vec3f>* _internal_mutable_data();
-  public:
-  const ::VCCSim::Vec3f& data(int index) const;
-  ::VCCSim::Vec3f* add_data();
-  const ::google::protobuf::RepeatedPtrField<::VCCSim::Vec3f>& data() const;
-  // uint32 timestamp = 2;
-  void clear_timestamp() ;
-  ::uint32_t timestamp() const;
-  void set_timestamp(::uint32_t value);
+  // .VCCSim.Vec3f point = 1;
+  bool has_point() const;
+  void clear_point() ;
+  const ::VCCSim::Vec3f& point() const;
+  PROTOBUF_NODISCARD ::VCCSim::Vec3f* release_point();
+  ::VCCSim::Vec3f* mutable_point();
+  void set_allocated_point(::VCCSim::Vec3f* value);
+  void unsafe_arena_set_allocated_point(::VCCSim::Vec3f* value);
+  ::VCCSim::Vec3f* unsafe_arena_release_point();
 
   private:
-  ::uint32_t _internal_timestamp() const;
-  void _internal_set_timestamp(::uint32_t value);
+  const ::VCCSim::Vec3f& _internal_point() const;
+  ::VCCSim::Vec3f* _internal_mutable_point();
 
   public:
-  // @@protoc_insertion_point(class_scope:VCCSim.DepthPointCloudData)
+  // uint32 color = 2;
+  void clear_color() ;
+  ::uint32_t color() const;
+  void set_color(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_color() const;
+  void _internal_set_color(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:VCCSim.ColoredPoint)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
@@ -3222,10 +3449,11 @@ class DepthPointCloudData final
                           ::google::protobuf::Arena* arena);
     inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
                           ::google::protobuf::Arena* arena, const Impl_& from,
-                          const DepthPointCloudData& from_msg);
-    ::google::protobuf::RepeatedPtrField< ::VCCSim::Vec3f > data_;
-    ::uint32_t timestamp_;
+                          const ColoredPoint& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
+    ::VCCSim::Vec3f* point_;
+    ::uint32_t color_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3233,32 +3461,32 @@ class DepthPointCloudData final
 };
 // -------------------------------------------------------------------
 
-class PointCloudWithColor final
+class TPointCloud final
     : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:VCCSim.PointCloudWithColor) */ {
+/* @@protoc_insertion_point(class_definition:VCCSim.TPointCloud) */ {
  public:
-  inline PointCloudWithColor() : PointCloudWithColor(nullptr) {}
-  ~PointCloudWithColor() PROTOBUF_FINAL;
+  inline TPointCloud() : TPointCloud(nullptr) {}
+  ~TPointCloud() PROTOBUF_FINAL;
 
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(PointCloudWithColor* msg, std::destroying_delete_t) {
+  void operator delete(TPointCloud* msg, std::destroying_delete_t) {
     SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(PointCloudWithColor));
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(TPointCloud));
   }
 #endif
 
   template <typename = void>
-  explicit PROTOBUF_CONSTEXPR PointCloudWithColor(
+  explicit PROTOBUF_CONSTEXPR TPointCloud(
       ::google::protobuf::internal::ConstantInitialized);
 
-  inline PointCloudWithColor(const PointCloudWithColor& from) : PointCloudWithColor(nullptr, from) {}
-  inline PointCloudWithColor(PointCloudWithColor&& from) noexcept
-      : PointCloudWithColor(nullptr, std::move(from)) {}
-  inline PointCloudWithColor& operator=(const PointCloudWithColor& from) {
+  inline TPointCloud(const TPointCloud& from) : TPointCloud(nullptr, from) {}
+  inline TPointCloud(TPointCloud&& from) noexcept
+      : TPointCloud(nullptr, std::move(from)) {}
+  inline TPointCloud& operator=(const TPointCloud& from) {
     CopyFrom(from);
     return *this;
   }
-  inline PointCloudWithColor& operator=(PointCloudWithColor&& from) noexcept {
+  inline TPointCloud& operator=(TPointCloud&& from) noexcept {
     if (this == &from) return *this;
     if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
       InternalSwap(&from);
@@ -3286,16 +3514,16 @@ class PointCloudWithColor final
   static const ::google::protobuf::Reflection* GetReflection() {
     return default_instance().GetMetadata().reflection;
   }
-  static const PointCloudWithColor& default_instance() {
+  static const TPointCloud& default_instance() {
     return *internal_default_instance();
   }
-  static inline const PointCloudWithColor* internal_default_instance() {
-    return reinterpret_cast<const PointCloudWithColor*>(
-        &_PointCloudWithColor_default_instance_);
+  static inline const TPointCloud* internal_default_instance() {
+    return reinterpret_cast<const TPointCloud*>(
+        &_TPointCloud_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 6;
-  friend void swap(PointCloudWithColor& a, PointCloudWithColor& b) { a.Swap(&b); }
-  inline void Swap(PointCloudWithColor* other) {
+  static constexpr int kIndexInFileMessages = 17;
+  friend void swap(TPointCloud& a, TPointCloud& b) { a.Swap(&b); }
+  inline void Swap(TPointCloud* other) {
     if (other == this) return;
     if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
       InternalSwap(other);
@@ -3303,7 +3531,7 @@ class PointCloudWithColor final
       ::google::protobuf::internal::GenericSwap(this, other);
     }
   }
-  void UnsafeArenaSwap(PointCloudWithColor* other) {
+  void UnsafeArenaSwap(TPointCloud* other) {
     if (other == this) return;
     ABSL_DCHECK(GetArena() == other->GetArena());
     InternalSwap(other);
@@ -3311,13 +3539,13 @@ class PointCloudWithColor final
 
   // implements Message ----------------------------------------------
 
-  PointCloudWithColor* New(::google::protobuf::Arena* arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<PointCloudWithColor>(arena);
+  TPointCloud* New(::google::protobuf::Arena* arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<TPointCloud>(arena);
   }
   using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const PointCloudWithColor& from);
+  void CopyFrom(const TPointCloud& from);
   using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const PointCloudWithColor& from) { PointCloudWithColor::MergeImpl(*this, from); }
+  void MergeFrom(const TPointCloud& from) { TPointCloud::MergeImpl(*this, from); }
 
   private:
   static void MergeImpl(
@@ -3354,18 +3582,18 @@ class PointCloudWithColor final
   private:
   void SharedCtor(::google::protobuf::Arena* arena);
   static void SharedDtor(MessageLite& self);
-  void InternalSwap(PointCloudWithColor* other);
+  void InternalSwap(TPointCloud* other);
  private:
   template <typename T>
   friend ::absl::string_view(
       ::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "VCCSim.PointCloudWithColor"; }
+  static ::absl::string_view FullMessageName() { return "VCCSim.TPointCloud"; }
 
  protected:
-  explicit PointCloudWithColor(::google::protobuf::Arena* arena);
-  PointCloudWithColor(::google::protobuf::Arena* arena, const PointCloudWithColor& from);
-  PointCloudWithColor(::google::protobuf::Arena* arena, PointCloudWithColor&& from) noexcept
-      : PointCloudWithColor(arena) {
+  explicit TPointCloud(::google::protobuf::Arena* arena);
+  TPointCloud(::google::protobuf::Arena* arena, const TPointCloud& from);
+  TPointCloud(::google::protobuf::Arena* arena, TPointCloud&& from) noexcept
+      : TPointCloud(arena) {
     *this = ::std::move(from);
   }
   const ::google::protobuf::internal::ClassData* GetClassData() const PROTOBUF_FINAL;
@@ -3381,30 +3609,39 @@ class PointCloudWithColor final
   // accessors -------------------------------------------------------
   enum : int {
     kDataFieldNumber = 1,
+    kTimestampFieldNumber = 2,
   };
-  // repeated .VCCSim.PointWithColor data = 1;
-  int data_size() const;
-  private:
-  int _internal_data_size() const;
-
-  public:
+  // .VCCSim.PointCloud data = 1;
+  bool has_data() const;
   void clear_data() ;
-  ::VCCSim::PointWithColor* mutable_data(int index);
-  ::google::protobuf::RepeatedPtrField<::VCCSim::PointWithColor>* mutable_data();
+  const ::VCCSim::PointCloud& data() const;
+  PROTOBUF_NODISCARD ::VCCSim::PointCloud* release_data();
+  ::VCCSim::PointCloud* mutable_data();
+  void set_allocated_data(::VCCSim::PointCloud* value);
+  void unsafe_arena_set_allocated_data(::VCCSim::PointCloud* value);
+  ::VCCSim::PointCloud* unsafe_arena_release_data();
 
   private:
-  const ::google::protobuf::RepeatedPtrField<::VCCSim::PointWithColor>& _internal_data() const;
-  ::google::protobuf::RepeatedPtrField<::VCCSim::PointWithColor>* _internal_mutable_data();
+  const ::VCCSim::PointCloud& _internal_data() const;
+  ::VCCSim::PointCloud* _internal_mutable_data();
+
   public:
-  const ::VCCSim::PointWithColor& data(int index) const;
-  ::VCCSim::PointWithColor* add_data();
-  const ::google::protobuf::RepeatedPtrField<::VCCSim::PointWithColor>& data() const;
-  // @@protoc_insertion_point(class_scope:VCCSim.PointCloudWithColor)
+  // uint32 timestamp = 2;
+  void clear_timestamp() ;
+  ::uint32_t timestamp() const;
+  void set_timestamp(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_timestamp() const;
+  void _internal_set_timestamp(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:VCCSim.TPointCloud)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
   static const ::google::protobuf::internal::TcParseTable<
-      0, 1, 1,
+      1, 2, 1,
       0, 2>
       _table_;
 
@@ -3421,9 +3658,11 @@ class PointCloudWithColor final
                           ::google::protobuf::Arena* arena);
     inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
                           ::google::protobuf::Arena* arena, const Impl_& from,
-                          const PointCloudWithColor& from_msg);
-    ::google::protobuf::RepeatedPtrField< ::VCCSim::PointWithColor > data_;
+                          const TPointCloud& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
+    ::VCCSim::PointCloud* data_;
+    ::uint32_t timestamp_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3491,7 +3730,7 @@ class Odometry final
     return reinterpret_cast<const Odometry*>(
         &_Odometry_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 8;
+  static constexpr int kIndexInFileMessages = 6;
   friend void swap(Odometry& a, Odometry& b) { a.Swap(&b); }
   inline void Swap(Odometry* other) {
     if (other == this) return;
@@ -3705,7 +3944,7 @@ class MeshData final
     return reinterpret_cast<const MeshData*>(
         &_MeshData_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 21;
+  static constexpr int kIndexInFileMessages = 23;
   friend void swap(MeshData& a, MeshData& b) { a.Swap(&b); }
   inline void Swap(MeshData* other) {
     if (other == this) return;
@@ -3956,7 +4195,7 @@ class DronePose final
     return reinterpret_cast<const DronePose*>(
         &_DronePose_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 17;
+  static constexpr int kIndexInFileMessages = 19;
   friend void swap(DronePose& a, DronePose& b) { a.Swap(&b); }
   inline void Swap(DronePose* other) {
     if (other == this) return;
@@ -4171,7 +4410,7 @@ class DronePath final
     return reinterpret_cast<const DronePath*>(
         &_DronePath_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 18;
+  static constexpr int kIndexInFileMessages = 20;
   friend void swap(DronePath& a, DronePath& b) { a.Swap(&b); }
   inline void Swap(DronePath* other) {
     if (other == this) return;
@@ -4327,6 +4566,204 @@ class DronePath final
 };
 // -------------------------------------------------------------------
 
+class ColoredPointCloud final
+    : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:VCCSim.ColoredPointCloud) */ {
+ public:
+  inline ColoredPointCloud() : ColoredPointCloud(nullptr) {}
+  ~ColoredPointCloud() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ColoredPointCloud* msg, std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ColoredPointCloud));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR ColoredPointCloud(
+      ::google::protobuf::internal::ConstantInitialized);
+
+  inline ColoredPointCloud(const ColoredPointCloud& from) : ColoredPointCloud(nullptr, from) {}
+  inline ColoredPointCloud(ColoredPointCloud&& from) noexcept
+      : ColoredPointCloud(nullptr, std::move(from)) {}
+  inline ColoredPointCloud& operator=(const ColoredPointCloud& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ColoredPointCloud& operator=(ColoredPointCloud&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const ColoredPointCloud& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const ColoredPointCloud* internal_default_instance() {
+    return reinterpret_cast<const ColoredPointCloud*>(
+        &_ColoredPointCloud_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 9;
+  friend void swap(ColoredPointCloud& a, ColoredPointCloud& b) { a.Swap(&b); }
+  inline void Swap(ColoredPointCloud* other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ColoredPointCloud* other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  ColoredPointCloud* New(::google::protobuf::Arena* arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ColoredPointCloud>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ColoredPointCloud& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ColoredPointCloud& from) { ColoredPointCloud::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(
+      ::google::protobuf::MessageLite& to_msg,
+      const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* _InternalSerialize(
+      const MessageLite& msg, ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* _InternalSerialize(
+      ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* _InternalSerialize(
+      ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ColoredPointCloud* other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(
+      ::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "VCCSim.ColoredPointCloud"; }
+
+ protected:
+  explicit ColoredPointCloud(::google::protobuf::Arena* arena);
+  ColoredPointCloud(::google::protobuf::Arena* arena, const ColoredPointCloud& from);
+  ColoredPointCloud(::google::protobuf::Arena* arena, ColoredPointCloud&& from) noexcept
+      : ColoredPointCloud(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* GetClassData() const PROTOBUF_FINAL;
+  static void* PlacementNew_(const void*, void* mem,
+                             ::google::protobuf::Arena* arena);
+  static constexpr auto InternalNewImpl_();
+  static const ::google::protobuf::internal::ClassDataFull _class_data_;
+
+ public:
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kDataFieldNumber = 1,
+  };
+  // repeated .VCCSim.ColoredPoint data = 1;
+  int data_size() const;
+  private:
+  int _internal_data_size() const;
+
+  public:
+  void clear_data() ;
+  ::VCCSim::ColoredPoint* mutable_data(int index);
+  ::google::protobuf::RepeatedPtrField<::VCCSim::ColoredPoint>* mutable_data();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::VCCSim::ColoredPoint>& _internal_data() const;
+  ::google::protobuf::RepeatedPtrField<::VCCSim::ColoredPoint>* _internal_mutable_data();
+  public:
+  const ::VCCSim::ColoredPoint& data(int index) const;
+  ::VCCSim::ColoredPoint* add_data();
+  const ::google::protobuf::RepeatedPtrField<::VCCSim::ColoredPoint>& data() const;
+  // @@protoc_insertion_point(class_scope:VCCSim.ColoredPointCloud)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<
+      0, 1, 1,
+      0, 2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(
+        ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                          ::google::protobuf::Arena* arena);
+    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                          ::google::protobuf::Arena* arena, const Impl_& from,
+                          const ColoredPointCloud& from_msg);
+    ::google::protobuf::RepeatedPtrField< ::VCCSim::ColoredPoint > data_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_VCCSim_2eproto;
+};
+// -------------------------------------------------------------------
+
 class CarPose final
     : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:VCCSim.CarPose) */ {
@@ -4387,7 +4824,7 @@ class CarPose final
     return reinterpret_cast<const CarPose*>(
         &_CarPose_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 19;
+  static constexpr int kIndexInFileMessages = 21;
   friend void swap(CarPose& a, CarPose& b) { a.Swap(&b); }
   inline void Swap(CarPose* other) {
     if (other == this) return;
@@ -4602,7 +5039,7 @@ class CarPath final
     return reinterpret_cast<const CarPath*>(
         &_CarPath_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 20;
+  static constexpr int kIndexInFileMessages = 22;
   friend void swap(CarPath& a, CarPath& b) { a.Swap(&b); }
   inline void Swap(CarPath* other) {
     if (other == this) return;
@@ -4818,7 +5255,7 @@ class LidarDataAndOdom final
     return reinterpret_cast<const LidarDataAndOdom*>(
         &_LidarDataAndOdom_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 13;
+  static constexpr int kIndexInFileMessages = 14;
   friend void swap(LidarDataAndOdom& a, LidarDataAndOdom& b) { a.Swap(&b); }
   inline void Swap(LidarDataAndOdom* other) {
     if (other == this) return;
@@ -5469,181 +5906,6 @@ inline void PoseYawOnly::_internal_set_yaw(float value) {
 
 // -------------------------------------------------------------------
 
-// PointWithColor
-
-// .VCCSim.Vec3f point = 1;
-inline bool PointWithColor::has_point() const {
-  bool value = (_impl_._has_bits_[0] & 0x00000001u) != 0;
-  PROTOBUF_ASSUME(!value || _impl_.point_ != nullptr);
-  return value;
-}
-inline void PointWithColor::clear_point() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (_impl_.point_ != nullptr) _impl_.point_->Clear();
-  _impl_._has_bits_[0] &= ~0x00000001u;
-}
-inline const ::VCCSim::Vec3f& PointWithColor::_internal_point() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  const ::VCCSim::Vec3f* p = _impl_.point_;
-  return p != nullptr ? *p : reinterpret_cast<const ::VCCSim::Vec3f&>(::VCCSim::_Vec3f_default_instance_);
-}
-inline const ::VCCSim::Vec3f& PointWithColor::point() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:VCCSim.PointWithColor.point)
-  return _internal_point();
-}
-inline void PointWithColor::unsafe_arena_set_allocated_point(::VCCSim::Vec3f* value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (GetArena() == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.point_);
-  }
-  _impl_.point_ = reinterpret_cast<::VCCSim::Vec3f*>(value);
-  if (value != nullptr) {
-    _impl_._has_bits_[0] |= 0x00000001u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000001u;
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:VCCSim.PointWithColor.point)
-}
-inline ::VCCSim::Vec3f* PointWithColor::release_point() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-
-  _impl_._has_bits_[0] &= ~0x00000001u;
-  ::VCCSim::Vec3f* released = _impl_.point_;
-  _impl_.point_ = nullptr;
-  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
-    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
-    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
-    if (GetArena() == nullptr) {
-      delete old;
-    }
-  } else {
-    if (GetArena() != nullptr) {
-      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
-    }
-  }
-  return released;
-}
-inline ::VCCSim::Vec3f* PointWithColor::unsafe_arena_release_point() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:VCCSim.PointWithColor.point)
-
-  _impl_._has_bits_[0] &= ~0x00000001u;
-  ::VCCSim::Vec3f* temp = _impl_.point_;
-  _impl_.point_ = nullptr;
-  return temp;
-}
-inline ::VCCSim::Vec3f* PointWithColor::_internal_mutable_point() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (_impl_.point_ == nullptr) {
-    auto* p = ::google::protobuf::Message::DefaultConstruct<::VCCSim::Vec3f>(GetArena());
-    _impl_.point_ = reinterpret_cast<::VCCSim::Vec3f*>(p);
-  }
-  return _impl_.point_;
-}
-inline ::VCCSim::Vec3f* PointWithColor::mutable_point() ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  _impl_._has_bits_[0] |= 0x00000001u;
-  ::VCCSim::Vec3f* _msg = _internal_mutable_point();
-  // @@protoc_insertion_point(field_mutable:VCCSim.PointWithColor.point)
-  return _msg;
-}
-inline void PointWithColor::set_allocated_point(::VCCSim::Vec3f* value) {
-  ::google::protobuf::Arena* message_arena = GetArena();
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (message_arena == nullptr) {
-    delete (_impl_.point_);
-  }
-
-  if (value != nullptr) {
-    ::google::protobuf::Arena* submessage_arena = (value)->GetArena();
-    if (message_arena != submessage_arena) {
-      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
-    }
-    _impl_._has_bits_[0] |= 0x00000001u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000001u;
-  }
-
-  _impl_.point_ = reinterpret_cast<::VCCSim::Vec3f*>(value);
-  // @@protoc_insertion_point(field_set_allocated:VCCSim.PointWithColor.point)
-}
-
-// uint32 color = 2;
-inline void PointWithColor::clear_color() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.color_ = 0u;
-}
-inline ::uint32_t PointWithColor::color() const {
-  // @@protoc_insertion_point(field_get:VCCSim.PointWithColor.color)
-  return _internal_color();
-}
-inline void PointWithColor::set_color(::uint32_t value) {
-  _internal_set_color(value);
-  // @@protoc_insertion_point(field_set:VCCSim.PointWithColor.color)
-}
-inline ::uint32_t PointWithColor::_internal_color() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.color_;
-}
-inline void PointWithColor::_internal_set_color(::uint32_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.color_ = value;
-}
-
-// -------------------------------------------------------------------
-
-// PointCloudWithColor
-
-// repeated .VCCSim.PointWithColor data = 1;
-inline int PointCloudWithColor::_internal_data_size() const {
-  return _internal_data().size();
-}
-inline int PointCloudWithColor::data_size() const {
-  return _internal_data_size();
-}
-inline void PointCloudWithColor::clear_data() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.data_.Clear();
-}
-inline ::VCCSim::PointWithColor* PointCloudWithColor::mutable_data(int index)
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_mutable:VCCSim.PointCloudWithColor.data)
-  return _internal_mutable_data()->Mutable(index);
-}
-inline ::google::protobuf::RepeatedPtrField<::VCCSim::PointWithColor>* PointCloudWithColor::mutable_data()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_mutable_list:VCCSim.PointCloudWithColor.data)
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  return _internal_mutable_data();
-}
-inline const ::VCCSim::PointWithColor& PointCloudWithColor::data(int index) const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:VCCSim.PointCloudWithColor.data)
-  return _internal_data().Get(index);
-}
-inline ::VCCSim::PointWithColor* PointCloudWithColor::add_data() ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  ::VCCSim::PointWithColor* _add = _internal_mutable_data()->Add();
-  // @@protoc_insertion_point(field_add:VCCSim.PointCloudWithColor.data)
-  return _add;
-}
-inline const ::google::protobuf::RepeatedPtrField<::VCCSim::PointWithColor>& PointCloudWithColor::data() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_list:VCCSim.PointCloudWithColor.data)
-  return _internal_data();
-}
-inline const ::google::protobuf::RepeatedPtrField<::VCCSim::PointWithColor>&
-PointCloudWithColor::_internal_data() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.data_;
-}
-inline ::google::protobuf::RepeatedPtrField<::VCCSim::PointWithColor>*
-PointCloudWithColor::_internal_mutable_data() {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return &_impl_.data_;
-}
-
-// -------------------------------------------------------------------
-
 // Twist
 
 // .VCCSim.Vec3f linear = 1;
@@ -6032,6 +6294,234 @@ inline void Odometry::set_allocated_twist(::VCCSim::Twist* value) {
 
   _impl_.twist_ = reinterpret_cast<::VCCSim::Twist*>(value);
   // @@protoc_insertion_point(field_set_allocated:VCCSim.Odometry.twist)
+}
+
+// -------------------------------------------------------------------
+
+// PointCloud
+
+// repeated .VCCSim.Vec3f data = 1;
+inline int PointCloud::_internal_data_size() const {
+  return _internal_data().size();
+}
+inline int PointCloud::data_size() const {
+  return _internal_data_size();
+}
+inline void PointCloud::clear_data() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.data_.Clear();
+}
+inline ::VCCSim::Vec3f* PointCloud::mutable_data(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:VCCSim.PointCloud.data)
+  return _internal_mutable_data()->Mutable(index);
+}
+inline ::google::protobuf::RepeatedPtrField<::VCCSim::Vec3f>* PointCloud::mutable_data()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable_list:VCCSim.PointCloud.data)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_data();
+}
+inline const ::VCCSim::Vec3f& PointCloud::data(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:VCCSim.PointCloud.data)
+  return _internal_data().Get(index);
+}
+inline ::VCCSim::Vec3f* PointCloud::add_data() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::VCCSim::Vec3f* _add = _internal_mutable_data()->Add();
+  // @@protoc_insertion_point(field_add:VCCSim.PointCloud.data)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::VCCSim::Vec3f>& PointCloud::data() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:VCCSim.PointCloud.data)
+  return _internal_data();
+}
+inline const ::google::protobuf::RepeatedPtrField<::VCCSim::Vec3f>&
+PointCloud::_internal_data() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.data_;
+}
+inline ::google::protobuf::RepeatedPtrField<::VCCSim::Vec3f>*
+PointCloud::_internal_mutable_data() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.data_;
+}
+
+// -------------------------------------------------------------------
+
+// ColoredPoint
+
+// .VCCSim.Vec3f point = 1;
+inline bool ColoredPoint::has_point() const {
+  bool value = (_impl_._has_bits_[0] & 0x00000001u) != 0;
+  PROTOBUF_ASSUME(!value || _impl_.point_ != nullptr);
+  return value;
+}
+inline void ColoredPoint::clear_point() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.point_ != nullptr) _impl_.point_->Clear();
+  _impl_._has_bits_[0] &= ~0x00000001u;
+}
+inline const ::VCCSim::Vec3f& ColoredPoint::_internal_point() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::VCCSim::Vec3f* p = _impl_.point_;
+  return p != nullptr ? *p : reinterpret_cast<const ::VCCSim::Vec3f&>(::VCCSim::_Vec3f_default_instance_);
+}
+inline const ::VCCSim::Vec3f& ColoredPoint::point() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:VCCSim.ColoredPoint.point)
+  return _internal_point();
+}
+inline void ColoredPoint::unsafe_arena_set_allocated_point(::VCCSim::Vec3f* value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.point_);
+  }
+  _impl_.point_ = reinterpret_cast<::VCCSim::Vec3f*>(value);
+  if (value != nullptr) {
+    _impl_._has_bits_[0] |= 0x00000001u;
+  } else {
+    _impl_._has_bits_[0] &= ~0x00000001u;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:VCCSim.ColoredPoint.point)
+}
+inline ::VCCSim::Vec3f* ColoredPoint::release_point() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  _impl_._has_bits_[0] &= ~0x00000001u;
+  ::VCCSim::Vec3f* released = _impl_.point_;
+  _impl_.point_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::VCCSim::Vec3f* ColoredPoint::unsafe_arena_release_point() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:VCCSim.ColoredPoint.point)
+
+  _impl_._has_bits_[0] &= ~0x00000001u;
+  ::VCCSim::Vec3f* temp = _impl_.point_;
+  _impl_.point_ = nullptr;
+  return temp;
+}
+inline ::VCCSim::Vec3f* ColoredPoint::_internal_mutable_point() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.point_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::VCCSim::Vec3f>(GetArena());
+    _impl_.point_ = reinterpret_cast<::VCCSim::Vec3f*>(p);
+  }
+  return _impl_.point_;
+}
+inline ::VCCSim::Vec3f* ColoredPoint::mutable_point() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  _impl_._has_bits_[0] |= 0x00000001u;
+  ::VCCSim::Vec3f* _msg = _internal_mutable_point();
+  // @@protoc_insertion_point(field_mutable:VCCSim.ColoredPoint.point)
+  return _msg;
+}
+inline void ColoredPoint::set_allocated_point(::VCCSim::Vec3f* value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete (_impl_.point_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = (value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    _impl_._has_bits_[0] |= 0x00000001u;
+  } else {
+    _impl_._has_bits_[0] &= ~0x00000001u;
+  }
+
+  _impl_.point_ = reinterpret_cast<::VCCSim::Vec3f*>(value);
+  // @@protoc_insertion_point(field_set_allocated:VCCSim.ColoredPoint.point)
+}
+
+// uint32 color = 2;
+inline void ColoredPoint::clear_color() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.color_ = 0u;
+}
+inline ::uint32_t ColoredPoint::color() const {
+  // @@protoc_insertion_point(field_get:VCCSim.ColoredPoint.color)
+  return _internal_color();
+}
+inline void ColoredPoint::set_color(::uint32_t value) {
+  _internal_set_color(value);
+  // @@protoc_insertion_point(field_set:VCCSim.ColoredPoint.color)
+}
+inline ::uint32_t ColoredPoint::_internal_color() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.color_;
+}
+inline void ColoredPoint::_internal_set_color(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.color_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// ColoredPointCloud
+
+// repeated .VCCSim.ColoredPoint data = 1;
+inline int ColoredPointCloud::_internal_data_size() const {
+  return _internal_data().size();
+}
+inline int ColoredPointCloud::data_size() const {
+  return _internal_data_size();
+}
+inline void ColoredPointCloud::clear_data() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.data_.Clear();
+}
+inline ::VCCSim::ColoredPoint* ColoredPointCloud::mutable_data(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:VCCSim.ColoredPointCloud.data)
+  return _internal_mutable_data()->Mutable(index);
+}
+inline ::google::protobuf::RepeatedPtrField<::VCCSim::ColoredPoint>* ColoredPointCloud::mutable_data()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable_list:VCCSim.ColoredPointCloud.data)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_data();
+}
+inline const ::VCCSim::ColoredPoint& ColoredPointCloud::data(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:VCCSim.ColoredPointCloud.data)
+  return _internal_data().Get(index);
+}
+inline ::VCCSim::ColoredPoint* ColoredPointCloud::add_data() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::VCCSim::ColoredPoint* _add = _internal_mutable_data()->Add();
+  // @@protoc_insertion_point(field_add:VCCSim.ColoredPointCloud.data)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::VCCSim::ColoredPoint>& ColoredPointCloud::data() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:VCCSim.ColoredPointCloud.data)
+  return _internal_data();
+}
+inline const ::google::protobuf::RepeatedPtrField<::VCCSim::ColoredPoint>&
+ColoredPointCloud::_internal_data() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.data_;
+}
+inline ::google::protobuf::RepeatedPtrField<::VCCSim::ColoredPoint>*
+ColoredPointCloud::_internal_mutable_data() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.data_;
 }
 
 // -------------------------------------------------------------------
@@ -6485,308 +6975,474 @@ inline void LidarDataAndOdom::set_allocated_odom(::VCCSim::Odometry* value) {
 
 // -------------------------------------------------------------------
 
-// RGBImageData
+// RGBData
 
 // uint32 width = 1;
-inline void RGBImageData::clear_width() {
+inline void RGBData::clear_width() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.width_ = 0u;
 }
-inline ::uint32_t RGBImageData::width() const {
-  // @@protoc_insertion_point(field_get:VCCSim.RGBImageData.width)
+inline ::uint32_t RGBData::width() const {
+  // @@protoc_insertion_point(field_get:VCCSim.RGBData.width)
   return _internal_width();
 }
-inline void RGBImageData::set_width(::uint32_t value) {
+inline void RGBData::set_width(::uint32_t value) {
   _internal_set_width(value);
-  // @@protoc_insertion_point(field_set:VCCSim.RGBImageData.width)
+  // @@protoc_insertion_point(field_set:VCCSim.RGBData.width)
 }
-inline ::uint32_t RGBImageData::_internal_width() const {
+inline ::uint32_t RGBData::_internal_width() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return _impl_.width_;
 }
-inline void RGBImageData::_internal_set_width(::uint32_t value) {
+inline void RGBData::_internal_set_width(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.width_ = value;
 }
 
 // uint32 height = 2;
-inline void RGBImageData::clear_height() {
+inline void RGBData::clear_height() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.height_ = 0u;
 }
-inline ::uint32_t RGBImageData::height() const {
-  // @@protoc_insertion_point(field_get:VCCSim.RGBImageData.height)
+inline ::uint32_t RGBData::height() const {
+  // @@protoc_insertion_point(field_get:VCCSim.RGBData.height)
   return _internal_height();
 }
-inline void RGBImageData::set_height(::uint32_t value) {
+inline void RGBData::set_height(::uint32_t value) {
   _internal_set_height(value);
-  // @@protoc_insertion_point(field_set:VCCSim.RGBImageData.height)
+  // @@protoc_insertion_point(field_set:VCCSim.RGBData.height)
 }
-inline ::uint32_t RGBImageData::_internal_height() const {
+inline ::uint32_t RGBData::_internal_height() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return _impl_.height_;
 }
-inline void RGBImageData::_internal_set_height(::uint32_t value) {
+inline void RGBData::_internal_set_height(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.height_ = value;
 }
 
 // bytes data = 3;
-inline void RGBImageData::clear_data() {
+inline void RGBData::clear_data() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.data_.ClearToEmpty();
 }
-inline const std::string& RGBImageData::data() const
+inline const std::string& RGBData::data() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:VCCSim.RGBImageData.data)
+  // @@protoc_insertion_point(field_get:VCCSim.RGBData.data)
   return _internal_data();
 }
 template <typename Arg_, typename... Args_>
-inline PROTOBUF_ALWAYS_INLINE void RGBImageData::set_data(Arg_&& arg,
+inline PROTOBUF_ALWAYS_INLINE void RGBData::set_data(Arg_&& arg,
                                                      Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.data_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
-  // @@protoc_insertion_point(field_set:VCCSim.RGBImageData.data)
+  // @@protoc_insertion_point(field_set:VCCSim.RGBData.data)
 }
-inline std::string* RGBImageData::mutable_data() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+inline std::string* RGBData::mutable_data() ABSL_ATTRIBUTE_LIFETIME_BOUND {
   std::string* _s = _internal_mutable_data();
-  // @@protoc_insertion_point(field_mutable:VCCSim.RGBImageData.data)
+  // @@protoc_insertion_point(field_mutable:VCCSim.RGBData.data)
   return _s;
 }
-inline const std::string& RGBImageData::_internal_data() const {
+inline const std::string& RGBData::_internal_data() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return _impl_.data_.Get();
 }
-inline void RGBImageData::_internal_set_data(const std::string& value) {
+inline void RGBData::_internal_set_data(const std::string& value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.data_.Set(value, GetArena());
 }
-inline std::string* RGBImageData::_internal_mutable_data() {
+inline std::string* RGBData::_internal_mutable_data() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   return _impl_.data_.Mutable( GetArena());
 }
-inline std::string* RGBImageData::release_data() {
+inline std::string* RGBData::release_data() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:VCCSim.RGBImageData.data)
+  // @@protoc_insertion_point(field_release:VCCSim.RGBData.data)
   return _impl_.data_.Release();
 }
-inline void RGBImageData::set_allocated_data(std::string* value) {
+inline void RGBData::set_allocated_data(std::string* value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.data_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.data_.IsDefault()) {
     _impl_.data_.Set("", GetArena());
   }
-  // @@protoc_insertion_point(field_set_allocated:VCCSim.RGBImageData.data)
+  // @@protoc_insertion_point(field_set_allocated:VCCSim.RGBData.data)
 }
 
 // uint32 timestamp = 5;
-inline void RGBImageData::clear_timestamp() {
+inline void RGBData::clear_timestamp() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.timestamp_ = 0u;
 }
-inline ::uint32_t RGBImageData::timestamp() const {
-  // @@protoc_insertion_point(field_get:VCCSim.RGBImageData.timestamp)
+inline ::uint32_t RGBData::timestamp() const {
+  // @@protoc_insertion_point(field_get:VCCSim.RGBData.timestamp)
   return _internal_timestamp();
 }
-inline void RGBImageData::set_timestamp(::uint32_t value) {
+inline void RGBData::set_timestamp(::uint32_t value) {
   _internal_set_timestamp(value);
-  // @@protoc_insertion_point(field_set:VCCSim.RGBImageData.timestamp)
+  // @@protoc_insertion_point(field_set:VCCSim.RGBData.timestamp)
 }
-inline ::uint32_t RGBImageData::_internal_timestamp() const {
+inline ::uint32_t RGBData::_internal_timestamp() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return _impl_.timestamp_;
 }
-inline void RGBImageData::_internal_set_timestamp(::uint32_t value) {
+inline void RGBData::_internal_set_timestamp(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.timestamp_ = value;
 }
 
 // -------------------------------------------------------------------
 
-// DepthImageData
+// DepthData
 
 // uint32 width = 1;
-inline void DepthImageData::clear_width() {
+inline void DepthData::clear_width() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.width_ = 0u;
 }
-inline ::uint32_t DepthImageData::width() const {
-  // @@protoc_insertion_point(field_get:VCCSim.DepthImageData.width)
+inline ::uint32_t DepthData::width() const {
+  // @@protoc_insertion_point(field_get:VCCSim.DepthData.width)
   return _internal_width();
 }
-inline void DepthImageData::set_width(::uint32_t value) {
+inline void DepthData::set_width(::uint32_t value) {
   _internal_set_width(value);
-  // @@protoc_insertion_point(field_set:VCCSim.DepthImageData.width)
+  // @@protoc_insertion_point(field_set:VCCSim.DepthData.width)
 }
-inline ::uint32_t DepthImageData::_internal_width() const {
+inline ::uint32_t DepthData::_internal_width() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return _impl_.width_;
 }
-inline void DepthImageData::_internal_set_width(::uint32_t value) {
+inline void DepthData::_internal_set_width(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.width_ = value;
 }
 
 // uint32 height = 2;
-inline void DepthImageData::clear_height() {
+inline void DepthData::clear_height() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.height_ = 0u;
 }
-inline ::uint32_t DepthImageData::height() const {
-  // @@protoc_insertion_point(field_get:VCCSim.DepthImageData.height)
+inline ::uint32_t DepthData::height() const {
+  // @@protoc_insertion_point(field_get:VCCSim.DepthData.height)
   return _internal_height();
 }
-inline void DepthImageData::set_height(::uint32_t value) {
+inline void DepthData::set_height(::uint32_t value) {
   _internal_set_height(value);
-  // @@protoc_insertion_point(field_set:VCCSim.DepthImageData.height)
+  // @@protoc_insertion_point(field_set:VCCSim.DepthData.height)
 }
-inline ::uint32_t DepthImageData::_internal_height() const {
+inline ::uint32_t DepthData::_internal_height() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return _impl_.height_;
 }
-inline void DepthImageData::_internal_set_height(::uint32_t value) {
+inline void DepthData::_internal_set_height(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.height_ = value;
 }
 
 // repeated float data = 3;
-inline int DepthImageData::_internal_data_size() const {
+inline int DepthData::_internal_data_size() const {
   return _internal_data().size();
 }
-inline int DepthImageData::data_size() const {
+inline int DepthData::data_size() const {
   return _internal_data_size();
 }
-inline void DepthImageData::clear_data() {
+inline void DepthData::clear_data() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.data_.Clear();
 }
-inline float DepthImageData::data(int index) const {
-  // @@protoc_insertion_point(field_get:VCCSim.DepthImageData.data)
+inline float DepthData::data(int index) const {
+  // @@protoc_insertion_point(field_get:VCCSim.DepthData.data)
   return _internal_data().Get(index);
 }
-inline void DepthImageData::set_data(int index, float value) {
+inline void DepthData::set_data(int index, float value) {
   _internal_mutable_data()->Set(index, value);
-  // @@protoc_insertion_point(field_set:VCCSim.DepthImageData.data)
+  // @@protoc_insertion_point(field_set:VCCSim.DepthData.data)
 }
-inline void DepthImageData::add_data(float value) {
+inline void DepthData::add_data(float value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _internal_mutable_data()->Add(value);
-  // @@protoc_insertion_point(field_add:VCCSim.DepthImageData.data)
+  // @@protoc_insertion_point(field_add:VCCSim.DepthData.data)
 }
-inline const ::google::protobuf::RepeatedField<float>& DepthImageData::data() const
+inline const ::google::protobuf::RepeatedField<float>& DepthData::data() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_list:VCCSim.DepthImageData.data)
+  // @@protoc_insertion_point(field_list:VCCSim.DepthData.data)
   return _internal_data();
 }
-inline ::google::protobuf::RepeatedField<float>* DepthImageData::mutable_data()
+inline ::google::protobuf::RepeatedField<float>* DepthData::mutable_data()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_mutable_list:VCCSim.DepthImageData.data)
+  // @@protoc_insertion_point(field_mutable_list:VCCSim.DepthData.data)
   ::google::protobuf::internal::TSanWrite(&_impl_);
   return _internal_mutable_data();
 }
 inline const ::google::protobuf::RepeatedField<float>&
-DepthImageData::_internal_data() const {
+DepthData::_internal_data() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return _impl_.data_;
 }
-inline ::google::protobuf::RepeatedField<float>* DepthImageData::_internal_mutable_data() {
+inline ::google::protobuf::RepeatedField<float>* DepthData::_internal_mutable_data() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.data_;
 }
 
 // uint32 timestamp = 4;
-inline void DepthImageData::clear_timestamp() {
+inline void DepthData::clear_timestamp() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.timestamp_ = 0u;
 }
-inline ::uint32_t DepthImageData::timestamp() const {
-  // @@protoc_insertion_point(field_get:VCCSim.DepthImageData.timestamp)
+inline ::uint32_t DepthData::timestamp() const {
+  // @@protoc_insertion_point(field_get:VCCSim.DepthData.timestamp)
   return _internal_timestamp();
 }
-inline void DepthImageData::set_timestamp(::uint32_t value) {
+inline void DepthData::set_timestamp(::uint32_t value) {
   _internal_set_timestamp(value);
-  // @@protoc_insertion_point(field_set:VCCSim.DepthImageData.timestamp)
+  // @@protoc_insertion_point(field_set:VCCSim.DepthData.timestamp)
 }
-inline ::uint32_t DepthImageData::_internal_timestamp() const {
+inline ::uint32_t DepthData::_internal_timestamp() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return _impl_.timestamp_;
 }
-inline void DepthImageData::_internal_set_timestamp(::uint32_t value) {
+inline void DepthData::_internal_set_timestamp(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.timestamp_ = value;
 }
 
 // -------------------------------------------------------------------
 
-// DepthPointCloudData
+// TPointCloud
 
-// repeated .VCCSim.Vec3f data = 1;
-inline int DepthPointCloudData::_internal_data_size() const {
+// .VCCSim.PointCloud data = 1;
+inline bool TPointCloud::has_data() const {
+  bool value = (_impl_._has_bits_[0] & 0x00000001u) != 0;
+  PROTOBUF_ASSUME(!value || _impl_.data_ != nullptr);
+  return value;
+}
+inline void TPointCloud::clear_data() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.data_ != nullptr) _impl_.data_->Clear();
+  _impl_._has_bits_[0] &= ~0x00000001u;
+}
+inline const ::VCCSim::PointCloud& TPointCloud::_internal_data() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::VCCSim::PointCloud* p = _impl_.data_;
+  return p != nullptr ? *p : reinterpret_cast<const ::VCCSim::PointCloud&>(::VCCSim::_PointCloud_default_instance_);
+}
+inline const ::VCCSim::PointCloud& TPointCloud::data() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:VCCSim.TPointCloud.data)
+  return _internal_data();
+}
+inline void TPointCloud::unsafe_arena_set_allocated_data(::VCCSim::PointCloud* value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.data_);
+  }
+  _impl_.data_ = reinterpret_cast<::VCCSim::PointCloud*>(value);
+  if (value != nullptr) {
+    _impl_._has_bits_[0] |= 0x00000001u;
+  } else {
+    _impl_._has_bits_[0] &= ~0x00000001u;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:VCCSim.TPointCloud.data)
+}
+inline ::VCCSim::PointCloud* TPointCloud::release_data() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  _impl_._has_bits_[0] &= ~0x00000001u;
+  ::VCCSim::PointCloud* released = _impl_.data_;
+  _impl_.data_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::VCCSim::PointCloud* TPointCloud::unsafe_arena_release_data() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:VCCSim.TPointCloud.data)
+
+  _impl_._has_bits_[0] &= ~0x00000001u;
+  ::VCCSim::PointCloud* temp = _impl_.data_;
+  _impl_.data_ = nullptr;
+  return temp;
+}
+inline ::VCCSim::PointCloud* TPointCloud::_internal_mutable_data() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.data_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::VCCSim::PointCloud>(GetArena());
+    _impl_.data_ = reinterpret_cast<::VCCSim::PointCloud*>(p);
+  }
+  return _impl_.data_;
+}
+inline ::VCCSim::PointCloud* TPointCloud::mutable_data() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  _impl_._has_bits_[0] |= 0x00000001u;
+  ::VCCSim::PointCloud* _msg = _internal_mutable_data();
+  // @@protoc_insertion_point(field_mutable:VCCSim.TPointCloud.data)
+  return _msg;
+}
+inline void TPointCloud::set_allocated_data(::VCCSim::PointCloud* value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete (_impl_.data_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = (value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    _impl_._has_bits_[0] |= 0x00000001u;
+  } else {
+    _impl_._has_bits_[0] &= ~0x00000001u;
+  }
+
+  _impl_.data_ = reinterpret_cast<::VCCSim::PointCloud*>(value);
+  // @@protoc_insertion_point(field_set_allocated:VCCSim.TPointCloud.data)
+}
+
+// uint32 timestamp = 2;
+inline void TPointCloud::clear_timestamp() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.timestamp_ = 0u;
+}
+inline ::uint32_t TPointCloud::timestamp() const {
+  // @@protoc_insertion_point(field_get:VCCSim.TPointCloud.timestamp)
+  return _internal_timestamp();
+}
+inline void TPointCloud::set_timestamp(::uint32_t value) {
+  _internal_set_timestamp(value);
+  // @@protoc_insertion_point(field_set:VCCSim.TPointCloud.timestamp)
+}
+inline ::uint32_t TPointCloud::_internal_timestamp() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.timestamp_;
+}
+inline void TPointCloud::_internal_set_timestamp(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.timestamp_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// NormalData
+
+// uint32 width = 1;
+inline void NormalData::clear_width() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.width_ = 0u;
+}
+inline ::uint32_t NormalData::width() const {
+  // @@protoc_insertion_point(field_get:VCCSim.NormalData.width)
+  return _internal_width();
+}
+inline void NormalData::set_width(::uint32_t value) {
+  _internal_set_width(value);
+  // @@protoc_insertion_point(field_set:VCCSim.NormalData.width)
+}
+inline ::uint32_t NormalData::_internal_width() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.width_;
+}
+inline void NormalData::_internal_set_width(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.width_ = value;
+}
+
+// uint32 height = 2;
+inline void NormalData::clear_height() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.height_ = 0u;
+}
+inline ::uint32_t NormalData::height() const {
+  // @@protoc_insertion_point(field_get:VCCSim.NormalData.height)
+  return _internal_height();
+}
+inline void NormalData::set_height(::uint32_t value) {
+  _internal_set_height(value);
+  // @@protoc_insertion_point(field_set:VCCSim.NormalData.height)
+}
+inline ::uint32_t NormalData::_internal_height() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.height_;
+}
+inline void NormalData::_internal_set_height(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.height_ = value;
+}
+
+// repeated .VCCSim.Vec3f data = 3;
+inline int NormalData::_internal_data_size() const {
   return _internal_data().size();
 }
-inline int DepthPointCloudData::data_size() const {
+inline int NormalData::data_size() const {
   return _internal_data_size();
 }
-inline void DepthPointCloudData::clear_data() {
+inline void NormalData::clear_data() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.data_.Clear();
 }
-inline ::VCCSim::Vec3f* DepthPointCloudData::mutable_data(int index)
+inline ::VCCSim::Vec3f* NormalData::mutable_data(int index)
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_mutable:VCCSim.DepthPointCloudData.data)
+  // @@protoc_insertion_point(field_mutable:VCCSim.NormalData.data)
   return _internal_mutable_data()->Mutable(index);
 }
-inline ::google::protobuf::RepeatedPtrField<::VCCSim::Vec3f>* DepthPointCloudData::mutable_data()
+inline ::google::protobuf::RepeatedPtrField<::VCCSim::Vec3f>* NormalData::mutable_data()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_mutable_list:VCCSim.DepthPointCloudData.data)
+  // @@protoc_insertion_point(field_mutable_list:VCCSim.NormalData.data)
   ::google::protobuf::internal::TSanWrite(&_impl_);
   return _internal_mutable_data();
 }
-inline const ::VCCSim::Vec3f& DepthPointCloudData::data(int index) const
+inline const ::VCCSim::Vec3f& NormalData::data(int index) const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:VCCSim.DepthPointCloudData.data)
+  // @@protoc_insertion_point(field_get:VCCSim.NormalData.data)
   return _internal_data().Get(index);
 }
-inline ::VCCSim::Vec3f* DepthPointCloudData::add_data() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+inline ::VCCSim::Vec3f* NormalData::add_data() ABSL_ATTRIBUTE_LIFETIME_BOUND {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   ::VCCSim::Vec3f* _add = _internal_mutable_data()->Add();
-  // @@protoc_insertion_point(field_add:VCCSim.DepthPointCloudData.data)
+  // @@protoc_insertion_point(field_add:VCCSim.NormalData.data)
   return _add;
 }
-inline const ::google::protobuf::RepeatedPtrField<::VCCSim::Vec3f>& DepthPointCloudData::data() const
+inline const ::google::protobuf::RepeatedPtrField<::VCCSim::Vec3f>& NormalData::data() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_list:VCCSim.DepthPointCloudData.data)
+  // @@protoc_insertion_point(field_list:VCCSim.NormalData.data)
   return _internal_data();
 }
 inline const ::google::protobuf::RepeatedPtrField<::VCCSim::Vec3f>&
-DepthPointCloudData::_internal_data() const {
+NormalData::_internal_data() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return _impl_.data_;
 }
 inline ::google::protobuf::RepeatedPtrField<::VCCSim::Vec3f>*
-DepthPointCloudData::_internal_mutable_data() {
+NormalData::_internal_mutable_data() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.data_;
 }
 
-// uint32 timestamp = 2;
-inline void DepthPointCloudData::clear_timestamp() {
+// uint32 timestamp = 4;
+inline void NormalData::clear_timestamp() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.timestamp_ = 0u;
 }
-inline ::uint32_t DepthPointCloudData::timestamp() const {
-  // @@protoc_insertion_point(field_get:VCCSim.DepthPointCloudData.timestamp)
+inline ::uint32_t NormalData::timestamp() const {
+  // @@protoc_insertion_point(field_get:VCCSim.NormalData.timestamp)
   return _internal_timestamp();
 }
-inline void DepthPointCloudData::set_timestamp(::uint32_t value) {
+inline void NormalData::set_timestamp(::uint32_t value) {
   _internal_set_timestamp(value);
-  // @@protoc_insertion_point(field_set:VCCSim.DepthPointCloudData.timestamp)
+  // @@protoc_insertion_point(field_set:VCCSim.NormalData.timestamp)
 }
-inline ::uint32_t DepthPointCloudData::_internal_timestamp() const {
+inline ::uint32_t NormalData::_internal_timestamp() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return _impl_.timestamp_;
 }
-inline void DepthPointCloudData::_internal_set_timestamp(::uint32_t value) {
+inline void NormalData::_internal_set_timestamp(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.timestamp_ = value;
 }

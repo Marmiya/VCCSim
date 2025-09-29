@@ -355,8 +355,8 @@ void AVCCHUD::SetupMainCharacter(const FVCCSimConfig& Config, TArray<AActor*> Fo
         }
         if (Component.Get<0>() == ESensorType::SegmentationCamera)
         {
-            if (USegmentationCameraComponent* SegCameraComponent =
-                MainCharacter->FindComponentByClass<USegmentationCameraComponent>())
+            if (USegCameraComponent* SegCameraComponent =
+                MainCharacter->FindComponentByClass<USegCameraComponent>())
             {
                 WidgetInstance->SetSegContext(
                     SegCameraComponent->GetRenderTarget(),
@@ -503,8 +503,8 @@ FRobotGrpcMaps AVCCHUD::SetupActors(const FVCCSimConfig& Config)
             }
             else if (Component.Get<0>() == ESensorType::SegmentationCamera)
             {
-                TArray<USegmentationCameraComponent*> SegmentationCameras;
-                RobotPawn->GetComponents<USegmentationCameraComponent>(SegmentationCameras);
+                TArray<USegCameraComponent*> SegmentationCameras;
+                RobotPawn->GetComponents<USegCameraComponent>(SegmentationCameras);
                 if (SegmentationCameras.Num() == 0)
                 {
                     UE_LOG(LogVCCHUD, Warning,
