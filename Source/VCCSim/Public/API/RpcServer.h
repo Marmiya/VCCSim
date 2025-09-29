@@ -44,6 +44,7 @@ struct FRobotGrpcMaps
 	struct FRobotMaps
 	{
 		std::map<std::string, AActor*> DroneMap;
+		std::map<std::string, AActor*> FlashMap;
 		std::map<std::string, AActor*> CarMap;
 	};
 

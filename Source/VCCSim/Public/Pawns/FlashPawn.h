@@ -38,6 +38,7 @@ public:
 	void SetPath(const TArray<FVector>& Positions, const TArray<FRotator>& Rotations);
 	UFUNCTION(BlueprintCallable, Category = "API")
 	bool IsReady() const { return bAcqReady; }
+	// This function is used to move to the next position in the path or panel.
 	UFUNCTION(BlueprintCallable, Category = "API")
 	void MoveToNext() { bMoveReady = true; bAcqReady = false; }
 

@@ -1090,30 +1090,36 @@ const char descriptor_table_protodef_VCCSim_2eproto[] ABSL_ATTRIBUTE_SECTION_VAR
     "e\022\021.VCCSim.DronePose\032\016.VCCSim.Status\0222\n\r"
     "SendDronePath\022\021.VCCSim.DronePath\032\016.VCCSi"
     "m.Status\022/\n\nMoveToNext\022\021.VCCSim.RobotNam"
-    "e\032\016.VCCSim.Status2\320\001\n\nCarService\0221\n\nGetC"
-    "arOdom\022\021.VCCSim.RobotName\032\020.VCCSim.Odome"
-    "try\022.\n\013SendCarPose\022\017.VCCSim.CarPose\032\016.VC"
-    "CSim.Status\022.\n\013SendCarPath\022\017.VCCSim.CarP"
-    "ath\032\016.VCCSim.Status\022/\n\nMoveToNext\022\021.VCCS"
-    "im.RobotName\032\016.VCCSim.Status2\243\001\n\013MeshSer"
-    "vice\022,\n\010SendMesh\022\020.VCCSim.MeshData\032\016.VCC"
-    "Sim.Status\0222\n\016SendGlobalMesh\022\020.VCCSim.Me"
-    "shData\032\016.VCCSim.MeshID\0222\n\020RemoveGlobalMe"
-    "sh\022\016.VCCSim.MeshID\032\016.VCCSim.Status2Y\n\021Po"
-    "intCloudService\022D\n\027SendPointCloudWithCol"
-    "or\022\031.VCCSim.ColoredPointCloud\032\016.VCCSim.S"
-    "tatus2\271\001\n\020SafeCheckService\0224\n\017CheckSafet"
-    "yPawn\022\021.VCCSim.RobotName\032\016.VCCSim.Status"
-    "\0224\n\023CheckSafetyPosition\022\r.VCCSim.Vec3f\032\016"
-    ".VCCSim.Status\0229\n\024CheckSafetyDronePath\022\021"
-    ".VCCSim.DronePath\032\016.VCCSim.Statusb\006proto"
-    "3"
+    "e\032\016.VCCSim.Status2\211\002\n\014FlashService\022/\n\014Ge"
+    "tFlashPose\022\021.VCCSim.RobotName\032\014.VCCSim.P"
+    "ose\0222\n\rSendFlashPose\022\021.VCCSim.DronePose\032"
+    "\016.VCCSim.Status\0222\n\rSendFlashPath\022\021.VCCSi"
+    "m.DronePath\032\016.VCCSim.Status\022/\n\nCheckRead"
+    "y\022\021.VCCSim.RobotName\032\016.VCCSim.Status\022/\n\n"
+    "MoveToNext\022\021.VCCSim.RobotName\032\016.VCCSim.S"
+    "tatus2\320\001\n\nCarService\0221\n\nGetCarOdom\022\021.VCC"
+    "Sim.RobotName\032\020.VCCSim.Odometry\022.\n\013SendC"
+    "arPose\022\017.VCCSim.CarPose\032\016.VCCSim.Status\022"
+    ".\n\013SendCarPath\022\017.VCCSim.CarPath\032\016.VCCSim"
+    ".Status\022/\n\nMoveToNext\022\021.VCCSim.RobotName"
+    "\032\016.VCCSim.Status2\243\001\n\013MeshService\022,\n\010Send"
+    "Mesh\022\020.VCCSim.MeshData\032\016.VCCSim.Status\0222"
+    "\n\016SendGlobalMesh\022\020.VCCSim.MeshData\032\016.VCC"
+    "Sim.MeshID\0222\n\020RemoveGlobalMesh\022\016.VCCSim."
+    "MeshID\032\016.VCCSim.Status2Y\n\021PointCloudServ"
+    "ice\022D\n\027SendPointCloudWithColor\022\031.VCCSim."
+    "ColoredPointCloud\032\016.VCCSim.Status2\271\001\n\020Sa"
+    "feCheckService\0224\n\017CheckSafetyPawn\022\021.VCCS"
+    "im.RobotName\032\016.VCCSim.Status\0224\n\023CheckSaf"
+    "etyPosition\022\r.VCCSim.Vec3f\032\016.VCCSim.Stat"
+    "us\0229\n\024CheckSafetyDronePath\022\021.VCCSim.Dron"
+    "ePath\032\016.VCCSim.Statusb\006proto3"
 };
 static ::absl::once_flag descriptor_table_VCCSim_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_VCCSim_2eproto = {
     false,
     false,
-    2961,
+    3229,
     descriptor_table_protodef_VCCSim_2eproto,
     "VCCSim.proto",
     &descriptor_table_VCCSim_2eproto_once,

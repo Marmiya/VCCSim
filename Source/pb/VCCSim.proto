@@ -157,6 +157,14 @@ service DroneService {
   rpc MoveToNext (RobotName) returns (Status);
 }
 
+service FlashService {
+  rpc GetFlashPose (RobotName) returns (Pose);
+  rpc SendFlashPose (DronePose) returns (Status);
+  rpc SendFlashPath (DronePath) returns (Status);
+  rpc CheckReady (RobotName) returns (Status);
+  rpc MoveToNext (RobotName) returns (Status);
+}
+
 service CarService {
   rpc GetCarOdom (RobotName) returns (Odometry);
   rpc SendCarPose (CarPose) returns (Status);

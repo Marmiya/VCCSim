@@ -1037,3 +1037,256 @@ void SendCarPathCall::ProcessRequest()
         Response.set_status(false);
     }
 }
+
+/* --------------------------Flash Handler---------------------------------- */
+
+GetFlashPoseCall::GetFlashPoseCall(
+    VCCSim::FlashService::AsyncService* Service,
+    grpc::ServerCompletionQueue* CompletionQueue,
+    const std::map<std::string, AFlashPawn*>& rcmap)
+        : AsyncCallTemplateM(Service, CompletionQueue, rcmap)
+{
+    Proceed(true);
+}
+
+void GetFlashPoseCall::PrepareNextCall()
+{
+    new GetFlashPoseCall(Service, CompletionQueue, RCMap_);
+}
+
+void GetFlashPoseCall::InitializeRequest()
+{
+    Service->RequestGetFlashPose(
+        &Context, &Request, &Responder, CompletionQueue, CompletionQueue, this);
+}
+
+void GetFlashPoseCall::ProcessRequest()
+{
+    if (RCMap_.contains(Request.name()))
+    {
+        const auto Flash = RCMap_[Request.name()];
+        const FVector Location = Flash->GetActorLocation();
+        const FRotator Rotation = Flash->GetActorRotation();
+
+        VCCSim::Vec3f* Position = Response.mutable_position();
+        Position->set_x(Location.X);
+        Position->set_y(Location.Y);
+        Position->set_z(Location.Z);
+
+        VCCSim::Rotation* Rot = Response.mutable_rotation();
+        FQuat Quat = Rotation.Quaternion();
+        Rot->set_x(Quat.X);
+        Rot->set_y(Quat.Y);
+        Rot->set_z(Quat.Z);
+        Rot->set_w(Quat.W);
+    }
+    else
+    {
+        UE_LOG(LogGRPCCall, Warning, TEXT("GetFlashPoseCall: "
+                                      "Flash not found!"));
+    }
+}
+
+SendFlashPoseCall::SendFlashPoseCall(
+    VCCSim::FlashService::AsyncService* Service,
+    grpc::ServerCompletionQueue* CompletionQueue,
+    const std::map<std::string, AFlashPawn*>& rcmap)
+        : AsyncCallTemplateM(Service, CompletionQueue, rcmap)
+{
+    Proceed(true);
+}
+
+void SendFlashPoseCall::PrepareNextCall()
+{
+    new SendFlashPoseCall(Service, CompletionQueue, RCMap_);
+}
+
+void SendFlashPoseCall::InitializeRequest()
+{
+    Service->RequestSendFlashPose(
+        &Context, &Request, &Responder, CompletionQueue, CompletionQueue, this);
+}
+
+void SendFlashPoseCall::ProcessRequest()
+{
+    if (RCMap_.contains(Request.name()))
+    {
+        if (AFlashPawn* Flash = RCMap_[Request.name()])
+        {
+            const VCCSim::Pose& PoseData = Request.pose();
+            const FVector TargetLocation(
+                PoseData.position().x(),
+                PoseData.position().y(),
+                PoseData.position().z()
+            );
+            const FQuat TargetQuat(
+                PoseData.rotation().x(),
+                PoseData.rotation().y(),
+                PoseData.rotation().z(),
+                PoseData.rotation().w()
+            );
+            const FRotator TargetRotation = TargetQuat.Rotator();
+            Flash->SetTarget(TargetLocation, TargetRotation);
+            Response.set_status(true);
+        }
+        else
+        {
+            UE_LOG(LogGRPCCall, Warning, TEXT("SendFlashPoseCall: "
+                                          "Flash not found!"));
+            Response.set_status(false);
+        }
+    }
+    else
+    {
+        UE_LOG(LogGRPCCall, Warning, TEXT("SendFlashPoseCall: "
+                                      "Flash not found!"));
+        Response.set_status(false);
+    }
+}
+
+SendFlashPathCall::SendFlashPathCall(
+    VCCSim::FlashService::AsyncService* Service,
+    grpc::ServerCompletionQueue* CompletionQueue,
+    const std::map<std::string, AFlashPawn*>& rcmap)
+        : AsyncCallTemplateM(Service, CompletionQueue, rcmap)
+{
+    Proceed(true);
+}
+
+void SendFlashPathCall::PrepareNextCall()
+{
+    new SendFlashPathCall(Service, CompletionQueue, RCMap_);
+}
+
+void SendFlashPathCall::InitializeRequest()
+{
+    Service->RequestSendFlashPath(
+        &Context, &Request, &Responder, CompletionQueue, CompletionQueue, this);
+}
+
+void SendFlashPathCall::ProcessRequest()
+{
+    if (RCMap_.contains(Request.name()))
+    {
+        if (AFlashPawn* Flash = RCMap_[Request.name()])
+        {
+            TArray<FVector> Positions;
+            TArray<FRotator> Rotations;
+            for (const auto& PoseData : Request.path())
+            {
+                Positions.Add(FVector(
+                    PoseData.position().x(),
+                    PoseData.position().y(),
+                    PoseData.position().z()));
+
+                FQuat Quat(
+                    PoseData.rotation().x(),
+                    PoseData.rotation().y(),
+                    PoseData.rotation().z(),
+                    PoseData.rotation().w());
+                Rotations.Add(Quat.Rotator());
+            }
+            Flash->SetPath(Positions, Rotations);
+            Response.set_status(true);
+        }
+        else
+        {
+            UE_LOG(LogGRPCCall, Warning, TEXT("SendFlashPathCall: "
+                                          "Flash not found!"));
+            Response.set_status(false);
+        }
+    }
+    else
+    {
+        UE_LOG(LogGRPCCall, Warning, TEXT("SendFlashPathCall: "
+                                      "Flash not found!"));
+        Response.set_status(false);
+    }
+}
+
+CheckFlashReadyCall::CheckFlashReadyCall(
+    VCCSim::FlashService::AsyncService* Service,
+    grpc::ServerCompletionQueue* CompletionQueue,
+    const std::map<std::string, AFlashPawn*>& rcmap)
+        : AsyncCallTemplateM(Service, CompletionQueue, rcmap)
+{
+    Proceed(true);
+}
+
+void CheckFlashReadyCall::PrepareNextCall()
+{
+    new CheckFlashReadyCall(Service, CompletionQueue, RCMap_);
+}
+
+void CheckFlashReadyCall::InitializeRequest()
+{
+    Service->RequestCheckReady(
+        &Context, &Request, &Responder, CompletionQueue, CompletionQueue, this);
+}
+
+void CheckFlashReadyCall::ProcessRequest()
+{
+    if (RCMap_.contains(Request.name()))
+    {
+        if (AFlashPawn* Flash = RCMap_[Request.name()])
+        {
+            Response.set_status(Flash->IsReady());
+        }
+        else
+        {
+            UE_LOG(LogGRPCCall, Warning, TEXT("CheckFlashReadyCall: "
+                                          "Flash not found!"));
+            Response.set_status(false);
+        }
+    }
+    else
+    {
+        UE_LOG(LogGRPCCall, Warning, TEXT("CheckFlashReadyCall: "
+                                      "Flash not found!"));
+        Response.set_status(false);
+    }
+}
+
+FlashMoveToNextCall::FlashMoveToNextCall(
+    VCCSim::FlashService::AsyncService* Service,
+    grpc::ServerCompletionQueue* CompletionQueue,
+    const std::map<std::string, AFlashPawn*>& rcmap)
+        : AsyncCallTemplateM(Service, CompletionQueue, rcmap)
+{
+    Proceed(true);
+}
+
+void FlashMoveToNextCall::PrepareNextCall()
+{
+    new FlashMoveToNextCall(Service, CompletionQueue, RCMap_);
+}
+
+void FlashMoveToNextCall::InitializeRequest()
+{
+    Service->RequestMoveToNext(
+        &Context, &Request, &Responder, CompletionQueue, CompletionQueue, this);
+}
+
+void FlashMoveToNextCall::ProcessRequest()
+{
+    if (RCMap_.contains(Request.name()))
+    {
+        if (AFlashPawn* Flash = RCMap_[Request.name()])
+        {
+            Flash->MoveToNext();
+            Response.set_status(true);
+        }
+        else
+        {
+            UE_LOG(LogGRPCCall, Warning, TEXT("FlashMoveToNextCall: "
+                                          "Flash not found!"));
+            Response.set_status(false);
+        }
+    }
+    else
+    {
+        UE_LOG(LogGRPCCall, Warning, TEXT("FlashMoveToNextCall: "
+                                      "Flash not found!"));
+        Response.set_status(false);
+    }
+}

@@ -63,6 +63,7 @@ public:
     	
     	VCCSim::DroneService::AsyncService DroneService;
         VCCSim::CarService::AsyncService CarService;
+        VCCSim::FlashService::AsyncService FlashService;
     	VCCSim::LidarService::AsyncService LidarService;
     	VCCSim::CameraService::AsyncService CameraService;
     	VCCSim::MeshService::AsyncService MeshService;
@@ -77,6 +78,10 @@ public:
     	if (!RGrpcMaps.RMaps.CarMap.empty())
     	{
 			Builder.RegisterService(&CarService);
+    	}
+    	if (!RGrpcMaps.RMaps.FlashMap.empty())
+    	{
+			Builder.RegisterService(&FlashService);
     	}
     	if (!RGrpcMaps.RCMaps.LiDARMap.empty())
     	{
@@ -121,6 +126,18 @@ public:
                 new GetCarOdomCall(&CarService, CompletionQueue.get(), CarMap);
                 new SendCarPoseCall(&CarService, CompletionQueue.get(), CarMap);
                 new SendCarPathCall(&CarService, CompletionQueue.get(), CarMap);
+            }
+            if (!RGrpcMaps.RMaps.FlashMap.empty())
+            {
+                for (const auto& Pair : RGrpcMaps.RMaps.FlashMap)
+                {
+                    FlashMap[Pair.first] = Cast<AFlashPawn>(Pair.second);
+                }
+                new GetFlashPoseCall(&FlashService, CompletionQueue.get(), FlashMap);
+                new SendFlashPoseCall(&FlashService, CompletionQueue.get(), FlashMap);
+                new SendFlashPathCall(&FlashService, CompletionQueue.get(), FlashMap);
+                new CheckFlashReadyCall(&FlashService, CompletionQueue.get(), FlashMap);
+                new FlashMoveToNextCall(&FlashService, CompletionQueue.get(), FlashMap);
             }
         	if (!RGrpcMaps.RCMaps.LiDARMap.empty())
         	{

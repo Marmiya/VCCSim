@@ -425,6 +425,78 @@ protected:
     virtual void ProcessRequest() override final;
 };
 
+/* --------------------------Flash Handler---------------------------------- */
+
+class GetFlashPoseCall final : public AsyncCallTemplateM<VCCSim::RobotName,
+    VCCSim::Pose, VCCSim::FlashService::AsyncService,
+    std::map<std::string, AFlashPawn*>>
+{
+public:
+    GetFlashPoseCall(VCCSim::FlashService::AsyncService* Service,
+        grpc::ServerCompletionQueue* CompletionQueue,
+        const std::map<std::string, AFlashPawn*>& rcmap);
+protected:
+    virtual void PrepareNextCall() override final;
+    virtual void InitializeRequest() override final;
+    virtual void ProcessRequest() override final;
+};
+
+class SendFlashPoseCall : public AsyncCallTemplateM<VCCSim::DronePose,
+    VCCSim::Status, VCCSim::FlashService::AsyncService,
+    std::map<std::string, AFlashPawn*>>
+{
+public:
+    SendFlashPoseCall(VCCSim::FlashService::AsyncService* Service,
+        grpc::ServerCompletionQueue* CompletionQueue,
+        const std::map<std::string, AFlashPawn*>& rcmap);
+protected:
+    virtual void PrepareNextCall() override final;
+    virtual void InitializeRequest() override final;
+    virtual void ProcessRequest() override final;
+};
+
+class SendFlashPathCall : public AsyncCallTemplateM<VCCSim::DronePath,
+    VCCSim::Status, VCCSim::FlashService::AsyncService,
+    std::map<std::string, AFlashPawn*>>
+{
+public:
+    SendFlashPathCall(VCCSim::FlashService::AsyncService* Service,
+        grpc::ServerCompletionQueue* CompletionQueue,
+        const std::map<std::string, AFlashPawn*>& rcmap);
+protected:
+    virtual void PrepareNextCall() override final;
+    virtual void InitializeRequest() override final;
+    virtual void ProcessRequest() override final;
+};
+
+class CheckFlashReadyCall : public AsyncCallTemplateM<VCCSim::RobotName,
+    VCCSim::Status, VCCSim::FlashService::AsyncService,
+    std::map<std::string, AFlashPawn*>>
+{
+public:
+    CheckFlashReadyCall(VCCSim::FlashService::AsyncService* Service,
+        grpc::ServerCompletionQueue* CompletionQueue,
+        const std::map<std::string, AFlashPawn*>& rcmap);
+protected:
+    virtual void PrepareNextCall() override final;
+    virtual void InitializeRequest() override final;
+    virtual void ProcessRequest() override final;
+};
+
+class FlashMoveToNextCall : public AsyncCallTemplateM<VCCSim::RobotName,
+    VCCSim::Status, VCCSim::FlashService::AsyncService,
+    std::map<std::string, AFlashPawn*>>
+{
+public:
+    FlashMoveToNextCall(VCCSim::FlashService::AsyncService* Service,
+        grpc::ServerCompletionQueue* CompletionQueue,
+        const std::map<std::string, AFlashPawn*>& rcmap);
+protected:
+    virtual void PrepareNextCall() override final;
+    virtual void InitializeRequest() override final;
+    virtual void ProcessRequest() override final;
+};
+
 
 /* --------------------------Template implementation----------------------- */
 

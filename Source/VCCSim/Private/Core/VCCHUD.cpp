@@ -419,6 +419,10 @@ FRobotGrpcMaps AVCCHUD::SetupActors(const FVCCSimConfig& Config)
         {
             RGrpcMaps.RMaps.CarMap[RobotTagStd] = RobotPawn;
         }
+        else if (Robot.Type == EPawnType::Flash)
+        {
+            RGrpcMaps.RMaps.FlashMap[RobotTagStd] = RobotPawn;
+        }
         else
         {
             UE_LOG(LogVCCHUD, Error, TEXT("AVCCHUD::SetupActors:"

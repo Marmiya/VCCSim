@@ -2269,6 +2269,841 @@ class DroneService final {
   typedef WithStreamedUnaryMethod_GetDronePose<WithStreamedUnaryMethod_SendDronePose<WithStreamedUnaryMethod_SendDronePath<WithStreamedUnaryMethod_MoveToNext<Service > > > > StreamedService;
 };
 
+class FlashService final {
+ public:
+  static constexpr char const* service_full_name() {
+    return "VCCSim.FlashService";
+  }
+  class StubInterface {
+   public:
+    virtual ~StubInterface() {}
+    virtual ::grpc::Status GetFlashPose(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::VCCSim::Pose* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Pose>> AsyncGetFlashPose(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Pose>>(AsyncGetFlashPoseRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Pose>> PrepareAsyncGetFlashPose(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Pose>>(PrepareAsyncGetFlashPoseRaw(context, request, cq));
+    }
+    virtual ::grpc::Status SendFlashPose(::grpc::ClientContext* context, const ::VCCSim::DronePose& request, ::VCCSim::Status* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Status>> AsyncSendFlashPose(::grpc::ClientContext* context, const ::VCCSim::DronePose& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Status>>(AsyncSendFlashPoseRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Status>> PrepareAsyncSendFlashPose(::grpc::ClientContext* context, const ::VCCSim::DronePose& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Status>>(PrepareAsyncSendFlashPoseRaw(context, request, cq));
+    }
+    virtual ::grpc::Status SendFlashPath(::grpc::ClientContext* context, const ::VCCSim::DronePath& request, ::VCCSim::Status* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Status>> AsyncSendFlashPath(::grpc::ClientContext* context, const ::VCCSim::DronePath& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Status>>(AsyncSendFlashPathRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Status>> PrepareAsyncSendFlashPath(::grpc::ClientContext* context, const ::VCCSim::DronePath& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Status>>(PrepareAsyncSendFlashPathRaw(context, request, cq));
+    }
+    virtual ::grpc::Status CheckReady(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::VCCSim::Status* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Status>> AsyncCheckReady(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Status>>(AsyncCheckReadyRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Status>> PrepareAsyncCheckReady(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Status>>(PrepareAsyncCheckReadyRaw(context, request, cq));
+    }
+    virtual ::grpc::Status MoveToNext(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::VCCSim::Status* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Status>> AsyncMoveToNext(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Status>>(AsyncMoveToNextRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Status>> PrepareAsyncMoveToNext(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Status>>(PrepareAsyncMoveToNextRaw(context, request, cq));
+    }
+    class async_interface {
+     public:
+      virtual ~async_interface() {}
+      virtual void GetFlashPose(::grpc::ClientContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Pose* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void GetFlashPose(::grpc::ClientContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Pose* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      virtual void SendFlashPose(::grpc::ClientContext* context, const ::VCCSim::DronePose* request, ::VCCSim::Status* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void SendFlashPose(::grpc::ClientContext* context, const ::VCCSim::DronePose* request, ::VCCSim::Status* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      virtual void SendFlashPath(::grpc::ClientContext* context, const ::VCCSim::DronePath* request, ::VCCSim::Status* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void SendFlashPath(::grpc::ClientContext* context, const ::VCCSim::DronePath* request, ::VCCSim::Status* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      virtual void CheckReady(::grpc::ClientContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Status* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void CheckReady(::grpc::ClientContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Status* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      virtual void MoveToNext(::grpc::ClientContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Status* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void MoveToNext(::grpc::ClientContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Status* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+    };
+    typedef class async_interface experimental_async_interface;
+    virtual class async_interface* async() { return nullptr; }
+    class async_interface* experimental_async() { return async(); }
+   private:
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Pose>* AsyncGetFlashPoseRaw(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Pose>* PrepareAsyncGetFlashPoseRaw(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Status>* AsyncSendFlashPoseRaw(::grpc::ClientContext* context, const ::VCCSim::DronePose& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Status>* PrepareAsyncSendFlashPoseRaw(::grpc::ClientContext* context, const ::VCCSim::DronePose& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Status>* AsyncSendFlashPathRaw(::grpc::ClientContext* context, const ::VCCSim::DronePath& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Status>* PrepareAsyncSendFlashPathRaw(::grpc::ClientContext* context, const ::VCCSim::DronePath& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Status>* AsyncCheckReadyRaw(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Status>* PrepareAsyncCheckReadyRaw(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Status>* AsyncMoveToNextRaw(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::VCCSim::Status>* PrepareAsyncMoveToNextRaw(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) = 0;
+  };
+  class Stub final : public StubInterface {
+   public:
+    Stub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options = ::grpc::StubOptions());
+    ::grpc::Status GetFlashPose(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::VCCSim::Pose* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Pose>> AsyncGetFlashPose(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Pose>>(AsyncGetFlashPoseRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Pose>> PrepareAsyncGetFlashPose(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Pose>>(PrepareAsyncGetFlashPoseRaw(context, request, cq));
+    }
+    ::grpc::Status SendFlashPose(::grpc::ClientContext* context, const ::VCCSim::DronePose& request, ::VCCSim::Status* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Status>> AsyncSendFlashPose(::grpc::ClientContext* context, const ::VCCSim::DronePose& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Status>>(AsyncSendFlashPoseRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Status>> PrepareAsyncSendFlashPose(::grpc::ClientContext* context, const ::VCCSim::DronePose& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Status>>(PrepareAsyncSendFlashPoseRaw(context, request, cq));
+    }
+    ::grpc::Status SendFlashPath(::grpc::ClientContext* context, const ::VCCSim::DronePath& request, ::VCCSim::Status* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Status>> AsyncSendFlashPath(::grpc::ClientContext* context, const ::VCCSim::DronePath& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Status>>(AsyncSendFlashPathRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Status>> PrepareAsyncSendFlashPath(::grpc::ClientContext* context, const ::VCCSim::DronePath& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Status>>(PrepareAsyncSendFlashPathRaw(context, request, cq));
+    }
+    ::grpc::Status CheckReady(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::VCCSim::Status* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Status>> AsyncCheckReady(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Status>>(AsyncCheckReadyRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Status>> PrepareAsyncCheckReady(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Status>>(PrepareAsyncCheckReadyRaw(context, request, cq));
+    }
+    ::grpc::Status MoveToNext(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::VCCSim::Status* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Status>> AsyncMoveToNext(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Status>>(AsyncMoveToNextRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Status>> PrepareAsyncMoveToNext(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::VCCSim::Status>>(PrepareAsyncMoveToNextRaw(context, request, cq));
+    }
+    class async final :
+      public StubInterface::async_interface {
+     public:
+      void GetFlashPose(::grpc::ClientContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Pose* response, std::function<void(::grpc::Status)>) override;
+      void GetFlashPose(::grpc::ClientContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Pose* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void SendFlashPose(::grpc::ClientContext* context, const ::VCCSim::DronePose* request, ::VCCSim::Status* response, std::function<void(::grpc::Status)>) override;
+      void SendFlashPose(::grpc::ClientContext* context, const ::VCCSim::DronePose* request, ::VCCSim::Status* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void SendFlashPath(::grpc::ClientContext* context, const ::VCCSim::DronePath* request, ::VCCSim::Status* response, std::function<void(::grpc::Status)>) override;
+      void SendFlashPath(::grpc::ClientContext* context, const ::VCCSim::DronePath* request, ::VCCSim::Status* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void CheckReady(::grpc::ClientContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Status* response, std::function<void(::grpc::Status)>) override;
+      void CheckReady(::grpc::ClientContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Status* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void MoveToNext(::grpc::ClientContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Status* response, std::function<void(::grpc::Status)>) override;
+      void MoveToNext(::grpc::ClientContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Status* response, ::grpc::ClientUnaryReactor* reactor) override;
+     private:
+      friend class Stub;
+      explicit async(Stub* stub): stub_(stub) { }
+      Stub* stub() { return stub_; }
+      Stub* stub_;
+    };
+    class async* async() override { return &async_stub_; }
+
+   private:
+    std::shared_ptr< ::grpc::ChannelInterface> channel_;
+    class async async_stub_{this};
+    ::grpc::ClientAsyncResponseReader< ::VCCSim::Pose>* AsyncGetFlashPoseRaw(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::VCCSim::Pose>* PrepareAsyncGetFlashPoseRaw(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::VCCSim::Status>* AsyncSendFlashPoseRaw(::grpc::ClientContext* context, const ::VCCSim::DronePose& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::VCCSim::Status>* PrepareAsyncSendFlashPoseRaw(::grpc::ClientContext* context, const ::VCCSim::DronePose& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::VCCSim::Status>* AsyncSendFlashPathRaw(::grpc::ClientContext* context, const ::VCCSim::DronePath& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::VCCSim::Status>* PrepareAsyncSendFlashPathRaw(::grpc::ClientContext* context, const ::VCCSim::DronePath& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::VCCSim::Status>* AsyncCheckReadyRaw(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::VCCSim::Status>* PrepareAsyncCheckReadyRaw(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::VCCSim::Status>* AsyncMoveToNextRaw(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::VCCSim::Status>* PrepareAsyncMoveToNextRaw(::grpc::ClientContext* context, const ::VCCSim::RobotName& request, ::grpc::CompletionQueue* cq) override;
+    const ::grpc::internal::RpcMethod rpcmethod_GetFlashPose_;
+    const ::grpc::internal::RpcMethod rpcmethod_SendFlashPose_;
+    const ::grpc::internal::RpcMethod rpcmethod_SendFlashPath_;
+    const ::grpc::internal::RpcMethod rpcmethod_CheckReady_;
+    const ::grpc::internal::RpcMethod rpcmethod_MoveToNext_;
+  };
+  static std::unique_ptr<Stub> NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options = ::grpc::StubOptions());
+
+  class Service : public ::grpc::Service {
+   public:
+    Service();
+    virtual ~Service();
+    virtual ::grpc::Status GetFlashPose(::grpc::ServerContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Pose* response);
+    virtual ::grpc::Status SendFlashPose(::grpc::ServerContext* context, const ::VCCSim::DronePose* request, ::VCCSim::Status* response);
+    virtual ::grpc::Status SendFlashPath(::grpc::ServerContext* context, const ::VCCSim::DronePath* request, ::VCCSim::Status* response);
+    virtual ::grpc::Status CheckReady(::grpc::ServerContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Status* response);
+    virtual ::grpc::Status MoveToNext(::grpc::ServerContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Status* response);
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_GetFlashPose : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_GetFlashPose() {
+      ::grpc::Service::MarkMethodAsync(0);
+    }
+    ~WithAsyncMethod_GetFlashPose() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status GetFlashPose(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Pose* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestGetFlashPose(::grpc::ServerContext* context, ::VCCSim::RobotName* request, ::grpc::ServerAsyncResponseWriter< ::VCCSim::Pose>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(0, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_SendFlashPose : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_SendFlashPose() {
+      ::grpc::Service::MarkMethodAsync(1);
+    }
+    ~WithAsyncMethod_SendFlashPose() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status SendFlashPose(::grpc::ServerContext* /*context*/, const ::VCCSim::DronePose* /*request*/, ::VCCSim::Status* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestSendFlashPose(::grpc::ServerContext* context, ::VCCSim::DronePose* request, ::grpc::ServerAsyncResponseWriter< ::VCCSim::Status>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(1, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_SendFlashPath : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_SendFlashPath() {
+      ::grpc::Service::MarkMethodAsync(2);
+    }
+    ~WithAsyncMethod_SendFlashPath() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status SendFlashPath(::grpc::ServerContext* /*context*/, const ::VCCSim::DronePath* /*request*/, ::VCCSim::Status* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestSendFlashPath(::grpc::ServerContext* context, ::VCCSim::DronePath* request, ::grpc::ServerAsyncResponseWriter< ::VCCSim::Status>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(2, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_CheckReady : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_CheckReady() {
+      ::grpc::Service::MarkMethodAsync(3);
+    }
+    ~WithAsyncMethod_CheckReady() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status CheckReady(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Status* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestCheckReady(::grpc::ServerContext* context, ::VCCSim::RobotName* request, ::grpc::ServerAsyncResponseWriter< ::VCCSim::Status>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(3, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_MoveToNext : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_MoveToNext() {
+      ::grpc::Service::MarkMethodAsync(4);
+    }
+    ~WithAsyncMethod_MoveToNext() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status MoveToNext(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Status* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestMoveToNext(::grpc::ServerContext* context, ::VCCSim::RobotName* request, ::grpc::ServerAsyncResponseWriter< ::VCCSim::Status>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(4, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  typedef WithAsyncMethod_GetFlashPose<WithAsyncMethod_SendFlashPose<WithAsyncMethod_SendFlashPath<WithAsyncMethod_CheckReady<WithAsyncMethod_MoveToNext<Service > > > > > AsyncService;
+  template <class BaseClass>
+  class WithCallbackMethod_GetFlashPose : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_GetFlashPose() {
+      ::grpc::Service::MarkMethodCallback(0,
+          new ::grpc::internal::CallbackUnaryHandler< ::VCCSim::RobotName, ::VCCSim::Pose>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Pose* response) { return this->GetFlashPose(context, request, response); }));}
+    void SetMessageAllocatorFor_GetFlashPose(
+        ::grpc::MessageAllocator< ::VCCSim::RobotName, ::VCCSim::Pose>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(0);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::VCCSim::RobotName, ::VCCSim::Pose>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_GetFlashPose() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status GetFlashPose(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Pose* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* GetFlashPose(
+      ::grpc::CallbackServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Pose* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_SendFlashPose : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_SendFlashPose() {
+      ::grpc::Service::MarkMethodCallback(1,
+          new ::grpc::internal::CallbackUnaryHandler< ::VCCSim::DronePose, ::VCCSim::Status>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::VCCSim::DronePose* request, ::VCCSim::Status* response) { return this->SendFlashPose(context, request, response); }));}
+    void SetMessageAllocatorFor_SendFlashPose(
+        ::grpc::MessageAllocator< ::VCCSim::DronePose, ::VCCSim::Status>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(1);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::VCCSim::DronePose, ::VCCSim::Status>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_SendFlashPose() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status SendFlashPose(::grpc::ServerContext* /*context*/, const ::VCCSim::DronePose* /*request*/, ::VCCSim::Status* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* SendFlashPose(
+      ::grpc::CallbackServerContext* /*context*/, const ::VCCSim::DronePose* /*request*/, ::VCCSim::Status* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_SendFlashPath : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_SendFlashPath() {
+      ::grpc::Service::MarkMethodCallback(2,
+          new ::grpc::internal::CallbackUnaryHandler< ::VCCSim::DronePath, ::VCCSim::Status>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::VCCSim::DronePath* request, ::VCCSim::Status* response) { return this->SendFlashPath(context, request, response); }));}
+    void SetMessageAllocatorFor_SendFlashPath(
+        ::grpc::MessageAllocator< ::VCCSim::DronePath, ::VCCSim::Status>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(2);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::VCCSim::DronePath, ::VCCSim::Status>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_SendFlashPath() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status SendFlashPath(::grpc::ServerContext* /*context*/, const ::VCCSim::DronePath* /*request*/, ::VCCSim::Status* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* SendFlashPath(
+      ::grpc::CallbackServerContext* /*context*/, const ::VCCSim::DronePath* /*request*/, ::VCCSim::Status* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_CheckReady : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_CheckReady() {
+      ::grpc::Service::MarkMethodCallback(3,
+          new ::grpc::internal::CallbackUnaryHandler< ::VCCSim::RobotName, ::VCCSim::Status>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Status* response) { return this->CheckReady(context, request, response); }));}
+    void SetMessageAllocatorFor_CheckReady(
+        ::grpc::MessageAllocator< ::VCCSim::RobotName, ::VCCSim::Status>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(3);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::VCCSim::RobotName, ::VCCSim::Status>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_CheckReady() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status CheckReady(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Status* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* CheckReady(
+      ::grpc::CallbackServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Status* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_MoveToNext : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_MoveToNext() {
+      ::grpc::Service::MarkMethodCallback(4,
+          new ::grpc::internal::CallbackUnaryHandler< ::VCCSim::RobotName, ::VCCSim::Status>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::VCCSim::RobotName* request, ::VCCSim::Status* response) { return this->MoveToNext(context, request, response); }));}
+    void SetMessageAllocatorFor_MoveToNext(
+        ::grpc::MessageAllocator< ::VCCSim::RobotName, ::VCCSim::Status>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(4);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::VCCSim::RobotName, ::VCCSim::Status>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_MoveToNext() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status MoveToNext(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Status* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* MoveToNext(
+      ::grpc::CallbackServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Status* /*response*/)  { return nullptr; }
+  };
+  typedef WithCallbackMethod_GetFlashPose<WithCallbackMethod_SendFlashPose<WithCallbackMethod_SendFlashPath<WithCallbackMethod_CheckReady<WithCallbackMethod_MoveToNext<Service > > > > > CallbackService;
+  typedef CallbackService ExperimentalCallbackService;
+  template <class BaseClass>
+  class WithGenericMethod_GetFlashPose : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_GetFlashPose() {
+      ::grpc::Service::MarkMethodGeneric(0);
+    }
+    ~WithGenericMethod_GetFlashPose() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status GetFlashPose(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Pose* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_SendFlashPose : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_SendFlashPose() {
+      ::grpc::Service::MarkMethodGeneric(1);
+    }
+    ~WithGenericMethod_SendFlashPose() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status SendFlashPose(::grpc::ServerContext* /*context*/, const ::VCCSim::DronePose* /*request*/, ::VCCSim::Status* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_SendFlashPath : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_SendFlashPath() {
+      ::grpc::Service::MarkMethodGeneric(2);
+    }
+    ~WithGenericMethod_SendFlashPath() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status SendFlashPath(::grpc::ServerContext* /*context*/, const ::VCCSim::DronePath* /*request*/, ::VCCSim::Status* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_CheckReady : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_CheckReady() {
+      ::grpc::Service::MarkMethodGeneric(3);
+    }
+    ~WithGenericMethod_CheckReady() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status CheckReady(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Status* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_MoveToNext : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_MoveToNext() {
+      ::grpc::Service::MarkMethodGeneric(4);
+    }
+    ~WithGenericMethod_MoveToNext() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status MoveToNext(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Status* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_GetFlashPose : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_GetFlashPose() {
+      ::grpc::Service::MarkMethodRaw(0);
+    }
+    ~WithRawMethod_GetFlashPose() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status GetFlashPose(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Pose* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestGetFlashPose(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(0, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_SendFlashPose : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_SendFlashPose() {
+      ::grpc::Service::MarkMethodRaw(1);
+    }
+    ~WithRawMethod_SendFlashPose() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status SendFlashPose(::grpc::ServerContext* /*context*/, const ::VCCSim::DronePose* /*request*/, ::VCCSim::Status* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestSendFlashPose(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(1, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_SendFlashPath : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_SendFlashPath() {
+      ::grpc::Service::MarkMethodRaw(2);
+    }
+    ~WithRawMethod_SendFlashPath() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status SendFlashPath(::grpc::ServerContext* /*context*/, const ::VCCSim::DronePath* /*request*/, ::VCCSim::Status* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestSendFlashPath(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(2, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_CheckReady : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_CheckReady() {
+      ::grpc::Service::MarkMethodRaw(3);
+    }
+    ~WithRawMethod_CheckReady() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status CheckReady(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Status* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestCheckReady(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(3, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_MoveToNext : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_MoveToNext() {
+      ::grpc::Service::MarkMethodRaw(4);
+    }
+    ~WithRawMethod_MoveToNext() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status MoveToNext(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Status* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestMoveToNext(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(4, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_GetFlashPose : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_GetFlashPose() {
+      ::grpc::Service::MarkMethodRawCallback(0,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->GetFlashPose(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_GetFlashPose() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status GetFlashPose(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Pose* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* GetFlashPose(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_SendFlashPose : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_SendFlashPose() {
+      ::grpc::Service::MarkMethodRawCallback(1,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->SendFlashPose(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_SendFlashPose() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status SendFlashPose(::grpc::ServerContext* /*context*/, const ::VCCSim::DronePose* /*request*/, ::VCCSim::Status* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* SendFlashPose(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_SendFlashPath : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_SendFlashPath() {
+      ::grpc::Service::MarkMethodRawCallback(2,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->SendFlashPath(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_SendFlashPath() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status SendFlashPath(::grpc::ServerContext* /*context*/, const ::VCCSim::DronePath* /*request*/, ::VCCSim::Status* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* SendFlashPath(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_CheckReady : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_CheckReady() {
+      ::grpc::Service::MarkMethodRawCallback(3,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->CheckReady(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_CheckReady() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status CheckReady(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Status* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* CheckReady(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_MoveToNext : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_MoveToNext() {
+      ::grpc::Service::MarkMethodRawCallback(4,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->MoveToNext(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_MoveToNext() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status MoveToNext(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Status* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* MoveToNext(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_GetFlashPose : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_GetFlashPose() {
+      ::grpc::Service::MarkMethodStreamed(0,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::VCCSim::RobotName, ::VCCSim::Pose>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::VCCSim::RobotName, ::VCCSim::Pose>* streamer) {
+                       return this->StreamedGetFlashPose(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_GetFlashPose() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status GetFlashPose(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Pose* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedGetFlashPose(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::VCCSim::RobotName,::VCCSim::Pose>* server_unary_streamer) = 0;
+  };
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_SendFlashPose : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_SendFlashPose() {
+      ::grpc::Service::MarkMethodStreamed(1,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::VCCSim::DronePose, ::VCCSim::Status>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::VCCSim::DronePose, ::VCCSim::Status>* streamer) {
+                       return this->StreamedSendFlashPose(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_SendFlashPose() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status SendFlashPose(::grpc::ServerContext* /*context*/, const ::VCCSim::DronePose* /*request*/, ::VCCSim::Status* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedSendFlashPose(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::VCCSim::DronePose,::VCCSim::Status>* server_unary_streamer) = 0;
+  };
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_SendFlashPath : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_SendFlashPath() {
+      ::grpc::Service::MarkMethodStreamed(2,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::VCCSim::DronePath, ::VCCSim::Status>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::VCCSim::DronePath, ::VCCSim::Status>* streamer) {
+                       return this->StreamedSendFlashPath(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_SendFlashPath() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status SendFlashPath(::grpc::ServerContext* /*context*/, const ::VCCSim::DronePath* /*request*/, ::VCCSim::Status* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedSendFlashPath(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::VCCSim::DronePath,::VCCSim::Status>* server_unary_streamer) = 0;
+  };
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_CheckReady : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_CheckReady() {
+      ::grpc::Service::MarkMethodStreamed(3,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::VCCSim::RobotName, ::VCCSim::Status>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::VCCSim::RobotName, ::VCCSim::Status>* streamer) {
+                       return this->StreamedCheckReady(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_CheckReady() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status CheckReady(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Status* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedCheckReady(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::VCCSim::RobotName,::VCCSim::Status>* server_unary_streamer) = 0;
+  };
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_MoveToNext : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_MoveToNext() {
+      ::grpc::Service::MarkMethodStreamed(4,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::VCCSim::RobotName, ::VCCSim::Status>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::VCCSim::RobotName, ::VCCSim::Status>* streamer) {
+                       return this->StreamedMoveToNext(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_MoveToNext() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status MoveToNext(::grpc::ServerContext* /*context*/, const ::VCCSim::RobotName* /*request*/, ::VCCSim::Status* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedMoveToNext(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::VCCSim::RobotName,::VCCSim::Status>* server_unary_streamer) = 0;
+  };
+  typedef WithStreamedUnaryMethod_GetFlashPose<WithStreamedUnaryMethod_SendFlashPose<WithStreamedUnaryMethod_SendFlashPath<WithStreamedUnaryMethod_CheckReady<WithStreamedUnaryMethod_MoveToNext<Service > > > > > StreamedUnaryService;
+  typedef Service SplitStreamedService;
+  typedef WithStreamedUnaryMethod_GetFlashPose<WithStreamedUnaryMethod_SendFlashPose<WithStreamedUnaryMethod_SendFlashPath<WithStreamedUnaryMethod_CheckReady<WithStreamedUnaryMethod_MoveToNext<Service > > > > > StreamedService;
+};
+
 class CarService final {
  public:
   static constexpr char const* service_full_name() {
