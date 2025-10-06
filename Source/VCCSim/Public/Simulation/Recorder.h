@@ -95,16 +95,15 @@ private:
     void TickRecording();
     void CollectSensorData();
     void ProcessCameraResult(FRDGBuilder& GraphBuilder, USensorBaseComponent* Sensor);
-    void ProcessSensorResults(FRDGBuilder& GraphBuilder,
-        const TArray<USensorBaseComponent*>& Sensors);
+    void ProcessSensorResults(FRDGBuilder& GraphBuilder, const TArray<USensorBaseComponent*>& Sensors);
     bool ShouldCaptureSensor(USensorBaseComponent* Sensor, double CurrentTime);
-
-    void InitializeAsyncWriter();
-    void ShutdownAsyncWriter();
 
     void SetupSensorProperties();
     void GroupCamerasByPose();
     bool ArePosesSimilar(const UCameraBaseComponent* CamA, const UCameraBaseComponent* CamB) const;
     
     void RenderViewGroupsRDG();
+
+    void InitializeAsyncWriter();
+    void ShutdownAsyncWriter();
 };

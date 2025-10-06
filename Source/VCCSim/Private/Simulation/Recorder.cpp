@@ -25,11 +25,71 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogRecorder, Log, All);
 
+class FDepthPS : public FGlobalShader
+{
+public:
+    DECLARE_GLOBAL_SHADER(FDepthPS);
+    SHADER_USE_PARAMETER_STRUCT(FDepthPS, FGlobalShader);
+
+    BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+        SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View)
+        SHADER_PARAMETER_RDG_TEXTURE(Texture2D, InputTexture)
+        SHADER_PARAMETER_SAMPLER(SamplerState, InputSampler)
+        RENDER_TARGET_BINDING_SLOTS()
+    END_SHADER_PARAMETER_STRUCT()
+};
+
+IMPLEMENT_GLOBAL_SHADER(FDepthPS, "/VCCSim/DepthCapture.usf", "MainPS", SF_Pixel);
+
+class FRGBPS : public FGlobalShader
+{
+public:
+    DECLARE_GLOBAL_SHADER(FRGBPS);
+    SHADER_USE_PARAMETER_STRUCT(FRGBPS, FGlobalShader);
+
+    BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+        SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View)
+        SHADER_PARAMETER_RDG_TEXTURE(Texture2D, InputTexture)
+        SHADER_PARAMETER_SAMPLER(SamplerState, InputSampler)
+        RENDER_TARGET_BINDING_SLOTS()
+    END_SHADER_PARAMETER_STRUCT()
+};
+
+IMPLEMENT_GLOBAL_SHADER(FRGBPS, "/VCCSim/RGBCapture.usf", "MainPS", SF_Pixel);
+
+class FNormalPS : public FGlobalShader
+{
+public:
+    DECLARE_GLOBAL_SHADER(FNormalPS);
+    SHADER_USE_PARAMETER_STRUCT(FNormalPS, FGlobalShader);
+
+    BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+        SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View)
+        SHADER_PARAMETER_RDG_TEXTURE(Texture2D, InputTexture)
+        RENDER_TARGET_BINDING_SLOTS()
+    END_SHADER_PARAMETER_STRUCT()
+};
+
+IMPLEMENT_GLOBAL_SHADER(FNormalPS, "/VCCSim/NormalCapture.usf", "MainPS", SF_Pixel);
+
+class FSegmentationPS : public FGlobalShader
+{
+public:
+    DECLARE_GLOBAL_SHADER(FSegmentationPS);
+    SHADER_USE_PARAMETER_STRUCT(FSegmentationPS, FGlobalShader);
+
+    BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+        SHADER_PARAMETER_RDG_TEXTURE_SRV(Texture2D<uint2>, CustomStencilTexture)
+        RENDER_TARGET_BINDING_SLOTS()
+    END_SHADER_PARAMETER_STRUCT()
+};
+
+IMPLEMENT_GLOBAL_SHADER(FSegmentationPS, "/VCCSim/SegmentationCapture.usf", "MainPS", SF_Pixel);
+
 ARecorder::ARecorder()
 {
     PrimaryActorTick.bCanEverTick = false;
 
-    // Create timestamp-based directory like RuntimeLogs
     FDateTime Now = FDateTime::Now();
     FString Timestamp = FString::Printf(TEXT("%04d%02d%02d_%02d%02d%02d"),
         Now.GetYear(), Now.GetMonth(), Now.GetDay(),
@@ -42,27 +102,6 @@ ARecorder::~ARecorder()
 {
     StopRecording();
     ShutdownAsyncWriter();
-}
-
-void ARecorder::InitializeAsyncWriter()
-{
-    if (FileWriter.IsValid())
-    {
-        return;
-    }
-
-    FileWriter = MakeUnique<FAsyncFileWriter>(RecordingPath);
-    UE_LOG(LogRecorder, Log, TEXT("Async file writer initialized"));
-}
-
-void ARecorder::ShutdownAsyncWriter()
-{
-    if (FileWriter.IsValid())
-    {
-        FileWriter->Flush();
-        FileWriter.Reset();
-        UE_LOG(LogRecorder, Log, TEXT("Async file writer shutdown"));
-    }
 }
 
 void ARecorder::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -190,7 +229,8 @@ void ARecorder::CreateActorDirectories(const FString& ActorName, TSet<ESensorTyp
                 SensorDir = FPaths::Combine(ActorDir, TEXT("Lidar"));
                 break;
             default:
-                continue; // Do nothing for other types
+                UE_LOG(LogRecorder, Warning, TEXT("Unknown sensor type for directory creation"));
+                continue;
         }
         PlatformFile.CreateDirectoryTree(*SensorDir);
     }
@@ -536,88 +576,6 @@ bool ARecorder::ArePosesSimilar(const UCameraBaseComponent* CamA, const UCameraB
     return true;
 }
 
-class FDepthPS : public FGlobalShader
-{
-public:
-    DECLARE_GLOBAL_SHADER(FDepthPS);
-    SHADER_USE_PARAMETER_STRUCT(FDepthPS, FGlobalShader);
-
-    BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
-        SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View)
-        SHADER_PARAMETER_RDG_TEXTURE(Texture2D, SceneDepthTexture)
-        SHADER_PARAMETER_SAMPLER(SamplerState, SceneDepthSampler)
-        RENDER_TARGET_BINDING_SLOTS()
-    END_SHADER_PARAMETER_STRUCT()
-
-    static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
-    {
-        return true;
-    }
-};
-
-IMPLEMENT_GLOBAL_SHADER(FDepthPS, "/VCCSim/DepthCapture.usf", "MainPS", SF_Pixel);
-
-class FRGBPS : public FGlobalShader
-{
-public:
-    DECLARE_GLOBAL_SHADER(FRGBPS);
-    SHADER_USE_PARAMETER_STRUCT(FRGBPS, FGlobalShader);
-
-    BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
-        SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View)
-        SHADER_PARAMETER_RDG_TEXTURE(Texture2D, SceneColorTexture)
-        SHADER_PARAMETER_SAMPLER(SamplerState, SceneColorSampler)
-        RENDER_TARGET_BINDING_SLOTS()
-    END_SHADER_PARAMETER_STRUCT()
-
-    static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
-    {
-        return true;
-    }
-};
-
-IMPLEMENT_GLOBAL_SHADER(FRGBPS, "/VCCSim/RGBCapture.usf", "MainPS", SF_Pixel);
-
-class FNormalPS : public FGlobalShader
-{
-public:
-    DECLARE_GLOBAL_SHADER(FNormalPS);
-    SHADER_USE_PARAMETER_STRUCT(FNormalPS, FGlobalShader);
-
-    BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
-        SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View)
-        SHADER_PARAMETER_RDG_TEXTURE(Texture2D, InputGBufferA)
-        RENDER_TARGET_BINDING_SLOTS()
-    END_SHADER_PARAMETER_STRUCT()
-
-    static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
-    {
-        return true;
-    }
-};
-
-IMPLEMENT_GLOBAL_SHADER(FNormalPS, "/VCCSim/NormalCapture.usf", "MainPS", SF_Pixel);
-
-class FSegmentationPS : public FGlobalShader
-{
-public:
-    DECLARE_GLOBAL_SHADER(FSegmentationPS);
-    SHADER_USE_PARAMETER_STRUCT(FSegmentationPS, FGlobalShader);
-
-    BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
-        SHADER_PARAMETER_RDG_TEXTURE_SRV(Texture2D<uint2>, CustomStencilTexture)
-        RENDER_TARGET_BINDING_SLOTS()
-    END_SHADER_PARAMETER_STRUCT()
-
-    static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
-    {
-        return true;
-    }
-};
-
-IMPLEMENT_GLOBAL_SHADER(FSegmentationPS, "/VCCSim/SegmentationCapture.usf", "MainPS", SF_Pixel);
-
-
 void ARecorder::RenderViewGroupsRDG()
 {
     if (!GetWorld() || CameraViewGroups.Num() == 0)
@@ -666,11 +624,13 @@ void ARecorder::RenderViewGroupsRDG()
         UCameraBaseComponent* RepresentativeCamera = GroupData.Cameras[0];
 
         GroupData.ViewOrigin = RepresentativeCamera->GetComponentLocation();
-        GroupData.ViewRotationMatrix = FInverseRotationMatrix(RepresentativeCamera->GetComponentRotation()) * FMatrix(
-            FPlane(0, 0, 1, 0),
-            FPlane(1, 0, 0, 0),
-            FPlane(0, 1, 0, 0),
-            FPlane(0, 0, 0, 1));
+        GroupData.ViewRotationMatrix = FInverseRotationMatrix(
+            RepresentativeCamera->GetComponentRotation()) *
+                FMatrix(
+                FPlane(0, 0, 1, 0),
+                FPlane(1, 0, 0, 0),
+                FPlane(0, 1, 0, 0),
+                FPlane(0, 0, 0, 1));
 
         const float FOVRad = FMath::DegreesToRadians(RepresentativeCamera->FOV);
         const float HalfFOV = FOVRad * 0.5f;
@@ -762,8 +722,8 @@ void ARecorder::RenderViewGroupsRDG()
                     {
                         auto* PassParameters = GraphBuilder.AllocParameters<FDepthPS::FParameters>();
                         PassParameters->View = Inputs.Renderer->Views[0].ViewUniformBuffer;
-                        PassParameters->SceneDepthTexture = SceneTextures.Depth.Resolve;
-                        PassParameters->SceneDepthSampler = TStaticSamplerState<SF_Point, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
+                        PassParameters->InputTexture = SceneTextures.Depth.Resolve;
+                        PassParameters->InputSampler = TStaticSamplerState<SF_Point, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
                         PassParameters->RenderTargets[0] = FRenderTargetBinding(OutputTexture, ERenderTargetLoadAction::EClear);
 
                         TShaderMapRef<FDepthPS> PixelShader(GetGlobalShaderMap(FeatureLevel));
@@ -774,8 +734,8 @@ void ARecorder::RenderViewGroupsRDG()
                     {
                         auto* PassParameters = GraphBuilder.AllocParameters<FRGBPS::FParameters>();
                         PassParameters->View = Inputs.Renderer->Views[0].ViewUniformBuffer;
-                        PassParameters->SceneColorTexture = SceneTextures.Color.Resolve;
-                        PassParameters->SceneColorSampler = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
+                        PassParameters->InputTexture = SceneTextures.Color.Resolve;
+                        PassParameters->InputSampler = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
                         PassParameters->RenderTargets[0] = FRenderTargetBinding(OutputTexture, ERenderTargetLoadAction::EClear);
 
                         TShaderMapRef<FRGBPS> PixelShader(GetGlobalShaderMap(FeatureLevel));
@@ -786,7 +746,7 @@ void ARecorder::RenderViewGroupsRDG()
                     {
                         auto* PassParameters = GraphBuilder.AllocParameters<FNormalPS::FParameters>();
                         PassParameters->View = Inputs.Renderer->Views[0].ViewUniformBuffer;
-                        PassParameters->InputGBufferA = SceneTextures.GBufferA;
+                        PassParameters->InputTexture = SceneTextures.GBufferA;
                         PassParameters->RenderTargets[0] = FRenderTargetBinding(OutputTexture, ERenderTargetLoadAction::EClear);
 
                         TShaderMapRef<FNormalPS> PixelShader(GetGlobalShaderMap(FeatureLevel));
@@ -810,4 +770,25 @@ void ARecorder::RenderViewGroupsRDG()
     }
 
     SceneRenderBuilder->Execute();
+}
+
+void ARecorder::InitializeAsyncWriter()
+{
+    if (FileWriter.IsValid())
+    {
+        return;
+    }
+
+    FileWriter = MakeUnique<FAsyncFileWriter>(RecordingPath);
+    UE_LOG(LogRecorder, Log, TEXT("Async file writer initialized"));
+}
+
+void ARecorder::ShutdownAsyncWriter()
+{
+    if (FileWriter.IsValid())
+    {
+        FileWriter->Flush();
+        FileWriter.Reset();
+        UE_LOG(LogRecorder, Log, TEXT("Async file writer shutdown"));
+    }
 }

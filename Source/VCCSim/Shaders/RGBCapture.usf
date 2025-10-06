@@ -1,11 +1,11 @@
 #include "/Engine/Private/Common.ush"
 
-Texture2D SceneColorTexture;
-SamplerState SceneColorSampler;
+Texture2D InputTexture;
+SamplerState InputSampler;
 
 float4 MainPS(float4 SvPosition : SV_POSITION) : SV_Target0
 {
     float2 UV = SvPosition.xy * View.BufferSizeAndInvSize.zw;
-    float3 Color = Texture2DSample(SceneColorTexture, SceneColorSampler, UV).rgb;
+    float3 Color = Texture2DSample(InputTexture, InputSampler, UV).rgb;
     return float4(Color, 1.0);
 }

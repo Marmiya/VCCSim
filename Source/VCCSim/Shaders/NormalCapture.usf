@@ -1,12 +1,12 @@
 #include "/Engine/Private/Common.ush"
 #include "/Engine/Private/DeferredShadingCommon.ush"
 
-Texture2D InputGBufferA;
+Texture2D InputTexture;
 
 float4 MainPS(float4 SvPosition : SV_POSITION) : SV_Target0
 {
     uint2 PixelPos = uint2(SvPosition.xy);
-    float4 GBufferAData = InputGBufferA.Load(int3(PixelPos, 0));
+    float4 GBufferAData = InputTexture.Load(int3(PixelPos, 0));
     float3 WorldNormal = DecodeNormal(GBufferAData.xyz);
     WorldNormal = normalize(WorldNormal);
     return float4(WorldNormal * 0.5 + 0.5, 1.0);
