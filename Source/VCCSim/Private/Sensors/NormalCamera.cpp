@@ -59,7 +59,7 @@ void UNormalCameraComponent::InitializeRenderTargets()
 {
     RenderTarget = NewObject<UTextureRenderTarget2D>(this);
     RenderTarget->InitCustomFormat(Width, Height,
-        PF_A16B16G16R16, true);
+        PF_FloatRGBA, true);
     RenderTarget->UpdateResource();
 }
 

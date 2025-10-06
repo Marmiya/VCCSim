@@ -353,7 +353,7 @@ void AVCCHUD::SetupMainCharacter(const FVCCSimConfig& Config, TArray<AActor*> Fo
                 UE_LOG(LogVCCHUD, Warning, TEXT("DepthCamera component not found!"));
             }
         }
-        if (Component.Get<0>() == ESensorType::SegmentationCamera)
+        if (Component.Get<0>() == ESensorType::SegmentCamera)
         {
             if (USegCameraComponent* SegCameraComponent =
                 MainCharacter->FindComponentByClass<USegCameraComponent>())
@@ -505,7 +505,7 @@ FRobotGrpcMaps AVCCHUD::SetupActors(const FVCCSimConfig& Config)
                     Objects.Add(DepthCam);
                 }
             }
-            else if (Component.Get<0>() == ESensorType::SegmentationCamera)
+            else if (Component.Get<0>() == ESensorType::SegmentCamera)
             {
                 TArray<USegCameraComponent*> SegmentationCameras;
                 RobotPawn->GetComponents<USegCameraComponent>(SegmentationCameras);

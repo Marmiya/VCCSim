@@ -5,5 +5,8 @@ SamplerState SceneDepthSampler;
 
 float4 MainPS(float4 SvPosition : SV_POSITION) : SV_Target0
 {
-    return float4(1000.5, .5, 1.5, 1.0);
+    float2 UV = SvPosition.xy * View.BufferSizeAndInvSize.zw;
+    float DeviceZ = SceneDepthTexture.SampleLevel(SceneDepthSampler, UV, 0).r;
+    float SceneDepth = ConvertFromDeviceZ(DeviceZ);
+    return float4(SceneDepth, SceneDepth, SceneDepth, 1.0);
 }

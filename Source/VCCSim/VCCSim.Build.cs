@@ -17,7 +17,8 @@ public class VCCSim : ModuleRules
         
         PrivateIncludePaths.AddRange(
             new string[] {
-                // ... add other private include paths required here ...
+                Path.Combine(EngineDirectory, "Source/Runtime/Renderer/Private"),
+                Path.Combine(EngineDirectory, "Source/Runtime/Renderer/Internal")
             }
         );
         

@@ -16,26 +16,12 @@
 */
 
 #include "Simulation/Recorder.h"
-#include "Sensors/CameraSensor.h"
-#include "Sensors/NormalCamera.h"
-#include "Sensors/SegmentCamera.h"
-#include "Sensors/DepthCamera.h"
-#include "Engine/World.h"
-#include "Misc/Paths.h"
-#include "TimerManager.h"
-#include "HAL/PlatformFilemanager.h"
-#include "RenderingThread.h"
+#include "Engine/TextureRenderTarget2D.h"
 #include "RenderGraphBuilder.h"
-#include "RenderGraphDefinitions.h"
-#include "RenderGraphUtils.h"
-#include "RHICommandList.h"
-#include "RHI.h"
-#include "RHIGPUReadback.h"
-#include "RendererInterface.h"
-#include "SceneRenderTargetParameters.h"
 #include "PixelShaderUtils.h"
-#include "ScreenRendering.h"
-#include "SystemTextures.h"
+#include "SceneRenderBuilderInterface.h"
+#include "SceneRendering.h"
+#include "LegacyScreenPercentageDriver.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogRecorder, Log, All);
 
@@ -197,7 +183,7 @@ void ARecorder::CreateActorDirectories(const FString& ActorName, TSet<ESensorTyp
             case ESensorType::NormalCamera:
                 SensorDir = FPaths::Combine(ActorDir, TEXT("Normal"));
                 break;
-            case ESensorType::SegmentationCamera:
+            case ESensorType::SegmentCamera:
                 SensorDir = FPaths::Combine(ActorDir, TEXT("Segmentation"));
                 break;
             case ESensorType::Lidar:
@@ -342,7 +328,7 @@ void ARecorder::ProcessCameraResult(FRDGBuilder& GraphBuilder, USensorBaseCompon
                       Packet.Data = NormalData;
                       break;
                   }
-              case ESensorType::SegmentationCamera:
+              case ESensorType::SegmentCamera:
                   {
                       auto SegData = MakeShared<FSegmentationCameraData>();
                       SegData->Timestamp = CaptureTimestamp;
@@ -415,7 +401,7 @@ void ARecorder::ProcessSensorResults(
         ESensorType SensorType = Sensor->GetSensorType();
         // Camera sensor
         if (SensorType == ESensorType::NormalCamera ||
-            SensorType == ESensorType::SegmentationCamera ||
+            SensorType == ESensorType::SegmentCamera ||
             SensorType == ESensorType::RGBCamera ||
             SensorType == ESensorType::DepthCamera)
         {
@@ -501,6 +487,7 @@ void ARecorder::GroupCamerasByPose()
         UCameraBaseComponent* BaseCamera = AllCameras[i];
         FCameraViewGroup NewGroup;
         NewGroup.ViewIndex = ViewIndex++;
+        NewGroup.OwnerActor = BaseCamera->GetOwner();
         NewGroup.Cameras.FindOrAdd(BaseCamera) = true;
         Grouped[i] = true;
 
@@ -556,6 +543,7 @@ public:
     SHADER_USE_PARAMETER_STRUCT(FDepthPS, FGlobalShader);
 
     BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+        SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View)
         SHADER_PARAMETER_RDG_TEXTURE(Texture2D, SceneDepthTexture)
         SHADER_PARAMETER_SAMPLER(SamplerState, SceneDepthSampler)
         RENDER_TARGET_BINDING_SLOTS()
@@ -569,6 +557,66 @@ public:
 
 IMPLEMENT_GLOBAL_SHADER(FDepthPS, "/VCCSim/DepthCapture.usf", "MainPS", SF_Pixel);
 
+class FRGBPS : public FGlobalShader
+{
+public:
+    DECLARE_GLOBAL_SHADER(FRGBPS);
+    SHADER_USE_PARAMETER_STRUCT(FRGBPS, FGlobalShader);
+
+    BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+        SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View)
+        SHADER_PARAMETER_RDG_TEXTURE(Texture2D, SceneColorTexture)
+        SHADER_PARAMETER_SAMPLER(SamplerState, SceneColorSampler)
+        RENDER_TARGET_BINDING_SLOTS()
+    END_SHADER_PARAMETER_STRUCT()
+
+    static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
+    {
+        return true;
+    }
+};
+
+IMPLEMENT_GLOBAL_SHADER(FRGBPS, "/VCCSim/RGBCapture.usf", "MainPS", SF_Pixel);
+
+class FNormalPS : public FGlobalShader
+{
+public:
+    DECLARE_GLOBAL_SHADER(FNormalPS);
+    SHADER_USE_PARAMETER_STRUCT(FNormalPS, FGlobalShader);
+
+    BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+        SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View)
+        SHADER_PARAMETER_RDG_TEXTURE(Texture2D, InputGBufferA)
+        RENDER_TARGET_BINDING_SLOTS()
+    END_SHADER_PARAMETER_STRUCT()
+
+    static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
+    {
+        return true;
+    }
+};
+
+IMPLEMENT_GLOBAL_SHADER(FNormalPS, "/VCCSim/NormalCapture.usf", "MainPS", SF_Pixel);
+
+class FSegmentationPS : public FGlobalShader
+{
+public:
+    DECLARE_GLOBAL_SHADER(FSegmentationPS);
+    SHADER_USE_PARAMETER_STRUCT(FSegmentationPS, FGlobalShader);
+
+    BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+        SHADER_PARAMETER_RDG_TEXTURE_SRV(Texture2D<uint2>, CustomStencilTexture)
+        RENDER_TARGET_BINDING_SLOTS()
+    END_SHADER_PARAMETER_STRUCT()
+
+    static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
+    {
+        return true;
+    }
+};
+
+IMPLEMENT_GLOBAL_SHADER(FSegmentationPS, "/VCCSim/SegmentationCapture.usf", "MainPS", SF_Pixel);
+
 
 void ARecorder::RenderViewGroupsRDG()
 {
@@ -577,75 +625,189 @@ void ARecorder::RenderViewGroupsRDG()
         return;
     }
 
-    TArray<TArray<UCameraBaseComponent*>> UpdatedCamerasPerGroup;
+    UWorld* World = GetWorld();
+    if (!World || !World->Scene)
+    {
+        return;
+    }
+
+    FSceneInterface* Scene = World->Scene;
+
+    struct FCameraGroupData
+    {
+        TArray<UCameraBaseComponent*> Cameras;
+        FVector ViewOrigin;
+        FMatrix ViewRotationMatrix;
+        FMatrix ProjectionMatrix;
+        FIntPoint Resolution;
+        AActor* OwnerActor;
+    };
+
+    TArray<FCameraGroupData> GroupDataArray;
 
     for (const auto& CameraViewGroup : CameraViewGroups)
     {
-        TArray<UCameraBaseComponent*> CamerasToUpdate;
+        FCameraGroupData GroupData;
+        GroupData.OwnerActor = CameraViewGroup.OwnerActor;
+
         for (const auto& CamPair : CameraViewGroup.Cameras)
         {
-            if (CamPair.Value)
+            if (CamPair.Value && CamPair.Key)
             {
-                if (UCameraBaseComponent* CameraComp = Cast<UCameraBaseComponent>(CamPair.Key))
+                GroupData.Cameras.Add(CamPair.Key);
+            }
+        }
+
+        if (GroupData.Cameras.Num() == 0)
+        {
+            continue;
+        }
+
+        UCameraBaseComponent* RepresentativeCamera = GroupData.Cameras[0];
+
+        GroupData.ViewOrigin = RepresentativeCamera->GetComponentLocation();
+        GroupData.ViewRotationMatrix = FInverseRotationMatrix(RepresentativeCamera->GetComponentRotation()) * FMatrix(
+            FPlane(0, 0, 1, 0),
+            FPlane(1, 0, 0, 0),
+            FPlane(0, 1, 0, 0),
+            FPlane(0, 0, 0, 1));
+
+        const float FOVRad = FMath::DegreesToRadians(RepresentativeCamera->FOV);
+        const float HalfFOV = FOVRad * 0.5f;
+        GroupData.Resolution = RepresentativeCamera->GetResolution();
+        const float AspectRatio = static_cast<float>(GroupData.Resolution.X) / GroupData.Resolution.Y;
+
+        GroupData.ProjectionMatrix = FReversedZPerspectiveMatrix(
+            HalfFOV,
+            AspectRatio,
+            1.0f,
+            GNearClippingPlane);
+
+        GroupDataArray.Add(MoveTemp(GroupData));
+    }
+
+    TUniquePtr<ISceneRenderBuilder> SceneRenderBuilder = ISceneRenderBuilder::Create(Scene);
+    const ERHIFeatureLevel::Type FeatureLevel = Scene->GetFeatureLevel();
+
+    for (const FCameraGroupData& GroupData : GroupDataArray)
+    {
+        UTextureRenderTarget2D* TempRenderTarget = NewObject<UTextureRenderTarget2D>();
+        TempRenderTarget->InitAutoFormat(GroupData.Resolution.X, GroupData.Resolution.Y);
+        TempRenderTarget->UpdateResourceImmediate(true);
+        FTextureRenderTargetResource* TempRTResource = TempRenderTarget->GameThread_GetRenderTargetResource();
+
+        FSceneViewFamilyContext* ViewFamily = new FSceneViewFamilyContext(
+            FSceneViewFamily::ConstructionValues(
+                TempRTResource,
+                Scene,
+                FEngineShowFlags(ESFIM_Game))
+            .SetTime(FGameTime::GetTimeSinceAppStart())
+            .SetRealtimeUpdate(true));
+
+        ViewFamily->EngineShowFlags.ScreenPercentage = false;
+        ViewFamily->EngineShowFlags.SetRendering(true);
+        ViewFamily->EngineShowFlags.SetPostProcessing(true);
+        ViewFamily->SetScreenPercentageInterface(new FLegacyScreenPercentageDriver(
+            *ViewFamily, 1.0f));
+
+        FSceneViewInitOptions ViewInitOptions;
+        ViewInitOptions.ViewFamily = ViewFamily;
+        ViewInitOptions.SetViewRectangle(FIntRect(0, 0, GroupData.Resolution.X, GroupData.Resolution.Y));
+        ViewInitOptions.ViewOrigin = GroupData.ViewOrigin;
+        ViewInitOptions.ViewRotationMatrix = GroupData.ViewRotationMatrix;
+        ViewInitOptions.ProjectionMatrix = GroupData.ProjectionMatrix;
+        ViewInitOptions.BackgroundColor = FLinearColor::Black;
+        ViewInitOptions.OverrideFarClippingPlaneDistance = -1.0f;
+
+        FSceneView* View = new FSceneView(ViewInitOptions);
+        if (GroupData.OwnerActor)
+        {
+            for (UActorComponent* Component : GroupData.OwnerActor->GetComponents())
+            {
+                if (UPrimitiveComponent* PrimComp = Cast<UPrimitiveComponent>(Component))
                 {
-                    CamerasToUpdate.Add(CameraComp);
+                    View->HiddenPrimitives.Add(PrimComp->GetPrimitiveSceneId());
                 }
             }
         }
-        UpdatedCamerasPerGroup.Add(MoveTemp(CamerasToUpdate));
-    }
+        ViewFamily->Views.Add(View);
 
-    const ERHIFeatureLevel::Type FeatureLevel = GMaxRHIFeatureLevel;
+        FSceneRenderer* SceneRenderer = SceneRenderBuilder->CreateSceneRenderer(ViewFamily);
 
-    ENQUEUE_RENDER_COMMAND(MRTMultiViewCapture)(
-        [UpdatedCamerasPerGroup, FeatureLevel](FRHICommandListImmediate& RHICmdList)
-        {
-            FRDGBuilder GraphBuilder(RHICmdList, RDG_EVENT_NAME("VCCSimMRTCapture"));
-
-            FRDGSystemTextures::Create(GraphBuilder);
-
-            const FSceneTextures* SceneTextures = nullptr;
-            for (const auto& UpdatedCameras : UpdatedCamerasPerGroup)
+        SceneRenderBuilder->AddRenderer(SceneRenderer, TEXT("VCCSimMultiSensorCapture"),
+            [GroupData, FeatureLevel](FRDGBuilder& GraphBuilder, const FSceneRenderFunctionInputs& Inputs)
             {
-                if (UpdatedCameras.Num() == 0)
+                if (!Inputs.Renderer)
                 {
-                    continue;
+                    return false;
                 }
 
-                for (int32 i = 0; i < UpdatedCameras.Num(); ++i)
+                Inputs.Renderer->Render(GraphBuilder, Inputs.SceneUpdateInputs);
+
+                const FSceneTextures& SceneTextures = Inputs.Renderer->GetActiveSceneTextures();
+
+                for (UCameraBaseComponent* Camera : GroupData.Cameras)
                 {
-                    if (UpdatedCameras[i]->GetSensorType() == ESensorType::DepthCamera)
+                    FTextureRenderTargetResource* RTResource = Camera->GetRenderTarget()->GetRenderTargetResource();
+
+                    ESensorType SensorType = Camera->GetSensorType();
+                    FString TextureName = FString::Printf(TEXT("CameraRT_%d"), Camera->GetSensorIndex());
+                    FRDGTextureRef OutputTexture = GraphBuilder.RegisterExternalTexture(
+                        CreateRenderTarget(RTResource->GetRenderTargetTexture(), *TextureName));
+
+                    const FIntPoint Extent = OutputTexture->Desc.Extent;
+                    const FIntRect ViewRect(0, 0, Extent.X, Extent.Y);
+
+                    if (SensorType == ESensorType::DepthCamera)
                     {
-                        FString TextureName = FString::Printf(TEXT("DepthCameraRT_%d"), UpdatedCameras[i]->GetSensorIndex());
-                        FRDGTextureRef OutputTexture = GraphBuilder.RegisterExternalTexture(
-                            CreateRenderTarget(UpdatedCameras[i]->GetRenderTarget()->
-                                GetRenderTargetResource()->GetRenderTargetTexture(), *TextureName));
-
                         auto* PassParameters = GraphBuilder.AllocParameters<FDepthPS::FParameters>();
-
-                        PassParameters->SceneDepthTexture = GSystemTextures.GetBlackDummy(GraphBuilder);
-                        PassParameters->SceneDepthSampler = TStaticSamplerState<SF_Point>::GetRHI();
-
-                        PassParameters->RenderTargets[0] =
-                            FRenderTargetBinding(OutputTexture, ERenderTargetLoadAction::EClear);
+                        PassParameters->View = Inputs.Renderer->Views[0].ViewUniformBuffer;
+                        PassParameters->SceneDepthTexture = SceneTextures.Depth.Resolve;
+                        PassParameters->SceneDepthSampler = TStaticSamplerState<SF_Point, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
+                        PassParameters->RenderTargets[0] = FRenderTargetBinding(OutputTexture, ERenderTargetLoadAction::EClear);
 
                         TShaderMapRef<FDepthPS> PixelShader(GetGlobalShaderMap(FeatureLevel));
+                        FPixelShaderUtils::AddFullscreenPass(GraphBuilder, GetGlobalShaderMap(FeatureLevel),
+                            RDG_EVENT_NAME("VCCSimDepthCapture"), PixelShader, PassParameters, ViewRect);
+                    }
+                    else if (SensorType == ESensorType::RGBCamera)
+                    {
+                        auto* PassParameters = GraphBuilder.AllocParameters<FRGBPS::FParameters>();
+                        PassParameters->View = Inputs.Renderer->Views[0].ViewUniformBuffer;
+                        PassParameters->SceneColorTexture = SceneTextures.Color.Resolve;
+                        PassParameters->SceneColorSampler = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
+                        PassParameters->RenderTargets[0] = FRenderTargetBinding(OutputTexture, ERenderTargetLoadAction::EClear);
 
-                        const FIntPoint Extent = OutputTexture->Desc.Extent;
-                        const FIntRect ViewRect(0, 0, Extent.X, Extent.Y);
+                        TShaderMapRef<FRGBPS> PixelShader(GetGlobalShaderMap(FeatureLevel));
+                        FPixelShaderUtils::AddFullscreenPass(GraphBuilder, GetGlobalShaderMap(FeatureLevel),
+                            RDG_EVENT_NAME("VCCSimRGBCapture"), PixelShader, PassParameters, ViewRect);
+                    }
+                    else if (SensorType == ESensorType::NormalCamera)
+                    {
+                        auto* PassParameters = GraphBuilder.AllocParameters<FNormalPS::FParameters>();
+                        PassParameters->View = Inputs.Renderer->Views[0].ViewUniformBuffer;
+                        PassParameters->InputGBufferA = SceneTextures.GBufferA;
+                        PassParameters->RenderTargets[0] = FRenderTargetBinding(OutputTexture, ERenderTargetLoadAction::EClear);
 
-                        FPixelShaderUtils::AddFullscreenPass(
-                            GraphBuilder,
-                            GetGlobalShaderMap(FeatureLevel),
-                            RDG_EVENT_NAME("VCCSimDepthCapture"),
-                            PixelShader,
-                            PassParameters,
-                            ViewRect);
+                        TShaderMapRef<FNormalPS> PixelShader(GetGlobalShaderMap(FeatureLevel));
+                        FPixelShaderUtils::AddFullscreenPass(GraphBuilder, GetGlobalShaderMap(FeatureLevel),
+                            RDG_EVENT_NAME("VCCSimNormalCapture"), PixelShader, PassParameters, ViewRect);
+                    }
+                    else if (SensorType == ESensorType::SegmentCamera)
+                    {
+                        auto* PassParameters = GraphBuilder.AllocParameters<FSegmentationPS::FParameters>();
+                        PassParameters->CustomStencilTexture = SceneTextures.CustomDepth.Stencil;
+                        PassParameters->RenderTargets[0] = FRenderTargetBinding(OutputTexture, ERenderTargetLoadAction::EClear);
+
+                        TShaderMapRef<FSegmentationPS> PixelShader(GetGlobalShaderMap(FeatureLevel));
+                        FPixelShaderUtils::AddFullscreenPass(GraphBuilder, GetGlobalShaderMap(FeatureLevel),
+                            RDG_EVENT_NAME("VCCSimSegmentationCapture"), PixelShader, PassParameters, ViewRect);
                     }
                 }
-            }
 
-            GraphBuilder.Execute();
-        });
+                return true;
+            });
+    }
+
+    SceneRenderBuilder->Execute();
 }
-

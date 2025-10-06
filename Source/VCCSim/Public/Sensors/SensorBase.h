@@ -30,7 +30,7 @@ enum class ESensorType : uint8
 	RGBCamera = 4,
 	DepthCamera = 5,
 	NormalCamera = 6,
-	SegmentationCamera = 7
+	SegmentCamera = 7
 };
 
 class VCCSIM_API FSensorConfig

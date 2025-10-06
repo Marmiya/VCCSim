@@ -21,7 +21,6 @@
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Engine/Engine.h"
-#include "ImageUtils.h"
 #include "IImageWrapper.h"
 #include "IImageWrapperModule.h"
 
@@ -159,7 +158,7 @@ void FImageCompressionTask::DoWork()
         case ESensorType::NormalCamera:
             CompressNormalData();
             break;
-        case ESensorType::SegmentationCamera:
+        case ESensorType::SegmentCamera:
             CompressSegmentationData();
             break;
         case ESensorType::Lidar:
@@ -214,6 +213,8 @@ bool FImageCompressionTask::CompressImageToEXR(
     FImage Image;
     Image.Init(Width, Height, ERawImageFormat::RGBA16F);
     TArrayView64<FFloat16Color> ImageView = Image.AsRGBA16F();
+    UE_LOG(LogAsyncFileWriter, Log, TEXT("first pixel: %f, %f, %f"),
+        ImageData[0].R.GetFloat(), ImageData[0].G.GetFloat(), ImageData[0].B.GetFloat());
 
     if (ImageView.Num() == ImageData.Num())
     {
@@ -250,10 +251,11 @@ void FImageCompressionTask::CompressDepthData()
 {
     const FDepthCameraData* DepthData = static_cast<const FDepthCameraData*>(DataPacket.Data.Get());
 
-    UE_LOG(LogAsyncFileWriter, Log, TEXT("First value of depth data: %f"), DepthData->DepthData[0]);
-
     if (DepthData && DepthData->DepthData.Num() > 0)
     {
+        auto DepthResult =
+            CreateCompressedResult(TEXT("Depth"), TEXT("png"), DataPacket.Data->Timestamp);
+        
         // Convert float depth to 16-bit depth
         TArray<uint16> DepthData16;
         DepthData16.Reserve(DepthData->DepthData.Num());

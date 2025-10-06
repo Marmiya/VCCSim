@@ -63,7 +63,7 @@ public:
     void AsyncGetSegmentationImageData(TFunction<void(const TArray<FColor>&)> Callback);
 
     // UCameraBaseComponent interface
-    virtual ESensorType GetSensorType() const override { return ESensorType::SegmentationCamera; }
+    virtual ESensorType GetSensorType() const override { return ESensorType::SegmentCamera; }
 
 protected:
     virtual void InitializeRenderTargets() override;

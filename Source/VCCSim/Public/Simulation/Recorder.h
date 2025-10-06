@@ -27,12 +27,13 @@
 
 struct FCameraViewGroup
 {
-    // Cameras and if they need update this frame
-    TMap<USensorBaseComponent*, bool> Cameras;
+    TMap<UCameraBaseComponent*, bool> Cameras;
     int32 ViewIndex;
+    AActor* OwnerActor;
 
     FCameraViewGroup()
         : ViewIndex(0)
+        , OwnerActor(nullptr)
     {}
 };
 
