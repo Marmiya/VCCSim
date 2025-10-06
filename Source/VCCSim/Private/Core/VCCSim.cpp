@@ -28,10 +28,13 @@ void FVCCSimModule::StartupModule()
 {
     UE_LOG(LogVCCSim, Display, TEXT("VCCSim module starting up."));
 
-    FString PluginShaderDir = FPaths::Combine(IPluginManager::Get().FindPlugin(TEXT("VCCSim"))->GetBaseDir(), TEXT("Source/VCCSim/Shaders"));
+    FString PluginShaderDir = FPaths::Combine(
+    	IPluginManager::Get().FindPlugin(TEXT("VCCSim"))->GetBaseDir(),
+    	TEXT("Source/VCCSim/Shaders"));
     AddShaderSourceDirectoryMapping(TEXT("/VCCSim"), PluginShaderDir);
 
-    UE_LOG(LogVCCSim, Log, TEXT("Registered shader directory mapping: /VCCSim -> %s"), *PluginShaderDir);
+    UE_LOG(LogVCCSim, Log,
+    	TEXT("Registered shader directory mapping: /VCCSim -> %s"), *PluginShaderDir);
 }
 
 void FVCCSimModule::ShutdownModule()

@@ -84,7 +84,6 @@ private:
     TMap<USensorBaseComponent*, double> SensorIntervals;
     UPROPERTY()
     TSet<USensorBaseComponent*> SensorsToReadThisFrame;
-    TMap<TWeakObjectPtr<UCameraBaseComponent>, FTextureRHIRef&> RenderTargets;
 
     TArray<FCameraViewGroup> CameraViewGroups;
     TMap<int32, FRDGViewResources> ViewResourcesMap;
@@ -107,8 +106,4 @@ private:
     bool ArePosesSimilar(const UCameraBaseComponent* CamA, const UCameraBaseComponent* CamB) const;
     
     void RenderViewGroupsRDG();
-    
-    TPair<FMatrix, FReversedZPerspectiveMatrix> CalculateViewMatrices(UCameraBaseComponent* Camera);
-    void ProcessReadbackData(int32 ViewIndex, const FCameraViewGroup& ViewGroup);
-    void DistributeDataToCameras(const TArray<FColor>& PixelData, const FCameraViewGroup& ViewGroup, double Timestamp);
 };

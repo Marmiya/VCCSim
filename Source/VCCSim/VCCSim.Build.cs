@@ -28,7 +28,7 @@ public class VCCSim : ModuleRules
                 "Core",
                 "CoreUObject",
                 "Engine",
-                "ImageWrapper", 
+                "ImageWrapper",
                 "ImageCore",
                 "UMG",
                 "InputCore",
@@ -37,14 +37,15 @@ public class VCCSim : ModuleRules
                 "Renderer",
                 "ProceduralMeshComponent",
                 "LevelSequence",
-                "MovieScene", 
-                "EnhancedInput", 
-                "ChaosVehicles", 
+                "MovieScene",
+                "EnhancedInput",
+                "ChaosVehicles",
                 "PhysicsCore",
                 "Niagara",
                 "NiagaraCore",
                 "NiagaraShader",
-                "AssetRegistry"
+                "AssetRegistry",
+                "Projects"
             }
         );
         

@@ -19,6 +19,7 @@
 #include "Sensors/CameraSensor.h"
 #include "Sensors/NormalCamera.h"
 #include "Sensors/SegmentCamera.h"
+#include "Sensors/DepthCamera.h"
 #include "Engine/World.h"
 #include "Misc/Paths.h"
 #include "TimerManager.h"
@@ -31,11 +32,10 @@
 #include "RHI.h"
 #include "RHIGPUReadback.h"
 #include "RendererInterface.h"
-#include "Sensors/DepthCamera.h"
-#include "SceneView.h"
-#include "SceneViewExtension.h"
-#include "Engine/Canvas.h"
-#include "CanvasTypes.h"
+#include "SceneRenderTargetParameters.h"
+#include "PixelShaderUtils.h"
+#include "ScreenRendering.h"
+#include "SystemTextures.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogRecorder, Log, All);
 
@@ -237,7 +237,7 @@ void ARecorder::CollectSensorData()
     AsyncTask(ENamedThreads::AnyThread,
         [this, SensorsToRead]()
         {
-            if (SensorsToReadThisFrame.Num() > 0)
+            if (SensorsToRead.Num() > 0)
             {
                 ENQUEUE_RENDER_COMMAND(DirectSensorCapture)(
                     [this, SensorsToRead](FRHICommandListImmediate& RHICmdList)
@@ -286,7 +286,7 @@ void ARecorder::ProcessCameraResult(FRDGBuilder& GraphBuilder, USensorBaseCompon
 
     TSharedPtr<FRHIGPUTextureReadback> SharedReadback(Readback);
 
-    double CaptureTimestamp = CameraBase->GetLastCaptureTimestamp();
+    double CaptureTimestamp = LastSensorCaptureTimes[Sensor];
 
     Async(EAsyncExecution::TaskGraph,
           [CameraBase, SharedReadback, CaptureTimestamp, this]()
@@ -399,7 +399,7 @@ void ARecorder::ProcessCameraResult(FRDGBuilder& GraphBuilder, USensorBaseCompon
                   break;
               }
 
-              if (Packet.bValid)
+              if (Packet.bValid && this->FileWriter.IsValid())
               {
                   this->FileWriter->WriteData(MoveTemp(Packet));
               }
@@ -462,15 +462,6 @@ void ARecorder::SetupSensorProperties()
             if (USensorBaseComponent* Sensor = Entry.GetSensorComponent())
             {
                 SensorIntervals.Add(Sensor, Sensor->GetRecordInterval());
-                if (Sensor->GetSensorType() == ESensorType::RGBCamera ||
-                    Sensor->GetSensorType() == ESensorType::DepthCamera ||
-                    Sensor->GetSensorType() == ESensorType::NormalCamera ||
-                    Sensor->GetSensorType() == ESensorType::SegmentationCamera)
-                {
-                    auto* Camera = Cast<UCameraBaseComponent>(Sensor);
-                    RenderTargets.FindOrAdd(Camera) =
-                        Camera->GetRenderTarget()->GetRenderTargetResource()->GetRenderTargetTexture();
-                }
             }
             else
             {
@@ -558,33 +549,26 @@ bool ARecorder::ArePosesSimilar(const UCameraBaseComponent* CamA, const UCameraB
     return true;
 }
 
-TPair<FMatrix, FReversedZPerspectiveMatrix> CalculateViewMatrices(UCameraBaseComponent* Camera)
+class FDepthPS : public FGlobalShader
 {
-    FVector ViewLocation = Camera->GetComponentLocation();
-    FRotator ViewRotation = Camera->GetComponentRotation();
+public:
+    DECLARE_GLOBAL_SHADER(FDepthPS);
+    SHADER_USE_PARAMETER_STRUCT(FDepthPS, FGlobalShader);
 
-    FMatrix ViewRotationMatrix = FInverseRotationMatrix(ViewRotation);
-    FMatrix ViewTranslationMatrix = FTranslationMatrix(-ViewLocation);
-    FMatrix ViewMatrix = ViewTranslationMatrix * ViewRotationMatrix;
+    BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+        SHADER_PARAMETER_RDG_TEXTURE(Texture2D, SceneDepthTexture)
+        SHADER_PARAMETER_SAMPLER(SamplerState, SceneDepthSampler)
+        RENDER_TARGET_BINDING_SLOTS()
+    END_SHADER_PARAMETER_STRUCT()
 
-    const float HalfFOVRad = FMath::DegreesToRadians(Camera->FOV / 2.0f);
-    const float AspectRatio = static_cast<float>(Camera->Width) / static_cast<float>(Camera->Height);
-
-    auto ProjectionMatrix = FReversedZPerspectiveMatrix(
-        HalfFOVRad,
-        AspectRatio,
-        1.0f,
-        GNearClippingPlane
-    );
-
-    return TPair<FMatrix, FReversedZPerspectiveMatrix>(ViewMatrix, ProjectionMatrix);
-}
-
-class DepthShader : public FGlobalShader
-{
-    DECLARE_GLOBAL_SHADER(DepthShader);
-    SHADER_USE_PARAMETER_STRUCT(DepthShader, FGlobalShader);
+    static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
+    {
+        return true;
+    }
 };
+
+IMPLEMENT_GLOBAL_SHADER(FDepthPS, "/VCCSim/DepthCapture.usf", "MainPS", SF_Pixel);
+
 
 void ARecorder::RenderViewGroupsRDG()
 {
@@ -593,41 +577,75 @@ void ARecorder::RenderViewGroupsRDG()
         return;
     }
 
-    TArray<TMap<UCameraBaseComponent*, FTextureRHIRef&>> UpdatedCamerasPerGroup;
-    
+    TArray<TArray<UCameraBaseComponent*>> UpdatedCamerasPerGroup;
+
     for (const auto& CameraViewGroup : CameraViewGroups)
     {
-        TMap<UCameraBaseComponent*, FTextureRHIRef&> CamerasToUpdate;
+        TArray<UCameraBaseComponent*> CamerasToUpdate;
         for (const auto& CamPair : CameraViewGroup.Cameras)
         {
-            if (CamPair.Value) // Needs update
+            if (CamPair.Value)
             {
                 if (UCameraBaseComponent* CameraComp = Cast<UCameraBaseComponent>(CamPair.Key))
-                {                    
-                    CamerasToUpdate.FindOrAdd(CameraComp) = RenderTargets[CameraComp];
+                {
+                    CamerasToUpdate.Add(CameraComp);
                 }
             }
-            UpdatedCamerasPerGroup.Add(MoveTemp(CamerasToUpdate));
         }
+        UpdatedCamerasPerGroup.Add(MoveTemp(CamerasToUpdate));
     }
 
-    ARecorder* RecorderPtr = this;
+    const ERHIFeatureLevel::Type FeatureLevel = GMaxRHIFeatureLevel;
 
     ENQUEUE_RENDER_COMMAND(MRTMultiViewCapture)(
-        [RecorderPtr, UpdatedCamerasPerGroup](FRHICommandListImmediate& RHICmdList)
+        [UpdatedCamerasPerGroup, FeatureLevel](FRHICommandListImmediate& RHICmdList)
         {
             FRDGBuilder GraphBuilder(RHICmdList, RDG_EVENT_NAME("VCCSimMRTCapture"));
 
+            FRDGSystemTextures::Create(GraphBuilder);
+
+            const FSceneTextures* SceneTextures = nullptr;
             for (const auto& UpdatedCameras : UpdatedCamerasPerGroup)
             {
-                const auto UpdatedCamerasArray = UpdatedCameras.Array();
-                const FIntPoint Resolution = UpdatedCamerasArray[0].Key->GetResolution();
-                for (int32 i = 1; i < UpdatedCamerasArray.Num(); ++i)
+                if (UpdatedCameras.Num() == 0)
                 {
-                    GraphBuilder.RegisterExternalTexture(
-                        CreateRenderTarget(UpdatedCamerasArray[i].Value, TEXT("MRTCameraRT")));
+                    continue;
+                }
+
+                for (int32 i = 0; i < UpdatedCameras.Num(); ++i)
+                {
+                    if (UpdatedCameras[i]->GetSensorType() == ESensorType::DepthCamera)
+                    {
+                        FString TextureName = FString::Printf(TEXT("DepthCameraRT_%d"), UpdatedCameras[i]->GetSensorIndex());
+                        FRDGTextureRef OutputTexture = GraphBuilder.RegisterExternalTexture(
+                            CreateRenderTarget(UpdatedCameras[i]->GetRenderTarget()->
+                                GetRenderTargetResource()->GetRenderTargetTexture(), *TextureName));
+
+                        auto* PassParameters = GraphBuilder.AllocParameters<FDepthPS::FParameters>();
+
+                        PassParameters->SceneDepthTexture = GSystemTextures.GetBlackDummy(GraphBuilder);
+                        PassParameters->SceneDepthSampler = TStaticSamplerState<SF_Point>::GetRHI();
+
+                        PassParameters->RenderTargets[0] =
+                            FRenderTargetBinding(OutputTexture, ERenderTargetLoadAction::EClear);
+
+                        TShaderMapRef<FDepthPS> PixelShader(GetGlobalShaderMap(FeatureLevel));
+
+                        const FIntPoint Extent = OutputTexture->Desc.Extent;
+                        const FIntRect ViewRect(0, 0, Extent.X, Extent.Y);
+
+                        FPixelShaderUtils::AddFullscreenPass(
+                            GraphBuilder,
+                            GetGlobalShaderMap(FeatureLevel),
+                            RDG_EVENT_NAME("VCCSimDepthCapture"),
+                            PixelShader,
+                            PassParameters,
+                            ViewRect);
+                    }
                 }
             }
+
             GraphBuilder.Execute();
         });
 }
+

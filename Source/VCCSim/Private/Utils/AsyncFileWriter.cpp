@@ -250,11 +250,10 @@ void FImageCompressionTask::CompressDepthData()
 {
     const FDepthCameraData* DepthData = static_cast<const FDepthCameraData*>(DataPacket.Data.Get());
 
+    UE_LOG(LogAsyncFileWriter, Log, TEXT("First value of depth data: %f"), DepthData->DepthData[0]);
+
     if (DepthData && DepthData->DepthData.Num() > 0)
     {
-        auto DepthResult =
-            CreateCompressedResult(TEXT("Depth"), TEXT("png"), DataPacket.Data->Timestamp);
-
         // Convert float depth to 16-bit depth
         TArray<uint16> DepthData16;
         DepthData16.Reserve(DepthData->DepthData.Num());
