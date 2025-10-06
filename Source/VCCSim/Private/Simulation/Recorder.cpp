@@ -32,6 +32,10 @@
 #include "RHIGPUReadback.h"
 #include "RendererInterface.h"
 #include "Sensors/DepthCamera.h"
+#include "SceneView.h"
+#include "SceneViewExtension.h"
+#include "Engine/Canvas.h"
+#include "CanvasTypes.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogRecorder, Log, All);
 
@@ -96,6 +100,9 @@ void ARecorder::StartRecording()
     }
 
     InitializeAsyncWriter();
+
+    SetupSensorProperties();
+    GroupCamerasByPose();
 
     float ClampedInterval = FMath::Max(RecordingInterval, 0.001f);
     GetWorld()->GetTimerManager().SetTimer(
@@ -205,13 +212,13 @@ void ARecorder::CreateActorDirectories(const FString& ActorName, TSet<ESensorTyp
 
 void ARecorder::CollectSensorData()
 {
-    TArray<FSensorRegistryEntry> AllSensorEntries = SensorRegistry.GetAllSensors();
-    if (AllSensorEntries.Num() == 0)
+    if (CameraViewGroups.Num() == 0)
     {
-        UE_LOG(LogRecorder, Warning, TEXT("No sensors registered for recording"));
+        UE_LOG(LogRecorder, Warning, TEXT("No camera view groups available for recording"));
         return;
     }
 
+    TArray<FSensorRegistryEntry> AllSensorEntries = SensorRegistry.GetAllSensors();
     TArray<USensorBaseComponent*> Sensors;
     for (const FSensorRegistryEntry& Entry : AllSensorEntries)
     {
@@ -242,49 +249,20 @@ void ARecorder::CollectSensorData()
                 );
             }
         });
-    
 
     double CurrentTime = FPlatformTime::Seconds();
-    for (USensorBaseComponent* Sensor : Sensors)
+    
+    for (FCameraViewGroup& ViewGroup : CameraViewGroups)
     {
-        if (auto* CameraBase = Cast<UCameraBaseComponent>(Sensor))
+        TArray<USensorBaseComponent*> CamerasNeedingUpdate;
+
+        for (auto& SensorAndState : ViewGroup.Cameras)
         {
-            if (ShouldCaptureSensor(Sensor, CurrentTime))
-            {
-                switch (Sensor->GetSensorType())
-                {
-                    case ESensorType::RGBCamera:
-                        if (auto* RGBCamera = Cast<URGBCameraComponent>(CameraBase))
-                        {
-                            RGBCamera->CaptureRGBSceneDeferred();
-                        }
-                        break;
-                    case ESensorType::DepthCamera:
-                        if (auto* DepthCamera = Cast<UDepthCameraComponent>(CameraBase))
-                        {
-                            DepthCamera->CaptureDepthSceneDeferred();
-                        }
-                        break;
-                    case ESensorType::NormalCamera:
-                        if (auto* NormalCamera = Cast<UNormalCameraComponent>(CameraBase))
-                        {
-                            NormalCamera->CaptureNormalSceneDeferred();
-                        }
-                        break;
-                    case ESensorType::SegmentationCamera:
-                        if (auto* SegCamera = Cast<USegCameraComponent>(CameraBase))
-                        {
-                            SegCamera->CaptureSegmentationSceneDeferred();
-                        }
-                        break;
-                    default:
-                        UE_LOG(LogRecorder, Warning, TEXT("Unsupported sensor type: %d"),
-                            static_cast<int32>(Sensor->GetSensorType()));
-                        break;
-                }
-            }
+            SensorAndState.Value = ShouldCaptureSensor(SensorAndState.Key, CurrentTime);
         }
     }
+
+    RenderViewGroupsRDG();
 }
 
 void ARecorder::ProcessCameraResult(FRDGBuilder& GraphBuilder, USensorBaseComponent* Sensor)
@@ -453,7 +431,7 @@ void ARecorder::ProcessSensorResults(
 
 bool ARecorder::ShouldCaptureSensor(USensorBaseComponent* Sensor, double CurrentTime)
 {
-    double SensorInterval = Sensor->GetRecordInterval();
+    double SensorInterval = SensorIntervals[Sensor];
 
     if (!LastSensorCaptureTimes.Contains(Sensor))
     {
@@ -473,4 +451,183 @@ bool ARecorder::ShouldCaptureSensor(USensorBaseComponent* Sensor, double Current
     }
 
     return false;
+}
+
+void ARecorder::SetupSensorProperties()
+{
+    for (const FSensorRegistryEntry& Entry : SensorRegistry.GetAllSensors())
+    {
+        if (Entry.IsValid())
+        {
+            if (USensorBaseComponent* Sensor = Entry.GetSensorComponent())
+            {
+                SensorIntervals.Add(Sensor, Sensor->GetRecordInterval());
+                if (Sensor->GetSensorType() == ESensorType::RGBCamera ||
+                    Sensor->GetSensorType() == ESensorType::DepthCamera ||
+                    Sensor->GetSensorType() == ESensorType::NormalCamera ||
+                    Sensor->GetSensorType() == ESensorType::SegmentationCamera)
+                {
+                    auto* Camera = Cast<UCameraBaseComponent>(Sensor);
+                    RenderTargets.FindOrAdd(Camera) =
+                        Camera->GetRenderTarget()->GetRenderTargetResource()->GetRenderTargetTexture();
+                }
+            }
+            else
+            {
+                UE_LOG(LogRecorder, Warning, TEXT("Invalid sensor component in registry entry"));
+            }
+        }
+    }
+}
+
+void ARecorder::GroupCamerasByPose()
+{
+    CameraViewGroups.Empty();
+
+    TArray<FSensorRegistryEntry> AllSensorEntries = SensorRegistry.GetAllSensors();
+    TArray<UCameraBaseComponent*> AllCameras;
+
+    for (const FSensorRegistryEntry& Entry : AllSensorEntries)
+    {
+        if (Entry.IsValid())
+        {
+            if (UCameraBaseComponent* Camera = Cast<UCameraBaseComponent>(Entry.GetSensorComponent()))
+            {
+                AllCameras.Add(Camera);
+            }
+        }
+    }
+
+    TArray<bool> Grouped;
+    Grouped.SetNumZeroed(AllCameras.Num());
+
+    int32 ViewIndex = 0;
+    for (int32 i = 0; i < AllCameras.Num(); ++i)
+    {
+        if (Grouped[i])
+            continue;
+
+        UCameraBaseComponent* BaseCamera = AllCameras[i];
+        FCameraViewGroup NewGroup;
+        NewGroup.ViewIndex = ViewIndex++;
+        NewGroup.Cameras.FindOrAdd(BaseCamera) = true;
+        Grouped[i] = true;
+
+        for (int32 j = i + 1; j < AllCameras.Num(); ++j)
+        {
+            if (Grouped[j])
+                continue;
+
+            UCameraBaseComponent* OtherCamera = AllCameras[j];
+            if (ArePosesSimilar(BaseCamera, OtherCamera))
+            {
+                NewGroup.Cameras.FindOrAdd(OtherCamera) = true;
+                Grouped[j] = true;
+            }
+        }
+
+        CameraViewGroups.Add(NewGroup);
+
+        UE_LOG(LogRecorder, Log, TEXT("View Group %d: %d"),
+            NewGroup.ViewIndex, NewGroup.Cameras.Num());
+    }
+}
+
+bool ARecorder::ArePosesSimilar(const UCameraBaseComponent* CamA, const UCameraBaseComponent* CamB) const
+{
+    if (CamA->GetResolution() != CamB->GetResolution())
+        return false;
+
+    if (!FMath::IsNearlyEqual(CamA->FOV, CamB->FOV, 0.1f))
+        return false;
+
+    FVector PosA = CamA->GetComponentLocation();
+    FVector PosB = CamB->GetComponentLocation();
+    float Distance = FVector::Dist(PosA, PosB);
+    if (Distance > PositionThreshold)
+        return false;
+
+    FRotator RotA = CamA->GetComponentRotation();
+    FRotator RotB = CamB->GetComponentRotation();
+    float AngularDiff = FMath::Abs(FRotator::NormalizeAxis(RotA.Pitch - RotB.Pitch)) +
+                        FMath::Abs(FRotator::NormalizeAxis(RotA.Yaw - RotB.Yaw)) +
+                        FMath::Abs(FRotator::NormalizeAxis(RotA.Roll - RotB.Roll));
+    if (AngularDiff > RotationThreshold * 3.0f)
+        return false;
+
+    return true;
+}
+
+TPair<FMatrix, FReversedZPerspectiveMatrix> CalculateViewMatrices(UCameraBaseComponent* Camera)
+{
+    FVector ViewLocation = Camera->GetComponentLocation();
+    FRotator ViewRotation = Camera->GetComponentRotation();
+
+    FMatrix ViewRotationMatrix = FInverseRotationMatrix(ViewRotation);
+    FMatrix ViewTranslationMatrix = FTranslationMatrix(-ViewLocation);
+    FMatrix ViewMatrix = ViewTranslationMatrix * ViewRotationMatrix;
+
+    const float HalfFOVRad = FMath::DegreesToRadians(Camera->FOV / 2.0f);
+    const float AspectRatio = static_cast<float>(Camera->Width) / static_cast<float>(Camera->Height);
+
+    auto ProjectionMatrix = FReversedZPerspectiveMatrix(
+        HalfFOVRad,
+        AspectRatio,
+        1.0f,
+        GNearClippingPlane
+    );
+
+    return TPair<FMatrix, FReversedZPerspectiveMatrix>(ViewMatrix, ProjectionMatrix);
+}
+
+class DepthShader : public FGlobalShader
+{
+    DECLARE_GLOBAL_SHADER(DepthShader);
+    SHADER_USE_PARAMETER_STRUCT(DepthShader, FGlobalShader);
+};
+
+void ARecorder::RenderViewGroupsRDG()
+{
+    if (!GetWorld() || CameraViewGroups.Num() == 0)
+    {
+        return;
+    }
+
+    TArray<TMap<UCameraBaseComponent*, FTextureRHIRef&>> UpdatedCamerasPerGroup;
+    
+    for (const auto& CameraViewGroup : CameraViewGroups)
+    {
+        TMap<UCameraBaseComponent*, FTextureRHIRef&> CamerasToUpdate;
+        for (const auto& CamPair : CameraViewGroup.Cameras)
+        {
+            if (CamPair.Value) // Needs update
+            {
+                if (UCameraBaseComponent* CameraComp = Cast<UCameraBaseComponent>(CamPair.Key))
+                {                    
+                    CamerasToUpdate.FindOrAdd(CameraComp) = RenderTargets[CameraComp];
+                }
+            }
+            UpdatedCamerasPerGroup.Add(MoveTemp(CamerasToUpdate));
+        }
+    }
+
+    ARecorder* RecorderPtr = this;
+
+    ENQUEUE_RENDER_COMMAND(MRTMultiViewCapture)(
+        [RecorderPtr, UpdatedCamerasPerGroup](FRHICommandListImmediate& RHICmdList)
+        {
+            FRDGBuilder GraphBuilder(RHICmdList, RDG_EVENT_NAME("VCCSimMRTCapture"));
+
+            for (const auto& UpdatedCameras : UpdatedCamerasPerGroup)
+            {
+                const auto UpdatedCamerasArray = UpdatedCameras.Array();
+                const FIntPoint Resolution = UpdatedCamerasArray[0].Key->GetResolution();
+                for (int32 i = 1; i < UpdatedCamerasArray.Num(); ++i)
+                {
+                    GraphBuilder.RegisterExternalTexture(
+                        CreateRenderTarget(UpdatedCamerasArray[i].Value, TEXT("MRTCameraRT")));
+                }
+            }
+            GraphBuilder.Execute();
+        });
 }

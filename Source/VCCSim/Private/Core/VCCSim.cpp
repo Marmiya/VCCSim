@@ -16,17 +16,22 @@
 */
 
 #include "Core/VCCSim.h"
+#include "Interfaces/IPluginManager.h"
+#include "Misc/Paths.h"
+#include "ShaderCore.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogVCCSim, Log, All);
-
-// Editor functionality moved to VCCSimEditor module
 
 #define LOCTEXT_NAMESPACE "FVCCSimModule"
 
 void FVCCSimModule::StartupModule()
 {
-    // Runtime module initialization
     UE_LOG(LogVCCSim, Display, TEXT("VCCSim module starting up."));
+
+    FString PluginShaderDir = FPaths::Combine(IPluginManager::Get().FindPlugin(TEXT("VCCSim"))->GetBaseDir(), TEXT("Source/VCCSim/Shaders"));
+    AddShaderSourceDirectoryMapping(TEXT("/VCCSim"), PluginShaderDir);
+
+    UE_LOG(LogVCCSim, Log, TEXT("Registered shader directory mapping: /VCCSim -> %s"), *PluginShaderDir);
 }
 
 void FVCCSimModule::ShutdownModule()

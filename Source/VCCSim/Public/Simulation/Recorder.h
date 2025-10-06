@@ -21,8 +21,33 @@
 #include "SensorRegistry.h"
 #include "Async/Async.h"
 #include "RHICommandList.h"
+#include "RenderGraphDefinitions.h"
 #include "Utils/AsyncFileWriter.h"
 #include "Recorder.generated.h"
+
+struct FCameraViewGroup
+{
+    // Cameras and if they need update this frame
+    TMap<USensorBaseComponent*, bool> Cameras;
+    int32 ViewIndex;
+
+    FCameraViewGroup()
+        : ViewIndex(0)
+    {}
+};
+
+struct FRDGViewResources
+{
+    FRDGTextureRef OutputTexture;
+    TSharedPtr<FRHIGPUTextureReadback> Readback;
+    double CaptureTimestamp;
+
+    FRDGViewResources()
+        : OutputTexture(nullptr)
+        , Readback(nullptr)
+        , CaptureTimestamp(0.0)
+    {}
+};
 
 UCLASS()
 class VCCSIM_API ARecorder : public AActor
@@ -56,7 +81,16 @@ private:
     UPROPERTY()
     TMap<USensorBaseComponent*, double> LastSensorCaptureTimes;
     UPROPERTY()
+    TMap<USensorBaseComponent*, double> SensorIntervals;
+    UPROPERTY()
     TSet<USensorBaseComponent*> SensorsToReadThisFrame;
+    TMap<TWeakObjectPtr<UCameraBaseComponent>, FTextureRHIRef&> RenderTargets;
+
+    TArray<FCameraViewGroup> CameraViewGroups;
+    TMap<int32, FRDGViewResources> ViewResourcesMap;
+
+    static constexpr float PositionThreshold = 5.0f;
+    static constexpr float RotationThreshold = 2.0f;
 
     void TickRecording();
     void CollectSensorData();
@@ -67,4 +101,14 @@ private:
 
     void InitializeAsyncWriter();
     void ShutdownAsyncWriter();
+
+    void SetupSensorProperties();
+    void GroupCamerasByPose();
+    bool ArePosesSimilar(const UCameraBaseComponent* CamA, const UCameraBaseComponent* CamB) const;
+    
+    void RenderViewGroupsRDG();
+    
+    TPair<FMatrix, FReversedZPerspectiveMatrix> CalculateViewMatrices(UCameraBaseComponent* Camera);
+    void ProcessReadbackData(int32 ViewIndex, const FCameraViewGroup& ViewGroup);
+    void DistributeDataToCameras(const TArray<FColor>& PixelData, const FCameraViewGroup& ViewGroup, double Timestamp);
 };

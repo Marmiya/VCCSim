@@ -1,0 +1,18 @@
+#include "/Engine/Public/Platform.ush"
+#include "/Engine/Private/Common.ush"
+#include "/Engine/Private/ScreenPass.ush"
+#include "/Engine/Private/DeferredShadingCommon.ush"
+
+Texture2D GBufferBTexture;
+SamplerState GBufferSampler;
+
+void CaptureNormalPS(
+    in noperspective float4 UVAndScreenPos : TEXCOORD0,
+    out float4 OutNormal : SV_Target0
+)
+{
+    float2 UV = UVAndScreenPos.xy;
+    float4 GBufferB = Texture2DSample(GBufferBTexture, GBufferSampler, UV);
+    float3 WorldNormal = DecodeNormal(GBufferB.rgb);
+    OutNormal = float4(WorldNormal * 0.5 + 0.5, 1.0);
+}

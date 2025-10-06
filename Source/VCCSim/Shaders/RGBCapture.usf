@@ -1,0 +1,15 @@
+#include "/Engine/Public/Platform.ush"
+#include "/Engine/Private/Common.ush"
+#include "/Engine/Private/ScreenPass.ush"
+
+Texture2D SceneColorTexture;
+SamplerState SceneColorSampler;
+
+void CaptureRGBPS(
+    in noperspective float4 UVAndScreenPos : TEXCOORD0,
+    out float4 OutColor : SV_Target0
+)
+{
+    float2 UV = UVAndScreenPos.xy;
+    OutColor = Texture2DSample(SceneColorTexture, SceneColorSampler, UV);
+}
