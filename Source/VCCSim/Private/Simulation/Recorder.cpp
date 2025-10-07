@@ -16,6 +16,7 @@
 */
 
 #include "Simulation/Recorder.h"
+#include "Simulation/ActorRegistry.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "RenderGraphBuilder.h"
 #include "PixelShaderUtils.h"
@@ -87,6 +88,10 @@ public:
 
 IMPLEMENT_GLOBAL_SHADER(FSegmentationPS, "/VCCSim/SegmentationCapture.usf", "MainPS", SF_Pixel);
 
+BEGIN_SHADER_PARAMETER_STRUCT(FEnqueueCopyTexturePass, )
+    RDG_TEXTURE_ACCESS(Texture, ERHIAccess::CopySrc)
+END_SHADER_PARAMETER_STRUCT()
+
 ARecorder::ARecorder()
 {
     PrimaryActorTick.bCanEverTick = false;
@@ -126,23 +131,22 @@ void ARecorder::StartRecording()
     }
 
     InitializeAsyncWriter();
+    InitializeReadbackWorker();
 
     SetupSensorProperties();
     GroupCamerasByPose();
 
-    float ClampedInterval = FMath::Max(RecordingInterval, 0.001f);
     GetWorld()->GetTimerManager().SetTimer(
         RecordingTimerHandle,
         [this]()
         {
             TickRecording();
         },
-        ClampedInterval,
+        RecorderInterval,
         true
     );
 
     bIsRecording = true;
-    CamerasToReadThisFrame.Empty();
     RecordState = true;
 }
 
@@ -153,19 +157,19 @@ void ARecorder::StopRecording()
         return;
     }
 
-    // Clear the timer
     if (GetWorld() && RecordingTimerHandle.IsValid())
     {
         GetWorld()->GetTimerManager().ClearTimer(RecordingTimerHandle);
         RecordingTimerHandle.Invalidate();
     }
 
+    ShutdownReadbackWorker();
     ShutdownAsyncWriter();
 
     bIsRecording = false;
     RecordState = false;
     LastSensorCaptureTimes.Empty();
-    CamerasToReadThisFrame.Empty();
+    ActorRegistry.UnregisterAllActors();
 
     UE_LOG(LogRecorder, Log, TEXT("Recording stopped"));
 }
@@ -191,21 +195,19 @@ void ARecorder::TickRecording()
     }
 
     SensorRegistry.CleanupInvalidEntries();
-    CollectSensorData();
+    CollectData();
 }
 
 void ARecorder::CreateActorDirectories(const FString& ActorName, TSet<ESensorType>&& SensorTypes)
 {
     IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
 
-    // Create actor directory
     FString ActorDir = FPaths::Combine(RecordingPath, ActorName);
     if (PlatformFile.CreateDirectoryTree(*ActorDir))
     {
         UE_LOG(LogRecorder, Log, TEXT("Created actor directory: %s"), *ActorDir);
     }
 
-    // Create sensor directories
     for (const ESensorType SensorType : SensorTypes)
     {
         FString SensorDir;
@@ -236,26 +238,14 @@ void ARecorder::CreateActorDirectories(const FString& ActorName, TSet<ESensorTyp
     }
 }
 
-void ARecorder::CollectSensorData()
+void ARecorder::CollectData()
 {
     if (CameraViewGroups.Num() == 0)
     {
         return;
     }
 
-    // Step 1: Read previous frame's camera data (async)
-    TArray<UCameraBaseComponent*> CamerasToRead = CamerasToReadThisFrame.Array();
-    CamerasToReadThisFrame.Empty();
-
-    for (UCameraBaseComponent* Camera : CamerasToRead)
-    {
-        if (PendingReadbacks.Contains(Camera))
-        {
-            ReadPendingCameraData(Camera);
-        }
-    }
-
-    // Step 2: Determine which cameras need capture this frame
+    // Step 1: Determine which cameras need capture this frame
     double CurrentTime = FPlatformTime::Seconds();
 
     for (FCameraViewGroup& ViewGroup : CameraViewGroups)
@@ -266,10 +256,10 @@ void ARecorder::CollectSensorData()
         }
     }
 
-    // Step 3: Render current frame and setup readbacks
-    RenderViewGroupsRDG();
+    // Step 2: Render current frame and setup readbacks
+    RenderViewGroupsRDG(CurrentTime);
 
-    // Step 4: Process LiDAR sensors (no GPU dependency)
+    // Step 3: Process LiDAR sensors (no GPU dependency)
     for (const auto& SensorEntry : SensorRegistry.GetAllSensors())
     {
         USensorBaseComponent* Sensor = SensorEntry.GetSensorComponent();
@@ -278,9 +268,12 @@ void ARecorder::CollectSensorData()
             SampleLiDARData(Sensor);
         }
     }
+
+    // Step 4: Record actor poses
+    RecordActorPoses(std::move(CurrentTime));
 }
 
-void ARecorder::RenderViewGroupsRDG()
+void ARecorder::RenderViewGroupsRDG(const double& CaptureTime)
 {
     if (!GetWorld() || CameraViewGroups.Num() == 0)
     {
@@ -399,7 +392,7 @@ void ARecorder::RenderViewGroupsRDG()
         FSceneRenderer* SceneRenderer = SceneRenderBuilder->CreateSceneRenderer(ViewFamily);
 
         SceneRenderBuilder->AddRenderer(SceneRenderer, TEXT("VCCSimMultiSensorCapture"),
-            [this, GroupData, FeatureLevel](FRDGBuilder& GraphBuilder, const FSceneRenderFunctionInputs& Inputs)
+            [this, GroupData, FeatureLevel, CaptureTime](FRDGBuilder& GraphBuilder, const FSceneRenderFunctionInputs& Inputs)
             {
                 if (!Inputs.Renderer)
                 {
@@ -422,6 +415,8 @@ void ARecorder::RenderViewGroupsRDG()
                     const FIntPoint Extent = OutputTexture->Desc.Extent;
                     const FIntRect ViewRect(0, 0, Extent.X, Extent.Y);
 
+                    bool bValidSensorType = false;
+
                     if (SensorType == ESensorType::DepthCamera)
                     {
                         auto* PassParameters = GraphBuilder.AllocParameters<FDepthPS::FParameters>();
@@ -433,6 +428,7 @@ void ARecorder::RenderViewGroupsRDG()
                         TShaderMapRef<FDepthPS> PixelShader(GetGlobalShaderMap(FeatureLevel));
                         FPixelShaderUtils::AddFullscreenPass(GraphBuilder, GetGlobalShaderMap(FeatureLevel),
                             RDG_EVENT_NAME("VCCSimDepthCapture"), PixelShader, PassParameters, ViewRect);
+                        bValidSensorType = true;
                     }
                     else if (SensorType == ESensorType::RGBCamera)
                     {
@@ -445,6 +441,7 @@ void ARecorder::RenderViewGroupsRDG()
                         TShaderMapRef<FRGBPS> PixelShader(GetGlobalShaderMap(FeatureLevel));
                         FPixelShaderUtils::AddFullscreenPass(GraphBuilder, GetGlobalShaderMap(FeatureLevel),
                             RDG_EVENT_NAME("VCCSimRGBCapture"), PixelShader, PassParameters, ViewRect);
+                        bValidSensorType = true;
                     }
                     else if (SensorType == ESensorType::NormalCamera)
                     {
@@ -456,6 +453,7 @@ void ARecorder::RenderViewGroupsRDG()
                         TShaderMapRef<FNormalPS> PixelShader(GetGlobalShaderMap(FeatureLevel));
                         FPixelShaderUtils::AddFullscreenPass(GraphBuilder, GetGlobalShaderMap(FeatureLevel),
                             RDG_EVENT_NAME("VCCSimNormalCapture"), PixelShader, PassParameters, ViewRect);
+                        bValidSensorType = true;
                     }
                     else if (SensorType == ESensorType::SegmentationCamera)
                     {
@@ -466,19 +464,37 @@ void ARecorder::RenderViewGroupsRDG()
                         TShaderMapRef<FSegmentationPS> PixelShader(GetGlobalShaderMap(FeatureLevel));
                         FPixelShaderUtils::AddFullscreenPass(GraphBuilder, GetGlobalShaderMap(FeatureLevel),
                             RDG_EVENT_NAME("VCCSimSegmentationCapture"), PixelShader, PassParameters, ViewRect);
+                        bValidSensorType = true;
+                    }
+                    else
+                    {
+                        UE_LOG(LogRecorder, Error, TEXT("Unsupported sensor type for camera %d"), Camera->GetSensorIndex());
                     }
 
-                    TSharedPtr<FRHIGPUTextureReadback> Readback = MakeShared<FRHIGPUTextureReadback>(
-                        *FString::Printf(TEXT("CameraReadback_%d"), Camera->GetSensorIndex()));
+                    if (bValidSensorType)
+                    {
+                        TSharedPtr<FRHIGPUTextureReadback> Readback = MakeShared<FRHIGPUTextureReadback>(
+                            *FString::Printf(TEXT("CameraReadback_%d"), Camera->GetSensorIndex()));
 
-                    AddEnqueueCopyPass(GraphBuilder, Readback.Get(), OutputTexture, FResolveRect());
+                        FEnqueueCopyTexturePass* PassParameters = GraphBuilder.AllocParameters<FEnqueueCopyTexturePass>();
+                        PassParameters->Texture = OutputTexture;
 
-                    FPendingReadback PendingData;
-                    PendingData.Readback = Readback;
-                    PendingData.CaptureTimestamp = this->LastSensorCaptureTimes[Camera];
-                    PendingData.Camera = Camera;
+                        GraphBuilder.AddPass(
+                            RDG_EVENT_NAME("EnqueueCopyAndEnqueue(%s)", OutputTexture->Name),
+                            PassParameters,
+                            ERDGPassFlags::Readback,
+                            [this, Readback, OutputTexture, CaptureTime, Camera](FRDGAsyncTask, FRHICommandList& RHICmdList)
+                            {
+                                Readback->EnqueueCopy(RHICmdList, OutputTexture->GetRHI(), FResolveRect());
 
-                    this->PendingReadbacks.Add(Camera, PendingData);
+                                FPendingReadback PendingData;
+                                PendingData.Readback = Readback;
+                                PendingData.CaptureTimestamp = CaptureTime;
+                                PendingData.Camera = Camera;
+
+                                this->PendingReadbacks.Enqueue(MoveTemp(PendingData));
+                            });
+                    }
                 }
 
                 return true;
@@ -488,178 +504,174 @@ void ARecorder::RenderViewGroupsRDG()
     SceneRenderBuilder->Execute();
 }
 
-void ARecorder::ReadPendingCameraData(UCameraBaseComponent* Camera)
+void ARecorder::ProcessPendingReadback(const FPendingReadback& PendingData)
 {
-    TWeakObjectPtr<UCameraBaseComponent> WeakCamera(Camera);
-    FPendingReadback PendingData = PendingReadbacks[WeakCamera];
-    PendingReadbacks.Remove(WeakCamera);
+    UCameraBaseComponent* Camera = PendingData.Camera.Get();
+    if (!Camera)
+    {
+        return;
+    }
 
-    TSharedPtr<FRHIGPUTextureReadback> SharedReadback = PendingData.Readback;
-    double CaptureTimestamp = PendingData.CaptureTimestamp;
+    TSharedPtr<FRHIGPUTextureReadback> Readback = PendingData.Readback;
+
+    const double CaptureTime = PendingData.CaptureTimestamp;
 
     Async(EAsyncExecution::TaskGraph,
-        [WeakCamera, SharedReadback, CaptureTimestamp, this]()
+    [Camera, Readback, CaptureTime, this]()
+    {
+        int32 Attempts = 0;
+        while (!Readback->IsReady())
         {
-            UCameraBaseComponent* Camera = WeakCamera.Get();
-            if (!Camera)
+            FPlatformProcess::YieldThread();
+            Attempts++;
+            if (Attempts > 5000000)
             {
-                UE_LOG(LogRecorder, Warning, TEXT("Camera was destroyed before readback completed"));
+                UE_LOG(LogRecorder, Error, TEXT("Readback timeout for sensor %d"), Camera->GetSensorIndex());
                 return;
             }
+        }
 
-            int32 Attempts = 0;
-            while (!SharedReadback->IsReady())
+        int32 RowPitchInPixels = 0;
+        const void* PixelData = Readback->Lock(RowPitchInPixels);
+        if (!PixelData)
+        {
+            UE_LOG(LogRecorder, Error, TEXT("Failed to lock readback for sensor %d"), Camera->GetSensorIndex());
+            return;
+        }
+
+        const FIntPoint Resolution = Camera->GetResolution();
+        const int32 NumPixels = Resolution.X * Resolution.Y;
+        const bool bHasPadding = (RowPitchInPixels != Resolution.X);
+
+        FSensorDataPacket Packet;
+        Packet.Type = Camera->GetSensorType();
+        Packet.SensorIndex = Camera->GetSensorIndex();
+        Packet.OwnerActor = Camera->GetOwnerActor();
+        Packet.bValid = true;
+
+        switch (Packet.Type)
+        {
+        case ESensorType::NormalCamera:
             {
-                FPlatformProcess::YieldThread();
-                Attempts++;
-                if (Attempts > 100000)
+                auto NormalData = MakeShared<FNormalCameraData>();
+                NormalData->Timestamp = CaptureTime;
+                NormalData->Width = Resolution.X;
+                NormalData->Height = Resolution.Y;
+                NormalData->SensorIndex = Packet.SensorIndex;
+                NormalData->Data.SetNumUninitialized(NumPixels);
+                const FFloat16Color* SourceColors = static_cast<const FFloat16Color*>(PixelData);
+
+                if (bHasPadding)
                 {
-                    UE_LOG(LogRecorder, Error, TEXT("Readback timeout"));
-                    return;
+                    for (int32 Row = 0; Row < Resolution.Y; ++Row)
+                    {
+                        const FFloat16Color* RowSrc = SourceColors + Row * RowPitchInPixels;
+                        FFloat16Color* RowDst = NormalData->Data.GetData() + Row * Resolution.X;
+                        FMemory::Memcpy(RowDst, RowSrc, Resolution.X * sizeof(FFloat16Color));
+                    }
                 }
-            }
-
-            int32 RowPitchInPixels = 0;
-            const void* PixelData = SharedReadback->Lock(RowPitchInPixels);
-            if (!PixelData)
-            {
-                UE_LOG(LogRecorder, Error, TEXT("Failed to lock readback"));
-                return;
-            }
-
-            const FIntPoint Resolution = Camera->GetResolution();
-            const int32 NumPixels = Resolution.X * Resolution.Y;
-            const bool bHasPadding = (RowPitchInPixels != Resolution.X);
-
-            FSensorDataPacket Packet;
-            Packet.Type = Camera->GetSensorType();
-            Packet.SensorIndex = Camera->GetSensorIndex();
-            Packet.OwnerActor = Camera->GetOwnerActor();
-            Packet.bValid = true;
-
-            switch (Packet.Type)
-            {
-            case ESensorType::NormalCamera:
+                else
                 {
-                    auto NormalData = MakeShared<FNormalCameraData>();
-                    NormalData->Timestamp = CaptureTimestamp;
-                    NormalData->Width = Resolution.X;
-                    NormalData->Height = Resolution.Y;
-                    NormalData->SensorIndex = Packet.SensorIndex;
-                    NormalData->Data.SetNumUninitialized(NumPixels);
-                    const FFloat16Color* SourceColors = static_cast<const FFloat16Color*>(PixelData);
-
-                    if (bHasPadding)
-                    {
-                        for (int32 Row = 0; Row < Resolution.Y; ++Row)
-                        {
-                            const FFloat16Color* RowSrc = SourceColors + Row * RowPitchInPixels;
-                            FFloat16Color* RowDst = NormalData->Data.GetData() + Row * Resolution.X;
-                            FMemory::Memcpy(RowDst, RowSrc, Resolution.X * sizeof(FFloat16Color));
-                        }
-                    }
-                    else
-                    {
-                        FMemory::Memcpy(NormalData->Data.GetData(), SourceColors, NumPixels * sizeof(FFloat16Color));
-                    }
-                    Packet.Data = NormalData;
-                    break;
+                    FMemory::Memcpy(NormalData->Data.GetData(), SourceColors, NumPixels * sizeof(FFloat16Color));
                 }
-            case ESensorType::SegmentationCamera:
-                {
-                    auto SegData = MakeShared<FSegmentationCameraData>();
-                    SegData->Timestamp = CaptureTimestamp;
-                    SegData->Width = Resolution.X;
-                    SegData->Height = Resolution.Y;
-                    SegData->SensorIndex = Packet.SensorIndex;
-                    SegData->Data.SetNumUninitialized(NumPixels);
-                    const FColor* SourceColors = static_cast<const FColor*>(PixelData);
-
-                    if (bHasPadding)
-                    {
-                        for (int32 Row = 0; Row < Resolution.Y; ++Row)
-                        {
-                            const FColor* RowSrc = SourceColors + Row * RowPitchInPixels;
-                            FColor* RowDst = SegData->Data.GetData() + Row * Resolution.X;
-                            FMemory::Memcpy(RowDst, RowSrc, Resolution.X * sizeof(FColor));
-                        }
-                    }
-                    else
-                    {
-                        FMemory::Memcpy(SegData->Data.GetData(), SourceColors, NumPixels * sizeof(FColor));
-                    }
-                    Packet.Data = SegData;
-                    break;
-                }
-            case ESensorType::RGBCamera:
-                {
-                    auto RGBData = MakeShared<FRGBCameraData>();
-                    RGBData->Timestamp = CaptureTimestamp;
-                    RGBData->Width = Resolution.X;
-                    RGBData->Height = Resolution.Y;
-                    RGBData->SensorIndex = Packet.SensorIndex;
-                    RGBData->RGBData.SetNumUninitialized(NumPixels);
-                    const FColor* SourceColors = static_cast<const FColor*>(PixelData);
-
-                    if (bHasPadding)
-                    {
-                        for (int32 Row = 0; Row < Resolution.Y; ++Row)
-                        {
-                            const FColor* RowSrc = SourceColors + Row * RowPitchInPixels;
-                            FColor* RowDst = RGBData->RGBData.GetData() + Row * Resolution.X;
-                            FMemory::Memcpy(RowDst, RowSrc, Resolution.X * sizeof(FColor));
-                        }
-                    }
-                    else
-                    {
-                        FMemory::Memcpy(RGBData->RGBData.GetData(), SourceColors, NumPixels * sizeof(FColor));
-                    }
-                    Packet.Data = RGBData;
-                    break;
-                }
-            case ESensorType::DepthCamera:
-                {
-                    auto DepthData = MakeShared<FDepthCameraData>();
-                    DepthData->Timestamp = CaptureTimestamp;
-                    DepthData->Width = Resolution.X;
-                    DepthData->Height = Resolution.Y;
-                    DepthData->SensorIndex = Packet.SensorIndex;
-                    DepthData->DepthData.SetNumUninitialized(NumPixels);
-                    const FFloat16Color* SourceColors = static_cast<const FFloat16Color*>(PixelData);
-
-                    if (bHasPadding)
-                    {
-                        for (int32 Row = 0; Row < Resolution.Y; ++Row)
-                        {
-                            const FFloat16Color* RowSrc = SourceColors + Row * RowPitchInPixels;
-                            for (int32 Col = 0; Col < Resolution.X; ++Col)
-                            {
-                                DepthData->DepthData[Row * Resolution.X + Col] = RowSrc[Col].R.GetFloat();
-                            }
-                        }
-                    }
-                    else
-                    {
-                        for (int32 i = 0; i < NumPixels; i++)
-                        {
-                            DepthData->DepthData[i] = SourceColors[i].R.GetFloat();
-                        }
-                    }
-                    Packet.Data = DepthData;
-                    break;
-                }
-            default:
-                Packet.bValid = false;
+                Packet.Data = NormalData;
                 break;
             }
-
-            if (Packet.bValid && this->FileWriter.IsValid())
+        case ESensorType::SegmentationCamera:
             {
-                this->FileWriter->WriteData(MoveTemp(Packet));
-            }
+                auto SegData = MakeShared<FSegmentationCameraData>();
+                SegData->Timestamp = CaptureTime;
+                SegData->Width = Resolution.X;
+                SegData->Height = Resolution.Y;
+                SegData->SensorIndex = Packet.SensorIndex;
+                SegData->Data.SetNumUninitialized(NumPixels);
+                const FColor* SourceColors = static_cast<const FColor*>(PixelData);
 
-            SharedReadback->Unlock();
-        });
+                if (bHasPadding)
+                {
+                    for (int32 Row = 0; Row < Resolution.Y; ++Row)
+                    {
+                        const FColor* RowSrc = SourceColors + Row * RowPitchInPixels;
+                        FColor* RowDst = SegData->Data.GetData() + Row * Resolution.X;
+                        FMemory::Memcpy(RowDst, RowSrc, Resolution.X * sizeof(FColor));
+                    }
+                }
+                else
+                {
+                    FMemory::Memcpy(SegData->Data.GetData(), SourceColors, NumPixels * sizeof(FColor));
+                }
+                Packet.Data = SegData;
+                break;
+            }
+        case ESensorType::RGBCamera:
+            {
+                auto RGBData = MakeShared<FRGBCameraData>();
+                RGBData->Timestamp = CaptureTime;
+                RGBData->Width = Resolution.X;
+                RGBData->Height = Resolution.Y;
+                RGBData->SensorIndex = Packet.SensorIndex;
+                RGBData->RGBData.SetNumUninitialized(NumPixels);
+                const FColor* SourceColors = static_cast<const FColor*>(PixelData);
+
+                if (bHasPadding)
+                {
+                    for (int32 Row = 0; Row < Resolution.Y; ++Row)
+                    {
+                        const FColor* RowSrc = SourceColors + Row * RowPitchInPixels;
+                        FColor* RowDst = RGBData->RGBData.GetData() + Row * Resolution.X;
+                        FMemory::Memcpy(RowDst, RowSrc, Resolution.X * sizeof(FColor));
+                    }
+                }
+                else
+                {
+                    FMemory::Memcpy(RGBData->RGBData.GetData(), SourceColors, NumPixels * sizeof(FColor));
+                }
+                Packet.Data = RGBData;
+                break;
+            }
+        case ESensorType::DepthCamera:
+            {
+                auto DepthData = MakeShared<FDepthCameraData>();
+                DepthData->Timestamp = CaptureTime;
+                DepthData->Width = Resolution.X;
+                DepthData->Height = Resolution.Y;
+                DepthData->SensorIndex = Packet.SensorIndex;
+                DepthData->DepthData.SetNumUninitialized(NumPixels);
+                const FFloat16Color* SourceColors = static_cast<const FFloat16Color*>(PixelData);
+
+                if (bHasPadding)
+                {
+                    for (int32 Row = 0; Row < Resolution.Y; ++Row)
+                    {
+                        const FFloat16Color* RowSrc = SourceColors + Row * RowPitchInPixels;
+                        for (int32 Col = 0; Col < Resolution.X; ++Col)
+                        {
+                            DepthData->DepthData[Row * Resolution.X + Col] = RowSrc[Col].R.GetFloat();
+                        }
+                    }
+                }
+                else
+                {
+                    for (int32 i = 0; i < NumPixels; i++)
+                    {
+                        DepthData->DepthData[i] = SourceColors[i].R.GetFloat();
+                    }
+                }
+                Packet.Data = DepthData;
+                break;
+            }
+        default:
+            Packet.bValid = false;
+            break;
+        }
+
+        Readback->Unlock();
+
+        if (Packet.bValid && FileWriter.IsValid())
+        {
+            FileWriter->WriteData(MoveTemp(Packet));
+        }
+    });
 }
 
 void ARecorder::SampleLiDARData(USensorBaseComponent* Sensor)
@@ -704,10 +716,6 @@ bool ARecorder::ShouldCaptureSensor(USensorBaseComponent* Sensor, double Current
     if (!LastSensorCaptureTimes.Contains(Sensor))
     {
         LastSensorCaptureTimes.Add(Sensor, CurrentTime);
-        if (Sensor->IsA<UCameraBaseComponent>())
-        {
-            CamerasToReadThisFrame.Add(static_cast<UCameraBaseComponent*>(Sensor));
-        }
         return true;
     }
 
@@ -717,10 +725,6 @@ bool ARecorder::ShouldCaptureSensor(USensorBaseComponent* Sensor, double Current
     if (TimeSinceLastCapture >= SensorInterval)
     {
         LastSensorCaptureTimes[Sensor] = CurrentTime;
-        if (Sensor->IsA<UCameraBaseComponent>())
-        {
-            CamerasToReadThisFrame.Add(static_cast<UCameraBaseComponent*>(Sensor));
-        }
         return true;
     }
 
@@ -835,6 +839,89 @@ void ARecorder::InitializeAsyncWriter()
     UE_LOG(LogRecorder, Log, TEXT("Async file writer initialized"));
 }
 
+void ARecorder::RecordActorPoses(double&& CurrentTime)
+{
+    ActorRegistry.CleanupInvalidEntries();
+
+    TArray<FActorRegistryEntry> AllActors = ActorRegistry.GetAllActors();
+
+    for (FActorRegistryEntry& Entry : AllActors)
+    {
+        if (!Entry.IsValid())
+        {
+            continue;
+        }
+
+        AActor* Actor = Entry.GetActor();
+        if (!Actor)
+        {
+            continue;
+        }
+
+        FActorRegistryEntry* EntryPtr = ActorRegistry.FindEntry(Actor);
+        if (!EntryPtr)
+        {
+            continue;
+        }
+
+        if (EntryPtr->LastRecordTime > 0.0 &&
+            (CurrentTime - EntryPtr->LastRecordTime) < EntryPtr->RecordInterval)
+        {
+            continue;
+        }
+
+        EntryPtr->LastRecordTime = CurrentTime;
+
+        FVector Location = Actor->GetActorLocation();
+        FQuat Rotation = Actor->GetActorQuat();
+
+        FString PoseLine = FString::Printf(TEXT("%.6f %.6f %.6f %.6f %.6f %.6f %.6f %.6f\n"),
+            CurrentTime,
+            Location.X, Location.Y, Location.Z,
+            Rotation.X, Rotation.Y, Rotation.Z, Rotation.W);
+
+        FString PoseFilePath = EntryPtr->PoseFilePath;
+
+        Async(EAsyncExecution::ThreadPool,
+            [PoseLine, PoseFilePath]()
+            {
+                FFileHelper::SaveStringToFile(PoseLine, *PoseFilePath,
+                    FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM,
+                    &IFileManager::Get(), FILEWRITE_Append);
+            });
+    }
+}
+
+void ARecorder::InitializeReadbackWorker()
+{
+    if (ReadbackWorker.IsValid())
+    {
+        return;
+    }
+
+    bReadbackWorkerShouldStop.store(false);
+    ReadbackWorker = MakeUnique<FReadbackWorker>(this);
+    ReadbackThread.Reset(FRunnableThread::Create(ReadbackWorker.Get(),
+        TEXT("RecorderReadbackWorker"), 0, TPri_Highest));
+    UE_LOG(LogRecorder, Log, TEXT("Readback worker initialized"));
+}
+
+void ARecorder::ShutdownReadbackWorker()
+{
+    bReadbackWorkerShouldStop.store(true);
+    if (ReadbackWorker.IsValid())
+    {
+        ReadbackWorker->Stop();
+    }
+    if (ReadbackThread.IsValid())
+    {
+        ReadbackThread->WaitForCompletion();
+        ReadbackThread.Reset();
+    }
+    ReadbackWorker.Reset();
+    UE_LOG(LogRecorder, Log, TEXT("Readback worker shutdown"));
+}
+
 void ARecorder::ShutdownAsyncWriter()
 {
     if (FileWriter.IsValid())
@@ -843,4 +930,22 @@ void ARecorder::ShutdownAsyncWriter()
         FileWriter.Reset();
         UE_LOG(LogRecorder, Log, TEXT("Async file writer shutdown"));
     }
+}
+
+uint32 ARecorder::FReadbackWorker::Run()
+{
+    while (!bShouldStop.load())
+    {
+        FPendingReadback PendingData;
+        while (Owner->PendingReadbacks.Dequeue(PendingData))
+        {
+            if (!Owner->bReadbackWorkerShouldStop.load())
+            {
+                Owner->ProcessPendingReadback(PendingData);
+            }
+        }
+
+        FPlatformProcess::YieldThread();
+    }
+    return 0;
 }

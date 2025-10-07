@@ -72,25 +72,7 @@ void APreciseDrone::OnConstruction(const FTransform& Transform)
 void APreciseDrone::Tick(float DeltaTime)
 {
     Super::Tick(DeltaTime);
-
-    // Handle recording if enabled
-    // if (bRecorded && RecordState)
-    // {
-    //     TimeSinceLastCapture += DeltaTime;
-    //     if (TimeSinceLastCapture >= RecordInterval)
-    //     {
-    //         TimeSinceLastCapture = 0.0f;
-    //         FPoseData PoseData;
-    //         PoseData.Location = GetActorLocation();
-    //         FRotator DroneRotation = GetActorForwardVector().Rotation();
-    //         PoseData.Quaternion = DroneRotation.Quaternion();
-    //
-    //         PoseData.Timestamp = FPlatformTime::Seconds();
-    //         Recorder->SubmitPoseData(this, MoveTemp(PoseData));
-    //     }
-    // }
-
-    // Process movement inputs or target movement
+    
     if (bUseTarget)
     {
         MoveToTarget(DeltaTime);

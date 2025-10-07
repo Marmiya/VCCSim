@@ -85,7 +85,7 @@ void FAsyncFileWriter::Flush()
 {
     while (PendingCompressionTasks.load() > 0 || !CompressedDataQueue.IsEmpty())
     {
-        FPlatformProcess::Sleep(0.001f);
+        FPlatformProcess::YieldThread();
     }
     UE_LOG(LogAsyncFileWriter, Log, TEXT("Flush completed - all tasks finished"));
 }
@@ -177,7 +177,7 @@ TSharedPtr<FCompressedImageData> FImageCompressionTask::CreateCompressedResult(
     auto Result = MakeShared<FCompressedImageData>();
     Result->SensorType = DataPacket.Type;
 
-    FString FileName = FString::Printf(TEXT("%.9f.%s"), Timestamp, *Extension);
+    FString FileName = FString::Printf(TEXT("%.6f.%s"), Timestamp, *Extension);
     Result->FilePath = FPaths::Combine(BasePath, DataPacket.OwnerActor->GetName(), SubPath, FileName);
 
     return Result;
@@ -287,7 +287,7 @@ void FImageCompressionTask::CompressDepthData()
 void FImageCompressionTask::CompressNormalData()
 {
     const FNormalCameraData* NormalData = static_cast<const FNormalCameraData*>(DataPacket.Data.Get());
-    if (NormalData || NormalData->Data.Num() > 0)
+    if (NormalData && NormalData->Data.Num() > 0)
     {
         auto Result =
             CreateCompressedResult(TEXT("Normal"), TEXT("exr"), DataPacket.Data->Timestamp);
@@ -295,7 +295,7 @@ void FImageCompressionTask::CompressNormalData()
             NormalData->Height, Result->CompressedData);
         CompressedDataQueue.Enqueue(Result);
     }
-    else 
+    else
     {
         UE_LOG(LogAsyncFileWriter, Error, TEXT("No Normal data to compress for actor: %s"),
             *DataPacket.OwnerActor->GetName());

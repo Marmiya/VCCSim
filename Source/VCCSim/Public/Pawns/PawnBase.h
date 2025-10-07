@@ -20,8 +20,6 @@
 #include "GameFramework/Pawn.h"
 #include "PawnBase.generated.h"
 
-class ARecorder;
-
 enum class EPawnType : uint8
 {
 	Drone,
@@ -37,16 +35,9 @@ class VCCSIM_API APawnBase : public APawn
 public:
 	UFUNCTION(BlueprintCallable)
 	void SetManualControl(bool Manual){ ManualControl = Manual; }
-
-	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Category = "VCCSim|Debug")
-	bool bRecorded = false;
-	bool RecordState = false;
 	
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category="VCCSim|Debug")
 	bool ManualControl = false;
 
-	UPROPERTY()
-	ARecorder* Recorder;
 	float RecordInterval = -1.f;
-	float TimeSinceLastCapture = 0.f;
 };

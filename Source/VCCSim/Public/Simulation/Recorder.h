@@ -19,6 +19,7 @@
 
 #include "CoreMinimal.h"
 #include "SensorRegistry.h"
+#include "ActorRegistry.h"
 #include "Async/Async.h"
 #include "RHICommandList.h"
 #include "RenderGraphDefinitions.h"
@@ -63,10 +64,13 @@ public:
     UPROPERTY(EditAnywhere, Category = "Recording")
     FString RecordingPath;
 
+    // Recorder will attempt to record at this interval (in seconds).
+    // Sensors and actors have their own intervals!
     UPROPERTY(EditAnywhere, Category = "Recording")
-    float RecordingInterval = 1.f/120.f;
+    float RecorderInterval = 1.f/120.f;
     bool RecordState = false;
     FSensorRegistry SensorRegistry;
+    FActorRegistry ActorRegistry;
 
     void StartRecording();
     void StopRecording();
@@ -83,8 +87,6 @@ private:
     TMap<USensorBaseComponent*, double> LastSensorCaptureTimes;
     UPROPERTY()
     TMap<USensorBaseComponent*, double> SensorIntervals;
-    UPROPERTY()
-    TSet<UCameraBaseComponent*> CamerasToReadThisFrame;
 
     TArray<FCameraViewGroup> CameraViewGroups;
 
@@ -94,19 +96,34 @@ private:
         double CaptureTimestamp;
         TWeakObjectPtr<UCameraBaseComponent> Camera;
     };
-    TMap<TWeakObjectPtr<UCameraBaseComponent>, FPendingReadback> PendingReadbacks;
+    TQueue<FPendingReadback, EQueueMode::Mpsc> PendingReadbacks;
+
+    class FReadbackWorker : public FRunnable
+    {
+    public:
+        FReadbackWorker(ARecorder* InOwner) : Owner(InOwner) {}
+        virtual uint32 Run() override;
+        virtual void Stop() override { bShouldStop.store(true); }
+    private:
+        ARecorder* Owner;
+        std::atomic<bool> bShouldStop{false};
+    };
+    TUniquePtr<FReadbackWorker> ReadbackWorker;
+    TUniquePtr<FRunnableThread> ReadbackThread;
+    std::atomic<bool> bReadbackWorkerShouldStop{false};
 
     static constexpr float PositionThreshold = 5.0f;
     static constexpr float RotationThreshold = 2.0f;
 
     void TickRecording();
-    void CollectSensorData();
+    void CollectData();
 
-    void ReadPendingCameraData(UCameraBaseComponent* Camera);
+    void ProcessPendingReadback(const FPendingReadback& PendingData);
     void SampleLiDARData(USensorBaseComponent* Sensor);
-    
-    void RenderViewGroupsRDG();
-    
+
+    void RenderViewGroupsRDG(const double& CaptureTime);
+    void RecordActorPoses(double&& CurrentTime);
+
     bool ShouldCaptureSensor(USensorBaseComponent* Sensor, double CurrentTime);
     void SetupSensorProperties();
     void GroupCamerasByPose();
@@ -114,4 +131,6 @@ private:
 
     void InitializeAsyncWriter();
     void ShutdownAsyncWriter();
+    void InitializeReadbackWorker();
+    void ShutdownReadbackWorker();
 };

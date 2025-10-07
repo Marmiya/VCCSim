@@ -425,23 +425,28 @@ FRobotGrpcMaps AVCCHUD::SetupActors(const FVCCSimConfig& Config)
         }
         else
         {
-            UE_LOG(LogVCCHUD, Error, TEXT("AVCCHUD::SetupActors:"
-                                        "Unknown pawn type!"));
+            UE_LOG(LogVCCHUD, Error, TEXT("AVCCHUD::SetupActors: Unknown pawn type!"));
         }
 
         if (Robot.RecordInterval > 0)
         {
-            if (auto Func = RobotPawn->FindFunction(FName(TEXT("SetRecorder"))))
+            if (APawnBase* PawnBase = Cast<APawnBase>(RobotPawn))
             {
-                RobotPawn->ProcessEvent(Func, &Recorder);
+                PawnBase->RecordInterval = Robot.RecordInterval;
+                AActor* Actor = RobotPawn;
+                FString ActorUniqueDir = FPaths::Combine(Recorder->RecordingPath, Actor->GetName());
+                FString PoseFilePath = FPaths::Combine(ActorUniqueDir, TEXT("poses.txt"));
+                Recorder->ActorRegistry.RegisterActor(Actor, Actor->GetName(), PoseFilePath, Robot.RecordInterval);
             }
-            if (auto Func = RobotPawn->FindFunction(FName(TEXT("SetRecordInterval"))))
+            else
             {
-                auto RecordInterval = Robot.RecordInterval;
-                RobotPawn->ProcessEvent(Func, &RecordInterval);
+                UE_LOG(LogVCCHUD, Warning,
+                    TEXT("Robot %s is not derived from APawnBase, cannot set RecordInterval"),
+                    *Robot.UETag);
             }
         }
-        
+
+        // Setup sensors
         TSet<ESensorType> SensorTypes;
         
         for (const auto& Component : Robot.ComponentConfigs)
