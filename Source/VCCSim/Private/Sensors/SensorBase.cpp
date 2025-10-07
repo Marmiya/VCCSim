@@ -33,8 +33,6 @@ void USensorBaseComponent::BeginPlay()
 	Super::BeginPlay();
 	ParentActor = GetOwner();
 	SetComponentTickEnabled(false);
-	SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	SetCollisionResponseToAllChannels(ECR_Ignore);
 }
 
 void USensorBaseComponent::OnComponentCreated()

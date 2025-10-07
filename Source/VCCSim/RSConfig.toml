@@ -44,7 +44,7 @@ RecordInterval = 0.033333
 #ScannerRangeOuter = 5000
 #ScannerAngleUp = 25
 #ScannerAngleDown = 45
-#bVisualizePoints = false
+#bVisualizePoints = true
 
 [Robots.ComponentConfigs.RGBCamera]
 RecordInterval = 0.033333

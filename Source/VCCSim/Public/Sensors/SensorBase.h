@@ -18,7 +18,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Components/PrimitiveComponent.h"
+#include "Components/SceneComponent.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "DataStructures/RecordData.h"
 #include "SensorBase.generated.h"
@@ -30,7 +30,7 @@ enum class ESensorType : uint8
 	RGBCamera = 4,
 	DepthCamera = 5,
 	NormalCamera = 6,
-	SegmentCamera = 7
+	SegmentationCamera = 7
 };
 
 class VCCSIM_API FSensorConfig
@@ -74,7 +74,7 @@ struct VCCSIM_API FSensorDataPacket
 };
 
 UCLASS(Abstract, ClassGroup = (VCCSIM), meta = (BlueprintSpawnableComponent))
-class VCCSIM_API USensorBaseComponent : public UPrimitiveComponent
+class VCCSIM_API USensorBaseComponent : public USceneComponent
 {
 	GENERATED_BODY()
 

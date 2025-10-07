@@ -119,8 +119,18 @@ void LidarGetOdomCall::ProcessRequest()
         const auto Lidar = RCMap_[Request.name()];
         const FVector Location = Lidar->GetComponentLocation();
         const FRotator Rotation = Lidar->GetComponentRotation();
-        const FVector LinearVelocity = Lidar->GetPhysicsLinearVelocity();
-        const FVector AngularVelocity = Lidar->GetPhysicsAngularVelocityInDegrees();
+
+        FVector LinearVelocity = FVector::ZeroVector;
+        FVector AngularVelocity = FVector::ZeroVector;
+
+        if (AActor* Owner = Lidar->GetOwner())
+        {
+            if (UPrimitiveComponent* RootPrim = Cast<UPrimitiveComponent>(Owner->GetRootComponent()))
+            {
+                LinearVelocity = RootPrim->GetPhysicsLinearVelocity();
+                AngularVelocity = RootPrim->GetPhysicsAngularVelocityInDegrees();
+            }
+        }
 
         VCCSim::Pose* PoseData = Response.mutable_pose();
         VCCSim::Vec3f* Position = PoseData->mutable_position();

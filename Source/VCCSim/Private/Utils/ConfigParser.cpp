@@ -165,7 +165,7 @@ namespace ConfigParserHelpers
 		if (SensorType == "Lidar") return ESensorType::Lidar;
 		if (SensorType == "RGBCamera") return ESensorType::RGBCamera;
 		if (SensorType == "DepthCamera") return ESensorType::DepthCamera;
-		if (SensorType == "SegmentationCamera") return ESensorType::SegmentCamera;
+		if (SensorType == "SegmentationCamera") return ESensorType::SegmentationCamera;
 		if (SensorType == "NormalCamera") return ESensorType::NormalCamera;
 		return ESensorType::RGBCamera;
 	}

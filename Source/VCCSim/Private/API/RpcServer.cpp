@@ -19,10 +19,10 @@ DEFINE_LOG_CATEGORY_STATIC(LogRpcServer, Log, All);
 
 #include "API/RpcServer.h"
 #include "API/GRPCCall.h"
-#include "Sensors/LidarSensor.h"
 #include "Pawns/DronePawn.h"
 #include "Pawns/CarPawn.h"
 #include "Pawns/FlashPawn.h"
+#include "Utils/InsMeshHolder.h"
 #include "Utils/MeshHandlerComponent.h"
 #include "Async/AsyncWork.h"
 #include "Utils/ConfigParser.h"

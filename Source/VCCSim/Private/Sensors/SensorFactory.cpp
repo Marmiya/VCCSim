@@ -22,7 +22,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogSensorFactory, Log, All);
 #include "Sensors/CameraSensor.h"
 #include "Sensors/DepthCamera.h"
 
-UPrimitiveComponent* FSensorFactory::CreateSensor(
+USceneComponent* FSensorFactory::CreateSensor(
 	ESensorType SensorType, AActor* Owner, FName Name, const FSensorConfig& Config)
 {
 	if (!Owner)
@@ -31,7 +31,7 @@ UPrimitiveComponent* FSensorFactory::CreateSensor(
 		return nullptr;
 	}
 
-	UPrimitiveComponent* Sensor = nullptr;
+	USceneComponent* Sensor = nullptr;
 
 	switch (SensorType)
 	{

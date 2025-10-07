@@ -14,6 +14,7 @@ struct FPoseData final : public FSensorData
 
 struct FLiDARData final : public FSensorData
 {
+	int32 SensorIndex;
 	TArray<FVector3f> Data;
 };
 

@@ -103,7 +103,7 @@ uint32 FAsyncFileWriter::FIOWorker::Run()
                 Owner->WriteCompressedDataToFile(*CompressedData);
             }
         }
-        FPlatformProcess::Sleep(0.001f);
+        FPlatformProcess::YieldThread();
     }
 
     TSharedPtr<FCompressedImageData> CompressedData;
@@ -158,7 +158,7 @@ void FImageCompressionTask::DoWork()
         case ESensorType::NormalCamera:
             CompressNormalData();
             break;
-        case ESensorType::SegmentCamera:
+        case ESensorType::SegmentationCamera:
             CompressSegmentationData();
             break;
         case ESensorType::Lidar:
@@ -213,8 +213,6 @@ bool FImageCompressionTask::CompressImageToEXR(
     FImage Image;
     Image.Init(Width, Height, ERawImageFormat::RGBA16F);
     TArrayView64<FFloat16Color> ImageView = Image.AsRGBA16F();
-    UE_LOG(LogAsyncFileWriter, Log, TEXT("first pixel: %f, %f, %f"),
-        ImageData[0].R.GetFloat(), ImageData[0].G.GetFloat(), ImageData[0].B.GetFloat());
 
     if (ImageView.Num() == ImageData.Num())
     {

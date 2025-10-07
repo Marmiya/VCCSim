@@ -84,25 +84,32 @@ private:
     UPROPERTY()
     TMap<USensorBaseComponent*, double> SensorIntervals;
     UPROPERTY()
-    TSet<USensorBaseComponent*> SensorsToReadThisFrame;
+    TSet<UCameraBaseComponent*> CamerasToReadThisFrame;
 
     TArray<FCameraViewGroup> CameraViewGroups;
-    TMap<int32, FRDGViewResources> ViewResourcesMap;
+
+    struct FPendingReadback
+    {
+        TSharedPtr<FRHIGPUTextureReadback> Readback;
+        double CaptureTimestamp;
+        TWeakObjectPtr<UCameraBaseComponent> Camera;
+    };
+    TMap<TWeakObjectPtr<UCameraBaseComponent>, FPendingReadback> PendingReadbacks;
 
     static constexpr float PositionThreshold = 5.0f;
     static constexpr float RotationThreshold = 2.0f;
 
     void TickRecording();
     void CollectSensorData();
-    void ProcessCameraResult(FRDGBuilder& GraphBuilder, USensorBaseComponent* Sensor);
-    void ProcessSensorResults(FRDGBuilder& GraphBuilder, const TArray<USensorBaseComponent*>& Sensors);
+    void RenderViewGroupsRDG();
+    
     bool ShouldCaptureSensor(USensorBaseComponent* Sensor, double CurrentTime);
-
     void SetupSensorProperties();
     void GroupCamerasByPose();
     bool ArePosesSimilar(const UCameraBaseComponent* CamA, const UCameraBaseComponent* CamB) const;
-    
-    void RenderViewGroupsRDG();
+
+    void ReadPendingCameraData(UCameraBaseComponent* Camera);
+    void SampleLiDARData(USensorBaseComponent* Sensor);
 
     void InitializeAsyncWriter();
     void ShutdownAsyncWriter();

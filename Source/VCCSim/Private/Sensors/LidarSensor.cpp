@@ -18,7 +18,7 @@
 DEFINE_LOG_CATEGORY_STATIC(LogLidarSensor, Log, All);
 
 #include "Sensors/LidarSensor.h"
-#include "DataStructures/RecordData.h"
+#include "Utils/InsMeshHolder.h"
 #include "DrawDebugHelpers.h"
 #include "Async/Async.h"
 #include "Misc/FileHelper.h"
@@ -44,7 +44,7 @@ void ULidarComponent::Configure(const FSensorConfig& Config)
 {
 	if (!bBPConfigured)
 	{
-		const auto LidarConfig = static_cast<const FLiDARConfig&>(Config);
+		const auto& LidarConfig = static_cast<const FLiDARConfig&>(Config);
 		NumPoints = LidarConfig.NumPoints;
 		NumRays = LidarConfig.NumRays;
 		ScannerRangeInner = LidarConfig.ScannerRangeInner;
@@ -52,32 +52,28 @@ void ULidarComponent::Configure(const FSensorConfig& Config)
 		ScannerAngleUp = LidarConfig.ScannerAngleUp;
 		ScannerAngleDown = LidarConfig.ScannerAngleDown;
 		bVisualizePoints = LidarConfig.bVisualizePoints;
+
+		InitSensor();
 	}
 
-	FirstCall();
+	if (MeshHolder)
+	{
+		OnPointCloudUpdated.AddLambda([this](const TArray<FVector>& Points)
+		{
+			TArray<FTransform> HitTransforms;
+			HitTransforms.Reserve(Points.Num());
+			for (const FVector& Point : Points)
+			{
+				HitTransforms.Add(FTransform(Point));
+			}
+			MeshHolder->ClearAndAddNewInstances(HitTransforms);
+		});
+	}
 }
 
 void ULidarComponent::BeginPlay()
 {
     Super::BeginPlay();
-
-	// Enable collision for physics simulation
-	SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-
-	// Set collision responses to ignore all channels
-	SetCollisionResponseToAllChannels(ECR_Ignore);
-
-	// Enable physics simulation
-	SetSimulatePhysics(true);
-}
-
-void ULidarComponent::FirstCall()
-{
-	InitSensor();
-
-	LastLocation = GetComponentLocation();
-	LastRotation = GetComponentRotation();
-	UpdateCachedPoints(LastLocation, LastRotation);
 }
 
 void ULidarComponent::InitSensor()
@@ -88,37 +84,33 @@ void ULidarComponent::InitSensor()
 	const int32 PointsPerLine = NumPoints / NumRays;
 	const double LayerAngleStep = 360.0 / PointsPerLine;
 
-	// Parameters to control density distribution
-	const double DensityPower = 1.0;  // Higher values make distribution more extreme
-	const double HorizonBias = 0.1;   // Higher values concentrate more rays near horizon
-
 	for (int32 i = 0; i < NumRays; i++)
 	{
 	    // Map i to [0, PI] for base distribution
-	    double theta = static_cast<double>(i) / (NumRays - 1) * PI;
+	    const double Theta = static_cast<double>(i) / (NumRays - 1) * PI;
 	    
-	    double sinValue = FMath::Sin(theta - PI/2);
-	    double t = (1.0 + sinValue) / 2.0;
+	    double SinValue = FMath::Sin(Theta - PI/2);
+	    double t = (1.0 + SinValue) / 2.0;
 	    
 	    // Apply power function and horizon bias
-	    t = FMath::Pow(t, DensityPower);
-	    t = FMath::Lerp(t, 1.0 - t, HorizonBias);
+	    t = FMath::Pow(t, 1.0); // Higher values make distribution more extreme
+	    t = FMath::Lerp(t, 1.0 - t, 0.1); // Higher values concentrate more rays near horizon
 	    
 	    // Map t to vertical angle range with non-linear distribution
 	    double CurrentLineAngle = FMath::Lerp(ScannerAngleUp, -ScannerAngleDown, t);
 	    
 	    // Ground coverage compensation
 	    // Adjust range based on angle to maintain more even ground coverage
-	    double CurrentLineRad = FMath::DegreesToRadians(CurrentLineAngle);
-	    double cosAngle = FMath::Cos(CurrentLineRad);
+	    const double CurrentLineRad = FMath::DegreesToRadians(CurrentLineAngle);
+	    const double CosAngle = FMath::Cos(CurrentLineRad);
 	    
 	    // Adjust ranges to compensate for ground projection
-	    double adjustedInnerRange = ScannerRangeInner / FMath::Max(cosAngle, 0.1);
-	    double adjustedOuterRange = ScannerRangeOuter / FMath::Max(cosAngle, 0.1);
+	    const double AdjustedInnerRange = ScannerRangeInner / FMath::Max(CosAngle, 0.1);
+	    const double AdjustedOuterRange = ScannerRangeOuter / FMath::Max(CosAngle, 0.1);
 	    
 	    // Calculate vertical offsets
-	    double InnerZOffset = adjustedInnerRange * FMath::Tan(CurrentLineRad);
-	    double OuterZOffset = adjustedOuterRange * FMath::Tan(CurrentLineRad);
+	    const double InnerZOffset = AdjustedInnerRange * FMath::Tan(CurrentLineRad);
+	    const double OuterZOffset = AdjustedOuterRange * FMath::Tan(CurrentLineRad);
 
 	    // Generate points for this vertical angle
 	    double CurrentLayerAngle = 0.0;
@@ -132,14 +124,14 @@ void ULidarComponent::InitSensor()
 	        );
 
 	        FVector CurrentStart(
-	            Direction.X * adjustedInnerRange,
-	            Direction.Y * adjustedInnerRange,
+	            Direction.X * AdjustedInnerRange,
+	            Direction.Y * AdjustedInnerRange,
 	            InnerZOffset
 	        );
 	        
 	        FVector CurrentEnd(
-	            Direction.X * adjustedOuterRange,
-	            Direction.Y * adjustedOuterRange,
+	            Direction.X * AdjustedOuterRange,
+	            Direction.Y * AdjustedOuterRange,
 	            OuterZOffset
 	        );
 
@@ -150,14 +142,8 @@ void ULidarComponent::InitSensor()
 	    }
 	}
 
-    // Update total rays
     ActualNumPoints = LocalStartPoints.Num();
-	
-	// Pre-allocate arrays
-	CachedStartPoints.Reserve(ActualNumPoints);
-	CachedEndPoints.Reserve(ActualNumPoints);
-	CachedStartPoints.SetNum(ActualNumPoints);
-	CachedEndPoints.SetNum(ActualNumPoints);
+
 	PointPool.Empty(ActualNumPoints);
 	PointPool.SetNum(ActualNumPoints);
 
@@ -193,61 +179,48 @@ TArray<FVector3f> ULidarComponent::PerformLineTraces(FVCCSimOdom* Odom)
 	{
 		Odom->Location = ComponentLocation;
 		Odom->Rotation = ComponentRotation;
-		Odom->LinearVelocity = GetPhysicsLinearVelocity();
-		Odom->AngularVelocity = GetPhysicsAngularVelocityInDegrees();
+
+		if (AActor* Owner = GetOwner())
+		{
+			if (UPrimitiveComponent* RootPrim = Cast<UPrimitiveComponent>(Owner->GetRootComponent()))
+			{
+				Odom->LinearVelocity = RootPrim->GetPhysicsLinearVelocity();
+				Odom->AngularVelocity = RootPrim->GetPhysicsAngularVelocityInDegrees();
+			}
+		}
 	}
 
-	// Check if we need to update cached points
-	if (ShouldUpdateCache(ComponentLocation, ComponentRotation))
-	{
-		UpdateCachedPoints(ComponentLocation, ComponentRotation);
-		LastLocation = ComponentLocation;
-		LastRotation = ComponentRotation;
-	}
+	const FTransform WorldTransform = GetComponentTransform();
 
-	// Perform chunked parallel processing
+	TArray<TArray<FVector3f>> ChunkResults;
+	ChunkResults.SetNum(NumChunks);
+
 	ParallelFor(NumChunks, [&](int32 ChunkIndex)
 	{
-		ProcessChunk(ChunkIndex);
-	});
+		ProcessChunk(ChunkIndex, WorldTransform);
 
-	// Collect valid points
-	TArray<FVector3f> ValidPoints;
-	
-	ValidPoints.Reserve(ActualNumPoints);
-	FCriticalSection CriticalSection;  // For thread-safe array access
-
-	// Process chunks in parallel
-	ParallelFor(NumChunks, [&](int32 ChunkIndex)
-	{
-		// Create local array for this chunk's valid points
-		TArray<FVector3f> ChunkValidPoints;
-		ChunkValidPoints.Reserve(ChunkSize);
+		TArray<FVector3f>& ChunkPoints = ChunkResults[ChunkIndex];
+		ChunkPoints.Reserve(ChunkSize);
 
 		const int32 StartIdx = ChunkStartIndices[ChunkIndex];
 		const int32 EndIdx = ChunkEndIndices[ChunkIndex];
 
-		// Collect hit points for this chunk
 		for (int32 Index = StartIdx; Index < EndIdx; ++Index)
 		{
 			if (PointPool[Index].bHit)
 			{
-				ChunkValidPoints.Add({
-					static_cast<float>(PointPool[Index].Position.X),
-					static_cast<float>(PointPool[Index].Position.Y),
-					static_cast<float>(PointPool[Index].Position.Z)
-				});
+				ChunkPoints.Add(FVector3f(PointPool[Index].Position));
 			}
 		}
-
-		// Add chunk results to main array
-		if (ChunkValidPoints.Num() > 0)
-		{
-			FScopeLock Lock(&CriticalSection);
-			ValidPoints.Append(ChunkValidPoints);
-		}
 	});
-	
+
+	TArray<FVector3f> ValidPoints;
+	ValidPoints.Reserve(ActualNumPoints);
+	for (const TArray<FVector3f>& ChunkPoints : ChunkResults)
+	{
+		ValidPoints.Append(ChunkPoints);
+	}
+
 	return ValidPoints;
 }
 
@@ -273,14 +246,19 @@ void ULidarComponent::VisualizePointCloud()
 TArray<FVector3f> ULidarComponent::GetPointCloudData()
 {
 	const auto ans = PerformLineTraces();
-	
-	if (bVisualizePoints)
+
+	if (bVisualizePoints && OnPointCloudUpdated.IsBound())
 	{
-		// Start a new task to visualize the point cloud
-		AsyncTask(ENamedThreads::GameThread, [this]()
-			{
-				VisualizePointCloud();
-			});
+		TArray<FVector> Points;
+		Points.Reserve(ans.Num());
+		for (const FVector3f& Point : ans)
+		{
+			Points.Add(FVector(Point));
+		}
+		AsyncTask(ENamedThreads::GameThread, [this, Points = MoveTemp(Points)]()
+		{
+			OnPointCloudUpdated.Broadcast(Points);
+		});
 	}
 
 	return ans;
@@ -291,82 +269,49 @@ TPair<TArray<FVector3f>, FVCCSimOdom> ULidarComponent::GetPointCloudDataAndOdom(
 	FVCCSimOdom Pose;
 	const auto ans = PerformLineTraces(&Pose);
 
-	if (bVisualizePoints)
+	if (bVisualizePoints && OnPointCloudUpdated.IsBound())
 	{
-		// Start a new task to visualize the point cloud
-		AsyncTask(ENamedThreads::GameThread, [this]()
-			{
-				VisualizePointCloud();
-			});
+		TArray<FVector> Points;
+		Points.Reserve(ans.Num());
+		for (const FVector3f& Point : ans)
+		{
+			Points.Add(FVector(Point));
+		}
+
+		AsyncTask(ENamedThreads::GameThread, [this, Points = MoveTemp(Points)]()
+		{
+			OnPointCloudUpdated.Broadcast(Points);
+		});
 	}
-	
+
 	return {ans, Pose};
 }
 
-void ULidarComponent::ProcessChunk(int32 ChunkIndex)
+void ULidarComponent::ProcessChunk(int32 ChunkIndex, const FTransform& WorldTransform)
 {
 	check(ChunkIndex >= 0 && ChunkIndex < NumChunks);
-    
-	// Get chunk boundaries
+
 	const int32 StartIndex = ChunkStartIndices[ChunkIndex];
 	const int32 EndIndex = ChunkEndIndices[ChunkIndex];
-    
-	// Calculate cache-line aligned processing groups
-	constexpr int32 PointsPerCacheLine = CACHE_LINE_SIZE / sizeof(FVector);
-    
-	// Process points in this chunk with cache-line alignment
-	for (int32 Index = StartIndex; Index < EndIndex; Index += PointsPerCacheLine)
+
+	for (int32 Index = StartIndex; Index < EndIndex; ++Index)
 	{
-		// Process a cache-line sized group of points
-		const int32 GroupEnd = FMath::Min(Index + PointsPerCacheLine, EndIndex);
-        
-		for (int32 GroupIndex = Index; GroupIndex < GroupEnd; ++GroupIndex)
-		{
-			FHitResult HitResult;
-			const bool bHit = GetWorld()->LineTraceSingleByChannel(
-				HitResult,
-				CachedStartPoints[GroupIndex],
-				CachedEndPoints[GroupIndex],
-				ECC_Visibility,
-				QueryParams
-			);
+		const FVector WorldStart = WorldTransform.TransformPosition(LocalStartPoints[Index]);
+		const FVector WorldEnd = WorldTransform.TransformPosition(LocalEndPoints[Index]);
 
-			FLiDARPoint& Point = PointPool[GroupIndex];
-			Point.bHit = bHit;
-			Point.Position = bHit ? HitResult.Location : CachedEndPoints[GroupIndex];
-		}
+		FHitResult HitResult;
+		const bool bHit = GetWorld()->LineTraceSingleByChannel(
+			HitResult,
+			WorldStart,
+			WorldEnd,
+			ECC_Visibility,
+			QueryParams
+		);
+
+		FLiDARPoint& Point = PointPool[Index];
+		Point.bHit = bHit;
+		Point.Position = bHit ? HitResult.Location : WorldEnd;
 	}
-}
-
-void ULidarComponent::UpdateCachedPoints(const FVector& NewLocation, const FRotator& NewRotation)
-{
-	for (int32 i = 0; i < ActualNumPoints; ++i)
-	{
-		CachedStartPoints[i] = NewRotation.RotateVector(LocalStartPoints[i]) + NewLocation;
-		CachedEndPoints[i] = NewRotation.RotateVector(LocalEndPoints[i]) + NewLocation;
-	}
-}
-
-bool ULidarComponent::ShouldUpdateCache(const FVector& NewLocation,
-	const FRotator& NewRotation) const
-{
-	// Check if movement exceeds threshold
-	float LocationDiff = FVector::Distance(LastLocation, NewLocation);
-	if (LocationDiff > UpdateThresholdDistance)
-	{
-		return true;
-	}
-
-	// Check if rotation exceeds threshold
-	FRotator RotationDiff = (NewRotation - LastRotation).GetNormalized();
-	if (FMath::Abs(RotationDiff.Yaw) > UpdateThresholdAngle ||
-		FMath::Abs(RotationDiff.Pitch) > UpdateThresholdAngle ||
-		FMath::Abs(RotationDiff.Roll) > UpdateThresholdAngle)
-	{
-		return true;
-	}
-
-	return false;
 }
 
 TArray<FTransform> ULidarComponent::GetHitTransforms() const

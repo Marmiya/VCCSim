@@ -353,7 +353,7 @@ void AVCCHUD::SetupMainCharacter(const FVCCSimConfig& Config, TArray<AActor*> Fo
                 UE_LOG(LogVCCHUD, Warning, TEXT("DepthCamera component not found!"));
             }
         }
-        if (Component.Get<0>() == ESensorType::SegmentCamera)
+        if (Component.Get<0>() == ESensorType::SegmentationCamera)
         {
             if (USegCameraComponent* SegCameraComponent =
                 MainCharacter->FindComponentByClass<USegCameraComponent>())
@@ -453,8 +453,8 @@ FRobotGrpcMaps AVCCHUD::SetupActors(const FVCCSimConfig& Config)
             {
                 if (ULidarComponent* LidarComponent = RobotPawn->FindComponentByClass<ULidarComponent>())
                 {
-                    LidarComponent->Configure(*SensorConfig);
                     LidarComponent->MeshHolder = Holder->FindComponentByClass<UInsMeshHolder>();
+                    LidarComponent->Configure(*SensorConfig);
                     RGrpcMaps.RCMaps.LiDARMap[RobotTagStd] = LidarComponent;
                     Objects.Add(LidarComponent);
                 }
@@ -505,7 +505,7 @@ FRobotGrpcMaps AVCCHUD::SetupActors(const FVCCSimConfig& Config)
                     Objects.Add(DepthCam);
                 }
             }
-            else if (Component.Get<0>() == ESensorType::SegmentCamera)
+            else if (Component.Get<0>() == ESensorType::SegmentationCamera)
             {
                 TArray<USegCameraComponent*> SegmentationCameras;
                 RobotPawn->GetComponents<USegCameraComponent>(SegmentationCameras);

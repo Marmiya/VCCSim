@@ -20,20 +20,34 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "SensorBase.h"
-#include "Utils/InsMeshHolder.h"
 #include "DataStructures/PointCloud.h"
 #include "LidarSensor.generated.h"
+
+class UInsMeshHolder;
+
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnLidarPointCloudUpdated, const TArray<FVector>&);
+
+namespace LidarDefaults
+{
+    constexpr int32 NumRays = 32;
+    constexpr int32 NumPoints = 3200;
+    constexpr double ScannerRangeInner = 300.0;
+    constexpr double ScannerRangeOuter = 8000.0;
+    constexpr double ScannerAngleUp = 30.0;
+    constexpr double ScannerAngleDown = 30.0;
+    constexpr bool bVisualizePoints = true;
+}
 
 class FLiDARConfig : public FSensorConfig
 {
 public:
-    int32 NumRays = 32;
-    int32 NumPoints = 3200;
-    double ScannerRangeInner = 300;
-    double ScannerRangeOuter = 8000;
-    double ScannerAngleUp = 30;
-    double ScannerAngleDown = 30;
-    bool bVisualizePoints = true;
+    int32 NumRays = LidarDefaults::NumRays;
+    int32 NumPoints = LidarDefaults::NumPoints;
+    double ScannerRangeInner = LidarDefaults::ScannerRangeInner;
+    double ScannerRangeOuter = LidarDefaults::ScannerRangeOuter;
+    double ScannerAngleUp = LidarDefaults::ScannerAngleUp;
+    double ScannerAngleDown = LidarDefaults::ScannerAngleDown;
+    bool bVisualizePoints = LidarDefaults::bVisualizePoints;
 };
 
 UCLASS(ClassGroup = (VCCSIM), meta = (BlueprintSpawnableComponent))
@@ -47,15 +61,15 @@ public:
     virtual ESensorType GetSensorType() const override { return ESensorType::Lidar; }
 
     UFUNCTION(BlueprintCallable, Category = "Lidar")
-    void FirstCall();
     void InitSensor();
 
     UFUNCTION(BlueprintCallable, Category = "Lidar")
     void VisualizePointCloud();
 
-    // For grpc server
     TArray<FVector3f> GetPointCloudData();
     TPair<TArray<FVector3f>, FVCCSimOdom> GetPointCloudDataAndOdom();
+
+    FOnLidarPointCloudUpdated OnPointCloudUpdated;
 
 protected:
     virtual void BeginPlay() override;
@@ -63,29 +77,24 @@ protected:
     TArray<FVector3f> PerformLineTraces(FVCCSimOdom* Odom = nullptr);
 
 public:
-    // Properties can be set in the editor and config file.
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lidar|Config")
-    int32 NumRays = 32;
+    int32 NumRays = LidarDefaults::NumRays;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lidar|Config")
-    int32 NumPoints = 3200;
+    int32 NumPoints = LidarDefaults::NumPoints;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lidar|Config")
-    double ScannerRangeInner = 300;
+    double ScannerRangeInner = LidarDefaults::ScannerRangeInner;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lidar|Config")
-    double ScannerRangeOuter = 8000;
+    double ScannerRangeOuter = LidarDefaults::ScannerRangeOuter;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lidar|Config")
-    double ScannerAngleUp = 30;
+    double ScannerAngleUp = LidarDefaults::ScannerAngleUp;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lidar|Config")
-    double ScannerAngleDown = 30;
+    double ScannerAngleDown = LidarDefaults::ScannerAngleDown;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lidar|Config")
-    bool bVisualizePoints = true;
+    bool bVisualizePoints = LidarDefaults::bVisualizePoints;
 
     // Constructor properties
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Lidar|Debug")
     int ActualNumPoints = -1;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "LiDAR|Performance")
-    float UpdateThresholdDistance = 1.f;  // In centimeters
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "LiDAR|Performance")
-    float UpdateThresholdAngle = 0.5; // In degrees
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "LiDAR|Performance")
     int32 ChunkSize = 256;
 
@@ -93,15 +102,8 @@ public:
     UInsMeshHolder* MeshHolder;
 
 private:
-    static constexpr int32 CACHE_LINE_SIZE = 64;
-
     TArray<FVector> LocalStartPoints;
     TArray<FVector> LocalEndPoints;
-
-    FVector LastLocation;
-    FRotator LastRotation;
-    TArray<FVector> CachedStartPoints;
-    TArray<FVector> CachedEndPoints;
     TArray<FLiDARPoint> PointPool;
 
     FCollisionQueryParams QueryParams;
@@ -110,10 +112,6 @@ private:
     TArray<int32> ChunkStartIndices;
     TArray<int32> ChunkEndIndices;
 
-    void ProcessChunk(int32 ChunkIndex);
-    void UpdateCachedPoints(const FVector& NewLocation,
-        const FRotator& NewRotation);
-    bool ShouldUpdateCache(const FVector& NewLocation,
-        const FRotator& NewRotation) const;
+    void ProcessChunk(int32 ChunkIndex, const FTransform& WorldTransform);
     TArray<FTransform> GetHitTransforms() const;
 };
