@@ -19,7 +19,7 @@
 #include "Editor/Panels/VCCSimPanelSelection.h"
 #include "Utils/VCCSimUIHelpers.h"
 #include "Simulation/SceneAnalysisManager.h"
-#include "Sensors/CameraSensor.h"
+#include "Sensors/RGBCamera.h"
 #include "Pawns/FlashPawn.h"
 #include "Engine/World.h"
 #include "Editor.h"

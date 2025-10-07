@@ -25,17 +25,24 @@
 #include "RHIResources.h"
 #include "DepthCamera.generated.h"
 
+namespace DepthCameraDefaults
+{
+	constexpr int32 Width = 1920;
+	constexpr int32 Height = 1080;
+	constexpr float MaxRange = 10000.0f;
+	constexpr float MinRange = 0.0f;
+}
+
 class FDepthCameraConfig: public FCameraConfig
 {
 public:
-    
-    float MaxRange = 10000.0f;
-    float MinRange = 0.0f;
-    
+    float MaxRange = DepthCameraDefaults::MaxRange;
+    float MinRange = DepthCameraDefaults::MinRange;
+
     FDepthCameraConfig()
     {
-        Width = 1920;
-        Height = 1080;
+        Width = DepthCameraDefaults::Width;
+        Height = DepthCameraDefaults::Height;
     }
 };
 
@@ -74,10 +81,10 @@ public:
     virtual ESensorType GetSensorType() const override { return ESensorType::DepthCamera; }
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthCamera|Config")
-    float MaxRange = 10000.0f;
+    float MaxRange = DepthCameraDefaults::MaxRange;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthCamera|Config")
-    float MinRange = 0.0f;
+    float MinRange = DepthCameraDefaults::MinRange;
 
 protected:
     virtual void InitializeRenderTargets() override;

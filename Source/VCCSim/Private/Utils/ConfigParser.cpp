@@ -17,9 +17,9 @@
 
 #include "Utils/ConfigParser.h"
 #include "Sensors/LidarSensor.h"
-#include "Sensors/CameraSensor.h"
+#include "Sensors/RGBCamera.h"
 #include "Sensors/DepthCamera.h"
-#include "Sensors/SegmentCamera.h"
+#include "Sensors/SegmentationCamera.h"
 #include "Sensors/NormalCamera.h"
 #include "toml++/toml.hpp"
 #include "HAL/PlatformFilemanager.h"

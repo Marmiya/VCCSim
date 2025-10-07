@@ -19,9 +19,9 @@ DEFINE_LOG_CATEGORY_STATIC(LogGRPCCall, Log, All);
 
 #include "API/GRPCCall.h"
 #include "Sensors/LidarSensor.h"
-#include "Sensors/CameraSensor.h"
+#include "Sensors/RGBCamera.h"
 #include "Sensors/DepthCamera.h"
-#include "Sensors/SegmentCamera.h"
+#include "Sensors/SegmentationCamera.h"
 #include "Sensors/NormalCamera.h"
 #include "Utils/MeshHandlerComponent.h"
 #include "Utils/InsMeshHolder.h"

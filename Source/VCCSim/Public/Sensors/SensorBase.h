@@ -33,10 +33,15 @@ enum class ESensorType : uint8
 	SegmentationCamera = 7
 };
 
+namespace SensorDefaults
+{
+	constexpr float RecordInterval = 0.2f;
+}
+
 class VCCSIM_API FSensorConfig
 {
 public:
-	float RecordInterval = 0.2f;
+	float RecordInterval = SensorDefaults::RecordInterval;
 };
 
 struct VCCSIM_API FVCCSimOdom
@@ -47,12 +52,19 @@ struct VCCSIM_API FVCCSimOdom
 	FVector AngularVelocity = FVector::ZeroVector;
 };
 
+namespace CameraDefaults
+{
+	constexpr float FOV = 90.0f;
+	constexpr int32 Width = 512;
+	constexpr int32 Height = 512;
+}
+
 class VCCSIM_API FCameraConfig : public FSensorConfig
 {
 public:
-	float FOV = 90.0f;
-	int32 Width = 512;
-	int32 Height = 512;
+	float FOV = CameraDefaults::FOV;
+	int32 Width = CameraDefaults::Width;
+	int32 Height = CameraDefaults::Height;
 };
 
 struct VCCSIM_API FSensorDataPacket
@@ -119,7 +131,7 @@ protected:
 	AActor* ParentActor = nullptr;
 
 	bool RecordState = false;
-	float RecordInterval = 0.2f;
+	float RecordInterval = SensorDefaults::RecordInterval;
 };
 
 UCLASS(Abstract, ClassGroup = (VCCSIM), meta = (BlueprintSpawnableComponent))
@@ -147,11 +159,11 @@ protected:
 
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Config")
-	float FOV = 90.0f;
+	float FOV = CameraDefaults::FOV;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Config")
-	int32 Width = 512;
+	int32 Width = CameraDefaults::Width;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Config")
-	int32 Height = 512;
+	int32 Height = CameraDefaults::Height;
 
 protected:
 	UPROPERTY()

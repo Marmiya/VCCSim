@@ -25,13 +25,19 @@
 #include "RHIResources.h"
 #include "NormalCamera.generated.h"
 
+namespace NormalCameraDefaults
+{
+	constexpr int32 Width = 1920;
+	constexpr int32 Height = 1080;
+}
+
 class FNormalCameraConfig: public FCameraConfig
 {
 public:
     FNormalCameraConfig()
     {
-        Width = 1920;
-        Height = 1080;
+        Width = NormalCameraDefaults::Width;
+        Height = NormalCameraDefaults::Height;
     }
 };
 

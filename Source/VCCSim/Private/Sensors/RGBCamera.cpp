@@ -17,7 +17,7 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogCameraSensor, Log, All);
 
-#include "Sensors/CameraSensor.h"
+#include "Sensors/RGBCamera.h"
 #include "Async/AsyncWork.h"
 #include "Windows/WindowsHWrapper.h"
 #include "Utils/InsMeshHolder.h"

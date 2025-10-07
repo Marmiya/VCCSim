@@ -18,7 +18,7 @@
 #include "Simulation/SceneAnalysisManager.h"
 #include "Components/StaticMeshComponent.h"
 #include "TimerManager.h"
-#include "Sensors/CameraSensor.h"
+#include "Sensors/RGBCamera.h"
 #include "EngineUtils.h"
 #include "Engine/StaticMesh.h"
 #include "DrawDebugHelpers.h"

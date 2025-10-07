@@ -17,7 +17,7 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogSegmentCamera, Log, All);
 
-#include "Sensors/SegmentCamera.h"
+#include "Sensors/SegmentationCamera.h"
 #include "RenderingThread.h"
 #include "Async/AsyncWork.h"
 #include "Windows/WindowsHWrapper.h"

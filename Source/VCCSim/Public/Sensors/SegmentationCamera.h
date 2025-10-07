@@ -23,83 +23,85 @@
 #include "Engine/TextureRenderTarget2D.h"
 #include "Materials/MaterialInterface.h"
 #include "RHIResources.h"
-#include "CameraSensor.generated.h"
+#include "SegmentationCamera.generated.h"
 
+namespace SegmentationCameraDefaults
+{
+	constexpr int32 Width = 512;
+	constexpr int32 Height = 512;
+	constexpr float MaxRange = 10000.0f;
+}
 
-class FRGBCameraConfig : public FCameraConfig
+class FSegmentationCameraConfig : public FCameraConfig
 {
 public:
+    float MaxRange = SegmentationCameraDefaults::MaxRange;
 
-    FRGBCameraConfig()
+    FSegmentationCameraConfig()
     {
-        FOV = 90.0f;
-        Width = 512;
-        Height = 512;
+        Width = SegmentationCameraDefaults::Width;
+        Height = SegmentationCameraDefaults::Height;
     }
 };
 
-class UInsMeshHolder;
-
 UCLASS(ClassGroup = (VCCSIM), meta = (BlueprintSpawnableComponent))
-class VCCSIM_API URGBCameraComponent : public UCameraBaseComponent
+class VCCSIM_API USegCameraComponent : public UCameraBaseComponent
 {
     GENERATED_BODY()
 
 public:
-    URGBCameraComponent() = default;
+    USegCameraComponent();
     virtual void Configure(const FSensorConfig& Config) override final;
-    void SetIgnoreLidar(UInsMeshHolder* MeshHolder);
-
     FString CameraName;
-
-    UFUNCTION(BlueprintCallable, Category = "RGBCamera")
-    void CaptureRGBScene();
-    UFUNCTION(BlueprintCallable, Category = "RGBCamera")
-    void CaptureRGBSceneDeferred();
     
-    // For grpc service
-    void AsyncGetRGBImageData(TFunction<void(const TArray<FColor>&)> Callback);
+    UFUNCTION(BlueprintCallable, Category = "SegmentationCamera")
+    void CaptureSegmentationScene();
+    UFUNCTION(BlueprintCallable, Category = "SegmentationCamera")
+    void CaptureSegmentationSceneDeferred();
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SegmentationCamera|Config")
+    UMaterialInterface* SegmentationMaterial = Cast<UMaterialInterface>(
+        StaticLoadObject(UMaterialInterface::StaticClass(), nullptr,
+            TEXT("/VCCSim/Materials/M_Segmentation.M_Segmentation")));
+    
+    virtual UTextureRenderTarget2D* GetRenderTarget() const override { return RenderTarget; }
+
+    // For GRPC call
+    void AsyncGetSegmentationImageData(TFunction<void(const TArray<FColor>&)> Callback);
 
     // UCameraBaseComponent interface
-    virtual UTextureRenderTarget2D* GetRenderTarget() const override { return RenderTarget; }
-    virtual ESensorType GetSensorType() const override { return ESensorType::RGBCamera; }
+    virtual ESensorType GetSensorType() const override { return ESensorType::SegmentationCamera; }
 
-    const TArray<FColor>& GetCombinedData() const { return RGBData; }
-    
 protected:
     virtual void InitializeRenderTargets() override;
-
     virtual void SetCaptureComponent() const override;
-    void ProcessRGBTexture(TFunction<void()> OnComplete);
-    void ProcessRGBTextureParam(TFunction<void(const TArray<FColor>&)> OnComplete);
+    void ProcessSegmentationTexture(TFunction<void()> OnComplete);
+    void ProcessSegmentationTextureParam(TFunction<void(const TArray<FColor>&)> OnComplete);
 
 private:
-    TArray<FColor> RGBData;
-
+    TArray<FColor> SegmentationData;
+    bool Dirty = false;
+    
     template<typename CallbackType>
-    void ProcessRGBTextureTemplate(CallbackType&& Callback);
+    void ProcessSegTextureTemplate(CallbackType&& Callback);
 };
 
 template<typename CallbackType>
-void URGBCameraComponent::ProcessRGBTextureTemplate(CallbackType&& Callback)
+void USegCameraComponent::ProcessSegTextureTemplate(CallbackType&& Callback)
 {
-    if (!RenderTarget)
-    {
-        UE_LOG(LogTemp, Error, TEXT("CombinedRenderTarget is null!"));
-        return;
-    }
+    if (!RenderTarget) { UE_LOG(LogTemp, Error, TEXT("SegmentationRenderTarget is null!")); return; }
 
-    if (RGBData.Num() != Width * Height)
+    if (SegmentationData.Num() != Width * Height)
     {
-        RGBData.SetNumUninitialized(Width * Height);
+        SegmentationData.SetNumUninitialized(Width * Height);
     }
 
     struct FReadSurfaceContext
     {
-        TArray<FColor>* RGBData;
+        TArray<FColor>* OutData;
         FIntRect Rect;
         FReadSurfaceDataFlags Flags;
-    } Context { &RGBData, FIntRect(0, 0, Width, Height),
+    } Context { &SegmentationData, FIntRect(0, 0, Width, Height),
                 FReadSurfaceDataFlags(RCM_UNorm, CubeFace_MAX) };
 
     auto SharedCallback = MakeShared<std::decay_t<CallbackType>>(std::forward<CallbackType>(Callback));
@@ -117,14 +119,19 @@ void URGBCameraComponent::ProcessRGBTextureTemplate(CallbackType&& Callback)
             RHICmdList.ReadSurfaceData(
                 RTRes->GetRenderTargetTexture(),
                 Context.Rect,
-                *Context.RGBData,
-                FReadSurfaceDataFlags()
+                *Context.OutData,
+                Context.Flags
             );
+            
+            for (auto& Color : *Context.OutData)
+            {
+                Color.A = 255;
+            }
 
             if constexpr (std::is_invocable_v<std::decay_t<CallbackType>>)
             { (*SharedCallback)(); }
             else if constexpr (std::is_invocable_v<std::decay_t<CallbackType>, const TArray<FColor>&>)
-            { (*SharedCallback)(*Context.RGBData); }
+            { (*SharedCallback)(*Context.OutData); }
         }
     );
 }

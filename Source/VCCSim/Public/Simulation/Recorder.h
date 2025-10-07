@@ -101,15 +101,16 @@ private:
 
     void TickRecording();
     void CollectSensorData();
+
+    void ReadPendingCameraData(UCameraBaseComponent* Camera);
+    void SampleLiDARData(USensorBaseComponent* Sensor);
+    
     void RenderViewGroupsRDG();
     
     bool ShouldCaptureSensor(USensorBaseComponent* Sensor, double CurrentTime);
     void SetupSensorProperties();
     void GroupCamerasByPose();
     bool ArePosesSimilar(const UCameraBaseComponent* CamA, const UCameraBaseComponent* CamB) const;
-
-    void ReadPendingCameraData(UCameraBaseComponent* Camera);
-    void SampleLiDARData(USensorBaseComponent* Sensor);
 
     void InitializeAsyncWriter();
     void ShutdownAsyncWriter();

@@ -23,9 +23,9 @@ DEFINE_LOG_CATEGORY_STATIC(LogSelection, Log, All);
 #include "Engine/Engine.h"
 #include "EngineUtils.h"
 #include "Pawns/FlashPawn.h"
-#include "Sensors/CameraSensor.h"
+#include "Sensors/RGBCamera.h"
 #include "Sensors/DepthCamera.h"
-#include "Sensors/SegmentCamera.h"
+#include "Sensors/SegmentationCamera.h"
 #include "Sensors/NormalCamera.h"
 
 // ============================================================================

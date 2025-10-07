@@ -16,10 +16,10 @@
 */
 
 #include "Simulation/SensorRegistry.h"
-#include "Sensors/CameraSensor.h"
+#include "Sensors/RGBCamera.h"
 #include "Sensors/LidarSensor.h"
 #include "Sensors/NormalCamera.h"
-#include "Sensors/SegmentCamera.h"
+#include "Sensors/SegmentationCamera.h"
 
 DEFINE_LOG_CATEGORY(LogSensorRegistry);
 

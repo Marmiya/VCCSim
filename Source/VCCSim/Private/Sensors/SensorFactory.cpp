@@ -19,7 +19,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogSensorFactory, Log, All);
 
 #include "Sensors/SensorFactory.h"
 #include "Sensors/LidarSensor.h"
-#include "Sensors/CameraSensor.h"
+#include "Sensors/RGBCamera.h"
 #include "Sensors/DepthCamera.h"
 
 USceneComponent* FSensorFactory::CreateSensor(
