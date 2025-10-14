@@ -556,12 +556,23 @@ FRobotGrpcMaps AVCCHUD::SetupActors(const FVCCSimConfig& Config)
                     static_cast<int32>(Component.Get<0>()));
             }
 
-            if (SensorConfig && SensorConfig->RecordInterval > 0.0f && Recorder)
+            if (SensorConfig && Recorder)
             {
                 SensorTypes.Add(Component.Get<0>());
                 for (UObject* Obj : Objects)
                 {
                     Recorder->SensorRegistry.RegisterSensor(Obj);
+                }
+
+                if (SensorConfig->RecordInterval > 0.0f)
+                {
+                    UE_LOG(LogVCCHUD, Log, TEXT("Registered sensor %s with auto-recording (interval: %.3fs)"),
+                        *Robot.UETag, SensorConfig->RecordInterval);
+                }
+                else
+                {
+                    UE_LOG(LogVCCHUD, Log, TEXT("Registered sensor %s for RPC-only mode (no auto-recording)"),
+                        *Robot.UETag);
                 }
             }
         }

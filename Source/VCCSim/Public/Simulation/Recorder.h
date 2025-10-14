@@ -79,6 +79,11 @@ public:
 
     void CreateActorDirectories(const FString& ActorName, TSet<ESensorType>&& SensorTypes);
 
+    void SubmitCameraRequest(
+        UCameraBaseComponent* Camera,
+        TFunction<void(const FSensorDataPacket&)> OnSuccess,
+        TFunction<void(const FString&)> OnError);
+
 private:
     bool bIsRecording = false;
     FTimerHandle RecordingTimerHandle;
@@ -97,6 +102,23 @@ private:
         TWeakObjectPtr<UCameraBaseComponent> Camera;
     };
     TQueue<FPendingReadback, EQueueMode::Mpsc> PendingReadbacks;
+
+    struct FRPCRequestCallback
+    {
+        TFunction<void(const FSensorDataPacket&)> OnSuccess;
+        TFunction<void(const FString&)> OnError;
+        double RequestTime;
+        double TimeoutDuration = 5.0;
+
+        FRPCRequestCallback() : RequestTime(0.0) {}
+    };
+
+    FCriticalSection RPCRequestLock;
+    TMap<TWeakObjectPtr<USensorBaseComponent>, TArray<FRPCRequestCallback>> PendingRPCCallbacks;
+    TSet<TWeakObjectPtr<USensorBaseComponent>> ForceCaptureThisFrame;
+
+    void CheckRPCTimeouts(double CurrentTime);
+    void TriggerRPCCallbacks(UCameraBaseComponent* Camera, const FSensorDataPacket& Packet);
 
     class FReadbackWorker : public FRunnable
     {

@@ -234,15 +234,16 @@ void LidarGetDataAndOdomCall::ProcessRequest()
 CameraGetRGBDataCall::CameraGetRGBDataCall(
     VCCSim::CameraService::AsyncService* Service,
     grpc::ServerCompletionQueue* CompletionQueue,
-    const std::map<std::string, URGBCameraComponent*>& RGBComponentMap)
-        : AsyncCallTemplateImage(Service, CompletionQueue, RGBComponentMap)
+    const std::map<std::string, URGBCameraComponent*>& RGBComponentMap,
+    ARecorder* Recorder)
+        : AsyncCallTemplateImage(Service, CompletionQueue, RGBComponentMap, Recorder)
 {
     Proceed(true);
 }
 
 void CameraGetRGBDataCall::PrepareNextCall()
 {
-    new CameraGetRGBDataCall(Service, CompletionQueue, RCMap_);
+    new CameraGetRGBDataCall(Service, CompletionQueue, RCMap_, Recorder_);
 }
 
 void CameraGetRGBDataCall::InitializeRequest()
@@ -258,44 +259,78 @@ void CameraGetRGBDataCall::ProcessRequest()
     if (!RCMap_.contains(CameraName))
     {
         UE_LOG(LogGRPCCall, Warning, TEXT("Cannot find rgb camera map!"));
+        Responder.Finish(Response, grpc::Status(grpc::INVALID_ARGUMENT, "Camera not found"), this);
+        Status = FINISH;
         return;
     }
 
     auto* RGBCamera = RCMap_[CameraName];
-    if (!RGBCamera)
+    if (!RGBCamera || !Recorder_)
     {
-        UE_LOG(LogGRPCCall, Warning, TEXT("Invalid rgb camera reference!"));
+        UE_LOG(LogGRPCCall, Warning, TEXT("Invalid rgb camera or recorder reference!"));
+        Responder.Finish(Response, grpc::Status(grpc::INTERNAL, "Invalid reference"), this);
+        Status = FINISH;
         return;
     }
 
-    RGBCamera->AsyncGetRGBImageData(
-        [this, RGBCamera](const TArray<FColor>& RGBData)
-    {
-        AsyncTask(ENamedThreads::AnyBackgroundHiPriTask,
-            [this, RGBData, RGBCamera]()
+    Recorder_->SubmitCameraRequest(
+        RGBCamera,
+        [this, RGBCamera](const FSensorDataPacket& Packet)
         {
-            Response.set_width(RGBCamera->Width);
-            Response.set_height(RGBCamera->Height);
-            Response.set_timestamp(FDateTime::UtcNow().ToUnixTimestamp());
-            Response.set_data(RGBData.GetData(), RGBData.Num());
-            Status = FINISH;
-            Responder.Finish(Response, grpc::Status::OK, this);
-        });
-    });
+            if (Packet.Type != ESensorType::RGBCamera || !Packet.bValid)
+            {
+                UE_LOG(LogGRPCCall, Error, TEXT("Invalid packet type or data"));
+                this->Responder.Finish(this->Response,
+                    grpc::Status(grpc::INTERNAL, "Invalid data"), this);
+                return;
+            }
+
+            auto RGBData = StaticCastSharedPtr<FRGBCameraData>(Packet.Data);
+            if (!RGBData)
+            {
+                UE_LOG(LogGRPCCall, Error, TEXT("Failed to cast RGB data"));
+                this->Responder.Finish(this->Response,
+                    grpc::Status(grpc::INTERNAL, "Cast failed"), this);
+                return;
+            }
+
+            AsyncTask(ENamedThreads::AnyBackgroundHiPriTask,
+                [this, RGBData, RGBCamera]()
+            {
+                this->Response.set_width(RGBData->Width);
+                this->Response.set_height(RGBData->Height);
+                this->Response.set_timestamp(RGBData->Timestamp);
+                this->Response.set_data(
+                    reinterpret_cast<const char*>(RGBData->RGBData.GetData()),
+                    RGBData->RGBData.Num() * sizeof(FColor));
+
+                this->Status = FINISH;
+                this->Responder.Finish(this->Response, grpc::Status::OK, this);
+            });
+        },
+        [this](const FString& ErrorMsg)
+        {
+            UE_LOG(LogGRPCCall, Error, TEXT("RPC request failed: %s"), *ErrorMsg);
+            this->Status = FINISH;
+            this->Responder.Finish(this->Response,
+                grpc::Status(grpc::DEADLINE_EXCEEDED, TCHAR_TO_UTF8(*ErrorMsg)), this);
+        }
+    );
 }
 
 CameraGetDepthDataCall::CameraGetDepthDataCall(
     VCCSim::CameraService::AsyncService* Service,
     grpc::ServerCompletionQueue* CompletionQueue,
-    const std::map<std::string, UDepthCameraComponent*>& DepthComponentMap)
-        : AsyncCallTemplateImage(Service, CompletionQueue, DepthComponentMap)
+    const std::map<std::string, UDepthCameraComponent*>& DepthComponentMap,
+    ARecorder* Recorder)
+        : AsyncCallTemplateImage(Service, CompletionQueue, DepthComponentMap, Recorder)
 {
     Proceed(true);
 }
 
 void CameraGetDepthDataCall::PrepareNextCall()
 {
-    new CameraGetDepthDataCall(Service, CompletionQueue, RCMap_);
+    new CameraGetDepthDataCall(Service, CompletionQueue, RCMap_, Recorder_);
 }
 
 void CameraGetDepthDataCall::InitializeRequest()
@@ -311,51 +346,81 @@ void CameraGetDepthDataCall::ProcessRequest()
     if (!RCMap_.contains(CameraName))
     {
         UE_LOG(LogGRPCCall, Warning, TEXT("Cannot find depth camera map!"));
+        Responder.Finish(Response, grpc::Status(grpc::INVALID_ARGUMENT, "Camera not found"), this);
+        Status = FINISH;
         return;
     }
 
-    auto* RGBDCamera = RCMap_[CameraName];
-    if (!RGBDCamera)
+    auto* DepthCamera = RCMap_[CameraName];
+    if (!DepthCamera || !Recorder_)
     {
-        UE_LOG(LogGRPCCall, Warning, TEXT("Invalid depth camera reference!"));
+        UE_LOG(LogGRPCCall, Warning, TEXT("Invalid depth camera or recorder reference!"));
+        Responder.Finish(Response, grpc::Status(grpc::INTERNAL, "Invalid reference"), this);
+        Status = FINISH;
         return;
     }
 
-    RGBDCamera->AsyncGetDepthImageData(
-        [this, RGBDCamera](const TArray<FFloat16Color>& RGBDData)
-    {
-        AsyncTask(ENamedThreads::AnyBackgroundHiPriTask,
-            [this, RGBDData, RGBDCamera]()
+    Recorder_->SubmitCameraRequest(
+        DepthCamera,
+        [this, DepthCamera](const FSensorDataPacket& Packet)
         {
-            Response.set_width(RGBDCamera->Width);
-            Response.set_height(RGBDCamera->Height);
-            Response.set_timestamp(FDateTime::UtcNow().ToUnixTimestamp());
-
-            // Extract depth from alpha channel
-            Response.mutable_data()->Reserve(RGBDData.Num());
-            for (const FFloat16Color& Pixel : RGBDData)
+            if (Packet.Type != ESensorType::DepthCamera || !Packet.bValid)
             {
-                Response.add_data(Pixel.R);
+                UE_LOG(LogGRPCCall, Error, TEXT("Invalid packet type or data"));
+                this->Responder.Finish(this->Response,
+                    grpc::Status(grpc::INTERNAL, "Invalid data"), this);
+                return;
             }
 
-            Status = FINISH;
-            Responder.Finish(Response, grpc::Status::OK, this);
-        });
-    });
+            auto DepthData = StaticCastSharedPtr<FDepthCameraData>(Packet.Data);
+            if (!DepthData)
+            {
+                UE_LOG(LogGRPCCall, Error, TEXT("Failed to cast depth data"));
+                this->Responder.Finish(this->Response,
+                    grpc::Status(grpc::INTERNAL, "Cast failed"), this);
+                return;
+            }
+
+            AsyncTask(ENamedThreads::AnyBackgroundHiPriTask,
+                [this, DepthData]()
+            {
+                this->Response.set_width(DepthData->Width);
+                this->Response.set_height(DepthData->Height);
+                this->Response.set_timestamp(DepthData->Timestamp);
+
+                this->Response.mutable_data()->Reserve(DepthData->DepthData.Num());
+                for (const float Depth : DepthData->DepthData)
+                {
+                    this->Response.add_data(Depth);
+                }
+
+                this->Status = FINISH;
+                this->Responder.Finish(this->Response, grpc::Status::OK, this);
+            });
+        },
+        [this](const FString& ErrorMsg)
+        {
+            UE_LOG(LogGRPCCall, Error, TEXT("RPC request failed: %s"), *ErrorMsg);
+            this->Status = FINISH;
+            this->Responder.Finish(this->Response,
+                grpc::Status(grpc::DEADLINE_EXCEEDED, TCHAR_TO_UTF8(*ErrorMsg)), this);
+        }
+    );
 }
 
 CameraGetDepthPointCloudCall::CameraGetDepthPointCloudCall(
     VCCSim::CameraService::AsyncService* Service,
     grpc::ServerCompletionQueue* CompletionQueue,
-    const std::map<std::string, UDepthCameraComponent*>& DepthComponentMap)
-        : AsyncCallTemplateImage(Service, CompletionQueue, DepthComponentMap)
+    const std::map<std::string, UDepthCameraComponent*>& DepthComponentMap,
+    ARecorder* Recorder)
+        : AsyncCallTemplateImage(Service, CompletionQueue, DepthComponentMap, Recorder)
 {
     Proceed(true);
 }
 
 void CameraGetDepthPointCloudCall::PrepareNextCall()
 {
-    new CameraGetDepthPointCloudCall(Service, CompletionQueue, RCMap_);
+    new CameraGetDepthPointCloudCall(Service, CompletionQueue, RCMap_, Recorder_);
 }
 
 void CameraGetDepthPointCloudCall::InitializeRequest()
@@ -416,15 +481,16 @@ void CameraGetDepthPointCloudCall::ProcessRequest()
 CameraGetSegmentDataCall::CameraGetSegmentDataCall(
     VCCSim::CameraService::AsyncService* Service,
     grpc::ServerCompletionQueue* CompletionQueue,
-    const std::map<std::string, USegCameraComponent*>& SegComponentMap)
-    : AsyncCallTemplateImage(Service, CompletionQueue, SegComponentMap)
+    const std::map<std::string, USegCameraComponent*>& SegComponentMap,
+    ARecorder* Recorder)
+    : AsyncCallTemplateImage(Service, CompletionQueue, SegComponentMap, Recorder)
 {
     Proceed(true);
 }
 
 void CameraGetSegmentDataCall::PrepareNextCall()
 {
-    new CameraGetSegmentDataCall(Service, CompletionQueue, RCMap_);
+    new CameraGetSegmentDataCall(Service, CompletionQueue, RCMap_, Recorder_);
 }
 
 void CameraGetSegmentDataCall::InitializeRequest()
@@ -440,45 +506,79 @@ void CameraGetSegmentDataCall::ProcessRequest()
     if (!RCMap_.contains(CameraName))
     {
         UE_LOG(LogGRPCCall, Warning, TEXT("Cannot find seg camera map!"));
+        Responder.Finish(Response, grpc::Status(grpc::INVALID_ARGUMENT, "Camera not found"), this);
+        Status = FINISH;
         return;
     }
 
     auto* SegCamera = RCMap_[CameraName];
-    if (!SegCamera)
+    if (!SegCamera || !Recorder_)
     {
-        UE_LOG(LogGRPCCall, Warning, TEXT("Invalid seg camera reference!"));
+        UE_LOG(LogGRPCCall, Warning, TEXT("Invalid seg camera or recorder reference!"));
+        Responder.Finish(Response, grpc::Status(grpc::INTERNAL, "Invalid reference"), this);
+        Status = FINISH;
         return;
     }
 
-    SegCamera->AsyncGetSegmentationImageData(
-        [this, SegCamera](const TArray<FColor>& SegData)
-    {
-        AsyncTask(ENamedThreads::AnyBackgroundHiPriTask,
-            [this, SegData, SegCamera]()
+    Recorder_->SubmitCameraRequest(
+        SegCamera,
+        [this, SegCamera](const FSensorDataPacket& Packet)
         {
-            Response.set_width(SegCamera->Width);
-            Response.set_height(SegCamera->Height);
-            Response.set_timestamp(FDateTime::UtcNow().ToUnixTimestamp());
-            Response.set_data(SegData.GetData(), SegData.Num());
-            Status = FINISH;
-            Responder.Finish(Response, grpc::Status::OK, this);
-        });
-    });
+            if (Packet.Type != ESensorType::SegmentationCamera || !Packet.bValid)
+            {
+                UE_LOG(LogGRPCCall, Error, TEXT("Invalid packet type or data"));
+                this->Responder.Finish(this->Response,
+                    grpc::Status(grpc::INTERNAL, "Invalid data"), this);
+                return;
+            }
+
+            auto SegData = StaticCastSharedPtr<FSegmentationCameraData>(Packet.Data);
+            if (!SegData)
+            {
+                UE_LOG(LogGRPCCall, Error, TEXT("Failed to cast segmentation data"));
+                this->Responder.Finish(this->Response,
+                    grpc::Status(grpc::INTERNAL, "Cast failed"), this);
+                return;
+            }
+
+            AsyncTask(ENamedThreads::AnyBackgroundHiPriTask,
+                [this, SegData]()
+            {
+                this->Response.set_width(SegData->Width);
+                this->Response.set_height(SegData->Height);
+                this->Response.set_timestamp(SegData->Timestamp);
+                this->Response.set_data(
+                    reinterpret_cast<const char*>(SegData->Data.GetData()),
+                    SegData->Data.Num() * sizeof(FColor));
+
+                this->Status = FINISH;
+                this->Responder.Finish(this->Response, grpc::Status::OK, this);
+            });
+        },
+        [this](const FString& ErrorMsg)
+        {
+            UE_LOG(LogGRPCCall, Error, TEXT("RPC request failed: %s"), *ErrorMsg);
+            this->Status = FINISH;
+            this->Responder.Finish(this->Response,
+                grpc::Status(grpc::DEADLINE_EXCEEDED, TCHAR_TO_UTF8(*ErrorMsg)), this);
+        }
+    );
 }
 
 
 CameraGetNormalDataCall::CameraGetNormalDataCall(
     VCCSim::CameraService::AsyncService* Service,
     grpc::ServerCompletionQueue* CompletionQueue,
-    const std::map<std::string, UNormalCameraComponent*>& NormalComponentMap)
-        : AsyncCallTemplateImage(Service, CompletionQueue, NormalComponentMap)
+    const std::map<std::string, UNormalCameraComponent*>& NormalComponentMap,
+    ARecorder* Recorder)
+        : AsyncCallTemplateImage(Service, CompletionQueue, NormalComponentMap, Recorder)
 {
     Proceed(true);
 }
 
 void CameraGetNormalDataCall::PrepareNextCall()
 {
-    new CameraGetNormalDataCall(Service, CompletionQueue, RCMap_);
+    new CameraGetNormalDataCall(Service, CompletionQueue, RCMap_, Recorder_);
 }
 
 void CameraGetNormalDataCall::InitializeRequest()
@@ -494,38 +594,69 @@ void CameraGetNormalDataCall::ProcessRequest()
     if (!RCMap_.contains(CameraName))
     {
         UE_LOG(LogGRPCCall, Warning, TEXT("Cannot find normal camera map!"));
+        Responder.Finish(Response, grpc::Status(grpc::INVALID_ARGUMENT, "Camera not found"), this);
+        Status = FINISH;
         return;
     }
 
     auto* NormalCamera = RCMap_[CameraName];
-    if (!NormalCamera)
+    if (!NormalCamera || !Recorder_)
     {
-        UE_LOG(LogGRPCCall, Warning, TEXT("Invalid normal camera reference!"));
+        UE_LOG(LogGRPCCall, Warning, TEXT("Invalid normal camera or recorder reference!"));
+        Responder.Finish(Response, grpc::Status(grpc::INTERNAL, "Invalid reference"), this);
+        Status = FINISH;
         return;
     }
 
-    NormalCamera->AsyncGetNormalImageData(
-        [this, NormalCamera](const TArray<FFloat16Color>& NormalData)
-    {
-        AsyncTask(ENamedThreads::AnyBackgroundHiPriTask,
-            [this, NormalData, NormalCamera]()
+    Recorder_->SubmitCameraRequest(
+        NormalCamera,
+        [this, NormalCamera](const FSensorDataPacket& Packet)
         {
-            Response.set_width(NormalCamera->Width);
-            Response.set_height(NormalCamera->Height);
-            Response.set_timestamp(FDateTime::UtcNow().ToUnixTimestamp());
-                Response.mutable_data()->Reserve(NormalCamera->Width * NormalCamera->Height);
+            if (Packet.Type != ESensorType::NormalCamera || !Packet.bValid)
+            {
+                UE_LOG(LogGRPCCall, Error, TEXT("Invalid packet type or data"));
+                this->Responder.Finish(this->Response,
+                    grpc::Status(grpc::INTERNAL, "Invalid data"), this);
+                return;
+            }
 
-                for (int i = 0; i < NormalData.Num(); ++i)
+            auto NormalData = StaticCastSharedPtr<FNormalCameraData>(Packet.Data);
+            if (!NormalData)
+            {
+                UE_LOG(LogGRPCCall, Error, TEXT("Failed to cast normal data"));
+                this->Responder.Finish(this->Response,
+                    grpc::Status(grpc::INTERNAL, "Cast failed"), this);
+                return;
+            }
+
+            AsyncTask(ENamedThreads::AnyBackgroundHiPriTask,
+                [this, NormalData]()
+            {
+                this->Response.set_width(NormalData->Width);
+                this->Response.set_height(NormalData->Height);
+                this->Response.set_timestamp(NormalData->Timestamp);
+                this->Response.mutable_data()->Reserve(NormalData->Data.Num());
+
+                for (int i = 0; i < NormalData->Data.Num(); ++i)
                 {
-                    VCCSim::Vec3f* Point = Response.mutable_data()->Mutable(i);
-                    Point->set_x(NormalData[i].R);
-                    Point->set_y(NormalData[i].G);
-                    Point->set_z(NormalData[i].B);
+                    VCCSim::Vec3f* Point = this->Response.mutable_data()->Add();
+                    Point->set_x(NormalData->Data[i].R.GetFloat());
+                    Point->set_y(NormalData->Data[i].G.GetFloat());
+                    Point->set_z(NormalData->Data[i].B.GetFloat());
                 }
-            Status = FINISH;
-            Responder.Finish(Response, grpc::Status::OK, this);
-        });
-    });
+
+                this->Status = FINISH;
+                this->Responder.Finish(this->Response, grpc::Status::OK, this);
+            });
+        },
+        [this](const FString& ErrorMsg)
+        {
+            UE_LOG(LogGRPCCall, Error, TEXT("RPC request failed: %s"), *ErrorMsg);
+            this->Status = FINISH;
+            this->Responder.Finish(this->Response,
+                grpc::Status(grpc::DEADLINE_EXCEEDED, TCHAR_TO_UTF8(*ErrorMsg)), this);
+        }
+    );
 }
 
 

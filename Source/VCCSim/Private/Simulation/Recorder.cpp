@@ -245,8 +245,11 @@ void ARecorder::CollectData()
         return;
     }
 
-    // Step 1: Determine which cameras need capture this frame
     double CurrentTime = FPlatformTime::Seconds();
+
+    CheckRPCTimeouts(CurrentTime);
+
+    // Step 1: Determine which cameras need capture this frame
 
     for (FCameraViewGroup& ViewGroup : CameraViewGroups)
     {
@@ -667,9 +670,23 @@ void ARecorder::ProcessPendingReadback(const FPendingReadback& PendingData)
 
         Readback->Unlock();
 
-        if (Packet.bValid && FileWriter.IsValid())
+        if (Packet.bValid)
         {
-            FileWriter->WriteData(MoveTemp(Packet));
+            bool bHasRPCCallback = false;
+            {
+                FScopeLock Lock(&this->RPCRequestLock);
+                bHasRPCCallback = this->PendingRPCCallbacks.Contains(Camera);
+            }
+
+            if (bHasRPCCallback)
+            {
+                this->TriggerRPCCallbacks(Camera, Packet);
+            }
+
+            if (this->bIsRecording && this->FileWriter.IsValid())
+            {
+                this->FileWriter->WriteData(FSensorDataPacket(Packet));
+            }
         }
     });
 }
@@ -712,6 +729,21 @@ void ARecorder::SampleLiDARData(USensorBaseComponent* Sensor)
 bool ARecorder::ShouldCaptureSensor(USensorBaseComponent* Sensor, double CurrentTime)
 {
     double SensorInterval = SensorIntervals[Sensor];
+
+    if (SensorInterval < 0.0)
+    {
+        bool bShouldForceCapture = false;
+        {
+            FScopeLock Lock(&RPCRequestLock);
+            bShouldForceCapture = ForceCaptureThisFrame.Contains(Sensor);
+            if (bShouldForceCapture)
+            {
+                ForceCaptureThisFrame.Remove(Sensor);
+                LastSensorCaptureTimes[Sensor] = CurrentTime;
+            }
+        }
+        return bShouldForceCapture;
+    }
 
     if (!LastSensorCaptureTimes.Contains(Sensor))
     {
@@ -948,4 +980,92 @@ uint32 ARecorder::FReadbackWorker::Run()
         FPlatformProcess::YieldThread();
     }
     return 0;
+}
+
+void ARecorder::SubmitCameraRequest(
+    UCameraBaseComponent* Camera,
+    TFunction<void(const FSensorDataPacket&)> OnSuccess,
+    TFunction<void(const FString&)> OnError)
+{
+    if (!Camera)
+    {
+        OnError(TEXT("Invalid camera pointer"));
+        return;
+    }
+
+    FScopeLock Lock(&RPCRequestLock);
+
+    static constexpr int32 MaxPendingCallbacksPerCamera = 50;
+    TArray<FRPCRequestCallback>& Callbacks = PendingRPCCallbacks.FindOrAdd(Camera);
+
+    if (Callbacks.Num() >= MaxPendingCallbacksPerCamera)
+    {
+        OnError(TEXT("RPC request queue full for this camera"));
+        UE_LOG(LogRecorder, Warning, TEXT("RPC queue full for camera %d"), Camera->GetSensorIndex());
+        return;
+    }
+
+    FRPCRequestCallback Callback;
+    Callback.OnSuccess = OnSuccess;
+    Callback.OnError = OnError;
+    Callback.RequestTime = FPlatformTime::Seconds();
+    Callbacks.Add(MoveTemp(Callback));
+
+    ForceCaptureThisFrame.Add(Camera);
+}
+
+void ARecorder::CheckRPCTimeouts(double CurrentTime)
+{
+    FScopeLock Lock(&RPCRequestLock);
+
+    TArray<TWeakObjectPtr<USensorBaseComponent>> ToRemove;
+
+    for (auto& Pair : PendingRPCCallbacks)
+    {
+        TArray<FRPCRequestCallback>& Callbacks = Pair.Value;
+
+        Callbacks.RemoveAll([CurrentTime](const FRPCRequestCallback& CB)
+        {
+            if (CurrentTime - CB.RequestTime > CB.TimeoutDuration)
+            {
+                CB.OnError(TEXT("Request timeout"));
+                UE_LOG(LogRecorder, Warning, TEXT("RPC request timeout"));
+                return true;
+            }
+            return false;
+        });
+
+        if (Callbacks.Num() == 0)
+        {
+            ToRemove.Add(Pair.Key);
+        }
+    }
+
+    for (TWeakObjectPtr Sensor : ToRemove)
+    {
+        PendingRPCCallbacks.Remove(Sensor);
+    }
+}
+
+void ARecorder::TriggerRPCCallbacks(UCameraBaseComponent* Camera, const FSensorDataPacket& Packet)
+{
+    TArray<FRPCRequestCallback> CallbacksCopy;
+
+    {
+        FScopeLock Lock(&RPCRequestLock);
+
+        if (TArray<FRPCRequestCallback>* Callbacks = PendingRPCCallbacks.Find(Camera))
+        {
+            CallbacksCopy = *Callbacks;
+            PendingRPCCallbacks.Remove(Camera);
+        }
+    }
+
+    for (const FRPCRequestCallback& CB : CallbacksCopy)
+    {
+        CB.OnSuccess(Packet);
+    }
+
+    UE_LOG(LogRecorder, Log, TEXT("Triggered %d RPC callbacks for camera %d"),
+        CallbacksCopy.Num(), Camera->GetSensorIndex());
 }

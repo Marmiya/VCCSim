@@ -31,6 +31,7 @@ class UInsMeshHolder;
 class ADronePawn;
 class AFlashPawn;
 class ACarPawn;
+class ARecorder;
 
 class AsyncCall
 {
@@ -106,7 +107,8 @@ class AsyncCallTemplateImage : public AsyncCall
 {
 public:
     AsyncCallTemplateImage(ServiceType* Service,
-        grpc::ServerCompletionQueue* CompletionQueue, const RobotComponentMap& RCMap);
+        grpc::ServerCompletionQueue* CompletionQueue, const RobotComponentMap& RCMap,
+        ARecorder* InRecorder);
 
     virtual void Proceed(bool OK) override final;
     virtual void Shutdown() override final;
@@ -120,13 +122,14 @@ protected:
     RequestType Request;
     ResponseType Response;
     grpc::ServerAsyncResponseWriter<ResponseType> Responder;
-    
+
     enum CallStatus { CREATE, PROCESS, FINISH };
     CallStatus Status;
 
     ServiceType* Service;
     grpc::ServerCompletionQueue* CompletionQueue;
     RobotComponentMap RCMap_;
+    ARecorder* Recorder_;
 };
 
 /* -------------------------- Recording ---------------------------------- */
@@ -210,7 +213,8 @@ public:
     CameraGetRGBDataCall(
         VCCSim::CameraService::AsyncService* Service,
         grpc::ServerCompletionQueue* CompletionQueue,
-        const std::map<std::string, URGBCameraComponent*>& RGBComponentMap);
+        const std::map<std::string, URGBCameraComponent*>& RGBComponentMap,
+        ARecorder* Recorder);
 
 protected:
     virtual void PrepareNextCall() override final;
@@ -227,7 +231,8 @@ public:
     CameraGetDepthDataCall(
         VCCSim::CameraService::AsyncService* Service,
         grpc::ServerCompletionQueue* CompletionQueue,
-        const std::map<std::string, UDepthCameraComponent*>& DepthComponentMap);
+        const std::map<std::string, UDepthCameraComponent*>& DepthComponentMap,
+        ARecorder* Recorder);
 protected:
     virtual void PrepareNextCall() override final;
     virtual void InitializeRequest() override final;
@@ -243,7 +248,8 @@ public:
     CameraGetDepthPointCloudCall(
         VCCSim::CameraService::AsyncService* Service,
         grpc::ServerCompletionQueue* CompletionQueue,
-        const std::map<std::string, UDepthCameraComponent*>& DepthComponentMap);
+        const std::map<std::string, UDepthCameraComponent*>& DepthComponentMap,
+        ARecorder* Recorder);
 protected:
     virtual void PrepareNextCall() override final;
     virtual void InitializeRequest() override final;
@@ -259,7 +265,8 @@ public:
     CameraGetSegmentDataCall(
         VCCSim::CameraService::AsyncService* Service,
         grpc::ServerCompletionQueue* CompletionQueue,
-        const std::map<std::string, USegCameraComponent*>& SegComponentMap);
+        const std::map<std::string, USegCameraComponent*>& SegComponentMap,
+        ARecorder* Recorder);
 protected:
     virtual void PrepareNextCall() override final;
     virtual void InitializeRequest() override final;
@@ -275,7 +282,8 @@ public:
     CameraGetNormalDataCall(
         VCCSim::CameraService::AsyncService* Service,
         grpc::ServerCompletionQueue* CompletionQueue,
-        const std::map<std::string, UNormalCameraComponent*>& NormalComponentMap);
+        const std::map<std::string, UNormalCameraComponent*>& NormalComponentMap,
+        ARecorder* Recorder);
 protected:
     virtual void PrepareNextCall() override final;
     virtual void InitializeRequest() override final;
@@ -581,9 +589,9 @@ template <typename RequestType, typename ResponseType, typename ServiceType,
     typename RobotComponentMap>
 AsyncCallTemplateImage<RequestType, ResponseType, ServiceType, RobotComponentMap>::
 AsyncCallTemplateImage(ServiceType* Service, grpc::ServerCompletionQueue* CompletionQueue,
-    const RobotComponentMap& RCMap)
+    const RobotComponentMap& RCMap, ARecorder* InRecorder)
     : Responder(&Context), Status(CREATE), Service(Service),
-      CompletionQueue(CompletionQueue), RCMap_(RCMap) {}
+      CompletionQueue(CompletionQueue), RCMap_(RCMap), Recorder_(InRecorder) {}
 
 template <typename RequestType, typename ResponseType, typename ServiceType,
     typename RobotComponentMap>

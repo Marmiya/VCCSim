@@ -154,24 +154,24 @@ public:
                 if (!RGrpcMaps.RCMaps.RGBMap.empty())
                 {
         		    new CameraGetRGBDataCall(&CameraService,
-				        CompletionQueue.get(), RGrpcMaps.RCMaps.RGBMap);
+				        CompletionQueue.get(), RGrpcMaps.RCMaps.RGBMap, Recorder);
                 }
                 if (!RGrpcMaps.RCMaps.DepthMap.empty())
                 {
         		    new CameraGetDepthDataCall(&CameraService,
-        		        CompletionQueue.get(), RGrpcMaps.RCMaps.DepthMap);
+        		        CompletionQueue.get(), RGrpcMaps.RCMaps.DepthMap, Recorder);
         		    new CameraGetDepthPointCloudCall(&CameraService,
-			        CompletionQueue.get(), RGrpcMaps.RCMaps.DepthMap);
+			        CompletionQueue.get(), RGrpcMaps.RCMaps.DepthMap, Recorder);
                 }
                 if (!RGrpcMaps.RCMaps.SegMap.empty())
                 {
         		    new CameraGetSegmentDataCall(&CameraService,
-        		        CompletionQueue.get(), RGrpcMaps.RCMaps.SegMap);
+        		        CompletionQueue.get(), RGrpcMaps.RCMaps.SegMap, Recorder);
                 }
                 if (!RGrpcMaps.RCMaps.NormalMap.empty())
                 {
         		    new CameraGetNormalDataCall(&CameraService,
-        		        CompletionQueue.get(), RGrpcMaps.RCMaps.NormalMap);
+        		        CompletionQueue.get(), RGrpcMaps.RCMaps.NormalMap, Recorder);
                 }
         	}
 

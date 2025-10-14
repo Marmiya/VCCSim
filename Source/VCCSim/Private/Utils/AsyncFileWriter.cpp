@@ -81,6 +81,7 @@ void FAsyncFileWriter::WriteData(FSensorDataPacket&& DataPacket)
         PendingCompressionTasks.fetch_sub(1);
     });
 }
+
 void FAsyncFileWriter::Flush()
 {
     while (PendingCompressionTasks.load() > 0 || !CompressedDataQueue.IsEmpty())
