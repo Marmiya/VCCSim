@@ -1,4 +1,4 @@
-﻿/*
+/*
 * Copyright (C) 2025 Visual Computing Research Center, Shenzhen University
  *
  * This program is free software: you can redistribute it and/or modify

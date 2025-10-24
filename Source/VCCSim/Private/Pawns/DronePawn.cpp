@@ -1,4 +1,4 @@
-﻿/*
+/*
 * Copyright (C) 2025 Visual Computing Research Center, Shenzhen University
  *
  * This program is free software: you can redistribute it and/or modify
@@ -78,6 +78,7 @@ bool ADronePawn::SetPath(
                 DistanceTraveled = 0.f;
                 CourseDistance = 0.f;
                 LastCourseDistance = 0.f;
+                bUsePath = true;
            });
 
         return true;

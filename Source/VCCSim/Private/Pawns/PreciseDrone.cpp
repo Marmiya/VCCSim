@@ -79,7 +79,7 @@ void APreciseDrone::Tick(float DeltaTime)
     }
     else if (bUsePath)
     {
-        if (CourseDistance > LastCourseDistance)
+        if (CourseDistance >= LastCourseDistance)
         {
             FollowThePathAndSteer();
         }
