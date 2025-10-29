@@ -31,7 +31,6 @@ USensorBaseComponent::USensorBaseComponent()
 void USensorBaseComponent::BeginPlay()
 {
 	Super::BeginPlay();
-	ParentActor = GetOwner();
 	SetComponentTickEnabled(false);
 }
 

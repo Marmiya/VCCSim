@@ -40,7 +40,7 @@ void FSensorRegistry::RegisterSensor(UObject* ProviderComponent)
 
     FScopeLock Lock(&RegistryLock);
 
-    AActor* OwnerActor = SensorBase->GetOwnerActor();
+    AActor* OwnerActor = SensorBase->GetOwner();
     if (!OwnerActor)
     {
         UE_LOG(LogSensorRegistry, Warning, TEXT("Sensor has no owner actor"));

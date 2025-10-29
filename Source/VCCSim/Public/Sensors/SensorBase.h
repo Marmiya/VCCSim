@@ -110,8 +110,6 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Sensor")
 	virtual float GetRecordInterval() const { return RecordInterval; }
 
-	virtual AActor* GetOwnerActor() const { return ParentActor; }
-
 protected:
 	virtual void BeginPlay() override;
 	virtual void OnComponentCreated() override;
@@ -127,9 +125,6 @@ public:
 	int32 SensorIndex = 0;
 
 protected:
-	UPROPERTY()
-	AActor* ParentActor = nullptr;
-
 	bool RecordState = false;
 	float RecordInterval = SensorDefaults::RecordInterval;
 };

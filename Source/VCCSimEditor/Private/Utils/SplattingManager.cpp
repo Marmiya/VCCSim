@@ -680,15 +680,9 @@ FString FSplattingManager::GetPythonExecutablePath()
 {
     // Try common Python executable names and locations
     TArray<FString> PossiblePaths = {
-        TEXT("C:/micromamba/envs/triangle_splatting/python.exe"), // Micromamba triangle_splatting environment (priority)
+        TEXT("C:/Users/micha/miniconda3/envs/vccsim/python.exe"),
         TEXT("python"),
-        TEXT("python3"),
-        TEXT("C:/Python39/python.exe"),
-        TEXT("C:/Python310/python.exe"),
-        TEXT("C:/Python311/python.exe"),
-        TEXT("C:/Users/%USERNAME%/AppData/Local/Programs/Python/Python39/python.exe"),
-        TEXT("C:/Users/%USERNAME%/AppData/Local/Programs/Python/Python310/python.exe"),
-        TEXT("C:/Users/%USERNAME%/AppData/Local/Programs/Python/Python311/python.exe")
+        TEXT("python3")
     };
     
     for (const FString& Path : PossiblePaths)

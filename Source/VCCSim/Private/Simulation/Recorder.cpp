@@ -549,7 +549,7 @@ void ARecorder::ProcessPendingReadback(const FPendingReadback& PendingData)
         FSensorDataPacket Packet;
         Packet.Type = Camera->GetSensorType();
         Packet.SensorIndex = Camera->GetSensorIndex();
-        Packet.OwnerActor = Camera->GetOwnerActor();
+        Packet.OwnerActor = Camera->GetOwner();
         Packet.bValid = true;
 
         switch (Packet.Type)
@@ -710,7 +710,7 @@ void ARecorder::SampleLiDARData(USensorBaseComponent* Sensor)
             FSensorDataPacket Packet;
             Packet.Type = ESensorType::Lidar;
             Packet.SensorIndex = Lidar->GetSensorIndex();
-            Packet.OwnerActor = Lidar->GetOwnerActor();
+            Packet.OwnerActor = Lidar->GetOwner();
             Packet.bValid = true;
 
             auto LidarData = MakeShared<FLiDARData>();
