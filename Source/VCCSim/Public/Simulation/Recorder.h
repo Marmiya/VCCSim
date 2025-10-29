@@ -24,6 +24,8 @@
 #include "RHICommandList.h"
 #include "RenderGraphDefinitions.h"
 #include "Utils/AsyncFileWriter.h"
+#include "RHIGPUReadback.h"
+#include <atomic>
 #include "Recorder.generated.h"
 
 struct FCameraViewGroup
@@ -155,4 +157,8 @@ private:
     void ShutdownAsyncWriter();
     void InitializeReadbackWorker();
     void ShutdownReadbackWorker();
+
+    void EnsureOnDemandCaptureSetup();
+    void ScheduleManualCaptureTick();
+    std::atomic<bool> bManualCaptureTickScheduled{false};
 };

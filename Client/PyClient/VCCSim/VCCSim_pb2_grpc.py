@@ -5,7 +5,7 @@ import warnings
 
 from . import VCCSim_pb2 as VCCSim__pb2
 
-GRPC_GENERATED_VERSION = '1.70.0'
+GRPC_GENERATED_VERSION = '1.76.0'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -18,7 +18,7 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + f' but the generated code in VCCSim_pb2_grpc.py depends on'
+        + ' but the generated code in VCCSim_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
@@ -258,7 +258,7 @@ class LidarService(object):
             _registered_method=True)
 
 
-class DepthCameraServiceStub(object):
+class CameraServiceStub(object):
     """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
@@ -267,91 +267,107 @@ class DepthCameraServiceStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.GetDepthIndexedCameraPointData = channel.unary_unary(
-                '/VCCSim.DepthCameraService/GetDepthIndexedCameraPointData',
+        self.GetRGBData = channel.unary_unary(
+                '/VCCSim.CameraService/GetRGBData',
                 request_serializer=VCCSim__pb2.IndexedCamera.SerializeToString,
-                response_deserializer=VCCSim__pb2.DepthCameraPointData.FromString,
+                response_deserializer=VCCSim__pb2.RGBData.FromString,
                 _registered_method=True)
-        self.GetDepthIndexedCameraImageSize = channel.unary_unary(
-                '/VCCSim.DepthCameraService/GetDepthIndexedCameraImageSize',
+        self.GetDepthData = channel.unary_unary(
+                '/VCCSim.CameraService/GetDepthData',
                 request_serializer=VCCSim__pb2.IndexedCamera.SerializeToString,
-                response_deserializer=VCCSim__pb2.ImageSize.FromString,
+                response_deserializer=VCCSim__pb2.DepthData.FromString,
                 _registered_method=True)
-        self.GetDepthIndexedCameraImageData = channel.unary_unary(
-                '/VCCSim.DepthCameraService/GetDepthIndexedCameraImageData',
+        self.GetDepthPointCloud = channel.unary_unary(
+                '/VCCSim.CameraService/GetDepthPointCloud',
                 request_serializer=VCCSim__pb2.IndexedCamera.SerializeToString,
-                response_deserializer=VCCSim__pb2.DepthCameraImageData.FromString,
+                response_deserializer=VCCSim__pb2.TPointCloud.FromString,
                 _registered_method=True)
-        self.GetDepthCameraOdom = channel.unary_unary(
-                '/VCCSim.DepthCameraService/GetDepthCameraOdom',
-                request_serializer=VCCSim__pb2.RobotName.SerializeToString,
-                response_deserializer=VCCSim__pb2.Odometry.FromString,
+        self.GetSegData = channel.unary_unary(
+                '/VCCSim.CameraService/GetSegData',
+                request_serializer=VCCSim__pb2.IndexedCamera.SerializeToString,
+                response_deserializer=VCCSim__pb2.RGBData.FromString,
+                _registered_method=True)
+        self.GetNormalData = channel.unary_unary(
+                '/VCCSim.CameraService/GetNormalData',
+                request_serializer=VCCSim__pb2.IndexedCamera.SerializeToString,
+                response_deserializer=VCCSim__pb2.NormalData.FromString,
                 _registered_method=True)
 
 
-class DepthCameraServiceServicer(object):
+class CameraServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
-    def GetDepthIndexedCameraPointData(self, request, context):
+    def GetRGBData(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def GetDepthIndexedCameraImageSize(self, request, context):
+    def GetDepthData(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def GetDepthIndexedCameraImageData(self, request, context):
+    def GetDepthPointCloud(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def GetDepthCameraOdom(self, request, context):
+    def GetSegData(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetNormalData(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
 
-def add_DepthCameraServiceServicer_to_server(servicer, server):
+def add_CameraServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'GetDepthIndexedCameraPointData': grpc.unary_unary_rpc_method_handler(
-                    servicer.GetDepthIndexedCameraPointData,
+            'GetRGBData': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetRGBData,
                     request_deserializer=VCCSim__pb2.IndexedCamera.FromString,
-                    response_serializer=VCCSim__pb2.DepthCameraPointData.SerializeToString,
+                    response_serializer=VCCSim__pb2.RGBData.SerializeToString,
             ),
-            'GetDepthIndexedCameraImageSize': grpc.unary_unary_rpc_method_handler(
-                    servicer.GetDepthIndexedCameraImageSize,
+            'GetDepthData': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetDepthData,
                     request_deserializer=VCCSim__pb2.IndexedCamera.FromString,
-                    response_serializer=VCCSim__pb2.ImageSize.SerializeToString,
+                    response_serializer=VCCSim__pb2.DepthData.SerializeToString,
             ),
-            'GetDepthIndexedCameraImageData': grpc.unary_unary_rpc_method_handler(
-                    servicer.GetDepthIndexedCameraImageData,
+            'GetDepthPointCloud': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetDepthPointCloud,
                     request_deserializer=VCCSim__pb2.IndexedCamera.FromString,
-                    response_serializer=VCCSim__pb2.DepthCameraImageData.SerializeToString,
+                    response_serializer=VCCSim__pb2.TPointCloud.SerializeToString,
             ),
-            'GetDepthCameraOdom': grpc.unary_unary_rpc_method_handler(
-                    servicer.GetDepthCameraOdom,
-                    request_deserializer=VCCSim__pb2.RobotName.FromString,
-                    response_serializer=VCCSim__pb2.Odometry.SerializeToString,
+            'GetSegData': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetSegData,
+                    request_deserializer=VCCSim__pb2.IndexedCamera.FromString,
+                    response_serializer=VCCSim__pb2.RGBData.SerializeToString,
+            ),
+            'GetNormalData': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetNormalData,
+                    request_deserializer=VCCSim__pb2.IndexedCamera.FromString,
+                    response_serializer=VCCSim__pb2.NormalData.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'VCCSim.DepthCameraService', rpc_method_handlers)
+            'VCCSim.CameraService', rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers('VCCSim.DepthCameraService', rpc_method_handlers)
+    server.add_registered_method_handlers('VCCSim.CameraService', rpc_method_handlers)
 
 
  # This class is part of an EXPERIMENTAL API.
-class DepthCameraService(object):
+class CameraService(object):
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
-    def GetDepthIndexedCameraPointData(request,
+    def GetRGBData(request,
             target,
             options=(),
             channel_credentials=None,
@@ -364,9 +380,9 @@ class DepthCameraService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/VCCSim.DepthCameraService/GetDepthIndexedCameraPointData',
+            '/VCCSim.CameraService/GetRGBData',
             VCCSim__pb2.IndexedCamera.SerializeToString,
-            VCCSim__pb2.DepthCameraPointData.FromString,
+            VCCSim__pb2.RGBData.FromString,
             options,
             channel_credentials,
             insecure,
@@ -378,7 +394,7 @@ class DepthCameraService(object):
             _registered_method=True)
 
     @staticmethod
-    def GetDepthIndexedCameraImageSize(request,
+    def GetDepthData(request,
             target,
             options=(),
             channel_credentials=None,
@@ -391,9 +407,9 @@ class DepthCameraService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/VCCSim.DepthCameraService/GetDepthIndexedCameraImageSize',
+            '/VCCSim.CameraService/GetDepthData',
             VCCSim__pb2.IndexedCamera.SerializeToString,
-            VCCSim__pb2.ImageSize.FromString,
+            VCCSim__pb2.DepthData.FromString,
             options,
             channel_credentials,
             insecure,
@@ -405,7 +421,7 @@ class DepthCameraService(object):
             _registered_method=True)
 
     @staticmethod
-    def GetDepthIndexedCameraImageData(request,
+    def GetDepthPointCloud(request,
             target,
             options=(),
             channel_credentials=None,
@@ -418,9 +434,9 @@ class DepthCameraService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/VCCSim.DepthCameraService/GetDepthIndexedCameraImageData',
+            '/VCCSim.CameraService/GetDepthPointCloud',
             VCCSim__pb2.IndexedCamera.SerializeToString,
-            VCCSim__pb2.DepthCameraImageData.FromString,
+            VCCSim__pb2.TPointCloud.FromString,
             options,
             channel_credentials,
             insecure,
@@ -432,7 +448,7 @@ class DepthCameraService(object):
             _registered_method=True)
 
     @staticmethod
-    def GetDepthCameraOdom(request,
+    def GetSegData(request,
             target,
             options=(),
             channel_credentials=None,
@@ -445,140 +461,9 @@ class DepthCameraService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/VCCSim.DepthCameraService/GetDepthCameraOdom',
-            VCCSim__pb2.RobotName.SerializeToString,
-            VCCSim__pb2.Odometry.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-
-class RGBCameraServiceStub(object):
-    """Missing associated documentation comment in .proto file."""
-
-    def __init__(self, channel):
-        """Constructor.
-
-        Args:
-            channel: A grpc.Channel.
-        """
-        self.GetRGBCameraOdom = channel.unary_unary(
-                '/VCCSim.RGBCameraService/GetRGBCameraOdom',
-                request_serializer=VCCSim__pb2.RobotName.SerializeToString,
-                response_deserializer=VCCSim__pb2.Odometry.FromString,
-                _registered_method=True)
-        self.GetRGBIndexedCameraImageData = channel.unary_unary(
-                '/VCCSim.RGBCameraService/GetRGBIndexedCameraImageData',
-                request_serializer=VCCSim__pb2.IndexedCamera.SerializeToString,
-                response_deserializer=VCCSim__pb2.RGBCameraImageData.FromString,
-                _registered_method=True)
-        self.GetRGBIndexedCameraImageSize = channel.unary_unary(
-                '/VCCSim.RGBCameraService/GetRGBIndexedCameraImageSize',
-                request_serializer=VCCSim__pb2.IndexedCamera.SerializeToString,
-                response_deserializer=VCCSim__pb2.ImageSize.FromString,
-                _registered_method=True)
-
-
-class RGBCameraServiceServicer(object):
-    """Missing associated documentation comment in .proto file."""
-
-    def GetRGBCameraOdom(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def GetRGBIndexedCameraImageData(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def GetRGBIndexedCameraImageSize(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-
-def add_RGBCameraServiceServicer_to_server(servicer, server):
-    rpc_method_handlers = {
-            'GetRGBCameraOdom': grpc.unary_unary_rpc_method_handler(
-                    servicer.GetRGBCameraOdom,
-                    request_deserializer=VCCSim__pb2.RobotName.FromString,
-                    response_serializer=VCCSim__pb2.Odometry.SerializeToString,
-            ),
-            'GetRGBIndexedCameraImageData': grpc.unary_unary_rpc_method_handler(
-                    servicer.GetRGBIndexedCameraImageData,
-                    request_deserializer=VCCSim__pb2.IndexedCamera.FromString,
-                    response_serializer=VCCSim__pb2.RGBCameraImageData.SerializeToString,
-            ),
-            'GetRGBIndexedCameraImageSize': grpc.unary_unary_rpc_method_handler(
-                    servicer.GetRGBIndexedCameraImageSize,
-                    request_deserializer=VCCSim__pb2.IndexedCamera.FromString,
-                    response_serializer=VCCSim__pb2.ImageSize.SerializeToString,
-            ),
-    }
-    generic_handler = grpc.method_handlers_generic_handler(
-            'VCCSim.RGBCameraService', rpc_method_handlers)
-    server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers('VCCSim.RGBCameraService', rpc_method_handlers)
-
-
- # This class is part of an EXPERIMENTAL API.
-class RGBCameraService(object):
-    """Missing associated documentation comment in .proto file."""
-
-    @staticmethod
-    def GetRGBCameraOdom(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/VCCSim.RGBCameraService/GetRGBCameraOdom',
-            VCCSim__pb2.RobotName.SerializeToString,
-            VCCSim__pb2.Odometry.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-    @staticmethod
-    def GetRGBIndexedCameraImageData(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/VCCSim.RGBCameraService/GetRGBIndexedCameraImageData',
+            '/VCCSim.CameraService/GetSegData',
             VCCSim__pb2.IndexedCamera.SerializeToString,
-            VCCSim__pb2.RGBCameraImageData.FromString,
+            VCCSim__pb2.RGBData.FromString,
             options,
             channel_credentials,
             insecure,
@@ -590,7 +475,7 @@ class RGBCameraService(object):
             _registered_method=True)
 
     @staticmethod
-    def GetRGBIndexedCameraImageSize(request,
+    def GetNormalData(request,
             target,
             options=(),
             channel_credentials=None,
@@ -603,167 +488,9 @@ class RGBCameraService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/VCCSim.RGBCameraService/GetRGBIndexedCameraImageSize',
+            '/VCCSim.CameraService/GetNormalData',
             VCCSim__pb2.IndexedCamera.SerializeToString,
-            VCCSim__pb2.ImageSize.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-
-class SegmentationCameraServiceStub(object):
-    """Missing associated documentation comment in .proto file."""
-
-    def __init__(self, channel):
-        """Constructor.
-
-        Args:
-            channel: A grpc.Channel.
-        """
-        self.GetSegmentationCameraOdom = channel.unary_unary(
-                '/VCCSim.SegmentationCameraService/GetSegmentationCameraOdom',
-                request_serializer=VCCSim__pb2.RobotName.SerializeToString,
-                response_deserializer=VCCSim__pb2.Odometry.FromString,
-                _registered_method=True)
-        self.GetSegmentationCameraImageData = channel.unary_unary(
-                '/VCCSim.SegmentationCameraService/GetSegmentationCameraImageData',
-                request_serializer=VCCSim__pb2.IndexedCamera.SerializeToString,
-                response_deserializer=VCCSim__pb2.SegmentationCameraImageData.FromString,
-                _registered_method=True)
-        self.GetSegmentationCameraImageSize = channel.unary_unary(
-                '/VCCSim.SegmentationCameraService/GetSegmentationCameraImageSize',
-                request_serializer=VCCSim__pb2.IndexedCamera.SerializeToString,
-                response_deserializer=VCCSim__pb2.ImageSize.FromString,
-                _registered_method=True)
-
-
-class SegmentationCameraServiceServicer(object):
-    """Missing associated documentation comment in .proto file."""
-
-    def GetSegmentationCameraOdom(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def GetSegmentationCameraImageData(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def GetSegmentationCameraImageSize(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-
-def add_SegmentationCameraServiceServicer_to_server(servicer, server):
-    rpc_method_handlers = {
-            'GetSegmentationCameraOdom': grpc.unary_unary_rpc_method_handler(
-                    servicer.GetSegmentationCameraOdom,
-                    request_deserializer=VCCSim__pb2.RobotName.FromString,
-                    response_serializer=VCCSim__pb2.Odometry.SerializeToString,
-            ),
-            'GetSegmentationCameraImageData': grpc.unary_unary_rpc_method_handler(
-                    servicer.GetSegmentationCameraImageData,
-                    request_deserializer=VCCSim__pb2.IndexedCamera.FromString,
-                    response_serializer=VCCSim__pb2.SegmentationCameraImageData.SerializeToString,
-            ),
-            'GetSegmentationCameraImageSize': grpc.unary_unary_rpc_method_handler(
-                    servicer.GetSegmentationCameraImageSize,
-                    request_deserializer=VCCSim__pb2.IndexedCamera.FromString,
-                    response_serializer=VCCSim__pb2.ImageSize.SerializeToString,
-            ),
-    }
-    generic_handler = grpc.method_handlers_generic_handler(
-            'VCCSim.SegmentationCameraService', rpc_method_handlers)
-    server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers('VCCSim.SegmentationCameraService', rpc_method_handlers)
-
-
- # This class is part of an EXPERIMENTAL API.
-class SegmentationCameraService(object):
-    """Missing associated documentation comment in .proto file."""
-
-    @staticmethod
-    def GetSegmentationCameraOdom(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/VCCSim.SegmentationCameraService/GetSegmentationCameraOdom',
-            VCCSim__pb2.RobotName.SerializeToString,
-            VCCSim__pb2.Odometry.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-    @staticmethod
-    def GetSegmentationCameraImageData(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/VCCSim.SegmentationCameraService/GetSegmentationCameraImageData',
-            VCCSim__pb2.IndexedCamera.SerializeToString,
-            VCCSim__pb2.SegmentationCameraImageData.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-    @staticmethod
-    def GetSegmentationCameraImageSize(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/VCCSim.SegmentationCameraService/GetSegmentationCameraImageSize',
-            VCCSim__pb2.IndexedCamera.SerializeToString,
-            VCCSim__pb2.ImageSize.FromString,
+            VCCSim__pb2.NormalData.FromString,
             options,
             channel_credentials,
             insecure,
@@ -799,6 +526,11 @@ class DroneServiceStub(object):
                 request_serializer=VCCSim__pb2.DronePath.SerializeToString,
                 response_deserializer=VCCSim__pb2.Status.FromString,
                 _registered_method=True)
+        self.MoveToNext = channel.unary_unary(
+                '/VCCSim.DroneService/MoveToNext',
+                request_serializer=VCCSim__pb2.RobotName.SerializeToString,
+                response_deserializer=VCCSim__pb2.Status.FromString,
+                _registered_method=True)
 
 
 class DroneServiceServicer(object):
@@ -822,6 +554,12 @@ class DroneServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def MoveToNext(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_DroneServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -838,6 +576,11 @@ def add_DroneServiceServicer_to_server(servicer, server):
             'SendDronePath': grpc.unary_unary_rpc_method_handler(
                     servicer.SendDronePath,
                     request_deserializer=VCCSim__pb2.DronePath.FromString,
+                    response_serializer=VCCSim__pb2.Status.SerializeToString,
+            ),
+            'MoveToNext': grpc.unary_unary_rpc_method_handler(
+                    servicer.MoveToNext,
+                    request_deserializer=VCCSim__pb2.RobotName.FromString,
                     response_serializer=VCCSim__pb2.Status.SerializeToString,
             ),
     }
@@ -932,6 +675,277 @@ class DroneService(object):
             metadata,
             _registered_method=True)
 
+    @staticmethod
+    def MoveToNext(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/VCCSim.DroneService/MoveToNext',
+            VCCSim__pb2.RobotName.SerializeToString,
+            VCCSim__pb2.Status.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+
+class FlashServiceStub(object):
+    """Missing associated documentation comment in .proto file."""
+
+    def __init__(self, channel):
+        """Constructor.
+
+        Args:
+            channel: A grpc.Channel.
+        """
+        self.GetFlashPose = channel.unary_unary(
+                '/VCCSim.FlashService/GetFlashPose',
+                request_serializer=VCCSim__pb2.RobotName.SerializeToString,
+                response_deserializer=VCCSim__pb2.Pose.FromString,
+                _registered_method=True)
+        self.SendFlashPose = channel.unary_unary(
+                '/VCCSim.FlashService/SendFlashPose',
+                request_serializer=VCCSim__pb2.DronePose.SerializeToString,
+                response_deserializer=VCCSim__pb2.Status.FromString,
+                _registered_method=True)
+        self.SendFlashPath = channel.unary_unary(
+                '/VCCSim.FlashService/SendFlashPath',
+                request_serializer=VCCSim__pb2.DronePath.SerializeToString,
+                response_deserializer=VCCSim__pb2.Status.FromString,
+                _registered_method=True)
+        self.CheckReady = channel.unary_unary(
+                '/VCCSim.FlashService/CheckReady',
+                request_serializer=VCCSim__pb2.RobotName.SerializeToString,
+                response_deserializer=VCCSim__pb2.Status.FromString,
+                _registered_method=True)
+        self.MoveToNext = channel.unary_unary(
+                '/VCCSim.FlashService/MoveToNext',
+                request_serializer=VCCSim__pb2.RobotName.SerializeToString,
+                response_deserializer=VCCSim__pb2.Status.FromString,
+                _registered_method=True)
+
+
+class FlashServiceServicer(object):
+    """Missing associated documentation comment in .proto file."""
+
+    def GetFlashPose(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SendFlashPose(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SendFlashPath(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def CheckReady(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def MoveToNext(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+
+def add_FlashServiceServicer_to_server(servicer, server):
+    rpc_method_handlers = {
+            'GetFlashPose': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetFlashPose,
+                    request_deserializer=VCCSim__pb2.RobotName.FromString,
+                    response_serializer=VCCSim__pb2.Pose.SerializeToString,
+            ),
+            'SendFlashPose': grpc.unary_unary_rpc_method_handler(
+                    servicer.SendFlashPose,
+                    request_deserializer=VCCSim__pb2.DronePose.FromString,
+                    response_serializer=VCCSim__pb2.Status.SerializeToString,
+            ),
+            'SendFlashPath': grpc.unary_unary_rpc_method_handler(
+                    servicer.SendFlashPath,
+                    request_deserializer=VCCSim__pb2.DronePath.FromString,
+                    response_serializer=VCCSim__pb2.Status.SerializeToString,
+            ),
+            'CheckReady': grpc.unary_unary_rpc_method_handler(
+                    servicer.CheckReady,
+                    request_deserializer=VCCSim__pb2.RobotName.FromString,
+                    response_serializer=VCCSim__pb2.Status.SerializeToString,
+            ),
+            'MoveToNext': grpc.unary_unary_rpc_method_handler(
+                    servicer.MoveToNext,
+                    request_deserializer=VCCSim__pb2.RobotName.FromString,
+                    response_serializer=VCCSim__pb2.Status.SerializeToString,
+            ),
+    }
+    generic_handler = grpc.method_handlers_generic_handler(
+            'VCCSim.FlashService', rpc_method_handlers)
+    server.add_generic_rpc_handlers((generic_handler,))
+    server.add_registered_method_handlers('VCCSim.FlashService', rpc_method_handlers)
+
+
+ # This class is part of an EXPERIMENTAL API.
+class FlashService(object):
+    """Missing associated documentation comment in .proto file."""
+
+    @staticmethod
+    def GetFlashPose(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/VCCSim.FlashService/GetFlashPose',
+            VCCSim__pb2.RobotName.SerializeToString,
+            VCCSim__pb2.Pose.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SendFlashPose(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/VCCSim.FlashService/SendFlashPose',
+            VCCSim__pb2.DronePose.SerializeToString,
+            VCCSim__pb2.Status.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SendFlashPath(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/VCCSim.FlashService/SendFlashPath',
+            VCCSim__pb2.DronePath.SerializeToString,
+            VCCSim__pb2.Status.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def CheckReady(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/VCCSim.FlashService/CheckReady',
+            VCCSim__pb2.RobotName.SerializeToString,
+            VCCSim__pb2.Status.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def MoveToNext(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/VCCSim.FlashService/MoveToNext',
+            VCCSim__pb2.RobotName.SerializeToString,
+            VCCSim__pb2.Status.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
 
 class CarServiceStub(object):
     """Missing associated documentation comment in .proto file."""
@@ -957,6 +971,11 @@ class CarServiceStub(object):
                 request_serializer=VCCSim__pb2.CarPath.SerializeToString,
                 response_deserializer=VCCSim__pb2.Status.FromString,
                 _registered_method=True)
+        self.MoveToNext = channel.unary_unary(
+                '/VCCSim.CarService/MoveToNext',
+                request_serializer=VCCSim__pb2.RobotName.SerializeToString,
+                response_deserializer=VCCSim__pb2.Status.FromString,
+                _registered_method=True)
 
 
 class CarServiceServicer(object):
@@ -980,6 +999,13 @@ class CarServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def MoveToNext(self, request, context):
+        """todo: implement
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_CarServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -996,6 +1022,11 @@ def add_CarServiceServicer_to_server(servicer, server):
             'SendCarPath': grpc.unary_unary_rpc_method_handler(
                     servicer.SendCarPath,
                     request_deserializer=VCCSim__pb2.CarPath.FromString,
+                    response_serializer=VCCSim__pb2.Status.SerializeToString,
+            ),
+            'MoveToNext': grpc.unary_unary_rpc_method_handler(
+                    servicer.MoveToNext,
+                    request_deserializer=VCCSim__pb2.RobotName.FromString,
                     response_serializer=VCCSim__pb2.Status.SerializeToString,
             ),
     }
@@ -1090,223 +1121,6 @@ class CarService(object):
             metadata,
             _registered_method=True)
 
-
-class FlashServiceStub(object):
-    """Missing associated documentation comment in .proto file."""
-
-    def __init__(self, channel):
-        """Constructor.
-
-        Args:
-            channel: A grpc.Channel.
-        """
-        self.GetFlashPose = channel.unary_unary(
-                '/VCCSim.FlashService/GetFlashPose',
-                request_serializer=VCCSim__pb2.RobotName.SerializeToString,
-                response_deserializer=VCCSim__pb2.Pose.FromString,
-                _registered_method=True)
-        self.SendFlashPose = channel.unary_unary(
-                '/VCCSim.FlashService/SendFlashPose',
-                request_serializer=VCCSim__pb2.FlashPose.SerializeToString,
-                response_deserializer=VCCSim__pb2.Status.FromString,
-                _registered_method=True)
-        self.SendFlashPath = channel.unary_unary(
-                '/VCCSim.FlashService/SendFlashPath',
-                request_serializer=VCCSim__pb2.FlashPath.SerializeToString,
-                response_deserializer=VCCSim__pb2.Status.FromString,
-                _registered_method=True)
-        self.CheckFlashReady = channel.unary_unary(
-                '/VCCSim.FlashService/CheckFlashReady',
-                request_serializer=VCCSim__pb2.RobotName.SerializeToString,
-                response_deserializer=VCCSim__pb2.Status.FromString,
-                _registered_method=True)
-        self.MoveToNext = channel.unary_unary(
-                '/VCCSim.FlashService/MoveToNext',
-                request_serializer=VCCSim__pb2.RobotName.SerializeToString,
-                response_deserializer=VCCSim__pb2.Status.FromString,
-                _registered_method=True)
-
-
-class FlashServiceServicer(object):
-    """Missing associated documentation comment in .proto file."""
-
-    def GetFlashPose(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def SendFlashPose(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def SendFlashPath(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def CheckFlashReady(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def MoveToNext(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-
-def add_FlashServiceServicer_to_server(servicer, server):
-    rpc_method_handlers = {
-            'GetFlashPose': grpc.unary_unary_rpc_method_handler(
-                    servicer.GetFlashPose,
-                    request_deserializer=VCCSim__pb2.RobotName.FromString,
-                    response_serializer=VCCSim__pb2.Pose.SerializeToString,
-            ),
-            'SendFlashPose': grpc.unary_unary_rpc_method_handler(
-                    servicer.SendFlashPose,
-                    request_deserializer=VCCSim__pb2.FlashPose.FromString,
-                    response_serializer=VCCSim__pb2.Status.SerializeToString,
-            ),
-            'SendFlashPath': grpc.unary_unary_rpc_method_handler(
-                    servicer.SendFlashPath,
-                    request_deserializer=VCCSim__pb2.FlashPath.FromString,
-                    response_serializer=VCCSim__pb2.Status.SerializeToString,
-            ),
-            'CheckFlashReady': grpc.unary_unary_rpc_method_handler(
-                    servicer.CheckFlashReady,
-                    request_deserializer=VCCSim__pb2.RobotName.FromString,
-                    response_serializer=VCCSim__pb2.Status.SerializeToString,
-            ),
-            'MoveToNext': grpc.unary_unary_rpc_method_handler(
-                    servicer.MoveToNext,
-                    request_deserializer=VCCSim__pb2.RobotName.FromString,
-                    response_serializer=VCCSim__pb2.Status.SerializeToString,
-            ),
-    }
-    generic_handler = grpc.method_handlers_generic_handler(
-            'VCCSim.FlashService', rpc_method_handlers)
-    server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers('VCCSim.FlashService', rpc_method_handlers)
-
-
- # This class is part of an EXPERIMENTAL API.
-class FlashService(object):
-    """Missing associated documentation comment in .proto file."""
-
-    @staticmethod
-    def GetFlashPose(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/VCCSim.FlashService/GetFlashPose',
-            VCCSim__pb2.RobotName.SerializeToString,
-            VCCSim__pb2.Pose.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-    @staticmethod
-    def SendFlashPose(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/VCCSim.FlashService/SendFlashPose',
-            VCCSim__pb2.FlashPose.SerializeToString,
-            VCCSim__pb2.Status.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-    @staticmethod
-    def SendFlashPath(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/VCCSim.FlashService/SendFlashPath',
-            VCCSim__pb2.FlashPath.SerializeToString,
-            VCCSim__pb2.Status.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-    @staticmethod
-    def CheckFlashReady(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/VCCSim.FlashService/CheckFlashReady',
-            VCCSim__pb2.RobotName.SerializeToString,
-            VCCSim__pb2.Status.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
     @staticmethod
     def MoveToNext(request,
             target,
@@ -1321,7 +1135,7 @@ class FlashService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/VCCSim.FlashService/MoveToNext',
+            '/VCCSim.CarService/MoveToNext',
             VCCSim__pb2.RobotName.SerializeToString,
             VCCSim__pb2.Status.FromString,
             options,
@@ -1504,7 +1318,7 @@ class PointCloudServiceStub(object):
         """
         self.SendPointCloudWithColor = channel.unary_unary(
                 '/VCCSim.PointCloudService/SendPointCloudWithColor',
-                request_serializer=VCCSim__pb2.PointCloudWithColor.SerializeToString,
+                request_serializer=VCCSim__pb2.ColoredPointCloud.SerializeToString,
                 response_deserializer=VCCSim__pb2.Status.FromString,
                 _registered_method=True)
 
@@ -1523,7 +1337,7 @@ def add_PointCloudServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
             'SendPointCloudWithColor': grpc.unary_unary_rpc_method_handler(
                     servicer.SendPointCloudWithColor,
-                    request_deserializer=VCCSim__pb2.PointCloudWithColor.FromString,
+                    request_deserializer=VCCSim__pb2.ColoredPointCloud.FromString,
                     response_serializer=VCCSim__pb2.Status.SerializeToString,
             ),
     }
@@ -1552,7 +1366,7 @@ class PointCloudService(object):
             request,
             target,
             '/VCCSim.PointCloudService/SendPointCloudWithColor',
-            VCCSim__pb2.PointCloudWithColor.SerializeToString,
+            VCCSim__pb2.ColoredPointCloud.SerializeToString,
             VCCSim__pb2.Status.FromString,
             options,
             channel_credentials,
@@ -1581,7 +1395,7 @@ class SafeCheckServiceStub(object):
                 _registered_method=True)
         self.CheckSafetyPosition = channel.unary_unary(
                 '/VCCSim.SafeCheckService/CheckSafetyPosition',
-                request_serializer=VCCSim__pb2.Position.SerializeToString,
+                request_serializer=VCCSim__pb2.Vec3f.SerializeToString,
                 response_deserializer=VCCSim__pb2.Status.FromString,
                 _registered_method=True)
         self.CheckSafetyDronePath = channel.unary_unary(
@@ -1595,21 +1409,21 @@ class SafeCheckServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
     def CheckSafetyPawn(self, request, context):
-        """todo
+        """todo: implement
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def CheckSafetyPosition(self, request, context):
-        """todo
+        """todo: implement
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def CheckSafetyDronePath(self, request, context):
-        """todo
+        """todo: implement
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -1625,7 +1439,7 @@ def add_SafeCheckServiceServicer_to_server(servicer, server):
             ),
             'CheckSafetyPosition': grpc.unary_unary_rpc_method_handler(
                     servicer.CheckSafetyPosition,
-                    request_deserializer=VCCSim__pb2.Position.FromString,
+                    request_deserializer=VCCSim__pb2.Vec3f.FromString,
                     response_serializer=VCCSim__pb2.Status.SerializeToString,
             ),
             'CheckSafetyDronePath': grpc.unary_unary_rpc_method_handler(
@@ -1686,7 +1500,7 @@ class SafeCheckService(object):
             request,
             target,
             '/VCCSim.SafeCheckService/CheckSafetyPosition',
-            VCCSim__pb2.Position.SerializeToString,
+            VCCSim__pb2.Vec3f.SerializeToString,
             VCCSim__pb2.Status.FromString,
             options,
             channel_credentials,

@@ -20,6 +20,7 @@
 #include "Engine/TextureRenderTarget2D.h"
 #include "RenderGraphBuilder.h"
 #include "PixelShaderUtils.h"
+#include "RenderGraphUtils.h"
 #include "SceneRenderBuilderInterface.h"
 #include "SceneRendering.h"
 #include "LegacyScreenPercentageDriver.h"
@@ -460,13 +461,23 @@ void ARecorder::RenderViewGroupsRDG(const double& CaptureTime)
                     }
                     else if (SensorType == ESensorType::SegmentationCamera)
                     {
-                        auto* PassParameters = GraphBuilder.AllocParameters<FSegmentationPS::FParameters>();
-                        PassParameters->CustomStencilTexture = SceneTextures.CustomDepth.Stencil;
-                        PassParameters->RenderTargets[0] = FRenderTargetBinding(OutputTexture, ERenderTargetLoadAction::EClear);
+                        const FRDGTextureSRVRef CustomStencilTexture = SceneTextures.CustomDepth.Stencil;
 
-                        TShaderMapRef<FSegmentationPS> PixelShader(GetGlobalShaderMap(FeatureLevel));
-                        FPixelShaderUtils::AddFullscreenPass(GraphBuilder, GetGlobalShaderMap(FeatureLevel),
-                            RDG_EVENT_NAME("VCCSimSegmentationCapture"), PixelShader, PassParameters, ViewRect);
+                        if (CustomStencilTexture)
+                        {
+                            auto* PassParameters = GraphBuilder.AllocParameters<FSegmentationPS::FParameters>();
+                            PassParameters->CustomStencilTexture = CustomStencilTexture;
+                            PassParameters->RenderTargets[0] = FRenderTargetBinding(OutputTexture, ERenderTargetLoadAction::EClear);
+
+                            TShaderMapRef<FSegmentationPS> PixelShader(GetGlobalShaderMap(FeatureLevel));
+                            FPixelShaderUtils::AddFullscreenPass(GraphBuilder, GetGlobalShaderMap(FeatureLevel),
+                                RDG_EVENT_NAME("VCCSimSegmentationCapture"), PixelShader, PassParameters, ViewRect);
+                        }
+                        else
+                        {
+                            AddClearRenderTargetPass(GraphBuilder, OutputTexture, FLinearColor::Black);
+                        }
+
                         bValidSensorType = true;
                     }
                     else
@@ -728,21 +739,32 @@ void ARecorder::SampleLiDARData(USensorBaseComponent* Sensor)
 
 bool ARecorder::ShouldCaptureSensor(USensorBaseComponent* Sensor, double CurrentTime)
 {
-    double SensorInterval = SensorIntervals[Sensor];
-
-    if (SensorInterval < 0.0)
+    bool bConsumeForceRequest = false;
     {
-        bool bShouldForceCapture = false;
+        FScopeLock Lock(&RPCRequestLock);
+        if (ForceCaptureThisFrame.Contains(Sensor))
         {
-            FScopeLock Lock(&RPCRequestLock);
-            bShouldForceCapture = ForceCaptureThisFrame.Contains(Sensor);
-            if (bShouldForceCapture)
-            {
-                ForceCaptureThisFrame.Remove(Sensor);
-                LastSensorCaptureTimes[Sensor] = CurrentTime;
-            }
+            ForceCaptureThisFrame.Remove(Sensor);
+            bConsumeForceRequest = true;
+            LastSensorCaptureTimes.Add(Sensor, CurrentTime);
         }
-        return bShouldForceCapture;
+    }
+
+    if (bConsumeForceRequest)
+    {
+        return true;
+    }
+
+    if (!RecordState)
+    {
+        return false;
+    }
+
+    double* IntervalPtr = SensorIntervals.Find(Sensor);
+    double SensorInterval = IntervalPtr ? *IntervalPtr : Sensor->GetRecordInterval();
+    if (!IntervalPtr)
+    {
+        SensorIntervals.Add(Sensor, SensorInterval);
     }
 
     if (!LastSensorCaptureTimes.Contains(Sensor))
@@ -751,8 +773,8 @@ bool ARecorder::ShouldCaptureSensor(USensorBaseComponent* Sensor, double Current
         return true;
     }
 
-    double LastCaptureTime = LastSensorCaptureTimes[Sensor];
-    double TimeSinceLastCapture = CurrentTime - LastCaptureTime;
+    const double LastCaptureTime = LastSensorCaptureTimes[Sensor];
+    const double TimeSinceLastCapture = CurrentTime - LastCaptureTime;
 
     if (TimeSinceLastCapture >= SensorInterval)
     {
@@ -833,6 +855,42 @@ void ARecorder::GroupCamerasByPose()
         UE_LOG(LogRecorder, Log, TEXT("View Group %d: %d"),
             NewGroup.ViewIndex, NewGroup.Cameras.Num());
     }
+}
+
+void ARecorder::EnsureOnDemandCaptureSetup()
+{
+    
+    if (bIsRecording)
+    {
+        return;
+    }
+    UE_LOG(LogRecorder, Log, TEXT("ARecorder::EnsureOnDemandCaptureSetup()"));
+    InitializeReadbackWorker();
+
+    SensorRegistry.CleanupInvalidEntries();
+    SetupSensorProperties();
+    GroupCamerasByPose();
+}
+
+void ARecorder::ScheduleManualCaptureTick()
+{
+    UE_LOG(LogRecorder, Log, TEXT("ARecorder::ScheduleManualCaptureTick()"));
+    bool bExpected = false;
+    if (!bManualCaptureTickScheduled.compare_exchange_strong(bExpected, true))
+    {
+        return;
+    }
+
+    TWeakObjectPtr<ARecorder> WeakThis(this);
+    AsyncTask(ENamedThreads::GameThread, [WeakThis]()
+    {
+        if (ARecorder* Recorder = WeakThis.Get())
+        {
+            Recorder->EnsureOnDemandCaptureSetup();
+            Recorder->CollectData();
+            Recorder->bManualCaptureTickScheduled.store(false);
+        }
+    });
 }
 
 bool ARecorder::ArePosesSimilar(const UCameraBaseComponent* CamA, const UCameraBaseComponent* CamB) const
@@ -993,25 +1051,31 @@ void ARecorder::SubmitCameraRequest(
         return;
     }
 
-    FScopeLock Lock(&RPCRequestLock);
-
-    static constexpr int32 MaxPendingCallbacksPerCamera = 50;
-    TArray<FRPCRequestCallback>& Callbacks = PendingRPCCallbacks.FindOrAdd(Camera);
-
-    if (Callbacks.Num() >= MaxPendingCallbacksPerCamera)
     {
-        OnError(TEXT("RPC request queue full for this camera"));
-        UE_LOG(LogRecorder, Warning, TEXT("RPC queue full for camera %d"), Camera->GetSensorIndex());
-        return;
+        FScopeLock Lock(&RPCRequestLock);
+
+        static constexpr int32 MaxPendingCallbacksPerCamera = 50;
+        TArray<FRPCRequestCallback>& Callbacks = PendingRPCCallbacks.FindOrAdd(Camera);
+
+        if (Callbacks.Num() >= MaxPendingCallbacksPerCamera)
+        {
+            OnError(TEXT("RPC request queue full for this camera"));
+            UE_LOG(LogRecorder, Warning, TEXT("RPC queue full for camera %d"), Camera->GetSensorIndex());
+            return;
+        }
+
+        FRPCRequestCallback Callback;
+        Callback.OnSuccess = OnSuccess;
+        Callback.OnError = OnError;
+        Callback.RequestTime = FPlatformTime::Seconds();
+        Callbacks.Add(MoveTemp(Callback));
+        ForceCaptureThisFrame.Add(Camera);
     }
 
-    FRPCRequestCallback Callback;
-    Callback.OnSuccess = OnSuccess;
-    Callback.OnError = OnError;
-    Callback.RequestTime = FPlatformTime::Seconds();
-    Callbacks.Add(MoveTemp(Callback));
-
-    ForceCaptureThisFrame.Add(Camera);
+    if (!bIsRecording)
+    {
+        ScheduleManualCaptureTick();
+    }
 }
 
 void ARecorder::CheckRPCTimeouts(double CurrentTime)
