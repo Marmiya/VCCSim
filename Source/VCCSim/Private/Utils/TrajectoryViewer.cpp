@@ -121,7 +121,7 @@ AActor* UTrajectoryViewer::GenerateVisibleElements(
         DrawDebugSphere(World, Position, ConeSize, 12, SphereColor, true, -1.0f, 0, 3.0f);
         
         // Draw direction arrow
-        FVector ForwardVector = Rotation.RotateVector(FVector(0.0f, 0.0f, 1.0f));
+        FVector ForwardVector = Rotation.RotateVector(FVector(1.f, .0f, .0f));
         FVector ArrowEnd = Position + ForwardVector * ConeLength;
         DrawDebugDirectionalArrow(World, Position, ArrowEnd, ConeSize * 0.6f, FColor::Red, true, -1.0f, 0, 4.0f);
     }

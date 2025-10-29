@@ -86,15 +86,29 @@ TArray<FCameraInfo> FVCCSimDataConverter::ConvertPoseFile(
         FCameraInfo CameraInfo;
         CameraInfo.UID = ValidPoseIndex;
         
-        FMatrix UEMatrix = FQuatRotationMatrix::Make(PoseData.Quaternion);
-        FMatrix CoordTransform = FMatrix::Identity;
-        CoordTransform.M[0][0] = 0.0f;   // X_ue = Y_colmap
-        CoordTransform.M[0][1] = 1.0f;   
-        CoordTransform.M[1][0] = 1.0f;   // Y_ue = X_colmap
-        CoordTransform.M[1][1] = 0.0f;   
-        CoordTransform.M[2][2] = 1.0f;   // Z_ue = Z_colmap
-        FMatrix ConvertedMatrix = CoordTransform * UEMatrix * CoordTransform.GetTransposed();
-        CameraInfo.Rotation = ConvertedMatrix.ToQuat();
+        FMatrix R_c2w_ue = FQuatRotationMatrix::Make(PoseData.Quaternion);
+
+        FMatrix TWorld = FMatrix::Identity;
+        TWorld.M[0][0] = 0.0f;
+        TWorld.M[0][1] = 1.0f;
+        TWorld.M[1][0] = 1.0f;
+        TWorld.M[1][1] = 0.0f;
+        TWorld.M[2][2] = 1.0f;
+
+        FMatrix TCam = FMatrix::Identity;
+        TCam.M[0][0] = 0.0f;
+        TCam.M[0][1] = 0.0f;
+        TCam.M[0][2] = 1.0f;
+        TCam.M[1][0] = 1.0f;
+        TCam.M[1][1] = 0.0f;
+        TCam.M[1][2] = 0.0f;
+        TCam.M[2][0] = 0.0f;
+        TCam.M[2][1] = -1.0f;
+        TCam.M[2][2] = 0.0f;
+
+        FMatrix R_c2w_ts = TWorld.GetTransposed() * R_c2w_ue.GetTransposed() * TCam;
+
+        CameraInfo.Rotation = R_c2w_ts.GetTransposed().ToQuat();
         CameraInfo.Position = ConvertLocation(PoseData.Location);
         
         // Set camera parameters

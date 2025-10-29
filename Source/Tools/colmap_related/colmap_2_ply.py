@@ -46,7 +46,7 @@ def rotation_matrix_to_ue_quaternion(R: np.ndarray) -> np.ndarray:
     COLMAP quaternion order: [w, x, y, z] (scalar first)
     
     Args:
-        R: 3x3 rotation matrix (world to camera in UE coordinates)
+        R: 3x3 rotation matrix (camera to world in UE coordinates)
     
     Returns:
         UE quaternion [x, y, z, w]
@@ -82,11 +82,6 @@ def rotation_matrix_to_ue_quaternion(R: np.ndarray) -> np.ndarray:
     # Return UE format: [x, y, z, w]
     return np.array([qx, qy, qz, qw], dtype=float)
 
-
-# IO helpers now imported from colmap_utils
-
-
-# Text parsers now imported from colmap_utils
 
 def parse_images_txt_to_camera_data(path: str):
     """Parse images.txt and extract camera centers and directions"""
@@ -211,9 +206,9 @@ Examples:
         """
     )
 
-    parser.add_argument('--input-dir', '-i', type=str, default=r"D:\Data\BaoAn\colmap\rc_colmap",
+    parser.add_argument('--input-dir', '-i', type=str, default=r"D:\Data\360_v2\garden\mesh\rc_colmap_refine",
                        help='Input COLMAP model directory')
-    parser.add_argument('--output-dir', '-o', type=str, default=r"D:\Data\BaoAn\colmap\rc_colmap\ply",
+    parser.add_argument('--output-dir', '-o', type=str, default=r"D:\Data\360_v2\garden\mesh\rc_colmap_refine\ply",
                        help='Output directory')
     parser.add_argument('--verbose', '-v', action='store_true', default=True,
                        help='Enable verbose output')
@@ -371,6 +366,7 @@ def main():
     # Write UE pose file with quaternions
     if args.verbose:
         print(f"[info] Writing UE pose file: {pose_ue_out}")
+    qaq = 0
     with open(pose_ue_out, 'w', encoding='utf-8') as f:
         f.write("# UE coordinate system poses (left-handed, cm)\n")
         f.write("# UE coordinate axes: +X forward, +Y right, +Z up\n")
@@ -381,19 +377,22 @@ def main():
             ue_pos = cam_ue_xyz[i]
             
             R_w2c_colmap = cam["R_w2c"]
-            
             R_c2w_colmap = R_w2c_colmap.T
-            
-            T_colmap_to_ue = np.array([
-                [0,  1,  0],  # X_ue = Y_colmap  
-                [1,  0,  0],  # Y_ue = X_colmap
-                [0,  0,  1]   # Z_ue = Z_colmap
+
+            T_world = np.array([
+                [0,  1,  0],  # X_ue_world = Y_colmap_world
+                [1,  0,  0],  # Y_ue_world = X_colmap_world
+                [0,  0,  1]   # Z_ue_world = Z_colmap_world (both Z-up)
             ])
-            
-            # Apply transformation: R_ue = T * R_colmap * T^T
-            R_c2w_ue = T_colmap_to_ue @ R_c2w_colmap @ T_colmap_to_ue.T
-            
-            # Extract UE quaternion [x, y, z, w] from camera-to-world rotation
+
+            T_cam = np.array([
+                [0,  0,  1],  # X_actor (forward) = Z_cam (forward)
+                [1,  0,  0],  # Y_actor (right) = X_cam (right)
+                [0, -1,  0]   # Z_actor (up) = -Y_cam (down)
+            ])
+
+            R_c2w_ue = T_world @ R_c2w_colmap @ T_cam.T
+
             ue_quat = rotation_matrix_to_ue_quaternion(R_c2w_ue)
             
             # Add pseudo timestamp (1 decimal place like in UE code)
