@@ -560,15 +560,19 @@ TSharedRef<SWidget> FVCCSimPanelRatSplatting::CreateGSTrainingControlSection()
             .Padding(0, 0, 5, 0)
             [
                 SNew(SButton)
-                .Text(FText::FromString(TEXT("Test Transform")))
+                .Text_Lambda([this]()
+                {
+                    return bDataPreparationInProgress ?
+                        FText::FromString(TEXT("Preparing...")) :
+                        FText::FromString(TEXT("Prepare Data"));
+                })
                 .VAlign(VAlign_Center)
                 .HAlign(HAlign_Center)
-                .IsEnabled_Lambda([this]() { return !bGSTrainingInProgress; })
+                .IsEnabled_Lambda([this]() { return !bGSTrainingInProgress && !bDataPreparationInProgress && !bColmapPipelineInProgress; })
                 .OnClicked_Lambda([this]() {
-                    return OnGSTestTransformationClicked();
+                    return OnGSPrepareTrainingDataClicked();
                 })
-                .ToolTipText(FText::FromString(TEXT("Export mesh and camera poses "
-                                                    "as PLY files for MeshLab validation")))
+                .ToolTipText(FText::FromString(TEXT("Generate training configuration and data files for RatSplatting/BRDF training (async for mesh triangles)")))
             ]
             
             + SHorizontalBox::Slot()

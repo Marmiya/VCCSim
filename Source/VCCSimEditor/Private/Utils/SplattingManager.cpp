@@ -320,12 +320,19 @@ void FSplattingManager::UpdateTrainingStatus()
         OnTriangleExtractionComplete();
         return;
     }
-    
+
     if (!IsTrainingInProgress())
     {
         return;
     }
-    
+
+    // Only monitor process when actually running (not just preparing)
+    // This prevents false "completion" detection during preparation phase
+    if (CurrentStatus != ETrainingStatus::Running)
+    {
+        return;
+    }
+
     FDateTime CurrentTime = FDateTime::Now();
     
     // Limit update frequency

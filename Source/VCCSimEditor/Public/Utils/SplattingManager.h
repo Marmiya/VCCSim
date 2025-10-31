@@ -112,9 +112,14 @@ public:
     
     /**
      * Check if training is currently in progress
-     * @return True if training is running
+     * @return True if training is running, preparing, or extracting triangles
      */
-    bool IsTrainingInProgress() const { return CurrentStatus == ETrainingStatus::Running; }
+    bool IsTrainingInProgress() const
+    {
+        return CurrentStatus == ETrainingStatus::Running ||
+               CurrentStatus == ETrainingStatus::Preparing ||
+               bTriangleExtractionInProgress;
+    }
     
     /**
      * Get current training status

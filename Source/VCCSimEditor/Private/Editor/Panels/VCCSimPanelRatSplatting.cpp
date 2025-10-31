@@ -27,6 +27,85 @@ DEFINE_LOG_CATEGORY_STATIC(LogRatSplatting, Log, All);
 #include "DesktopPlatformModule.h"
 #include "Framework/Application/SlateApplication.h"
 
+// ============================================================================
+// ASYNC DATA PREPARATION TASK
+// ============================================================================
+
+class FDataPreparationTask : public FNonAbandonableTask
+{
+public:
+    FDataPreparationTask(const FSplattingConfig& InConfig, const FString& InOutputPath)
+        : Config(InConfig)
+        , OutputPath(InOutputPath)
+        , bSucceeded(false)
+    {
+    }
+
+    void DoWork()
+    {
+        if (!Config.SelectedMesh.IsValid())
+        {
+            ErrorMessage = TEXT("Selected mesh is not valid");
+            bSucceeded = false;
+            return;
+        }
+
+        try
+        {
+            FVCCSimDataConverter::FMeshTriangleData TriangleData =
+                FVCCSimDataConverter::ExtractMeshTriangles(
+                    Config.SelectedMesh.Get(),
+                    Config.MaxMeshTriangles,
+                    Config.MeshTriangleMethod,
+                    true
+                );
+
+            FString BasePath = FPaths::GetPath(OutputPath) / FPaths::GetBaseFilename(OutputPath);
+
+            if (FVCCSimDataConverter::SaveMeshTrianglesDualFormat(TriangleData, BasePath, 8))
+            {
+                bSucceeded = true;
+                ResultMessage = FString::Printf(TEXT("Successfully exported %d mesh triangles"),
+                    TriangleData.TriangleCount);
+            }
+            else
+            {
+                bSucceeded = false;
+                ErrorMessage = TEXT("Failed to save mesh triangles in dual format");
+            }
+        }
+        catch (const std::exception& e)
+        {
+            bSucceeded = false;
+            ErrorMessage = FString::Printf(TEXT("Mesh triangle extraction failed: %s"), UTF8_TO_TCHAR(e.what()));
+        }
+        catch (...)
+        {
+            bSucceeded = false;
+            ErrorMessage = TEXT("Unknown error during mesh triangle extraction");
+        }
+    }
+
+    FORCEINLINE TStatId GetStatId() const
+    {
+        RETURN_QUICK_DECLARE_CYCLE_STAT(FDataPreparationTask, STATGROUP_ThreadPoolAsyncTasks);
+    }
+
+    bool WasSuccessful() const { return bSucceeded; }
+    FString GetErrorMessage() const { return ErrorMessage; }
+    FString GetResultMessage() const { return ResultMessage; }
+
+private:
+    FSplattingConfig Config;
+    FString OutputPath;
+
+    bool bSucceeded;
+    FString ErrorMessage;
+    FString ResultMessage;
+};
+
+typedef TSharedPtr<FAsyncTask<FDataPreparationTask>> FDataPreparationTaskPtr;
+
 BEGIN_SLATE_FUNCTION_BUILD_OPTIMIZATION
 
 // Attention: the code about UI layout and click handlers is in VCCSimPanelRatSplatting_UI.cpp
@@ -72,6 +151,14 @@ FVCCSimPanelRatSplatting::~FVCCSimPanelRatSplatting()
         GEditor->GetTimerManager()->ClearTimer(GSStatusUpdateTimerHandle);
         GSStatusUpdateTimerHandle.Invalidate();
     }
+
+    // Clean up async data preparation task
+    if (DataPreparationTask)
+    {
+        FDataPreparationTaskPtr* TaskPtr = static_cast<FDataPreparationTaskPtr*>(DataPreparationTask);
+        delete TaskPtr;
+        DataPreparationTask = nullptr;
+    }
 }
 
 void FVCCSimPanelRatSplatting::Initialize()
@@ -105,6 +192,15 @@ void FVCCSimPanelRatSplatting::Cleanup()
         GEditor->GetTimerManager()->ClearTimer(GSStatusUpdateTimerHandle);
         GSStatusUpdateTimerHandle.Invalidate();
     }
+
+    // Clean up async data preparation task
+    if (DataPreparationTask)
+    {
+        FDataPreparationTaskPtr* TaskPtr = static_cast<FDataPreparationTaskPtr*>(DataPreparationTask);
+        delete TaskPtr;
+        DataPreparationTask = nullptr;
+    }
+    bDataPreparationInProgress = false;
 }
 
 // ============================================================================
@@ -788,152 +884,224 @@ void FVCCSimPanelRatSplatting::StartTriangleSplattingWithColmapData(const FStrin
     }
 }
 
-FReply FVCCSimPanelRatSplatting::OnGSTestTransformationClicked()
+FReply FVCCSimPanelRatSplatting::OnGSPrepareTrainingDataClicked()
 {
-    // Validate basic configuration first
-    if (GSConfig.OutputDirectory.IsEmpty())
+    if (bDataPreparationInProgress)
     {
-        FVCCSimUIHelpers::ShowNotification(TEXT("Please specify an output directory first"), true);
+        FVCCSimUIHelpers::ShowNotification(TEXT("Data preparation already in progress"), true);
         return FReply::Handled();
     }
 
-    // Create Test Transform subdirectory
-    FString TestTransformOutputDir = FPaths::Combine(GSConfig.OutputDirectory, TEXT("Test Transform"));
-    IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
-    if (!PlatformFile.DirectoryExists(*TestTransformOutputDir))
+    if (!ValidateGSConfiguration())
     {
-        if (!PlatformFile.CreateDirectoryTree(*TestTransformOutputDir))
-        {
-            FVCCSimUIHelpers::ShowNotification(TEXT("Failed to create Test Transform directory"), true);
-            return FReply::Handled();
-        }
+        return FReply::Handled();
     }
 
-    bool bExportedAny = false;
-    FString StatusMessage;
+    IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
 
-    // Export selected mesh to PLY (both original UE and transformed Triangle Splatting coordinates)
+    FString TSTrainingDir = FPaths::Combine(GSConfig.OutputDirectory, TEXT("RatSplatting"));
+
+    FDateTime Now = FDateTime::Now();
+    FString Timestamp = Now.ToString(TEXT("%Y%m%d_%H%M%S"));
+    FString SessionDirName = FString::Printf(TEXT("prepared_session_%s"), *Timestamp);
+    PendingSessionDirectory = FPaths::Combine(TSTrainingDir, SessionDirName);
+
+    UE_LOG(LogRatSplatting, Log, TEXT("Preparing training data session: %s"), *PendingSessionDirectory);
+
+    if (!PlatformFile.CreateDirectoryTree(*PendingSessionDirectory))
+    {
+        FVCCSimUIHelpers::ShowNotification(TEXT("Failed to create session directory"), true);
+        return FReply::Handled();
+    }
+
+    PendingConfigDir = FPaths::Combine(PendingSessionDirectory, TEXT("config"));
+    if (!PlatformFile.CreateDirectoryTree(*PendingConfigDir))
+    {
+        FVCCSimUIHelpers::ShowNotification(TEXT("Failed to create config directory"), true);
+        return FReply::Handled();
+    }
+
+    FCameraIntrinsics Intrinsics = FVCCSimDataConverter::ConvertCameraParamsWithFocalLength(
+        GSConfig.FOVDegrees, GSConfig.ImageWidth, GSConfig.ImageHeight,
+        GSConfig.FocalLengthX, GSConfig.FocalLengthY);
+
+    TArray<FCameraInfo> CameraInfos = FVCCSimDataConverter::ConvertPoseFile(
+        GSConfig.PoseFilePath, GSConfig.ImageDirectory, Intrinsics);
+
+    if (CameraInfos.Num() == 0)
+    {
+        FVCCSimUIHelpers::ShowNotification(TEXT("No valid camera poses found in pose file"), true);
+        return FReply::Handled();
+    }
+
+    if (!FVCCSimDataConverter::SaveCameraInfo(CameraInfos, PendingConfigDir))
+    {
+        FVCCSimUIHelpers::ShowNotification(TEXT("Failed to save camera information"), true);
+        return FReply::Handled();
+    }
+
+    UE_LOG(LogRatSplatting, Log, TEXT("Saved %d camera poses"), CameraInfos.Num());
+
     if (GSConfig.SelectedMesh.IsValid())
     {
-        try
+        if (GSConfig.bUseMeshTriangles)
         {
-            // Export original UE coordinates
-            int32 PointCount = GSInitPointCountValue.Get(10000);
-            FPointCloudData OriginalMesh = FVCCSimDataConverter::ConvertMeshToPointCloud(
-                GSConfig.SelectedMesh.Get(), PointCount, false);
+            FString MeshTrianglesPath = FPaths::Combine(PendingConfigDir, TEXT("mesh_triangles.ply"));
 
-            FString MeshUEPath = FPaths::Combine(TestTransformOutputDir,
-                TEXT("test_mesh_ue_coordinates.ply"));
-            if (FVCCSimDataConverter::SavePointCloudToPLY(OriginalMesh, MeshUEPath))
+            bDataPreparationInProgress = true;
+            FVCCSimUIHelpers::ShowNotification(TEXT("Extracting mesh triangles in background...\nEditor remains responsive."));
+
+            FDataPreparationTaskPtr* TaskPtr = new FDataPreparationTaskPtr(
+                MakeShared<FAsyncTask<FDataPreparationTask>>(GSConfig, MeshTrianglesPath)
+            );
+            DataPreparationTask = TaskPtr;
+
+            (*TaskPtr)->StartBackgroundTask();
+
+            UE_LOG(LogRatSplatting, Log, TEXT("Started async extraction of %d mesh triangles"), GSConfig.MaxMeshTriangles);
+
+            if (GEditor)
             {
-                StatusMessage += FString::Printf(TEXT("Original mesh (UE coords)\n"));
-                bExportedAny = true;
+                GEditor->GetTimerManager()->SetTimer(
+                    GSStatusUpdateTimerHandle,
+                    FTimerDelegate::CreateLambda([this]()
+                    {
+                        if (DataPreparationTask)
+                        {
+                            FDataPreparationTaskPtr* TaskPtr = static_cast<FDataPreparationTaskPtr*>(DataPreparationTask);
+                            if (TaskPtr->IsValid() && (*TaskPtr)->IsDone())
+                            {
+                                const FDataPreparationTask& Task = (*TaskPtr)->GetTask();
+
+                                bDataPreparationInProgress = false;
+
+                                if (GEditor && GSStatusUpdateTimerHandle.IsValid())
+                                {
+                                    GEditor->GetTimerManager()->ClearTimer(GSStatusUpdateTimerHandle);
+                                    GSStatusUpdateTimerHandle.Invalidate();
+                                }
+
+                                FString StatusMessage;
+                                bool bSuccess = true;
+
+                                if (Task.WasSuccessful())
+                                {
+                                    StatusMessage = Task.GetResultMessage() + TEXT("\n");
+                                    UE_LOG(LogRatSplatting, Log, TEXT("Mesh triangle extraction completed successfully"));
+                                }
+                                else
+                                {
+                                    StatusMessage = TEXT("✗ ") + Task.GetErrorMessage() + TEXT("\n");
+                                    bSuccess = false;
+                                    UE_LOG(LogRatSplatting, Error, TEXT("Mesh triangle extraction failed: %s"), *Task.GetErrorMessage());
+                                }
+
+                                delete TaskPtr;
+                                DataPreparationTask = nullptr;
+
+                                if (!GSConfig.bUseMeshTriangles || bSuccess)
+                                {
+                                    FinishDataPreparation(StatusMessage, bSuccess);
+                                }
+                            }
+                        }
+                    }),
+                    0.5f,
+                    true
+                );
             }
 
-            // Export transformed Triangle Splatting coordinates
-            FPointCloudData TransformedMesh = FVCCSimDataConverter::ConvertMeshToPointCloud(
-                GSConfig.SelectedMesh.Get(), PointCount, true);
+            return FReply::Handled();
+        }
+        else
+        {
+            FPointCloudData PointCloud = FVCCSimDataConverter::ConvertMeshToPointCloud(
+                GSConfig.SelectedMesh.Get(), GSConfig.InitPointCount, true);
 
-            FString MeshTSPath = FPaths::Combine(TestTransformOutputDir,
-                TEXT("test_mesh_ts_coordinates.ply"));
-            if (FVCCSimDataConverter::SavePointCloudToPLY(TransformedMesh, MeshTSPath))
+            if (PointCloud.GetPointCount() > 0)
             {
-                StatusMessage += FString::Printf(TEXT("Transformed mesh (TS coords)\n"));
-                bExportedAny = true;
-
-                // Log bounding boxes for comparison
-                FVector UEMin = FVector(FLT_MAX), UEMax = FVector(-FLT_MAX);
-                FVector TSMin = FVector(FLT_MAX), TSMax = FVector(-FLT_MAX);
-
-                for (const FRatPoint& Point : OriginalMesh.Points)
+                FString PointCloudPath = FPaths::Combine(PendingConfigDir, TEXT("init_points.ply"));
+                if (FVCCSimDataConverter::SavePointCloudToPLY(PointCloud, PointCloudPath))
                 {
-                    UEMin = FVector::Min(UEMin, Point.Position);
-                    UEMax = FVector::Max(UEMax, Point.Position);
+                    UE_LOG(LogRatSplatting, Log, TEXT("Generated %d init points"), PointCloud.GetPointCount());
                 }
-
-                for (const FRatPoint& Point : TransformedMesh.Points)
-                {
-                    TSMin = FVector::Min(TSMin, Point.Position);
-                    TSMax = FVector::Max(TSMax, Point.Position);
-                }
-
-                StatusMessage += FString::Printf(
-                TEXT("UE mesh bbox: Min(%.2f,%.2f,%.2f) Max(%.2f,%.2f,%.2f)\n"),
-                    UEMin.X, UEMin.Y, UEMin.Z, UEMax.X, UEMax.Y, UEMax.Z);
-                StatusMessage += FString::Printf(
-                TEXT("TS mesh bbox: Min(%.2f,%.2f,%.2f) Max(%.2f,%.2f,%.2f)\n"),
-                        TSMin.X, TSMin.Y, TSMin.Z, TSMax.X, TSMax.Y, TSMax.Z);
-            }
-            else
-            {
-                StatusMessage += TEXT("✗ Failed to export transformed mesh\n");
             }
         }
-        catch (...)
-        {
-            StatusMessage += TEXT("✗ Error converting mesh\n");
-        }
+    }
+
+    FinishDataPreparation(TEXT(""), true);
+
+    return FReply::Handled();
+}
+
+void FVCCSimPanelRatSplatting::FinishDataPreparation(const FString& AdditionalMessage, bool bSuccess)
+{
+    FString StatusMessage = AdditionalMessage;
+
+    FString ConfigPath = FPaths::Combine(PendingConfigDir, TEXT("vccsim_training_config.json"));
+    FString ConfigContent = FString::Printf(TEXT(
+        "{\n"
+        "  \"image_directory\": \"%s\",\n"
+        "  \"pose_file\": \"%s\",\n"
+        "  \"output_directory\": \"%s\",\n"
+        "  \"camera\": {\n"
+        "    \"fov_degrees\": %.2f,\n"
+        "    \"width\": %d,\n"
+        "    \"height\": %d,\n"
+        "    \"focal_length_x\": %.2f,\n"
+        "    \"focal_length_y\": %.2f\n"
+        "  },\n"
+        "  \"training\": {\n"
+        "    \"max_iterations\": %d\n"
+        "  },\n"
+        "  \"mesh\": {\n"
+        "    \"use_mesh_initialization\": %s,\n"
+        "    \"mesh_path\": \"%s\",\n"
+        "    \"use_mesh_triangles\": %s,\n"
+        "    \"max_mesh_triangles\": %d,\n"
+        "    \"mesh_triangle_method\": \"%s\",\n"
+        "    \"mesh_opacity\": %.3f\n"
+        "  }\n"
+        "}\n"
+    ),
+        *GSConfig.ImageDirectory.Replace(TEXT("\\"), TEXT("/")),
+        *GSConfig.PoseFilePath.Replace(TEXT("\\"), TEXT("/")),
+        *PendingSessionDirectory.Replace(TEXT("\\"), TEXT("/")),
+        GSConfig.FOVDegrees,
+        GSConfig.ImageWidth,
+        GSConfig.ImageHeight,
+        GSConfig.FocalLengthX,
+        GSConfig.FocalLengthY,
+        GSConfig.MaxIterations,
+        GSConfig.SelectedMesh.IsValid() ? TEXT("true") : TEXT("false"),
+        GSConfig.SelectedMesh.IsValid() ? *GSConfig.SelectedMesh->GetPathName() : TEXT(""),
+        GSConfig.bUseMeshTriangles ? TEXT("true") : TEXT("false"),
+        GSConfig.MaxMeshTriangles,
+        *GSConfig.MeshTriangleMethod,
+        GSConfig.MeshOpacity
+    );
+
+    if (FFileHelper::SaveStringToFile(ConfigContent, *ConfigPath))
+    {
+        StatusMessage += TEXT("✓ Generated training config\n");
     }
     else
     {
-        StatusMessage += TEXT("⚠ No mesh selected\n");
+        StatusMessage += TEXT("✗ Failed to save config file\n");
+        bSuccess = false;
     }
 
-    // Export camera poses as points with normals (camera orientations)
-    if (!GSConfig.PoseFilePath.IsEmpty() && FPaths::FileExists(GSConfig.PoseFilePath))
+    if (bSuccess)
     {
-        try
-        {
-            FCameraIntrinsics Intrinsics = FVCCSimDataConverter::ConvertCameraParamsWithFocalLength(
-                GSConfig.FOVDegrees, GSConfig.ImageWidth, GSConfig.ImageHeight,
-                GSConfig.FocalLengthX, GSConfig.FocalLengthY);
-
-            TArray<FCameraInfo> CameraInfos = FVCCSimDataConverter::ConvertPoseFile(
-                GSConfig.PoseFilePath, GSConfig.ImageDirectory, Intrinsics);
-
-            if (CameraInfos.Num() > 0)
-            {
-                FString CameraPLYPath = FPaths::Combine(TestTransformOutputDir,
-                    TEXT("test_cameras_transformed.ply"));
-                ExportCamerasToPLY(CameraInfos, CameraPLYPath);
-
-                // Save CameraInfo data for comparison
-                FString CameraInfoPath = FPaths::Combine(TestTransformOutputDir,
-                    TEXT("camera_info_data.txt"));
-                SaveCameraInfoData(CameraInfos, CameraInfoPath);
-
-                StatusMessage += FString::Printf(
-                    TEXT("✓ %d cameras exported\n✓ CameraInfo data saved\n"), CameraInfos.Num());
-                bExportedAny = true;
-            }
-            else
-            {
-                StatusMessage += TEXT("✗ No valid cameras found in pose file\n");
-            }
-        }
-        catch (...)
-        {
-            StatusMessage += TEXT("✗ Error converting camera poses\n");
-        }
-    }
-    else
-    {
-        StatusMessage += TEXT("⚠ No valid pose file specified\n");
-    }
-
-    // Show result
-    if (bExportedAny)
-    {
-        StatusMessage += TEXT("\nOpen the PLY files to verify coordinate transformation!");
+        StatusMessage += FString::Printf(TEXT("\n✓ Training data ready!\nWorkspace: %s\n\n")
+                                        TEXT("Run: python train_brdf.py --workspace \"%s\""),
+                                        *PendingSessionDirectory, *PendingSessionDirectory);
         FVCCSimUIHelpers::ShowNotification(StatusMessage);
     }
     else
     {
-        FVCCSimUIHelpers::ShowNotification(TEXT("No data was exported. Please check "
-                                "mesh selection and pose file."), true);
+        FVCCSimUIHelpers::ShowNotification(TEXT("Data preparation completed with errors. Check log."), true);
     }
-
-    return FReply::Handled();
 }
 
 FReply FVCCSimPanelRatSplatting::OnGSExportColmapClicked()

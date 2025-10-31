@@ -113,11 +113,17 @@ private:
     // Training state
     bool bGSTrainingInProgress = false;
     bool bColmapPipelineInProgress = false;
+    bool bDataPreparationInProgress = false;
     FTimerHandle GSStatusUpdateTimerHandle;
 
     // Managers
     TSharedPtr<FSplattingManager> GSTrainingManager;
     TSharedPtr<FColmapManager> ColmapManager;
+
+    // Data preparation async task
+    void* DataPreparationTask = nullptr;
+    FString PendingSessionDirectory;
+    FString PendingConfigDir;
 
     // Triangle selection method options
     TArray<TSharedPtr<FString>> TriangleSelectionMethods;
@@ -172,7 +178,7 @@ private:
     FReply OnGSStartTrainingClicked();
     FReply OnGSStopTrainingClicked();
     FReply OnGSColmapTrainingClicked();
-    FReply OnGSTestTransformationClicked();
+    FReply OnGSPrepareTrainingDataClicked();
     FReply OnGSExportColmapClicked();
 
     // ============================================================================
@@ -201,4 +207,5 @@ private:
 
     void ExportCamerasToPLY(const TArray<struct FCameraInfo>& CameraInfos, const FString& OutputPath);
     void SaveCameraInfoData(const TArray<struct FCameraInfo>& CameraInfos, const FString& OutputPath);
+    void FinishDataPreparation(const FString& AdditionalMessage, bool bSuccess);
 };
