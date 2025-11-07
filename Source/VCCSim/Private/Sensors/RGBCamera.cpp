@@ -70,7 +70,9 @@ void URGBCameraComponent::InitializeRenderTargets()
 
     RenderTarget->TargetGamma = GEngine->GetDisplayGamma();
     RenderTarget->InitCustomFormat(Width, Height,
-        PF_B8G8R8A8, true);
+        PF_B8G8R8A8, false);
+    RenderTarget->bForceLinearGamma = false;
+    RenderTarget->SRGB = true;
     RenderTarget->RenderTargetFormat = RTF_RGBA8;
     RenderTarget->bGPUSharedFlag = true;
     RenderTarget->bAutoGenerateMips = false;
