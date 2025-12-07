@@ -504,32 +504,40 @@ TArray<FString> FVCCSimDataConverter::ValidateImageDirectory(
     const FString& ImageDirectory, const TArray<FString>& ValidExtensions)
 {
     TArray<FString> ValidImages;
-    
+
     if (!FPaths::DirectoryExists(ImageDirectory))
     {
         UE_LOG(LogDataConverter, Error, TEXT("Image directory does "
                                     "not exist: %s"), *ImageDirectory);
         return ValidImages;
     }
-    
+
     TArray<FString> FoundFiles;
     IFileManager::Get().FindFiles(FoundFiles, *ImageDirectory, nullptr);
-    
+
+    int32 FilteredMaskCount = 0;
+
     for (const FString& FileName : FoundFiles)
     {
         FString Extension = FPaths::GetExtension(FileName).ToLower();
-        
+
         if (ValidExtensions.Contains(Extension))
         {
+            if (FileName.Contains(TEXT("_mask"), ESearchCase::IgnoreCase))
+            {
+                FilteredMaskCount++;
+                continue;
+            }
+
             ValidImages.Add(FPaths::Combine(ImageDirectory, FileName));
         }
     }
-    
+
     ValidImages.Sort();
-    
-    UE_LOG(LogDataConverter, Log, TEXT("Found %d images in %s"),
-        ValidImages.Num(), *ImageDirectory);
-    
+
+    UE_LOG(LogDataConverter, Log, TEXT("Found %d images in %s (filtered %d mask files)"),
+        ValidImages.Num(), *ImageDirectory, FilteredMaskCount);
+
     return ValidImages;
 }
 

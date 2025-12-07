@@ -527,7 +527,7 @@ TSharedRef<SWidget> FVCCSimPanelRatSplatting::CreateGSTrainingParamsSection()
                     TEXT("Max Mesh Triangles"),
                     GSMaxMeshTrianglesSpinBox,
                     GSMaxMeshTrianglesValue,
-                    100000, 4000000, 10000,
+                    100000, 10000000, 10000,
                     [this](int32 NewValue) { 
                         GSConfig.MaxMeshTriangles = NewValue; 
                     }

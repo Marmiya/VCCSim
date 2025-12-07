@@ -379,9 +379,9 @@ Examples:
     )
 
     # Add common arguments
-    parser.add_argument('--input-dir', '-i', type=str, default=r"D:\Data\BaoAn\colmap\rc_colmap",
+    parser.add_argument('--input-dir', '-i', type=str, default=r"D:\Data\L7\Imgs\colmap\original",
                        help='Input COLMAP model directory')
-    parser.add_argument('--output-dir', '-o', type=str, default=r"D:\Data\BaoAn\colmap\rc_colmap_refine",
+    parser.add_argument('--output-dir', '-o', type=str, default=r"D:\Data\L7\Imgs\colmap\refined",
                        help='Output directory')
     parser.add_argument('--verbose', '-v', action='store_true', default=True,
                        help='Enable verbose output')
