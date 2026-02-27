@@ -23,6 +23,7 @@
 #include "Engine/TextureRenderTarget2D.h"
 #include "Materials/MaterialInterface.h"
 #include "RHIResources.h"
+#include "RHIGPUReadback.h"
 #include "RGBCamera.generated.h"
 
 namespace RGBCameraDefaults
@@ -99,37 +100,45 @@ void URGBCameraComponent::ProcessRGBTextureTemplate(CallbackType&& Callback)
         RGBData.SetNumUninitialized(Width * Height);
     }
 
-    struct FReadSurfaceContext
-    {
-        TArray<FColor>* RGBData;
-        FIntRect Rect;
-        FReadSurfaceDataFlags Flags;
-    } Context { &RGBData, FIntRect(0, 0, Width, Height),
-                FReadSurfaceDataFlags(RCM_UNorm, CubeFace_MAX) };
-
     auto SharedCallback = MakeShared<std::decay_t<CallbackType>>(std::forward<CallbackType>(Callback));
 
     UTextureRenderTarget2D* RT = RenderTarget;
 
     ENQUEUE_RENDER_COMMAND(ReadSurfaceCommand)(
-        [RT, Context, SharedCallback](FRHICommandListImmediate& RHICmdList)
+        [RT, RGBDataPtr = &RGBData, CaptureWidth = Width, CaptureHeight = Height,
+         SharedCallback](FRHICommandListImmediate& RHICmdList)
         {
             if (!RT) return;
 
             FTextureRenderTargetResource* RTRes = RT->GetRenderTargetResource();
             if (!RTRes) return;
 
-            RHICmdList.ReadSurfaceData(
-                RTRes->GetRenderTargetTexture(),
-                Context.Rect,
-                *Context.RGBData,
-                FReadSurfaceDataFlags()
-            );
+            FRHITexture* TextureRHI = RTRes->GetRenderTargetTexture();
+            if (!TextureRHI) return;
+
+            FRHIGPUTextureReadback Readback(TEXT("RGBCameraReadback"));
+            Readback.EnqueueCopy(RHICmdList, TextureRHI);
+            RHICmdList.BlockUntilGPUIdle();
+
+            int32 RowPitchInPixels;
+            void* MappedData = Readback.Lock(RowPitchInPixels);
+            if (MappedData)
+            {
+                const int32 SrcRowBytes = RowPitchInPixels * sizeof(FColor);
+                const int32 DstRowBytes = CaptureWidth * sizeof(FColor);
+                const uint8* Src = static_cast<const uint8*>(MappedData);
+                uint8* Dst = reinterpret_cast<uint8*>(RGBDataPtr->GetData());
+                for (int32 Row = 0; Row < CaptureHeight; ++Row)
+                {
+                    FMemory::Memcpy(Dst + Row * DstRowBytes, Src + Row * SrcRowBytes, DstRowBytes);
+                }
+                Readback.Unlock();
+            }
 
             if constexpr (std::is_invocable_v<std::decay_t<CallbackType>>)
             { (*SharedCallback)(); }
             else if constexpr (std::is_invocable_v<std::decay_t<CallbackType>, const TArray<FColor>&>)
-            { (*SharedCallback)(*Context.RGBData); }
+            { (*SharedCallback)(*RGBDataPtr); }
         }
     );
 }

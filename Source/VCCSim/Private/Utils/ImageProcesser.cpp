@@ -37,7 +37,8 @@ void FAsyncImageSaveTask::DoWork()
 
 void FAsyncDepthSaveTask::DoWork()
 {
-    // Convert depth data to 16-bit grayscale
+    if (DepthPixels.IsEmpty()) return;
+
     TArray<uint16> DepthData16;
     DepthData16.Reserve(DepthPixels.Num());
 

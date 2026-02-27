@@ -168,7 +168,7 @@ TArray<FDCPoint> UDepthCameraComponent::GeneratePointCloud()
         for (int32 X = 0; X < Width; ++X)
         {
             const int32 Index = Y * Width + X;
-            const float Depth = DepthData[Index].A * MaxRange;
+            const float Depth = DepthData[Index].R;
 
             if (Depth > MinRange && Depth < MaxRange)
             {

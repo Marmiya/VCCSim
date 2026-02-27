@@ -206,9 +206,9 @@ Examples:
         """
     )
 
-    parser.add_argument('--input-dir', '-i', type=str, default=r"D:\Data\L7\Imgs\colmap\refined",
+    parser.add_argument('--input-dir', '-i', type=str, default=r"D:\Data\BaoAnS\colmap\refined",
                        help='Input COLMAP model directory')
-    parser.add_argument('--output-dir', '-o', type=str, default=r"D:\Data\L7\Imgs\colmap\ply",
+    parser.add_argument('--output-dir', '-o', type=str, default=r"D:\Data\BaoAnS\colmap\ply",
                        help='Output directory')
     parser.add_argument('--verbose', '-v', action='store_true', default=True,
                        help='Enable verbose output')
