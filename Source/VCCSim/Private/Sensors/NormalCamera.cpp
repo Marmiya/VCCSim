@@ -72,27 +72,15 @@ void UNormalCameraComponent::CaptureNormalScene()
     }
     if (IsInGameThread())
     {
-        CaptureComponent->CaptureScene();
+        CaptureComponent->CaptureSceneDeferred();
     }
     else
     {
         AsyncTask(ENamedThreads::GameThread, [this]()
         {
-            CaptureComponent->CaptureScene();
+            CaptureComponent->CaptureSceneDeferred();
         });
     }
-}
-
-void UNormalCameraComponent::CaptureNormalSceneDeferred()
-{
-    if (!CheckComponentAndRenderTarget())
-    {
-        UE_LOG(LogNormalCamera, Error, TEXT("Component or RenderTarget not valid!"));
-        return;
-    }
-
-    LastCaptureTimestamp = FPlatformTime::Seconds();
-    CaptureComponent->CaptureSceneDeferred();
 }
 
 void UNormalCameraComponent::CaptureNormalSceneAndProcess()

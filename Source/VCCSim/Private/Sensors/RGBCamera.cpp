@@ -50,18 +50,17 @@ void URGBCameraComponent::SetCaptureComponent() const
 {
     Super::SetCaptureComponent();
 
-    CaptureComponent->CaptureSource = SCS_FinalColorLDR;
+    CaptureComponent->CaptureSource = SCS_FinalColorHDR;
     CaptureComponent->bAlwaysPersistRenderingState = true;
     CaptureComponent->PrimaryComponentTick.bCanEverTick = true;
+    CaptureComponent->bRenderInMainRenderer = true;
     
-    FEngineShowFlags& ShowFlags = CaptureComponent->ShowFlags;
-    ShowFlags.EnableAdvancedFeatures();
-    ShowFlags.SetPostProcessing(true);
-    ShowFlags.SetTonemapper(true);
-    ShowFlags.SetBloom(true);
-    ShowFlags.SetLumenGlobalIllumination(true);
-    ShowFlags.SetLumenReflections(true);
-    ShowFlags.SetAntiAliasing(true);
+    auto& SF = CaptureComponent->ShowFlags;
+    SF.SetMotionBlur(false);
+    SF.SetDepthOfField(false);
+    SF.SetLensFlares(false);
+    SF.SetVignette(false);
+    SF.SetGrain(false);
 }
 
 void URGBCameraComponent::InitializeRenderTargets()
@@ -90,27 +89,15 @@ void URGBCameraComponent::CaptureRGBScene()
 
     if (IsInGameThread())
     {
-        CaptureComponent->CaptureScene();
+        CaptureComponent->CaptureSceneDeferred();
     }
     else
     {
         AsyncTask(ENamedThreads::GameThread, [this]()
         {
-            CaptureComponent->CaptureScene();
+            CaptureComponent->CaptureSceneDeferred();
         });
     }
-}
-
-void URGBCameraComponent::CaptureRGBSceneDeferred()
-{
-    if (!CheckComponentAndRenderTarget())
-    {
-        UE_LOG(LogCameraSensor, Error, TEXT("Component or RenderTarget not valid!"));
-        return;
-    }
-
-    LastCaptureTimestamp = FPlatformTime::Seconds();
-    CaptureComponent->CaptureSceneDeferred();
 }
 
 void URGBCameraComponent::AsyncGetRGBImageData(

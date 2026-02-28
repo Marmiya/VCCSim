@@ -56,8 +56,6 @@ public:
     
     UFUNCTION(BlueprintCallable, Category = "SegmentationCamera")
     void CaptureSegmentationScene();
-    UFUNCTION(BlueprintCallable, Category = "SegmentationCamera")
-    void CaptureSegmentationSceneDeferred();
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SegmentationCamera|Config")
     UMaterialInterface* SegmentationMaterial = Cast<UMaterialInterface>(

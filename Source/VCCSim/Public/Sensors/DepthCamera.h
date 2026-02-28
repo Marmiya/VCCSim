@@ -64,8 +64,6 @@ public:
     UFUNCTION(BlueprintCallable, Category = "DepthCamera")
     void CaptureDepthScene();
     UFUNCTION(BlueprintCallable, Category = "DepthCamera")
-    void CaptureDepthSceneDeferred();
-    UFUNCTION(BlueprintCallable, Category = "DepthCamera")
     void CaptureDepthSceneAndProcess();
     virtual UTextureRenderTarget2D* GetRenderTarget() const override { return RenderTarget; }
 

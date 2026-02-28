@@ -60,8 +60,6 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "RGBCamera")
     void CaptureRGBScene();
-    UFUNCTION(BlueprintCallable, Category = "RGBCamera")
-    void CaptureRGBSceneDeferred();
     
     // For grpc service
     void AsyncGetRGBImageData(TFunction<void(const TArray<FColor>&)> Callback);

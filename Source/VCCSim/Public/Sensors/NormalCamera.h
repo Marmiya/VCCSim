@@ -53,8 +53,6 @@ public:
     UFUNCTION(BlueprintCallable, Category = "NormalCamera")
     void CaptureNormalScene();
     UFUNCTION(BlueprintCallable, Category = "NormalCamera")
-    void CaptureNormalSceneDeferred();
-    UFUNCTION(BlueprintCallable, Category = "NormalCamera")
     void CaptureNormalSceneAndProcess();
     virtual UTextureRenderTarget2D* GetRenderTarget() const override { return RenderTarget; }
 

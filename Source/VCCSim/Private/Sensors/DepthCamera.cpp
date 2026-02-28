@@ -72,27 +72,15 @@ void UDepthCameraComponent::CaptureDepthScene()
     }
     if (IsInGameThread())
     {
-        CaptureComponent->CaptureScene();
+        CaptureComponent->CaptureSceneDeferred();
     }
     else
     {
         AsyncTask(ENamedThreads::GameThread, [this]()
         {
-            CaptureComponent->CaptureScene();
+            CaptureComponent->CaptureSceneDeferred();
         });
     }
-}
-
-void UDepthCameraComponent::CaptureDepthSceneDeferred()
-{
-    if (!CheckComponentAndRenderTarget())
-    {
-        UE_LOG(LogDepthCamera, Error, TEXT("Component or RenderTarget not valid!"));
-        return;
-    }
-
-    LastCaptureTimestamp = FPlatformTime::Seconds();
-    CaptureComponent->CaptureSceneDeferred();
 }
 
 void UDepthCameraComponent::CaptureDepthSceneAndProcess()
