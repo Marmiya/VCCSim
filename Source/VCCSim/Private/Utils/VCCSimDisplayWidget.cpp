@@ -626,56 +626,93 @@ void UVCCSIMDisplayWidget::ProcessCaptureByType(EVCCSimViewType ViewType)
         return;
     }
 
-    FString CaptureTypeName;
-    switch (ViewType)
+    FString BaseDir = LogSavePath + "/LiveCaptures/";
+    FFileManagerGeneric FileManager;
+    if (!FileManager.MakeDirectory(*BaseDir, true))
     {
-    case EVCCSimViewType::RGB:
-        if (auto* RGBCamera = Cast<URGBCameraComponent>(ViewData->CameraComponent))
-        {
-            RGBCamera->CaptureRGBScene();
-        }
-        CaptureTypeName = TEXT("RGBCapture");
-        break;
-    case EVCCSimViewType::Depth:
-        if (auto* DepthCamera = Cast<UDepthCameraComponent>(ViewData->CameraComponent))
-        {
-            DepthCamera->CaptureDepthScene();
-        }
-        CaptureTypeName = TEXT("DepthCapture");
-        break;
-    case EVCCSimViewType::Normal:
-        if (auto* NormalCamera = Cast<UNormalCameraComponent>(ViewData->CameraComponent))
-        {
-            NormalCamera->CaptureNormalScene();
-        }
-        CaptureTypeName = TEXT("NormalCapture");
-        break;
-    case EVCCSimViewType::Segmentation:
-        if (auto* SegCamera = Cast<USegCameraComponent>(ViewData->CameraComponent))
-        {
-            SegCamera->CaptureSegmentationScene();
-        }
-        CaptureTypeName = TEXT("SegmentationCapture");
-        break;
-    case EVCCSimViewType::Lit:
-        CaptureTypeName = TEXT("LitCapture");
-        break;
-    case EVCCSimViewType::PointCloud:
-        CaptureTypeName = TEXT("PCCapture");
-        break;
-    case EVCCSimViewType::Unit:
-        CaptureTypeName = TEXT("UnitCapture");
-        break;
-    default:
-        UE_LOG(LogVCCSimDisplayWidget, Warning, TEXT("Invalid ViewType: %d"), (int32)ViewType);
+        UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("Failed to create capture directory."));
         return;
     }
 
-    SaveRenderTargetToDisk(ViewData->RenderTarget, CaptureTypeName, ViewType);
+    FString Timestamp = FDateTime::Now().ToString();
+
+    switch (ViewType)
+    {
+    case EVCCSimViewType::RGB:
+    {
+        auto* Camera = Cast<URGBCameraComponent>(ViewData->CameraComponent);
+        if (!Camera) return;
+        FString FilePath = BaseDir + TEXT("RGBCapture_") + Timestamp + TEXT(".png");
+        FIntPoint Size(Camera->Width, Camera->Height);
+        Camera->AsyncGetRGBImageData([FilePath, Size](const TArray<FColor>& ImageData)
+        {
+            (new FAutoDeleteAsyncTask<FAsyncImageSaveTask>(ImageData, Size, FilePath))
+                ->StartBackgroundTask();
+        });
+        return;
+    }
+    case EVCCSimViewType::Depth:
+    {
+        auto* Camera = Cast<UDepthCameraComponent>(ViewData->CameraComponent);
+        if (!Camera) return;
+        FString FilePath = BaseDir + TEXT("DepthCapture_") + Timestamp + TEXT(".png");
+        FIntPoint Size(Camera->Width, Camera->Height);
+        Camera->AsyncGetDepthImageData([FilePath, Size](const TArray<FFloat16Color>& ImageData)
+        {
+            TArray<float> DepthPixelsFloat;
+            DepthPixelsFloat.SetNum(ImageData.Num());
+            for (int32 i = 0; i < ImageData.Num(); ++i)
+            {
+                DepthPixelsFloat[i] = ImageData[i].R.GetFloat();
+            }
+            (new FAutoDeleteAsyncTask<FAsyncDepthSaveTask>(DepthPixelsFloat, Size, FilePath))
+                ->StartBackgroundTask();
+        });
+        return;
+    }
+    case EVCCSimViewType::Normal:
+    {
+        auto* Camera = Cast<UNormalCameraComponent>(ViewData->CameraComponent);
+        if (!Camera) return;
+        FString FilePath = BaseDir + TEXT("NormalCapture_") + Timestamp + TEXT(".exr");
+        FIntPoint Size(Camera->Width, Camera->Height);
+        Camera->AsyncGetNormalImageData([FilePath, Size](const TArray<FFloat16Color>& ImageData)
+        {
+            (new FAutoDeleteAsyncTask<FAsyncNormalEXRSaveTask>(ImageData, Size, FilePath))
+                ->StartBackgroundTask();
+        });
+        return;
+    }
+    case EVCCSimViewType::Segmentation:
+    {
+        auto* Camera = Cast<USegCameraComponent>(ViewData->CameraComponent);
+        if (!Camera) return;
+        FString FilePath = BaseDir + TEXT("SegmentationCapture_") + Timestamp + TEXT(".png");
+        FIntPoint Size(Camera->Width, Camera->Height);
+        Camera->AsyncGetSegmentationImageData([FilePath, Size](const TArray<FColor>& ImageData)
+        {
+            (new FAutoDeleteAsyncTask<FAsyncImageSaveTask>(ImageData, Size, FilePath))
+                ->StartBackgroundTask();
+        });
+        return;
+    }
+    case EVCCSimViewType::Lit:
+        SaveRenderTargetToDisk(ViewData->RenderTarget, TEXT("LitCapture"));
+        break;
+    case EVCCSimViewType::PointCloud:
+        SaveRenderTargetToDisk(ViewData->RenderTarget, TEXT("PCCapture"));
+        break;
+    case EVCCSimViewType::Unit:
+        SaveRenderTargetToDisk(ViewData->RenderTarget, TEXT("UnitCapture"));
+        break;
+    default:
+        UE_LOG(LogVCCSimDisplayWidget, Warning, TEXT("Invalid ViewType: %d"), (int32)ViewType);
+        break;
+    }
 }
 
 void UVCCSIMDisplayWidget::SaveRenderTargetToDisk(
-    UTextureRenderTarget2D* RenderTarget, const FString& FileName, EVCCSimViewType ViewType) const
+    UTextureRenderTarget2D* RenderTarget, const FString& FileName) const
 {
     if (!RenderTarget)
     {
@@ -693,8 +730,8 @@ void UVCCSIMDisplayWidget::SaveRenderTargetToDisk(
     }
 
     FIntPoint Size = RTResource->GetSizeXY();
-    auto CurTime = FDateTime::Now();
-    FString FilePath = LogSavePath + "/LiveCaptures/" + FileName + "_" + CurTime.ToString() + ".png";
+    FString FilePath = LogSavePath + "/LiveCaptures/" + FileName + "_" +
+        FDateTime::Now().ToString() + ".png";
 
     FFileManagerGeneric FileManager;
     if (!FileManager.MakeDirectory(*FPaths::GetPath(FilePath), true))
@@ -703,44 +740,17 @@ void UVCCSIMDisplayWidget::SaveRenderTargetToDisk(
         return;
     }
 
-    if (ViewType == EVCCSimViewType::Depth)
+    TArray<FColor> Pixels;
+    Pixels.SetNum(Size.X * Size.Y);
+    if (!RTResource->ReadPixels(Pixels))
     {
-        TArray<FFloat16Color> DepthPixels;
-        DepthPixels.SetNum(Size.X * Size.Y);
-
-        bool bReadDepthPixels = RTResource->ReadFloat16Pixels(DepthPixels);
-        if (!bReadDepthPixels)
-        {
-            UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("Failed to read depth pixels from RenderTarget."));
-            return;
-        }
-
-        TArray<float> DepthPixelsFloat;
-        DepthPixelsFloat.SetNum(Size.X * Size.Y);
-        for (int32 i = 0; i < DepthPixels.Num(); ++i)
-        {
-            DepthPixelsFloat[i] = DepthPixels[i].R.GetFloat();
-        }
-        (new FAutoDeleteAsyncTask<FAsyncDepthSaveTask>(
-            DepthPixelsFloat, Size, FilePath))->StartBackgroundTask();
+        UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("Failed to read pixels from RenderTarget."));
+        return;
     }
-    else
+    for (FColor& Color : Pixels)
     {
-        TArray<FColor> Pixels;
-        Pixels.SetNum(Size.X * Size.Y);
-        bool bReadPixels = RTResource->ReadPixels(Pixels);
-        for (FColor& Color : Pixels)
-        {
-            Color.A = 255;
-        }
-        
-        if (!bReadPixels)
-        {
-            UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("Failed to read pixels from RenderTarget."));
-            return;
-        }
-
-        (new FAutoDeleteAsyncTask<FAsyncImageSaveTask>(
-            Pixels, Size, FilePath))->StartBackgroundTask();
+        Color.A = 255;
     }
+
+    (new FAutoDeleteAsyncTask<FAsyncImageSaveTask>(Pixels, Size, FilePath))->StartBackgroundTask();
 }

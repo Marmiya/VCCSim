@@ -172,7 +172,7 @@ private:
     void ProcessCapture(const int32 ID);
     void ProcessCaptureByType(EVCCSimViewType ViewType);
     void SaveRenderTargetToDisk(
-        UTextureRenderTarget2D* RenderTarget, const FString& FileName, EVCCSimViewType ViewType) const;
+        UTextureRenderTarget2D* RenderTarget, const FString& FileName) const;
 
     static EVCCSimViewType IDToViewType(int32 ID);
     static int32 ViewTypeToID(EVCCSimViewType ViewType);
