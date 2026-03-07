@@ -65,7 +65,6 @@ void AVCCSimLookAtPath::OnConstruction(const FTransform& Transform)
 	Super::OnConstruction(Transform);
 
 	DiscoverTraceIgnores();
-	SnapAllPointsToGround();
 
 	PathLength = Spline->GetSplineLength();
 	NumSamplePoints = GetNumSamplePoints();
