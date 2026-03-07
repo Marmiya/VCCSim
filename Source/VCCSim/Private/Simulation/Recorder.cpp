@@ -767,6 +767,11 @@ bool ARecorder::ShouldCaptureSensor(USensorBaseComponent* Sensor, double Current
         SensorIntervals.Add(Sensor, SensorInterval);
     }
 
+    if (SensorInterval < 0.0)
+    {
+        return false;
+    }
+
     if (!LastSensorCaptureTimes.Contains(Sensor))
     {
         LastSensorCaptureTimes.Add(Sensor, CurrentTime);
