@@ -1,3 +1,6 @@
 [submodule "Source/tomlplusplus"]
 	path = Source/tomlplusplus
 	url = https://github.com/marzer/tomlplusplus.git
+[submodule "Source/TexEnhancer"]
+	path = Source/TexEnhancer
+	url = https://github.com/Marmiya/TexEnhancer.git
