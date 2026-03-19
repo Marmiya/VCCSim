@@ -96,6 +96,7 @@ void FVCCSimConfigManager::SaveToJsonFile()
     PanelStatesJson->SetBoolField(TEXT("SceneAnalysisSection"), PanelStates.bSceneAnalysisSectionExpanded);
     PanelStatesJson->SetBoolField(TEXT("PointCloudSection"), PanelStates.bPointCloudSectionExpanded);
     PanelStatesJson->SetBoolField(TEXT("RatSplattingSection"), PanelStates.bRatSplattingSectionExpanded);
+    PanelStatesJson->SetBoolField(TEXT("TexEnhancerSection"), PanelStates.bTexEnhancerSectionExpanded);
     RootObject->SetObjectField(TEXT("PanelStates"), PanelStatesJson);
 
     // Save RatSplatting configuration
@@ -111,6 +112,14 @@ void FVCCSimConfigManager::SaveToJsonFile()
     RatSplattingConfigJson->SetStringField(TEXT("SelectedMeshPath"), MeshPath);
 
     RootObject->SetObjectField(TEXT("RatSplattingConfig"), RatSplattingConfigJson);
+
+    // Save TexEnhancer configuration
+    TSharedPtr<FJsonObject> TexEnhancerConfigJson = MakeShareable(new FJsonObject);
+    TexEnhancerConfigJson->SetStringField(TEXT("OutputDirectory"), TexEnhancerConfig.OutputDirectory);
+    TexEnhancerConfigJson->SetStringField(TEXT("SceneName"), TexEnhancerConfig.SceneName);
+    TexEnhancerConfigJson->SetStringField(TEXT("TexEnhancerScriptPath"), TexEnhancerConfig.TexEnhancerScriptPath);
+    TexEnhancerConfigJson->SetStringField(TEXT("EstimatedMaterialsDir"), TexEnhancerConfig.EstimatedMaterialsDir);
+    RootObject->SetObjectField(TEXT("TexEnhancerConfig"), TexEnhancerConfigJson);
 
     // Add metadata
     TSharedPtr<FJsonObject> Metadata = MakeShareable(new FJsonObject);
@@ -170,6 +179,7 @@ bool FVCCSimConfigManager::LoadFromJsonFile()
         (*PanelStatesJson)->TryGetBoolField(TEXT("SceneAnalysisSection"), PanelStates.bSceneAnalysisSectionExpanded);
         (*PanelStatesJson)->TryGetBoolField(TEXT("PointCloudSection"), PanelStates.bPointCloudSectionExpanded);
         (*PanelStatesJson)->TryGetBoolField(TEXT("RatSplattingSection"), PanelStates.bRatSplattingSectionExpanded);
+        (*PanelStatesJson)->TryGetBoolField(TEXT("TexEnhancerSection"), PanelStates.bTexEnhancerSectionExpanded);
     }
 
     // Load RatSplatting configuration
@@ -191,6 +201,16 @@ bool FVCCSimConfigManager::LoadFromJsonFile()
                 RatSplattingConfig.SelectedMesh = LoadedMesh;
             }
         }
+    }
+
+    // Load TexEnhancer configuration
+    const TSharedPtr<FJsonObject>* TexEnhancerConfigJson = nullptr;
+    if (RootObject->TryGetObjectField(TEXT("TexEnhancerConfig"), TexEnhancerConfigJson))
+    {
+        (*TexEnhancerConfigJson)->TryGetStringField(TEXT("OutputDirectory"), TexEnhancerConfig.OutputDirectory);
+        (*TexEnhancerConfigJson)->TryGetStringField(TEXT("SceneName"), TexEnhancerConfig.SceneName);
+        (*TexEnhancerConfigJson)->TryGetStringField(TEXT("TexEnhancerScriptPath"), TexEnhancerConfig.TexEnhancerScriptPath);
+        (*TexEnhancerConfigJson)->TryGetStringField(TEXT("EstimatedMaterialsDir"), TexEnhancerConfig.EstimatedMaterialsDir);
     }
 
     UE_LOG(LogVCCSimConfigManager, Log, TEXT("Panel configuration loaded from: %s"), *ConfigPath);

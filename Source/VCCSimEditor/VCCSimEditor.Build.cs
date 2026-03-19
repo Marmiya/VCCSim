@@ -55,7 +55,15 @@ public class VCCSimEditor : ModuleRules
 
                 // Rendering
                 "RenderCore",
-                "RHI"
+                "RHI",
+
+                // Sun position ephemeris
+                "SunPosition",
+
+                // GT material export: mesh description read + PNG encoding
+                "MeshDescription",
+                "StaticMeshDescription",
+                "ImageWrapper"
             }
         );
         

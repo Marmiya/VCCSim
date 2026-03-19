@@ -55,6 +55,7 @@ public:
         bool bSceneAnalysisSectionExpanded = false;
         bool bPointCloudSectionExpanded = false;
         bool bRatSplattingSectionExpanded = true;
+        bool bTexEnhancerSectionExpanded = false;
     };
 
     // RatSplatting configuration
@@ -68,6 +69,15 @@ public:
         TWeakObjectPtr<UStaticMesh> SelectedMesh;
     };
 
+    // TexEnhancer data generation & evaluation configuration
+    struct FTexEnhancerConfig
+    {
+        FString OutputDirectory;
+        FString SceneName = TEXT("Scene_A");
+        FString TexEnhancerScriptPath;
+        FString EstimatedMaterialsDir;
+    };
+
     // Getters and setters for panel states
     const FPanelStates& GetPanelStates() const { return PanelStates; }
     void SetPanelStates(const FPanelStates& InStates) { PanelStates = InStates; }
@@ -76,12 +86,17 @@ public:
     const FRatSplattingConfig& GetRatSplattingConfig() const { return RatSplattingConfig; }
     void SetRatSplattingConfig(const FRatSplattingConfig& InConfig) { RatSplattingConfig = InConfig; }
 
+    // Getters and setters for TexEnhancer config
+    const FTexEnhancerConfig& GetTexEnhancerConfig() const { return TexEnhancerConfig; }
+    void SetTexEnhancerConfig(const FTexEnhancerConfig& InConfig) { TexEnhancerConfig = InConfig; }
+
     // Individual state setters
     void SetFlashPawnSectionExpanded(bool bExpanded) { PanelStates.bFlashPawnSectionExpanded = bExpanded; }
     void SetPathImageCaptureSectionExpanded(bool bExpanded) { PanelStates.bPathImageCaptureSectionExpanded = bExpanded; }
     void SetSceneAnalysisSectionExpanded(bool bExpanded) { PanelStates.bSceneAnalysisSectionExpanded = bExpanded; }
     void SetPointCloudSectionExpanded(bool bExpanded) { PanelStates.bPointCloudSectionExpanded = bExpanded; }
     void SetRatSplattingSectionExpanded(bool bExpanded) { PanelStates.bRatSplattingSectionExpanded = bExpanded; }
+    void SetTexEnhancerSectionExpanded(bool bExpanded) { PanelStates.bTexEnhancerSectionExpanded = bExpanded; }
 
     // ============================================================================
     // EVENTS AND CALLBACKS
@@ -102,6 +117,7 @@ private:
     // Configuration data
     FPanelStates PanelStates;
     FRatSplattingConfig RatSplattingConfig;
+    FTexEnhancerConfig TexEnhancerConfig;
 
     // ============================================================================
     // INTERNAL JSON OPERATIONS

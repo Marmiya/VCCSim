@@ -22,6 +22,7 @@
 #include "Editor/Panels/VCCSimPanelPathImageCapture.h"
 #include "Editor/Panels/VCCSimPanelSceneAnalysis.h"
 #include "Editor/Panels/VCCSimPanelRatSplatting.h"
+#include "Editor/Panels/VCCSimPanelTexEnhancer.h"
 #include "Editor/UnrealEd/Public/Selection.h"
 #include "Utils/VCCSimConfigManager.h"
 
@@ -61,6 +62,13 @@ SVCCSimPanel::~SVCCSimPanel()
     {
         RatSplattingManager->Cleanup();
         RatSplattingManager.Reset();
+    }
+
+    // Clean up TexEnhancer manager
+    if (TexEnhancerManager.IsValid())
+    {
+        TexEnhancerManager->Cleanup();
+        TexEnhancerManager.Reset();
     }
 
     // Clean up Point Cloud manager
@@ -116,6 +124,11 @@ void SVCCSimPanel::Construct(const FArguments& InArgs)
     // Initialize RatSplatting manager
     RatSplattingManager = MakeShared<FVCCSimPanelRatSplatting>();
     RatSplattingManager->Initialize();
+
+    // Initialize TexEnhancer manager
+    TexEnhancerManager = MakeShared<FVCCSimPanelTexEnhancer>();
+    TexEnhancerManager->Initialize();
+    TexEnhancerManager->SetSelectionManager(SelectionManager);
 
     // Load panel state BEFORE creating UI widgets
     LoadPanelState();
@@ -226,6 +239,14 @@ void SVCCSimPanel::CreateMainLayout()
                 .AutoHeight()
                 [
                     CreatePointCloudPanel()
+                ]
+
+                // TexEnhancer data generation & evaluation panel
+                +SVerticalBox::Slot()
+                .AutoHeight()
+                [
+                    TexEnhancerManager.IsValid() ? TexEnhancerManager->CreateTexEnhancerPanel() :
+                    SNew(STextBlock).Text(FText::FromString("TexEnhancer Manager not initialized"))
                 ]
 
                 // RatSplatting panel
@@ -408,6 +429,12 @@ void SVCCSimPanel::UpdateSubPanelsFromState()
         RatSplattingManager->LoadFromConfigManager();
     }
 
+    if (TexEnhancerManager.IsValid())
+    {
+        TexEnhancerManager->SetTexEnhancerSectionExpanded(States.bTexEnhancerSectionExpanded);
+        TexEnhancerManager->LoadFromConfigManager();
+    }
+
     UE_LOG(LogVCCSimEditor, Log, TEXT("Sub-panel states updated from centralized configuration"));
 }
 
@@ -438,6 +465,11 @@ void SVCCSimPanel::GatherSubPanelStates()
     if (RatSplattingManager.IsValid())
     {
         States.bRatSplattingSectionExpanded = RatSplattingManager->IsRatSplattingSectionExpanded();
+    }
+
+    if (TexEnhancerManager.IsValid())
+    {
+        States.bTexEnhancerSectionExpanded = TexEnhancerManager->IsTexEnhancerSectionExpanded();
     }
 
     FVCCSimConfigManager::Get().SetPanelStates(States);
