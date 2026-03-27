@@ -21,6 +21,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogColmapManager, Log, All);
 #include "Utils/VCCSimDataConverter.h"
 #include "HAL/PlatformProcess.h"
 #include "HAL/PlatformFilemanager.h"
+#include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Misc/DateTime.h"
 #include "Engine/Engine.h"
@@ -419,5 +420,94 @@ bool FColmapManager::ExecuteColmapCommand(const FString& Command, const FString&
     }
     
     UE_LOG(LogColmapManager, Log, TEXT("COLMAP %s completed successfully"), *StepName);
+    return true;
+}
+
+bool FColmapManager::WriteColmapDatasetFiles(
+    const FString& SparseDir,
+    int32 Width, int32 Height,
+    float FocalX, float FocalY,
+    float CenterX, float CenterY,
+    const TArray<FVector>& C2WPositions,
+    const TArray<FQuat>& C2WRotations,
+    const TArray<FString>& ImageNames)
+{
+    if (C2WPositions.Num() == 0 || C2WPositions.Num() != C2WRotations.Num() || C2WPositions.Num() != ImageNames.Num())
+    {
+        UE_LOG(LogColmapManager, Warning, TEXT("WriteColmapDatasetFiles: mismatched or empty input arrays"));
+        return false;
+    }
+
+    IPlatformFile& PF = FPlatformFileManager::Get().GetPlatformFile();
+    if (!PF.DirectoryExists(*SparseDir))
+    {
+        if (!PF.CreateDirectoryTree(*SparseDir))
+        {
+            UE_LOG(LogColmapManager, Error, TEXT("WriteColmapDatasetFiles: failed to create directory: %s"), *SparseDir);
+            return false;
+        }
+    }
+
+    // cameras.txt — single shared PINHOLE camera
+    FString CamerasContent = TEXT("# Camera list with one line of data per camera:\n");
+    CamerasContent += TEXT("#   CAMERA_ID, MODEL, WIDTH, HEIGHT, PARAMS[]\n");
+    CamerasContent += FString::Printf(TEXT("# Number of cameras: 1\n"));
+    CamerasContent += FString::Printf(TEXT("1 PINHOLE %d %d %.6f %.6f %.6f %.6f\n"),
+        Width, Height, FocalX, FocalY, CenterX, CenterY);
+
+    const FString CamerasPath = FPaths::Combine(SparseDir, TEXT("cameras.txt"));
+    if (!FFileHelper::SaveStringToFile(CamerasContent, *CamerasPath, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM))
+    {
+        UE_LOG(LogColmapManager, Error, TEXT("WriteColmapDatasetFiles: failed to write cameras.txt"));
+        return false;
+    }
+
+    // images.txt — world-to-camera convention (QW QX QY QZ TX TY TZ)
+    FString ImagesContent = TEXT("# Image list with two lines of data per image:\n");
+    ImagesContent += TEXT("#   IMAGE_ID, QW, QX, QY, QZ, TX, TY, TZ, CAMERA_ID, NAME\n");
+    ImagesContent += TEXT("#   POINTS2D[] as (X, Y, POINT3D_ID)\n");
+    ImagesContent += FString::Printf(TEXT("# Number of images: %d, mean observations per image: 0\n"), C2WPositions.Num());
+
+    for (int32 i = 0; i < C2WPositions.Num(); ++i)
+    {
+        const FQuat Q_c2w = C2WRotations[i];
+        const FVector C = C2WPositions[i];
+
+        // Invert to world-to-camera
+        const FQuat Q_w2c = Q_c2w.Inverse();
+
+        // t = -R_w2c * C
+        const FVector T = Q_w2c.RotateVector(-C);
+
+        ImagesContent += FString::Printf(
+            TEXT("%d %.9f %.9f %.9f %.9f %.9f %.9f %.9f 1 %s\n"),
+            i + 1,
+            Q_w2c.W, Q_w2c.X, Q_w2c.Y, Q_w2c.Z,
+            T.X, T.Y, T.Z,
+            *ImageNames[i]);
+
+        ImagesContent += TEXT("\n");  // empty POINTS2D line
+    }
+
+    const FString ImagesPath = FPaths::Combine(SparseDir, TEXT("images.txt"));
+    if (!FFileHelper::SaveStringToFile(ImagesContent, *ImagesPath, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM))
+    {
+        UE_LOG(LogColmapManager, Error, TEXT("WriteColmapDatasetFiles: failed to write images.txt"));
+        return false;
+    }
+
+    // points3D.txt — empty (no prior 3D points from GT)
+    FString PointsContent = TEXT("# 3D point list with one line of data per point:\n");
+    PointsContent += TEXT("#   POINT3D_ID, X, Y, Z, R, G, B, ERROR, TRACK[] as (IMAGE_ID, POINT2D_IDX)\n");
+    PointsContent += TEXT("# Number of points: 0, mean track length: 0\n");
+
+    const FString PointsPath = FPaths::Combine(SparseDir, TEXT("points3D.txt"));
+    if (!FFileHelper::SaveStringToFile(PointsContent, *PointsPath, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM))
+    {
+        UE_LOG(LogColmapManager, Error, TEXT("WriteColmapDatasetFiles: failed to write points3D.txt"));
+        return false;
+    }
+
+    UE_LOG(LogColmapManager, Log, TEXT("COLMAP dataset written: %d images -> %s"), C2WPositions.Num(), *SparseDir);
     return true;
 }

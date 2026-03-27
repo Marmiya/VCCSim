@@ -106,7 +106,6 @@ private:
     TSharedPtr<SNumericEntryBox<int32>> SunCalcMinuteSpinBox;
     TSharedPtr<SNumericEntryBox<int32>> SunCalcFillSlotSpinBox;
     TSharedPtr<SNumericEntryBox<float>> DayCycleSpeedSpinBox;
-    TSharedPtr<STextBlock>              SunCalcResultTextBlock;
     TOptional<float>                    DayCycleSpeedValue;
 
     // ============================================================================
@@ -177,7 +176,9 @@ private:
     TOptional<int32> SunCalcFillSlotValue;
 
     FTimerHandle StatusTimerHandle;
-    FProcHandle PipelineProcHandle;
+    FTimerHandle CaptureTimerHandle;
+    FProcHandle  PipelineProcHandle;
+    FString      CaptureImageDir;
 
     TWeakPtr<FVCCSimPanelSelection> SelectionManager;
 

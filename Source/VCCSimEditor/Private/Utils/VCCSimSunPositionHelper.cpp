@@ -37,11 +37,11 @@ bool FVCCSimSunPositionHelper::Calculate(const FSunParams& Params, float& OutEle
         SunData
     );
 
-    OutElevation = SunData.CorrectedElevation;
+    OutElevation = SunData.CorrectedElevation - 180.0f;
     OutAzimuth   = SunData.Azimuth;
 
     UE_LOG(LogSunPositionHelper, Log,
-        TEXT("Sun: Lat=%.2f Lon=%.2f %d-%02d-%02d %02d:%02d UTC%+.1f → Elev=%.2f° Az=%.2f°"),
+        TEXT("Sun: Lat=%.2f Lon=%.2f %d-%02d-%02d %02d:%02d UTC%+.1f -> Elev=%.2f Az=%.2f"),
         Params.Latitude, Params.Longitude,
         Params.Year, Params.Month, Params.Day,
         Params.Hour, Params.Minute,

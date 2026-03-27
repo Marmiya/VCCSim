@@ -17,7 +17,6 @@
 
 #include "Editor/Panels/VCCSimPanelTexEnhancer.h"
 #include "Utils/VCCSimUIHelpers.h"
-#include "Editor/Panels/VCCSimPanelSelection.h"
 
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SBox.h"
@@ -41,31 +40,31 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateTexEnhancerPanel()
         +SVerticalBox::Slot().AutoHeight()
         [ CreateDatasetConfigSection() ]
 
-        +SVerticalBox::Slot().MaxHeight(1).Padding(FMargin(0, 6, 0, 6))
+        +SVerticalBox::Slot().MaxHeight(1).Padding(FMargin(0, 4, 0, 4))
         [ FVCCSimUIHelpers::CreateSeparator() ]
 
         +SVerticalBox::Slot().AutoHeight()
         [ CreateLightingScheduleSection() ]
 
-        +SVerticalBox::Slot().MaxHeight(1).Padding(FMargin(0, 6, 0, 6))
+        +SVerticalBox::Slot().MaxHeight(1).Padding(FMargin(0, 4, 0, 4))
         [ FVCCSimUIHelpers::CreateSeparator() ]
 
         +SVerticalBox::Slot().AutoHeight()
         [ CreateCaptureSection() ]
 
-        +SVerticalBox::Slot().MaxHeight(1).Padding(FMargin(0, 6, 0, 6))
+        +SVerticalBox::Slot().MaxHeight(1).Padding(FMargin(0, 4, 0, 4))
         [ FVCCSimUIHelpers::CreateSeparator() ]
 
         +SVerticalBox::Slot().AutoHeight()
         [ CreateGTExportSection() ]
 
-        +SVerticalBox::Slot().MaxHeight(1).Padding(FMargin(0, 6, 0, 6))
+        +SVerticalBox::Slot().MaxHeight(1).Padding(FMargin(0, 4, 0, 4))
         [ FVCCSimUIHelpers::CreateSeparator() ]
 
         +SVerticalBox::Slot().AutoHeight()
         [ CreatePipelineSection() ]
 
-        +SVerticalBox::Slot().MaxHeight(1).Padding(FMargin(0, 6, 0, 6))
+        +SVerticalBox::Slot().MaxHeight(1).Padding(FMargin(0, 4, 0, 4))
         [ FVCCSimUIHelpers::CreateSeparator() ]
 
         +SVerticalBox::Slot().AutoHeight()
@@ -172,12 +171,12 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateLightingScheduleSection()
             ]
         ]
 
-        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 4, 0, 2))
+        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
         [
             SNew(SBorder)
             .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
             .BorderBackgroundColor(FColor(20, 40, 80, 255))
-            .Padding(FMargin(6, 4))
+            .Padding(FMargin(6, 3))
             [
                 SNew(SVerticalBox)
                 +SVerticalBox::Slot().AutoHeight()
@@ -199,7 +198,7 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateLightingScheduleSection()
             SNew(SBorder)
             .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
             .BorderBackgroundColor(FColor(80, 40, 10, 255))
-            .Padding(FMargin(6, 4))
+            .Padding(FMargin(6, 3))
             [
                 SNew(SVerticalBox)
                 +SVerticalBox::Slot().AutoHeight()
@@ -261,9 +260,10 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateSunPositionCalculatorWidget()
                 [
                     SAssignNew(SpinBoxPtr, SNumericEntryBox<float>)
                     .Value_Lambda([&ValueOpt]() { return ValueOpt; })
-                    .MinValue(MinVal).MaxValue(MaxVal).Delta(Delta).AllowSpin(true)
-                    .OnValueChanged_Lambda([&ValueOpt, &Var](float Val)
+                    .MinValue(MinVal).MaxValue(MaxVal).Delta(Delta).AllowSpin(false)
+                    .OnValueChanged_Lambda([&ValueOpt, &Var, MinVal, MaxVal](float Val)
                     {
+                        Val = FMath::Clamp(Val, MinVal, MaxVal);
                         Var = Val;
                         ValueOpt = Val;
                     })
@@ -279,7 +279,7 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateSunPositionCalculatorWidget()
         int32 MinVal, int32 MaxVal, int32 Delta) -> TSharedRef<SWidget>
     {
         return SNew(SHorizontalBox)
-            +SHorizontalBox::Slot().MaxWidth(52).VAlign(VAlign_Center).Padding(FMargin(0, 0, 4, 0))
+            +SHorizontalBox::Slot().MaxWidth(40).VAlign(VAlign_Center).Padding(FMargin(0, 0, 2, 0))
             [
                 SNew(STextBlock)
                 .Text(FText::FromString(LabelText))
@@ -295,9 +295,10 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateSunPositionCalculatorWidget()
                 [
                     SAssignNew(SpinBoxPtr, SNumericEntryBox<int32>)
                     .Value_Lambda([&ValueOpt]() { return ValueOpt; })
-                    .MinValue(MinVal).MaxValue(MaxVal).Delta(Delta).AllowSpin(true)
-                    .OnValueChanged_Lambda([&ValueOpt, &Var](int32 Val)
+                    .MinValue(MinVal).MaxValue(MaxVal).Delta(Delta).AllowSpin(false)
+                    .OnValueChanged_Lambda([&ValueOpt, &Var, MinVal, MaxVal](int32 Val)
                     {
+                        Val = FMath::Clamp(Val, MinVal, MaxVal);
                         Var = Val;
                         ValueOpt = Val;
                     })
@@ -320,7 +321,7 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateSunPositionCalculatorWidget()
             .Font(FCoreStyle::GetDefaultFontStyle("Bold", 9))
         ]
 
-        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 4, 0, 2))
+        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
         [
             MakeInlineSpinBoxFloat(TEXT("Latitude"),
                 SunCalcLatSpinBox, SunCalcLatValue, SunCalcLatitude, -90.f, 90.f, 0.1f)
@@ -332,7 +333,7 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateSunPositionCalculatorWidget()
                 SunCalcLonSpinBox, SunCalcLonValue, SunCalcLongitude, -180.f, 180.f, 0.1f)
         ]
 
-        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2, 0, 4))
+        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
         [
             MakeInlineSpinBoxFloat(TEXT("TZ (UTC\u00B1)"),
                 SunCalcTZSpinBox, SunCalcTZValue, SunCalcTimeZone, -12.f, 14.f, 0.5f)
@@ -342,13 +343,13 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateSunPositionCalculatorWidget()
         [
             SNew(SHorizontalBox)
 
-            +SHorizontalBox::Slot().FillWidth(1.5f).Padding(FMargin(0, 0, 8, 0))
+            +SHorizontalBox::Slot().FillWidth(1.f).Padding(FMargin(0, 0, 4, 0))
             [
                 MakeInlineSpinBoxInt(TEXT("Year"),
                     SunCalcYearSpinBox, SunCalcYearValue, SunCalcYear, 1900, 2100, 1)
             ]
 
-            +SHorizontalBox::Slot().FillWidth(1.f).Padding(FMargin(0, 0, 8, 0))
+            +SHorizontalBox::Slot().FillWidth(1.f).Padding(FMargin(0, 0, 4, 0))
             [
                 MakeInlineSpinBoxInt(TEXT("Month"),
                     SunCalcMonthSpinBox, SunCalcMonthValue, SunCalcMonth, 1, 12, 1)
@@ -361,24 +362,27 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateSunPositionCalculatorWidget()
             ]
         ]
 
-        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2, 0, 4))
+        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
         [
             SNew(SHorizontalBox)
 
-            +SHorizontalBox::Slot().FillWidth(1.f).Padding(FMargin(0, 0, 8, 0))
+            +SHorizontalBox::Slot().FillWidth(1.f).Padding(FMargin(0, 0, 4, 0))
             [
                 MakeInlineSpinBoxInt(TEXT("Hour"),
                     SunCalcHourSpinBox, SunCalcHourValue, SunCalcHour, 0, 23, 1)
             ]
 
-            +SHorizontalBox::Slot().FillWidth(1.f)
+            +SHorizontalBox::Slot().FillWidth(1.f).Padding(FMargin(0, 0, 4, 0))
             [
                 MakeInlineSpinBoxInt(TEXT("Minute"),
                     SunCalcMinuteSpinBox, SunCalcMinuteValue, SunCalcMinute, 0, 59, 5)
             ]
+
+            +SHorizontalBox::Slot().FillWidth(1.f)
+            [ SNew(SSpacer) ]
         ]
 
-        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2, 0, 2))
+        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
         [
             SNew(SHorizontalBox)
 
@@ -392,7 +396,7 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateSunPositionCalculatorWidget()
                 .OnClicked_Lambda([this]() { return OnCalculateSunPositionClicked(); })
             ]
 
-            +SHorizontalBox::Slot().MaxWidth(52).Padding(FMargin(0, 0, 2, 0))
+            +SHorizontalBox::Slot().MinWidth(50).Padding(FMargin(0, 0, 2, 0))
             [
                 SNew(SBorder)
                 .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
@@ -401,7 +405,7 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateSunPositionCalculatorWidget()
                 [
                     SAssignNew(DayCycleSpeedSpinBox, SNumericEntryBox<float>)
                     .Value_Lambda([this]() { return DayCycleSpeedValue; })
-                    .MinValue(1.f).MaxValue(600.f).Delta(1.f).AllowSpin(true)
+                    .MinValue(1.f).MaxValue(600.f).Delta(1.f).AllowSpin(false)
                     .ToolTipText(FText::FromString(TEXT("Day cycle duration in real seconds (1=fast, 600=slow)")))
                     .OnValueChanged_Lambda([this](float Val)
                     {
@@ -418,18 +422,10 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateSunPositionCalculatorWidget()
                 .ContentPadding(FMargin(6, 2))
                 .Text_Lambda([this]()
                 {
-                    return FText::FromString(bDayCycleActive ? TEXT("■ Stop") : TEXT("▶ Day Cycle"));
+                    return FText::FromString(bDayCycleActive ? TEXT("Stop") : TEXT("Day Cycle"));
                 })
                 .ToolTipText(FText::FromString(TEXT("Simulate 24h day/night cycle using current lat/lon/date")))
                 .OnClicked_Lambda([this]() { return OnToggleDayCycleClicked(); })
-            ]
-
-            +SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
-            [
-                SAssignNew(SunCalcResultTextBlock, STextBlock)
-                .Text(FText::GetEmpty())
-                .ColorAndOpacity(FLinearColor(0.8f, 0.8f, 0.5f))
-                .Font(FCoreStyle::GetDefaultFontStyle("Mono", 8))
             ]
         ]
 
@@ -454,7 +450,7 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateSunPositionCalculatorWidget()
                 [
                     SAssignNew(SunCalcFillSlotSpinBox, SNumericEntryBox<int32>)
                     .Value_Lambda([this]() { return SunCalcFillSlotValue; })
-                    .MinValue(1).MaxValue(MaxLightingEntries).Delta(1).AllowSpin(true)
+                    .MinValue(1).MaxValue(MaxLightingEntries).Delta(1).AllowSpin(false)
                     .ToolTipText(FText::FromString(TEXT("Target slot index (1-4)")))
                     .OnValueChanged_Lambda([this](int32 Val)
                     {
@@ -508,7 +504,7 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateSetALightingEntry(int32 Index
         [
             SAssignNew(SetAElevationSpinBox[Index], SNumericEntryBox<float>)
             .Value_Lambda([this, Index]() { return SetAElevationValue[Index]; })
-            .MinValue(0.f).MaxValue(90.f).Delta(1.f).AllowSpin(true)
+            .MinValue(0.f).MaxValue(90.f).Delta(1.f).AllowSpin(false)
             .ToolTipText(FText::FromString(TEXT("Sun elevation (°)")))
             .OnValueChanged_Lambda([this, Index](float Val)
             {
@@ -527,7 +523,7 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateSetALightingEntry(int32 Index
         [
             SAssignNew(SetAAzimuthSpinBox[Index], SNumericEntryBox<float>)
             .Value_Lambda([this, Index]() { return SetAAzimuthValue[Index]; })
-            .MinValue(0.f).MaxValue(360.f).Delta(5.f).AllowSpin(true)
+            .MinValue(0.f).MaxValue(360.f).Delta(5.f).AllowSpin(false)
             .ToolTipText(FText::FromString(TEXT("Sun azimuth (°)")))
             .OnValueChanged_Lambda([this, Index](float Val)
             {
@@ -569,7 +565,7 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateSetBLightingEntry(int32 Index
         [
             SAssignNew(SetBElevationSpinBox[Index], SNumericEntryBox<float>)
             .Value_Lambda([this, Index]() { return SetBElevationValue[Index]; })
-            .MinValue(0.f).MaxValue(90.f).Delta(1.f).AllowSpin(true)
+            .MinValue(0.f).MaxValue(90.f).Delta(1.f).AllowSpin(false)
             .ToolTipText(FText::FromString(TEXT("Sun elevation (°) — evaluation only")))
             .OnValueChanged_Lambda([this, Index](float Val)
             {
@@ -588,7 +584,7 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateSetBLightingEntry(int32 Index
         [
             SAssignNew(SetBAzimuthSpinBox[Index], SNumericEntryBox<float>)
             .Value_Lambda([this, Index]() { return SetBAzimuthValue[Index]; })
-            .MinValue(0.f).MaxValue(360.f).Delta(5.f).AllowSpin(true)
+            .MinValue(0.f).MaxValue(360.f).Delta(5.f).AllowSpin(false)
             .ToolTipText(FText::FromString(TEXT("Sun azimuth (°) — evaluation only")))
             .OnValueChanged_Lambda([this, Index](float Val)
             {
@@ -627,13 +623,13 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateCaptureSection()
         +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
         [ CreateSemiSphericalParams() ]
 
-        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 4, 0, 2))
+        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
         [ CreateNadirGridParams() ]
 
-        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 4, 0, 2))
+        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
         [ CreateCameraIntrinsicsParams() ]
 
-        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 6, 0, 2))
+        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
         [
             SNew(SButton)
             .ButtonStyle(FAppStyle::Get(), "FlatButton.Primary")
@@ -665,7 +661,7 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateCaptureSection()
             .OnClicked_Lambda([this]() { return OnStartCaptureSetBClicked(); })
         ]
 
-        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 4))
+        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
         [
             SNew(SBorder)
             .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
@@ -797,54 +793,70 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateGTExportSection()
             FVCCSimUIHelpers::CreateSectionHeader(TEXT("GT Material Export"))
         ]
 
-        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 4, 0, 2))
+        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
         [
-            SNew(SHorizontalBox)
-            +SHorizontalBox::Slot().FillWidth(1.f).Padding(FMargin(0, 0, 4, 0))
+            SNew(SButton)
+            .ButtonStyle(FAppStyle::Get(), "FlatButton.Success")
+            .ContentPadding(FMargin(5, 2))
+            .Text(FText::FromString(TEXT("+ Add Selected Actors")))
+            .ToolTipText(FText::FromString(TEXT("Add currently selected StaticMeshActors from the viewport")))
+            .OnClicked_Lambda([this]() { return OnAddSelectedActorsClicked(); })
+        ]
+
+        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 0, 0, 2))
+        [
+            SNew(SBox)
+            .HeightOverride(90.f)
             [
-                SNew(SButton)
-                .ButtonStyle(FAppStyle::Get(), "FlatButton.Success")
-                .ContentPadding(FMargin(5, 2))
-                .Text(FText::FromString(TEXT("+ Add Selected")))
-                .ToolTipText(FText::FromString(TEXT("Add currently selected StaticMeshActors from the viewport")))
-                .OnClicked_Lambda([this]() { return OnAddSelectedActorsClicked(); })
-            ]
-            +SHorizontalBox::Slot().FillWidth(1.f)
-            [
-                SNew(SButton)
-                .ButtonStyle(FAppStyle::Get(), "FlatButton.Danger")
-                .ContentPadding(FMargin(5, 2))
-                .Text(FText::FromString(TEXT("- Remove Selected")))
-                .ToolTipText(FText::FromString(TEXT("Remove highlighted items from the export list")))
-                .OnClicked_Lambda([this]() { return OnRemoveFromGTListClicked(); })
+                SNew(SBorder)
+                .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
+                .BorderBackgroundColor(FColor(10, 10, 10, 255))
+                .Padding(2)
+                [
+                    SAssignNew(GTActorListView, SListView<TSharedPtr<FString>>)
+                    .ListItemsSource(&GTActorListItems)
+                    .SelectionMode(ESelectionMode::None)
+                    .OnGenerateRow_Lambda([this](TSharedPtr<FString> Item,
+                        const TSharedRef<STableViewBase>& Owner) -> TSharedRef<ITableRow>
+                    {
+                        return SNew(STableRow<TSharedPtr<FString>>, Owner)
+                        [
+                            SNew(SHorizontalBox)
+                            +SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center).Padding(FMargin(2, 0))
+                            [
+                                SNew(STextBlock)
+                                .Text(FText::FromString(*Item))
+                                .ColorAndOpacity(FLinearColor(0.8f, 0.9f, 0.8f))
+                                .Font(FCoreStyle::GetDefaultFontStyle("Mono", 8))
+                            ]
+                            +SHorizontalBox::Slot().AutoWidth()
+                            [
+                                SNew(SButton)
+                                .ButtonStyle(FAppStyle::Get(), "FlatButton.Danger")
+                                .ContentPadding(FMargin(4, 1))
+                                .Text(FText::FromString(TEXT("×")))
+                                .OnClicked_Lambda([this, Item]() -> FReply
+                                {
+                                    if (Item.IsValid())
+                                    {
+                                        const FString S = *Item;
+                                        GTActorListItems.RemoveAll([&S](const TSharedPtr<FString>& P)
+                                        {
+                                            return P.IsValid() && *P == S;
+                                        });
+                                        if (GTActorListView.IsValid())
+                                            GTActorListView->RequestListRefresh();
+                                    }
+                                    return FReply::Handled();
+                                })
+                            ]
+                        ];
+                    })
+                ]
             ]
         ]
 
-        +SVerticalBox::Slot().MaxHeight(90.f).Padding(FMargin(0, 0, 0, 4))
-        [
-            SNew(SBorder)
-            .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
-            .BorderBackgroundColor(FColor(10, 10, 10, 255))
-            .Padding(2)
-            [
-                SAssignNew(GTActorListView, SListView<TSharedPtr<FString>>)
-                .ListItemsSource(&GTActorListItems)
-                .SelectionMode(ESelectionMode::Multi)
-                .OnGenerateRow_Lambda([](TSharedPtr<FString> Item,
-                    const TSharedRef<STableViewBase>& Owner) -> TSharedRef<ITableRow>
-                {
-                    return SNew(STableRow<TSharedPtr<FString>>, Owner)
-                    [
-                        SNew(STextBlock)
-                        .Text(FText::FromString(*Item))
-                        .ColorAndOpacity(FLinearColor(0.8f, 0.9f, 0.8f))
-                        .Font(FCoreStyle::GetDefaultFontStyle("Mono", 8))
-                    ];
-                })
-            ]
-        ]
-
-        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 0, 0, 4))
+        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 0, 0, 2))
         [
             FVCCSimUIHelpers::CreateNumericPropertyRowInt32(
                 TEXT("Tex Res (px)"), GTTexResSpinBox, GTTexResValue,
@@ -860,7 +872,7 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateGTExportSection()
             .ToolTipText_Lambda([this]()
             {
                 return FText::FromString(FString::Printf(
-                    TEXT("Export mesh OBJ + PBR textures for %d actor(s) → %s/gt_materials/"),
+                    TEXT("Export mesh OBJ + PBR textures for %d actor(s) -> %s/gt_materials/"),
                     GTActorListItems.Num(), *OutputDirectory));
             })
             .IsEnabled_Lambda([this]() { return !OutputDirectory.IsEmpty() && !GTActorListItems.IsEmpty(); })
@@ -908,7 +920,7 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreatePipelineSection()
             )
         ]
 
-        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 4))
+        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
         [
             SNew(SHorizontalBox)
 
@@ -974,7 +986,7 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateEvaluationSection()
             )
         ]
 
-        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 4, 0, 2))
+        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
         [
             SNew(SHorizontalBox)
             +SHorizontalBox::Slot().MaxWidth(160)
@@ -991,12 +1003,12 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateEvaluationSection()
             ]
         ]
 
-        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 4))
+        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
         [
             SNew(SBorder)
             .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
             .BorderBackgroundColor(FColor(5, 5, 5, 200))
-            .Padding(FMargin(8, 6))
+            .Padding(FMargin(6, 4))
             [
                 SAssignNew(EvalResultsTextBlock, STextBlock)
                 .Text(FText::FromString(TEXT("No evaluation results yet.")))

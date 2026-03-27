@@ -19,6 +19,7 @@
 #include "Utils/VCCSimSunPositionHelper.h"
 #include "Utils/VCCSimUIHelpers.h"
 #include "Utils/VCCSimConfigManager.h"
+#include "Utils/ColmapManager.h"
 #include "Editor/Panels/VCCSimPanelSelection.h"
 #include "Pawns/FlashPawn.h"
 #include "Utils/VCCSimDataConverter.h"
@@ -30,11 +31,12 @@
 #include "Engine/StaticMesh.h"
 #include "Engine/Texture.h"
 #include "Engine/Texture2D.h"
-#include "Materials/MaterialInstance.h"
-#include "Materials/MaterialInstanceDynamic.h"
-#include "Kismet/GameplayStatics.h"
+#include "Materials/MaterialInterface.h"
 #include "EngineUtils.h"
 #include "Selection.h"
+#include "Sensors/RGBCamera.h"
+#include "HighResScreenshot.h"
+#include "LevelEditorViewport.h"
 
 #include "MeshDescription.h"
 #include "StaticMeshAttributes.h"
@@ -43,15 +45,12 @@
 #include "IImageWrapperModule.h"
 #include "Modules/ModuleManager.h"
 
-#include "Dom/JsonObject.h"
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
 #include "HAL/PlatformFilemanager.h"
 #include "HAL/PlatformProcess.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
-#include "Framework/Notifications/NotificationManager.h"
-#include "Widgets/Notifications/SNotificationList.h"
 #include "DesktopPlatformModule.h"
 #include "IDesktopPlatform.h"
 #include "Framework/Application/SlateApplication.h"
@@ -118,8 +117,10 @@ void FVCCSimPanelTexEnhancer::Cleanup()
     {
         GEditor->GetTimerManager()->ClearTimer(StatusTimerHandle);
         GEditor->GetTimerManager()->ClearTimer(DayCycleTimerHandle);
+        GEditor->GetTimerManager()->ClearTimer(CaptureTimerHandle);
     }
-    bDayCycleActive = false;
+    bDayCycleActive   = false;
+    bCaptureInProgress = false;
 
     if (PipelineProcHandle.IsValid())
     {
@@ -239,7 +240,7 @@ void FVCCSimPanelTexEnhancer::ApplyLightingCondition(float ElevationDeg, float A
     }
 
     if (bMarkDirty) DirectionalLight->Modify();
-    FRotator NewRotation(-ElevationDeg, AzimuthDeg, 0.f);
+    FRotator NewRotation(-ElevationDeg, AzimuthDeg - 180.f, 0.f);
     DirectionalLight->SetActorRotation(NewRotation);
     GEditor->RedrawAllViewports();
 
@@ -277,23 +278,11 @@ FReply FVCCSimPanelTexEnhancer::OnCalculateSunPositionClicked()
 
     bool bAboveHorizon = FVCCSimSunPositionHelper::Calculate(Params, SunCalcElevation, SunCalcAzimuth);
 
-    FString ResultStr = FString::Printf(
-        TEXT("Elevation: %.1f°   Azimuth: %.1f°%s"),
-        SunCalcElevation, SunCalcAzimuth,
-        bAboveHorizon ? TEXT("") : TEXT("  ⚠ below horizon"));
+    ApplyLightingCondition(SunCalcElevation, SunCalcAzimuth);
 
-    if (SunCalcResultTextBlock.IsValid())
+    if (!bAboveHorizon)
     {
-        SunCalcResultTextBlock->SetText(FText::FromString(ResultStr));
-    }
-
-    if (bAboveHorizon)
-    {
-        ApplyLightingCondition(SunCalcElevation, SunCalcAzimuth);
-    }
-    else
-    {
-        UpdateStatus(FString::Printf(TEXT("Sun is below the horizon at the specified time (Elevation=%.1f°)"), SunCalcElevation));
+        UpdateStatus(FString::Printf(TEXT("Night: Sun %.1f below horizon"), -SunCalcElevation));
     }
 
     return FReply::Handled();
@@ -390,12 +379,6 @@ void FVCCSimPanelTexEnhancer::TickDayCycle()
     FVCCSimSunPositionHelper::Calculate(Params, Elev, Az);
 
     ApplyLightingCondition(Elev, Az, false);
-
-    if (SunCalcResultTextBlock.IsValid())
-    {
-        SunCalcResultTextBlock->SetText(FText::FromString(
-            FString::Printf(TEXT("%02d:%02d  Elev=%.1f°  Az=%.1f°"), SimH, SimM, Elev, Az)));
-    }
 }
 
 // ============================================================================
@@ -446,30 +429,128 @@ void FVCCSimPanelTexEnhancer::ExecuteCapturePipeline(bool bIsSetB)
         return;
     }
 
-    FString CaptureDir = bIsSetB ? GetSetBCaptureDir() : GetSetACaptureDir();
+    TWeakObjectPtr<AFlashPawn> FlashPawn = SelectionManager.Pin()->GetSelectedFlashPawn();
 
-    IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
-    if (!PlatformFile.DirectoryExists(*CaptureDir))
+    TArray<FVector> Positions;
+    TArray<FRotator> Rotations;
+    FlashPawn->GetCurrentPath(Positions, Rotations);
+
+    if (Positions.IsEmpty())
     {
-        PlatformFile.CreateDirectoryTree(*CaptureDir);
+        FVCCSimUIHelpers::ShowNotification(
+            TEXT("FlashPawn has no path. Generate a path first in the Path Image Capture panel."), true);
+        return;
     }
 
-    bCaptureInProgress = true;
-    FString SetLabel = bIsSetB ? TEXT("Set-B (Evaluation)") : TEXT("Set-A (Estimation)");
-    FString Msg = FString::Printf(TEXT("Starting capture: %s  →  %s"), *SetLabel, *CaptureDir);
-    UpdateStatus(Msg);
-    UE_LOG(LogTexEnhancerPanel, Log, TEXT("%s"), *Msg);
+    const FString CaptureDir = bIsSetB ? GetSetBCaptureDir() : GetSetACaptureDir();
+    CaptureImageDir = CaptureDir / TEXT("images");
+
+    IPlatformFile& PF = FPlatformFileManager::Get().GetPlatformFile();
+    PF.CreateDirectoryTree(*CaptureImageDir);
+    PF.CreateDirectoryTree(*(CaptureDir / TEXT("config")));
+
+    GenerateCameraInfoFromFlashPawn(CaptureImageDir);
 
     if (bIsSetB)
     {
         bSetBLocked = true;
-        UpdateStatus(TEXT("Set-B captured and locked. This set is reserved for evaluation only."));
-        FVCCSimUIHelpers::ShowNotification(TEXT("Set-B locked. Run evaluation after TexEnhancer completes."), false);
     }
 
-    GenerateCameraInfoFromFlashPawn(FPaths::Combine(CaptureDir, TEXT("images")));
+    FlashPawn->SetPathPanel(Positions, Rotations);
+    FlashPawn->MoveTo(0);
 
-    bCaptureInProgress = false;
+    bCaptureInProgress = true;
+    const FString SetLabel = bIsSetB ? TEXT("Set-B") : TEXT("Set-A");
+    const int32 TotalPoses = Positions.Num();
+    UpdateStatus(FString::Printf(TEXT("Capturing %s: 0 / %d poses..."), *SetLabel, TotalPoses));
+
+    GEditor->GetTimerManager()->SetTimer(
+        CaptureTimerHandle,
+        [this, SetLabel, TotalPoses]()
+        {
+            if (!SelectionManager.IsValid())
+            {
+                GEditor->GetTimerManager()->ClearTimer(CaptureTimerHandle);
+                bCaptureInProgress = false;
+                return;
+            }
+
+            TWeakObjectPtr<AFlashPawn> FP = SelectionManager.Pin()->GetSelectedFlashPawn();
+            if (!FP.IsValid())
+            {
+                GEditor->GetTimerManager()->ClearTimer(CaptureTimerHandle);
+                bCaptureInProgress = false;
+                return;
+            }
+
+            if (!FP->IsReady()) return;
+
+            const int32 PoseIndex = FP->GetCurrentIndex();
+
+            FEditorViewportClient* ViewportClient = nullptr;
+            for (FLevelEditorViewportClient* LVC : GEditor->GetLevelViewportClients())
+            {
+                if (LVC && LVC->Viewport && !LVC->IsOrtho())
+                {
+                    ViewportClient = LVC;
+                    break;
+                }
+            }
+
+            if (ViewportClient)
+            {
+                TArray<URGBCameraComponent*> Cameras;
+                FP->GetComponents<URGBCameraComponent>(Cameras);
+
+                FVector ViewLoc  = FP->GetActorLocation();
+                FRotator ViewRot = FP->GetActorRotation();
+                float ViewFOV    = CaptureFOVDegrees;
+                FIntPoint ImgSize(CaptureWidth, CaptureHeight);
+
+                if (Cameras.Num() > 0 && Cameras[0])
+                {
+                    FTransform CT = Cameras[0]->GetComponentTransform();
+                    ViewLoc  = CT.GetLocation();
+                    ViewRot  = CT.GetRotation().Rotator();
+                    auto Sz  = Cameras[0]->GetImageSize();
+                    ImgSize  = FIntPoint(Sz.first, Sz.second);
+                }
+
+                ViewportClient->SetViewLocation(ViewLoc);
+                ViewportClient->SetViewRotation(ViewRot);
+                ViewportClient->ViewFOV = ViewFOV;
+                ViewportClient->Invalidate();
+
+                const FString Filename = CaptureImageDir / FVCCSimDataConverter::GenerateImageFileName(PoseIndex);
+                FHighResScreenshotConfig& Cfg = GetHighResScreenshotConfig();
+                Cfg.SetResolution(ImgSize.X, ImgSize.Y);
+                Cfg.SetFilename(Filename);
+                Cfg.bMaskEnabled = false;
+                Cfg.bCaptureHDR  = false;
+                FScreenshotRequest::RequestScreenshot(Filename, false, false);
+
+                UpdateStatus(FString::Printf(TEXT("Capturing %s: %d / %d"),
+                    *SetLabel, PoseIndex + 1, TotalPoses));
+            }
+
+            if (PoseIndex >= TotalPoses - 1)
+            {
+                GEditor->GetTimerManager()->ClearTimer(CaptureTimerHandle);
+                bCaptureInProgress = false;
+                const FString Done = FString::Printf(TEXT("%s capture complete: %d images -> %s"),
+                    *SetLabel, TotalPoses, *CaptureImageDir);
+                UpdateStatus(Done);
+                FVCCSimUIHelpers::ShowNotification(Done, false);
+                UE_LOG(LogTexEnhancerPanel, Log, TEXT("%s"), *Done);
+            }
+            else
+            {
+                FP->MoveForward();
+            }
+        },
+        0.2f,
+        true
+    );
 }
 
 void FVCCSimPanelTexEnhancer::GenerateCameraInfoFromFlashPawn(const FString& ImageDir)
@@ -505,6 +586,13 @@ void FVCCSimPanelTexEnhancer::GenerateCameraInfoFromFlashPawn(const FString& Ima
     TArray<FCameraInfo> CameraInfos;
     CameraInfos.Reserve(Positions.Num());
 
+    TArray<FVector> ColmapPositions;
+    TArray<FQuat>   ColmapRotations;
+    TArray<FString> ColmapImageNames;
+    ColmapPositions.Reserve(Positions.Num());
+    ColmapRotations.Reserve(Positions.Num());
+    ColmapImageNames.Reserve(Positions.Num());
+
     for (int32 i = 0; i < Positions.Num(); ++i)
     {
         FCameraInfo Info;
@@ -528,6 +616,10 @@ void FVCCSimPanelTexEnhancer::GenerateCameraInfoFromFlashPawn(const FString& Ima
         Info.ImagePath = FPaths::Combine(ImageDir, ImageName);
 
         CameraInfos.Add(Info);
+
+        ColmapPositions.Add(Info.Position);
+        ColmapRotations.Add(Info.Rotation);
+        ColmapImageNames.Add(ImageName);
     }
 
     FString ConfigDir = FPaths::Combine(FPaths::GetPath(ImageDir), TEXT("config"));
@@ -541,7 +633,7 @@ void FVCCSimPanelTexEnhancer::GenerateCameraInfoFromFlashPawn(const FString& Ima
 
     if (FVCCSimDataConverter::SaveCameraInfo(CameraInfos, ConfigDir))
     {
-        FString Msg = FString::Printf(TEXT("camera_info.json saved: %d poses  →  %s"), Positions.Num(), *ConfigDir);
+        FString Msg = FString::Printf(TEXT("camera_info.json saved: %d poses -> %s"), Positions.Num(), *ConfigDir);
         UpdateStatus(Msg);
         UE_LOG(LogTexEnhancerPanel, Log, TEXT("%s"), *Msg);
     }
@@ -550,6 +642,25 @@ void FVCCSimPanelTexEnhancer::GenerateCameraInfoFromFlashPawn(const FString& Ima
         FString Msg = FString::Printf(TEXT("Failed to save camera_info.json to: %s"), *ConfigDir);
         UpdateStatus(Msg);
         UE_LOG(LogTexEnhancerPanel, Warning, TEXT("%s"), *Msg);
+    }
+
+    FString SparseDir = FPaths::Combine(FPaths::GetPath(ImageDir), TEXT("sparse"), TEXT("0"));
+    FPaths::NormalizeDirectoryName(SparseDir);
+
+    if (FColmapManager::WriteColmapDatasetFiles(
+            SparseDir,
+            CaptureWidth, CaptureHeight,
+            Intrinsics.FocalX, Intrinsics.FocalY,
+            Intrinsics.CenterX, Intrinsics.CenterY,
+            ColmapPositions, ColmapRotations, ColmapImageNames))
+    {
+        FString Msg = FString::Printf(TEXT("COLMAP dataset written: %d poses -> %s"), Positions.Num(), *SparseDir);
+        UpdateStatus(Msg);
+        UE_LOG(LogTexEnhancerPanel, Log, TEXT("%s"), *Msg);
+    }
+    else
+    {
+        UE_LOG(LogTexEnhancerPanel, Warning, TEXT("Failed to write COLMAP dataset to: %s"), *SparseDir);
     }
 }
 
@@ -679,10 +790,10 @@ void FVCCSimPanelTexEnhancer::ExportGTMaterialsFromScene()
 
     if (!FFileHelper::SaveStringToFile(JsonStr, *(BaseDir / TEXT("manifest.json"))))
     {
-        UE_LOG(LogTexEnhancerPanel, Warning, TEXT("GT Export: failed to write manifest.json → %s"), *BaseDir);
+        UE_LOG(LogTexEnhancerPanel, Warning, TEXT("GT Export: failed to write manifest.json -> %s"), *BaseDir);
     }
 
-    const FString Msg = FString::Printf(TEXT("GT export done: %d actors → %s"), ExportedCount, *BaseDir);
+    const FString Msg = FString::Printf(TEXT("GT export done: %d actors -> %s"), ExportedCount, *BaseDir);
     UpdateStatus(Msg);
     FVCCSimUIHelpers::ShowNotification(Msg, false);
     UE_LOG(LogTexEnhancerPanel, Log, TEXT("%s"), *Msg);

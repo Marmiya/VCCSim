@@ -75,6 +75,15 @@ public:
     FOnColmapProgressUpdated OnProgressUpdated;
     FOnColmapCompleted OnCompleted;
 
+    static bool WriteColmapDatasetFiles(
+        const FString& SparseDir,
+        int32 Width, int32 Height,
+        float FocalX, float FocalY,
+        float CenterX, float CenterY,
+        const TArray<FVector>& C2WPositions,
+        const TArray<FQuat>& C2WRotations,
+        const TArray<FString>& ImageNames);
+
     // FRunnable interface
     virtual bool Init() override;
     virtual uint32 Run() override;
