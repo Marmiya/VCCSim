@@ -72,7 +72,6 @@ private:
     TSharedPtr<SNumericEntryBox<float>> OrbitHOverlapSpinBox;
     TSharedPtr<SNumericEntryBox<float>> OrbitVOverlapSpinBox;
     TSharedPtr<SNumericEntryBox<float>> OrbitNadirAltSpinBox;
-    TSharedPtr<SNumericEntryBox<int32>> OrbitNadirCountSpinBox;
     
     // Path Visualization UI
     TSharedPtr<SButton> VisualizePathButton;
@@ -88,10 +87,9 @@ private:
     float OrbitMargin       = 500.0f;
     float OrbitStartHeight  = 200.0f;
     float OrbitCameraHFOV   = 90.0f;
-    float OrbitHOverlap     = 0.80f;
-    float OrbitVOverlap     = 0.80f;
+    float OrbitHOverlap     = 0.60f;
+    float OrbitVOverlap     = 0.60f;
     float OrbitNadirAlt     = 500.0f;
-    int32 OrbitNadirCount   = 4;
     bool  bOrbitIncludeNadir = true;
 
     // TOptional attributes for SpinBox values
@@ -101,7 +99,6 @@ private:
     TOptional<float> OrbitHOverlapValue;
     TOptional<float> OrbitVOverlapValue;
     TOptional<float> OrbitNadirAltValue;
-    TOptional<int32> OrbitNadirCountValue;
     
     // Path visualization state
     bool bPathVisualized = false;

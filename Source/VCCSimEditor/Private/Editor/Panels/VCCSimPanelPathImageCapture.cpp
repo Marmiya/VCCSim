@@ -84,7 +84,6 @@ FVCCSimPanelPathImageCapture::FVCCSimPanelPathImageCapture()
     OrbitHOverlapValue    = OrbitHOverlap;
     OrbitVOverlapValue    = OrbitVOverlap;
     OrbitNadirAltValue    = OrbitNadirAlt;
-    OrbitNadirCountValue  = OrbitNadirCount;
     JobNum = MakeShared<std::atomic<int32>>(0);
 }
 
@@ -331,11 +330,6 @@ TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreatePathConfigSection()
             .IsChecked_Lambda([this]() { return bOrbitIncludeNadir ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
             .OnCheckStateChanged_Lambda([this](ECheckBoxState S) { bOrbitIncludeNadir = (S == ECheckBoxState::Checked); })
         ]
-        +SHorizontalBox::Slot().FillWidth(1.f).Padding(FMargin(0, 0, 4, 0))
-        [
-            FVCCSimUIHelpers::CreateNumericPropertyRowInt32(
-                TEXT("Nadir Count"), OrbitNadirCountSpinBox, OrbitNadirCountValue, OrbitNadirCount, 1, 1)
-        ]
         +SHorizontalBox::Slot().FillWidth(1.f)
         [
             FVCCSimUIHelpers::CreateNumericPropertyRowFloat(
@@ -503,30 +497,43 @@ void FVCCSimPanelPathImageCapture::GeneratePosesAroundTarget()
     const float   BoxMinZ   = CombinedBox.Min.Z + OrbitStartHeight;
     const float   BoxMaxZ   = CombinedBox.Max.Z;
 
-    // Coverage-based ring/pose computation
     const float HFovRad  = FMath::DegreesToRadians(FMath::Max(OrbitCameraHFOV, 5.f));
     const FIntPoint CamRes = SelectionManager.Pin()->GetActiveCameraResolution();
     const float AspectRatio = (CamRes.Y > 0) ? (float)CamRes.X / CamRes.Y : 16.f / 9.f;
     const float VFovRad  = 2.f * FMath::Atan(FMath::Tan(HFovRad * 0.5f) / AspectRatio);
 
-    const float AvgDist = (HX + HY) * 0.5f + OrbitMargin;
-
-    const float FootprintH = 2.f * AvgDist * FMath::Tan(HFovRad * 0.5f);
-    const float FootprintV = 2.f * AvgDist * FMath::Tan(VFovRad * 0.5f);
-
+    const float FootprintH = 2.f * OrbitMargin * FMath::Tan(HFovRad * 0.5f);
+    const float FootprintV = 2.f * OrbitMargin * FMath::Tan(VFovRad * 0.5f);
     const float StepH = FootprintH * FMath::Max(1.f - OrbitHOverlap, 0.05f);
     const float StepV = FootprintV * FMath::Max(1.f - OrbitVOverlap, 0.05f);
-
-    const float Perimeter  = 4.f * (HX + HY + 2.f * OrbitMargin);
-    const int32 PosesPerRing = FMath::Max(4, FMath::CeilToInt(Perimeter / StepH));
 
     const float BuildingH = FMath::Max(BoxMaxZ - BoxMinZ, 0.f);
     const int32 NumRings  = FMath::Max(1, FMath::CeilToInt(BuildingH / StepV));
 
-    UE_LOG(LogPathImageCapture, Log,
-        TEXT("Orbit coverage: HFov=%.0f VFov=%.0f AvgDist=%.0f Footprint=%.0fx%.0f Step=%.0fx%.0f -> %d rings x %d poses"),
-        FMath::RadiansToDegrees(HFovRad), FMath::RadiansToDegrees(VFovRad),
-        AvgDist, FootprintH, FootprintV, StepH, StepV, NumRings, PosesPerRing);
+    UWorld* World = GEditor->GetEditorWorldContext().World();
+    TArray<AActor*> OrbitActors;
+    for (const TSharedPtr<FString>& Label : OrbitActorListItems)
+    {
+        if (!Label.IsValid()) continue;
+        for (TActorIterator<AActor> It(World); It; ++It)
+        {
+            if (It->GetActorLabel() == *Label)
+            {
+                OrbitActors.Add(*It);
+                break;
+            }
+        }
+    }
+
+    TArray<UPrimitiveComponent*> OrbitPrimComps;
+    for (AActor* Actor : OrbitActors)
+        Actor->GetComponents<UPrimitiveComponent>(OrbitPrimComps);
+
+    const int32 NumSampleAngles = 360;
+    const float SearchRadius = (FMath::Max(HX, HY) + OrbitMargin) * 4.f + 2000.f;
+
+    FCollisionQueryParams QueryParams;
+    QueryParams.bTraceComplex = true;
 
     TArray<FVector>  Positions;
     TArray<FRotator> Rotations;
@@ -535,42 +542,114 @@ void FVCCSimPanelPathImageCapture::GeneratePosesAroundTarget()
     {
         const float T = (NumRings > 1) ? (float)Ring / (NumRings - 1) : 0.5f;
         const float Z = BoxMinZ + T * BuildingH;
+        const FVector CenterAtZ(BoxCenter.X, BoxCenter.Y, Z);
 
-        for (int32 PoseIdx = 0; PoseIdx < PosesPerRing; ++PoseIdx)
+        TArray<FVector> FineSamples;
+        FineSamples.Reserve(NumSampleAngles);
+
+        for (int32 AngleIdx = 0; AngleIdx < NumSampleAngles; ++AngleIdx)
         {
-            const float AngleRad = FMath::DegreesToRadians(360.f * PoseIdx / PosesPerRing);
-            const float CosA = FMath::Cos(AngleRad);
-            const float SinA = FMath::Sin(AngleRad);
+            const float AngleRad = FMath::DegreesToRadians(360.f * AngleIdx / NumSampleAngles);
+            const FVector Dir(FMath::Cos(AngleRad), FMath::Sin(AngleRad), 0.f);
+            const FVector TraceStart = CenterAtZ + Dir * SearchRadius;
+            const FVector TraceEnd   = CenterAtZ;
 
-            float DistToEdge;
-            if (FMath::Abs(CosA) < KINDA_SMALL_NUMBER)
-                DistToEdge = HY;
-            else if (FMath::Abs(SinA) < KINDA_SMALL_NUMBER)
-                DistToEdge = HX;
+            FHitResult BestHit;
+            float BestDistFromStart = FLT_MAX;
+            bool bFoundHit = false;
+
+            for (UPrimitiveComponent* Comp : OrbitPrimComps)
+            {
+                FHitResult CompHit;
+                if (Comp && Comp->LineTraceComponent(CompHit, TraceStart, TraceEnd, QueryParams))
+                {
+                    const float D = FVector::Dist(TraceStart, CompHit.Location);
+                    if (D < BestDistFromStart)
+                    {
+                        BestDistFromStart = D;
+                        BestHit = CompHit;
+                        bFoundHit = true;
+                    }
+                }
+            }
+
+            FVector CamPos;
+            if (bFoundHit)
+            {
+                const FVector N2D(BestHit.Normal.X, BestHit.Normal.Y, 0.f);
+                const FVector HitNormal2D = N2D.IsNearlyZero() ? Dir : N2D.GetSafeNormal();
+                CamPos = FVector(BestHit.Location.X + HitNormal2D.X * OrbitMargin,
+                                 BestHit.Location.Y + HitNormal2D.Y * OrbitMargin,
+                                 Z);
+            }
             else
-                DistToEdge = FMath::Min(HX / FMath::Abs(CosA), HY / FMath::Abs(SinA));
+            {
+                const float AbsCosA = FMath::Abs(Dir.X);
+                const float AbsSinA = FMath::Abs(Dir.Y);
+                const float BoxDist = (AbsCosA < KINDA_SMALL_NUMBER) ? HY :
+                                      (AbsSinA < KINDA_SMALL_NUMBER) ? HX :
+                                      FMath::Min(HX / AbsCosA, HY / AbsSinA);
+                CamPos = FVector(CenterAtZ.X + (BoxDist + OrbitMargin) * Dir.X,
+                                 CenterAtZ.Y + (BoxDist + OrbitMargin) * Dir.Y,
+                                 Z);
+            }
+            FineSamples.Add(CamPos);
+        }
 
-            const FVector CamPos(BoxCenter.X + (DistToEdge + OrbitMargin) * CosA,
-                                 BoxCenter.Y + (DistToEdge + OrbitMargin) * SinA, Z);
-            const FVector LookTarget(BoxCenter.X, BoxCenter.Y, CamPos.Z);
-            const FVector LookDir = (LookTarget - CamPos).GetSafeNormal();
-
+        auto AddPose = [&](const FVector& CamPos)
+        {
+            const FVector LookDir(BoxCenter.X - CamPos.X, BoxCenter.Y - CamPos.Y, 0.f);
             Positions.Add(CamPos);
-            Rotations.Add(LookDir.ToOrientationRotator());
+            Rotations.Add(LookDir.GetSafeNormal().Rotation());
+        };
+
+        AddPose(FineSamples[0]);
+        float AccumLen = 0.f;
+        for (int32 i = 0; i < NumSampleAngles; ++i)
+        {
+            const int32 Next = (i + 1) % NumSampleAngles;
+            AccumLen += FVector::Dist2D(FineSamples[i], FineSamples[Next]);
+            if (AccumLen >= StepH)
+            {
+                AddPose(FVector(FineSamples[Next].X, FineSamples[Next].Y, Z));
+                AccumLen = 0.f;
+            }
         }
     }
 
-    if (bOrbitIncludeNadir && OrbitNadirCount > 0)
+    if (bOrbitIncludeNadir)
     {
-        const float NadirZ = BoxMaxZ + OrbitNadirAlt;
-        const float NadirR = FMath::Max(HX, HY) * 0.5f;
-        for (int32 i = 0; i < OrbitNadirCount; ++i)
+        const float NadirZ     = CombinedBox.Max.Z + OrbitNadirAlt;
+        const float NadirFootH = 2.f * OrbitNadirAlt * FMath::Tan(HFovRad * 0.5f);
+        const float NadirFootV = 2.f * OrbitNadirAlt * FMath::Tan(VFovRad * 0.5f);
+        const float CrossStep  = NadirFootH * FMath::Max(1.f - OrbitHOverlap, 0.05f);
+        const float AlongStep  = NadirFootV * FMath::Max(1.f - OrbitVOverlap, 0.05f);
+
+        const float MinX = CombinedBox.Min.X - OrbitMargin;
+        const float MaxX = CombinedBox.Max.X + OrbitMargin;
+        const float MinY = CombinedBox.Min.Y - OrbitMargin;
+        const float MaxY = CombinedBox.Max.Y + OrbitMargin;
+
+        int32 StripIdx = 0;
+        for (float X = MinX; X <= MaxX + KINDA_SMALL_NUMBER; X += CrossStep, ++StripIdx)
         {
-            const float AngleRad = FMath::DegreesToRadians(360.f * i / OrbitNadirCount);
-            const FVector CamPos(BoxCenter.X + NadirR * FMath::Cos(AngleRad),
-                                 BoxCenter.Y + NadirR * FMath::Sin(AngleRad), NadirZ);
-            Positions.Add(CamPos);
-            Rotations.Add(FRotator(-90.f, FMath::RadiansToDegrees(AngleRad), 0.f));
+            const float Yaw = (StripIdx % 2 == 0) ? 90.f : -90.f;
+            if (StripIdx % 2 == 0)
+            {
+                for (float Y = MinY; Y <= MaxY + KINDA_SMALL_NUMBER; Y += AlongStep)
+                {
+                    Positions.Add(FVector(X, Y, NadirZ));
+                    Rotations.Add(FRotator(-90.f, Yaw, 0.f));
+                }
+            }
+            else
+            {
+                for (float Y = MaxY; Y >= MinY - KINDA_SMALL_NUMBER; Y -= AlongStep)
+                {
+                    Positions.Add(FVector(X, Y, NadirZ));
+                    Rotations.Add(FRotator(-90.f, Yaw, 0.f));
+                }
+            }
         }
     }
 
@@ -599,8 +678,8 @@ void FVCCSimPanelPathImageCapture::GeneratePosesAroundTarget()
     bAutoCaptureInProgress = false;
     GEditor->GetTimerManager()->ClearTimer(AutoCaptureTimerHandle);
 
-    UE_LOG(LogPathImageCapture, Log, TEXT("Bounding-box orbit: %d poses (%d rings x %d + %d nadir)"),
-        Positions.Num(), NumRings, PosesPerRing, bOrbitIncludeNadir ? OrbitNadirCount : 0);
+    UE_LOG(LogPathImageCapture, Log, TEXT("Conformal orbit: %d total poses (%d rings%s)"),
+        Positions.Num(), NumRings, bOrbitIncludeNadir ? TEXT(" + nadir zigzag") : TEXT(""));
 }
 
 FReply FVCCSimPanelPathImageCapture::OnLoadPoseClicked()
