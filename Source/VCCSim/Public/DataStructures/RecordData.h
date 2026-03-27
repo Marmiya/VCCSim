@@ -49,3 +49,19 @@ struct FNormalCameraData final : public FSensorData
 	int32 SensorIndex;
 	TArray<FFloat16Color> Data;
 };
+
+struct FBaseColorCameraData final : public FSensorData
+{
+	int32 Width;
+	int32 Height;
+	int32 SensorIndex;
+	TArray<FColor> Data;
+};
+
+struct FMaterialPropertiesCameraData final : public FSensorData
+{
+	int32 Width;
+	int32 Height;
+	int32 SensorIndex;
+	TArray<FColor> Data;
+};

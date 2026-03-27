@@ -162,6 +162,12 @@ void FImageCompressionTask::DoWork()
         case ESensorType::SegmentationCamera:
             CompressSegmentationData();
             break;
+        case ESensorType::BaseColorCamera:
+            CompressBaseColorData();
+            break;
+        case ESensorType::MaterialPropertiesCamera:
+            CompressMaterialPropertiesData();
+            break;
         case ESensorType::Lidar:
             CompressLidarData();
             break;
@@ -242,6 +248,41 @@ void FImageCompressionTask::CompressRGBData()
     else
     {
         UE_LOG(LogAsyncFileWriter, Error, TEXT("No RGB data to compress for actor: %s"),
+            *DataPacket.OwnerActor->GetName());
+    }
+}
+
+void FImageCompressionTask::CompressBaseColorData()
+{
+    const FBaseColorCameraData* BCData = static_cast<const FBaseColorCameraData*>(DataPacket.Data.Get());
+
+    if (BCData && BCData->Data.Num() > 0)
+    {
+        auto Result = CreateCompressedResult(TEXT("BaseColor"), TEXT("png"), DataPacket.Data->Timestamp);
+        CompressImageToPNG(BCData->Data, BCData->Width, BCData->Height, Result->CompressedData);
+        CompressedDataQueue.Enqueue(Result);
+    }
+    else
+    {
+        UE_LOG(LogAsyncFileWriter, Error, TEXT("No BaseColor data to compress for actor: %s"),
+            *DataPacket.OwnerActor->GetName());
+    }
+}
+
+void FImageCompressionTask::CompressMaterialPropertiesData()
+{
+    const FMaterialPropertiesCameraData* MPData =
+        static_cast<const FMaterialPropertiesCameraData*>(DataPacket.Data.Get());
+
+    if (MPData && MPData->Data.Num() > 0)
+    {
+        auto Result = CreateCompressedResult(TEXT("MaterialProperties"), TEXT("png"), DataPacket.Data->Timestamp);
+        CompressImageToPNG(MPData->Data, MPData->Width, MPData->Height, Result->CompressedData);
+        CompressedDataQueue.Enqueue(Result);
+    }
+    else
+    {
+        UE_LOG(LogAsyncFileWriter, Error, TEXT("No MaterialProperties data to compress for actor: %s"),
             *DataPacket.OwnerActor->GetName());
     }
 }

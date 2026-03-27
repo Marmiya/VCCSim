@@ -89,6 +89,36 @@ public:
 
 IMPLEMENT_GLOBAL_SHADER(FSegmentationPS, "/VCCSim/SegmentationCapture.usf", "MainPS", SF_Pixel);
 
+class FBaseColorPS : public FGlobalShader
+{
+public:
+    DECLARE_GLOBAL_SHADER(FBaseColorPS);
+    SHADER_USE_PARAMETER_STRUCT(FBaseColorPS, FGlobalShader);
+
+    BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+        SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View)
+        SHADER_PARAMETER_RDG_TEXTURE(Texture2D, InputTexture)
+        RENDER_TARGET_BINDING_SLOTS()
+    END_SHADER_PARAMETER_STRUCT()
+};
+
+IMPLEMENT_GLOBAL_SHADER(FBaseColorPS, "/VCCSim/BaseColorCapture.usf", "MainPS", SF_Pixel);
+
+class FMaterialPropertiesPS : public FGlobalShader
+{
+public:
+    DECLARE_GLOBAL_SHADER(FMaterialPropertiesPS);
+    SHADER_USE_PARAMETER_STRUCT(FMaterialPropertiesPS, FGlobalShader);
+
+    BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+        SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View)
+        SHADER_PARAMETER_RDG_TEXTURE(Texture2D, InputTexture)
+        RENDER_TARGET_BINDING_SLOTS()
+    END_SHADER_PARAMETER_STRUCT()
+};
+
+IMPLEMENT_GLOBAL_SHADER(FMaterialPropertiesPS, "/VCCSim/MaterialPropertiesCapture.usf", "MainPS", SF_Pixel);
+
 BEGIN_SHADER_PARAMETER_STRUCT(FEnqueueCopyTexturePass, )
     RDG_TEXTURE_ACCESS(Texture, ERHIAccess::CopySrc)
 END_SHADER_PARAMETER_STRUCT()
@@ -224,6 +254,14 @@ void ARecorder::CreateActorDirectories(const FString& ActorName, TSet<ESensorTyp
                 break;
             case ESensorType::NormalCamera:
                 SensorDir = FPaths::Combine(ActorDir, TEXT("Normal"));
+                break;
+            case ESensorType::BaseColorCamera:
+                SensorDir = FPaths::Combine(ActorDir, TEXT("BaseColor"));
+                PlatformFile.CreateDirectoryTree(*SensorDir);
+                break;
+            case ESensorType::MaterialPropertiesCamera:
+                SensorDir = FPaths::Combine(ActorDir, TEXT("MaterialProperties"));
+                PlatformFile.CreateDirectoryTree(*SensorDir);
                 break;
             case ESensorType::SegmentationCamera:
                 SensorDir = FPaths::Combine(ActorDir, TEXT("Segmentation"));
@@ -459,6 +497,30 @@ void ARecorder::RenderViewGroupsRDG(const double& CaptureTime)
                             RDG_EVENT_NAME("VCCSimNormalCapture"), PixelShader, PassParameters, ViewRect);
                         bValidSensorType = true;
                     }
+                    else if (SensorType == ESensorType::BaseColorCamera)
+                    {
+                        auto* PassParameters = GraphBuilder.AllocParameters<FBaseColorPS::FParameters>();
+                        PassParameters->View = Inputs.Renderer->Views[0].ViewUniformBuffer;
+                        PassParameters->InputTexture = SceneTextures.GBufferC;
+                        PassParameters->RenderTargets[0] = FRenderTargetBinding(OutputTexture, ERenderTargetLoadAction::EClear);
+
+                        TShaderMapRef<FBaseColorPS> PixelShader(GetGlobalShaderMap(FeatureLevel));
+                        FPixelShaderUtils::AddFullscreenPass(GraphBuilder, GetGlobalShaderMap(FeatureLevel),
+                            RDG_EVENT_NAME("VCCSimBaseColorCapture"), PixelShader, PassParameters, ViewRect);
+                        bValidSensorType = true;
+                    }
+                    else if (SensorType == ESensorType::MaterialPropertiesCamera)
+                    {
+                        auto* PassParameters = GraphBuilder.AllocParameters<FMaterialPropertiesPS::FParameters>();
+                        PassParameters->View = Inputs.Renderer->Views[0].ViewUniformBuffer;
+                        PassParameters->InputTexture = SceneTextures.GBufferB;
+                        PassParameters->RenderTargets[0] = FRenderTargetBinding(OutputTexture, ERenderTargetLoadAction::EClear);
+
+                        TShaderMapRef<FMaterialPropertiesPS> PixelShader(GetGlobalShaderMap(FeatureLevel));
+                        FPixelShaderUtils::AddFullscreenPass(GraphBuilder, GetGlobalShaderMap(FeatureLevel),
+                            RDG_EVENT_NAME("VCCSimMaterialPropertiesCapture"), PixelShader, PassParameters, ViewRect);
+                        bValidSensorType = true;
+                    }
                     else if (SensorType == ESensorType::SegmentationCamera)
                     {
                         const FRDGTextureSRVRef CustomStencilTexture = SceneTextures.CustomDepth.Stencil;
@@ -615,6 +677,58 @@ void ARecorder::ProcessPendingReadback(const FPendingReadback& PendingData)
                     FMemory::Memcpy(SegData->Data.GetData(), SourceColors, NumPixels * sizeof(FColor));
                 }
                 Packet.Data = SegData;
+                break;
+            }
+        case ESensorType::MaterialPropertiesCamera:
+            {
+                auto MPData = MakeShared<FMaterialPropertiesCameraData>();
+                MPData->Timestamp = CaptureTime;
+                MPData->Width = Resolution.X;
+                MPData->Height = Resolution.Y;
+                MPData->SensorIndex = Packet.SensorIndex;
+                MPData->Data.SetNumUninitialized(NumPixels);
+                const FColor* SourceColors = static_cast<const FColor*>(PixelData);
+
+                if (bHasPadding)
+                {
+                    for (int32 Row = 0; Row < Resolution.Y; ++Row)
+                    {
+                        const FColor* RowSrc = SourceColors + Row * RowPitchInPixels;
+                        FColor* RowDst = MPData->Data.GetData() + Row * Resolution.X;
+                        FMemory::Memcpy(RowDst, RowSrc, Resolution.X * sizeof(FColor));
+                    }
+                }
+                else
+                {
+                    FMemory::Memcpy(MPData->Data.GetData(), SourceColors, NumPixels * sizeof(FColor));
+                }
+                Packet.Data = MPData;
+                break;
+            }
+        case ESensorType::BaseColorCamera:
+            {
+                auto BCData = MakeShared<FBaseColorCameraData>();
+                BCData->Timestamp = CaptureTime;
+                BCData->Width = Resolution.X;
+                BCData->Height = Resolution.Y;
+                BCData->SensorIndex = Packet.SensorIndex;
+                BCData->Data.SetNumUninitialized(NumPixels);
+                const FColor* SourceColors = static_cast<const FColor*>(PixelData);
+
+                if (bHasPadding)
+                {
+                    for (int32 Row = 0; Row < Resolution.Y; ++Row)
+                    {
+                        const FColor* RowSrc = SourceColors + Row * RowPitchInPixels;
+                        FColor* RowDst = BCData->Data.GetData() + Row * Resolution.X;
+                        FMemory::Memcpy(RowDst, RowSrc, Resolution.X * sizeof(FColor));
+                    }
+                }
+                else
+                {
+                    FMemory::Memcpy(BCData->Data.GetData(), SourceColors, NumPixels * sizeof(FColor));
+                }
+                Packet.Data = BCData;
                 break;
             }
         case ESensorType::RGBCamera:

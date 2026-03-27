@@ -1,0 +1,14 @@
+#include "/Engine/Private/Common.ush"
+#include "/Engine/Private/DeferredShadingCommon.ush"
+
+Texture2D InputTexture;
+
+float4 MainPS(float4 SvPosition : SV_POSITION) : SV_Target0
+{
+    uint2 PixelPos = uint2(SvPosition.xy);
+    float4 GBufferB = InputTexture.Load(int3(PixelPos, 0));
+    float Metallic  = GBufferB.r;
+    float Specular  = GBufferB.g;
+    float Roughness = GBufferB.b;
+    return float4(Metallic, Specular, Roughness, 1.0);
+}

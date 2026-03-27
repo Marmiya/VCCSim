@@ -28,6 +28,8 @@ class AVCCSimLookAtPath;
 class URGBDCameraComponent;
 class USegCameraComponent;
 class UNormalCameraComponent;
+class UBaseColorCameraComponent;
+class UMaterialPropertiesCameraComponent;
 
 /**
  * Selection panel functionality manager
@@ -51,9 +53,6 @@ public:
     
     /** Create the selection UI panel */
     TSharedRef<SWidget> CreateSelectionPanel();
-    
-    /** Update camera availability based on selected FlashPawn */
-    void UpdateActiveCameras();
     
     /** Handle actor selection from viewport */
     void HandleActorSelection(AActor* Actor);
@@ -89,12 +88,16 @@ public:
     bool HasDepthCamera() const { return bHasDepthCamera; }
     bool HasSegmentationCamera() const { return bHasSegmentationCamera; }
     bool HasNormalCamera() const { return bHasNormalCamera; }
-    
+    bool HasBaseColorCamera() const { return bHasBaseColorCamera; }
+    bool HasMaterialPropertiesCamera() const { return bHasMaterialPropertiesCamera; }
+
     /** Check camera usage state */
     bool IsUsingRGBCamera() const { return bUseRGBCamera; }
     bool IsUsingDepthCamera() const { return bUseDepthCamera; }
     bool IsUsingSegmentationCamera() const { return bUseSegmentationCamera; }
     bool IsUsingNormalCamera() const { return bUseNormalCamera; }
+    bool IsUsingBaseColorCamera() const { return bUseBaseColorCamera; }
+    bool IsUsingMaterialPropertiesCamera() const { return bUseMaterialPropertiesCamera; }
     
     /** Get camera parameters from active cameras */
     float GetActiveCameraFOV() const;
@@ -144,6 +147,8 @@ private:
     void OnDepthCameraCheckboxChanged(ECheckBoxState NewState);
     void OnSegmentationCameraCheckboxChanged(ECheckBoxState NewState);
     void OnNormalCameraCheckboxChanged(ECheckBoxState NewState);
+    void OnBaseColorCameraCheckboxChanged(ECheckBoxState NewState);
+    void OnMaterialPropertiesCameraCheckboxChanged(ECheckBoxState NewState);
     
     // ============================================================================
     // SELECTION LOGIC
@@ -185,12 +190,16 @@ private:
     bool bHasDepthCamera = false;
     bool bHasSegmentationCamera = false;
     bool bHasNormalCamera = false;
-    
+    bool bHasBaseColorCamera = false;
+    bool bHasMaterialPropertiesCamera = false;
+
     /** Camera usage flags */
-    bool bUseRGBCamera = true;  // RGB camera enabled by default
+    bool bUseRGBCamera = true;
     bool bUseDepthCamera = false;
     bool bUseSegmentationCamera = false;
     bool bUseNormalCamera = false;
+    bool bUseBaseColorCamera = false;
+    bool bUseMaterialPropertiesCamera = false;
     
     /** UI section expansion state */
     bool bFlashPawnSectionExpanded = false;

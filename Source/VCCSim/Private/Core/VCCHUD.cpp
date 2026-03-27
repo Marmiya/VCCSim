@@ -22,6 +22,8 @@
 #include "Sensors/RGBCamera.h"
 #include "Sensors/SegmentationCamera.h"
 #include "Sensors/NormalCamera.h"
+#include "Sensors/BaseColorCamera.h"
+#include "Sensors/MaterialPropertiesCamera.h"
 #include "Simulation/Recorder.h"
 #include "Simulation/MeshManager.h"
 #include "Simulation/SceneAnalysisManager.h"
@@ -548,6 +550,40 @@ FRobotGrpcMaps AVCCHUD::SetupActors(const FVCCSimConfig& Config)
                         *Robot.UETag, NormalCam->GetSensorIndex());
                     RGrpcMaps.RCMaps.NormalMap[TCHAR_TO_UTF8(*CameraKey)] = NormalCam;
                     Objects.Add(NormalCam);
+                }
+            }
+            else if (Component.Get<0>() == ESensorType::BaseColorCamera)
+            {
+                TArray<UBaseColorCameraComponent*> BaseColorCameras;
+                RobotPawn->GetComponents<UBaseColorCameraComponent>(BaseColorCameras);
+                if (BaseColorCameras.Num() == 0)
+                {
+                    UE_LOG(LogVCCHUD, Warning,
+                        TEXT("No BaseColorCameraComponent found on robot %s"), *Robot.UETag);
+                    continue;
+                }
+
+                for (auto* BaseColorCam : BaseColorCameras)
+                {
+                    BaseColorCam->Configure(*SensorConfig);
+                    Objects.Add(BaseColorCam);
+                }
+            }
+            else if (Component.Get<0>() == ESensorType::MaterialPropertiesCamera)
+            {
+                TArray<UMaterialPropertiesCameraComponent*> MatPropsCameras;
+                RobotPawn->GetComponents<UMaterialPropertiesCameraComponent>(MatPropsCameras);
+                if (MatPropsCameras.Num() == 0)
+                {
+                    UE_LOG(LogVCCHUD, Warning,
+                        TEXT("No MaterialPropertiesCameraComponent found on robot %s"), *Robot.UETag);
+                    continue;
+                }
+
+                for (auto* MatPropsCam : MatPropsCameras)
+                {
+                    MatPropsCam->Configure(*SensorConfig);
+                    Objects.Add(MatPropsCam);
                 }
             }
             else

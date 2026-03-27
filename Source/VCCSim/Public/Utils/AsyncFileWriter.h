@@ -65,6 +65,8 @@ private:
     void CompressDepthData();
     void CompressNormalData();
     void CompressSegmentationData();
+    void CompressBaseColorData();
+    void CompressMaterialPropertiesData();
     void CompressLidarData();
 
     TSharedPtr<FCompressedImageData> CreateCompressedResult(const FString& SubPath, const FString& Extension, double Timestamp);

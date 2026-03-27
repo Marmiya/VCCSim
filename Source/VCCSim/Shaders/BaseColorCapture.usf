@@ -1,0 +1,11 @@
+#include "/Engine/Private/Common.ush"
+#include "/Engine/Private/DeferredShadingCommon.ush"
+
+Texture2D InputTexture;
+
+float4 MainPS(float4 SvPosition : SV_POSITION) : SV_Target0
+{
+    uint2 PixelPos = uint2(SvPosition.xy);
+    float3 BaseColor = InputTexture.Load(int3(PixelPos, 0)).rgb;
+    return float4(BaseColor, 1.0);
+}

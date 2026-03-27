@@ -21,6 +21,8 @@ DEFINE_LOG_CATEGORY_STATIC(LogSensorFactory, Log, All);
 #include "Sensors/LidarSensor.h"
 #include "Sensors/RGBCamera.h"
 #include "Sensors/DepthCamera.h"
+#include "Sensors/BaseColorCamera.h"
+#include "Sensors/MaterialPropertiesCamera.h"
 
 USceneComponent* FSensorFactory::CreateSensor(
 	ESensorType SensorType, AActor* Owner, FName Name, const FSensorConfig& Config)
@@ -99,6 +101,52 @@ USceneComponent* FSensorFactory::CreateSensor(
 			{
 				UE_LOG(LogSensorFactory, Error, TEXT("FSensorFactory::CreateSensor: "
 								"Failed to create Depth Camera sensor!"));
+			}
+
+			break;
+		}
+	case ESensorType::MaterialPropertiesCamera:
+		{
+			const FMaterialPropertiesCameraConfig* CameraConfig =
+				static_cast<const FMaterialPropertiesCameraConfig*>(&Config);
+			if (!CameraConfig)
+			{
+				UE_LOG(LogSensorFactory, Error, TEXT("FSensorFactory::CreateSensor: "
+								"Invalid config type for MaterialProperties Camera sensor!"));
+				return nullptr;
+			}
+
+			if (auto CameraSensor = NewObject<UMaterialPropertiesCameraComponent>(Owner, Name))
+			{
+				Sensor = CameraSensor;
+			}
+			else
+			{
+				UE_LOG(LogSensorFactory, Error, TEXT("FSensorFactory::CreateSensor: "
+								"Failed to create MaterialProperties Camera sensor!"));
+			}
+
+			break;
+		}
+	case ESensorType::BaseColorCamera:
+		{
+			const FBaseColorCameraConfig* CameraConfig =
+				static_cast<const FBaseColorCameraConfig*>(&Config);
+			if (!CameraConfig)
+			{
+				UE_LOG(LogSensorFactory, Error, TEXT("FSensorFactory::CreateSensor: "
+								"Invalid config type for BaseColor Camera sensor!"));
+				return nullptr;
+			}
+
+			if (auto CameraSensor = NewObject<UBaseColorCameraComponent>(Owner, Name))
+			{
+				Sensor = CameraSensor;
+			}
+			else
+			{
+				UE_LOG(LogSensorFactory, Error, TEXT("FSensorFactory::CreateSensor: "
+								"Failed to create BaseColor Camera sensor!"));
 			}
 
 			break;

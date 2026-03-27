@@ -30,7 +30,9 @@ enum class ESensorType : uint8
 	RGBCamera = 4,
 	DepthCamera = 5,
 	NormalCamera = 6,
-	SegmentationCamera = 7
+	SegmentationCamera = 7,
+	BaseColorCamera = 8,
+	MaterialPropertiesCamera = 9
 };
 
 namespace SensorDefaults

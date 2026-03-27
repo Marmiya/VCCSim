@@ -55,6 +55,8 @@ public:
     // UI state access for persistence
     bool IsPathImageCaptureSectionExpanded() const { return bPathImageCaptureSectionExpanded; }
     void SetPathImageCaptureSectionExpanded(bool bExpanded) { bPathImageCaptureSectionExpanded = bExpanded; }
+
+    void LoadFromConfigManager();
     
 private:
     // ============================================================================
@@ -150,6 +152,8 @@ private:
     void SaveDepth(int32 PoseIndex, bool& bAnyCaptured);
     void SaveSeg(int32 PoseIndex, bool& bAnyCaptured);
     void SaveNormal(int32 PoseIndex, bool& bAnyCaptured);
+    void SaveBaseColor(int32 PoseIndex, bool& bAnyCaptured);
+    void SaveMaterialProperties(int32 PoseIndex, bool& bAnyCaptured);
     void StartAutoCapture();
     void StopAutoCapture();
     

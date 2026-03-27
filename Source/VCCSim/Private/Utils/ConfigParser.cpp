@@ -21,6 +21,8 @@
 #include "Sensors/DepthCamera.h"
 #include "Sensors/SegmentationCamera.h"
 #include "Sensors/NormalCamera.h"
+#include "Sensors/BaseColorCamera.h"
+#include "Sensors/MaterialPropertiesCamera.h"
 #include "toml++/toml.hpp"
 #include "HAL/PlatformFilemanager.h"
 
@@ -156,6 +158,32 @@ namespace ConfigParserHelpers
 			return Config;
 		}
 
+		if (SensorType == "BaseColorCamera")
+		{
+			auto Config = MakeShared<FBaseColorCameraConfig>();
+			if (ConfigTable)
+			{
+				Config->RecordInterval = (*ConfigTable)["RecordInterval"].value_or(Config->RecordInterval);
+				Config->FOV = (*ConfigTable)["FOV"].value_or(Config->FOV);
+				Config->Width = (*ConfigTable)["Width"].value_or(Config->Width);
+				Config->Height = (*ConfigTable)["Height"].value_or(Config->Height);
+			}
+			return Config;
+		}
+
+		if (SensorType == "MaterialPropertiesCamera")
+		{
+			auto Config = MakeShared<FMaterialPropertiesCameraConfig>();
+			if (ConfigTable)
+			{
+				Config->RecordInterval = (*ConfigTable)["RecordInterval"].value_or(Config->RecordInterval);
+				Config->FOV = (*ConfigTable)["FOV"].value_or(Config->FOV);
+				Config->Width = (*ConfigTable)["Width"].value_or(Config->Width);
+				Config->Height = (*ConfigTable)["Height"].value_or(Config->Height);
+			}
+			return Config;
+		}
+
 		UE_LOG(LogConfigParser, Warning, TEXT("Unknown sensor type: %s"), *TomlStringToFString(SensorType));
 		return nullptr;
 	}
@@ -167,6 +195,8 @@ namespace ConfigParserHelpers
 		if (SensorType == "DepthCamera") return ESensorType::DepthCamera;
 		if (SensorType == "SegmentationCamera") return ESensorType::SegmentationCamera;
 		if (SensorType == "NormalCamera") return ESensorType::NormalCamera;
+		if (SensorType == "BaseColorCamera") return ESensorType::BaseColorCamera;
+		if (SensorType == "MaterialPropertiesCamera") return ESensorType::MaterialPropertiesCamera;
 		return ESensorType::RGBCamera;
 	}
 }

@@ -27,6 +27,8 @@ DEFINE_LOG_CATEGORY_STATIC(LogPathImageCapture, Log, All);
 #include "Sensors/DepthCamera.h"
 #include "Sensors/SegmentationCamera.h"
 #include "Sensors/NormalCamera.h"
+#include "Sensors/BaseColorCamera.h"
+#include "Sensors/MaterialPropertiesCamera.h"
 #include "Engine/StaticMeshActor.h"
 #include "Components/PrimitiveComponent.h"
 #include "Selection.h"
@@ -1077,7 +1079,19 @@ void FVCCSimPanelPathImageCapture::CaptureImageFromCurrentPose()
         {
             SaveSeg(PoseIndex, bAnyCaptured);
         }
-        
+
+        if (SelectionManagerPin->IsUsingBaseColorCamera() &&
+            SelectionManagerPin->HasBaseColorCamera())
+        {
+            SaveBaseColor(PoseIndex, bAnyCaptured);
+        }
+
+        if (SelectionManagerPin->IsUsingMaterialPropertiesCamera() &&
+            SelectionManagerPin->HasMaterialPropertiesCamera())
+        {
+            SaveMaterialProperties(PoseIndex, bAnyCaptured);
+        }
+
         // Log if no images were captured
         if (!bAnyCaptured)
         {
@@ -1370,6 +1384,100 @@ void FVCCSimPanelPathImageCapture::SaveNormal(int32 PoseIndex, bool& bAnyCapture
     }
 }
 
+void FVCCSimPanelPathImageCapture::SaveBaseColor(int32 PoseIndex, bool& bAnyCaptured)
+{
+    TWeakObjectPtr<AFlashPawn> SelectedFlashPawn;
+    if (SelectionManager.IsValid())
+        SelectedFlashPawn = SelectionManager.Pin()->GetSelectedFlashPawn();
+
+    if (!SelectedFlashPawn.IsValid()) return;
+
+    TArray<UBaseColorCameraComponent*> Cameras;
+    SelectedFlashPawn->GetComponents<UBaseColorCameraComponent>(Cameras);
+    *JobNum += Cameras.Num();
+
+    for (int32 i = 0; i < Cameras.Num(); ++i)
+    {
+        UBaseColorCameraComponent* Camera = Cameras[i];
+        if (Camera)
+        {
+            if (!Camera->IsActive())
+                Camera->SetActive(true);
+
+            int32 CameraIndex = Camera->GetSensorIndex();
+            if (CameraIndex < 0) CameraIndex = i;
+
+            FString Filename = SaveDirectory / FString::Printf(
+                TEXT("BaseColor_Cam%02d_Pose%03d.png"), CameraIndex, PoseIndex);
+
+            FIntPoint Size = {Camera->GetImageSize().first, Camera->GetImageSize().second};
+
+            Camera->AsyncGetBaseColorImageData(
+                [Filename, Size, JobNum = this->JobNum](const TArray<FColor>& ImageData)
+                {
+                    TArray<FColor> DataCopy = ImageData;
+                    for (FColor& Pixel : DataCopy) Pixel.A = 255;
+                    (new FAutoDeleteAsyncTask<FAsyncImageSaveTask>(DataCopy, Size, Filename))
+                        ->StartBackgroundTask();
+                    *JobNum -= 1;
+                });
+
+            bAnyCaptured = true;
+        }
+        else
+        {
+            *JobNum -= 1;
+        }
+    }
+}
+
+void FVCCSimPanelPathImageCapture::SaveMaterialProperties(int32 PoseIndex, bool& bAnyCaptured)
+{
+    TWeakObjectPtr<AFlashPawn> SelectedFlashPawn;
+    if (SelectionManager.IsValid())
+        SelectedFlashPawn = SelectionManager.Pin()->GetSelectedFlashPawn();
+
+    if (!SelectedFlashPawn.IsValid()) return;
+
+    TArray<UMaterialPropertiesCameraComponent*> Cameras;
+    SelectedFlashPawn->GetComponents<UMaterialPropertiesCameraComponent>(Cameras);
+    *JobNum += Cameras.Num();
+
+    for (int32 i = 0; i < Cameras.Num(); ++i)
+    {
+        UMaterialPropertiesCameraComponent* Camera = Cameras[i];
+        if (Camera)
+        {
+            if (!Camera->IsActive())
+                Camera->SetActive(true);
+
+            int32 CameraIndex = Camera->GetSensorIndex();
+            if (CameraIndex < 0) CameraIndex = i;
+
+            FString Filename = SaveDirectory / FString::Printf(
+                TEXT("MatProps_Cam%02d_Pose%03d.png"), CameraIndex, PoseIndex);
+
+            FIntPoint Size = {Camera->GetImageSize().first, Camera->GetImageSize().second};
+
+            Camera->AsyncGetMaterialPropertiesImageData(
+                [Filename, Size, JobNum = this->JobNum](const TArray<FColor>& ImageData)
+                {
+                    TArray<FColor> DataCopy = ImageData;
+                    for (FColor& Pixel : DataCopy) Pixel.A = 255;
+                    (new FAutoDeleteAsyncTask<FAsyncImageSaveTask>(DataCopy, Size, Filename))
+                        ->StartBackgroundTask();
+                    *JobNum -= 1;
+                });
+
+            bAnyCaptured = true;
+        }
+        else
+        {
+            *JobNum -= 1;
+        }
+    }
+}
+
 void FVCCSimPanelPathImageCapture::StartAutoCapture()
 {
     TWeakObjectPtr<AFlashPawn> SelectedFlashPawn;
@@ -1620,10 +1728,12 @@ TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreateCaptureButtons()
             auto SelectionManagerPin = SelectionManager.Pin();
             if (!SelectionManagerPin.IsValid() || !SelectionManagerPin->GetSelectedFlashPawn().IsValid()) return false;
             
-            return (SelectionManagerPin->IsUsingRGBCamera() && SelectionManagerPin->HasRGBCamera()) || 
-                   (SelectionManagerPin->IsUsingDepthCamera() && SelectionManagerPin->HasDepthCamera()) || 
+            return (SelectionManagerPin->IsUsingRGBCamera() && SelectionManagerPin->HasRGBCamera()) ||
+                   (SelectionManagerPin->IsUsingDepthCamera() && SelectionManagerPin->HasDepthCamera()) ||
                    (SelectionManagerPin->IsUsingNormalCamera() && SelectionManagerPin->HasNormalCamera()) ||
-                   (SelectionManagerPin->IsUsingSegmentationCamera() && SelectionManagerPin->HasSegmentationCamera());
+                   (SelectionManagerPin->IsUsingSegmentationCamera() && SelectionManagerPin->HasSegmentationCamera()) ||
+                   (SelectionManagerPin->IsUsingBaseColorCamera() && SelectionManagerPin->HasBaseColorCamera()) ||
+                   (SelectionManagerPin->IsUsingMaterialPropertiesCamera() && SelectionManagerPin->HasMaterialPropertiesCamera());
         })
     ]
     
@@ -1696,4 +1806,9 @@ void FVCCSimPanelPathImageCapture::LoadOrbitActorList()
         OrbitActorListItems.Add(MakeShareable(new FString(Label)));
     if (OrbitActorListView.IsValid())
         OrbitActorListView->RequestListRefresh();
+}
+
+void FVCCSimPanelPathImageCapture::LoadFromConfigManager()
+{
+    LoadOrbitActorList();
 }
