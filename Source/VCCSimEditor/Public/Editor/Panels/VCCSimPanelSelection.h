@@ -24,6 +24,7 @@
 #include "GameFramework/Actor.h"
 
 class AFlashPawn;
+class AVCCSimLookAtPath;
 class URGBDCameraComponent;
 class USegCameraComponent;
 class UNormalCameraComponent;
@@ -64,21 +65,24 @@ public:
     /** Auto-select first available FlashPawn in the scene */
     void AutoSelectFlashPawn();
 
+    /** Auto-select first available LookAtPath in the scene */
+    void AutoSelectLookAtPath();
+
     // ============================================================================
     // GETTERS
     // ============================================================================
     
     /** Get currently selected FlashPawn */
     TWeakObjectPtr<AFlashPawn> GetSelectedFlashPawn() const { return SelectedFlashPawn; }
-    
-    /** Get currently selected target object */
-    TWeakObjectPtr<AActor> GetSelectedTargetObject() const { return SelectedTargetObject; }
-    
+
+    /** Get currently selected LookAtPath */
+    TWeakObjectPtr<AVCCSimLookAtPath> GetSelectedLookAtPath() const { return SelectedLookAtPath; }
+
     /** Check if FlashPawn selection mode is active */
     bool IsSelectingFlashPawn() const { return bSelectingFlashPawn; }
-    
-    /** Check if Target selection mode is active */
-    bool IsSelectingTarget() const { return bSelectingTarget; }
+
+    /** Check if LookAtPath selection mode is active */
+    bool IsSelectingLookAtPath() const { return bSelectingLookAtPath; }
     
     /** Check camera availability */
     bool HasRGBCamera() const { return bHasRGBCamera; }
@@ -106,12 +110,12 @@ private:
     
     /** Create Flash Pawn selection panel */
     TSharedRef<SWidget> CreatePawnSelectPanel();
-    
+
     /** Create Camera selection panel */
     TSharedRef<SWidget> CreateCameraSelectPanel();
-    
-    /** Create Target object selection panel */
-    TSharedRef<SWidget> CreateTargetSelectPanel();
+
+    /** Create LookAtPath selection panel */
+    TSharedRef<SWidget> CreateLookAtSelectPanel();
     
     /** Create camera status row showing available cameras */
     TSharedRef<SWidget> CreateCameraStatusRow();
@@ -131,9 +135,9 @@ private:
     
     /** Handle FlashPawn selection toggle */
     void OnSelectFlashPawnToggleChanged(ECheckBoxState NewState);
-    
-    /** Handle Target selection toggle */
-    void OnSelectTargetToggleChanged(ECheckBoxState NewState);
+
+    /** Handle LookAtPath selection toggle */
+    void OnSelectLookAtToggleChanged(ECheckBoxState NewState);
     
     /** Handle camera checkbox changes */
     void OnRGBCameraCheckboxChanged(ECheckBoxState NewState);
@@ -159,10 +163,10 @@ private:
     // FlashPawn Selection UI
     TSharedPtr<STextBlock> SelectedFlashPawnText;
     TSharedPtr<SCheckBox> SelectFlashPawnToggle;
-    
-    // Target Selection UI
-    TSharedPtr<STextBlock> SelectedTargetObjectText;
-    TSharedPtr<SCheckBox> SelectTargetToggle;
+
+    // LookAtPath Selection UI
+    TSharedPtr<STextBlock> SelectedLookAtText;
+    TSharedPtr<SCheckBox> SelectLookAtToggle;
     
     // ============================================================================
     // SELECTION STATE
@@ -170,11 +174,11 @@ private:
     
     /** Currently selected actors */
     TWeakObjectPtr<AFlashPawn> SelectedFlashPawn;
-    TWeakObjectPtr<AActor> SelectedTargetObject;
-    
+    TWeakObjectPtr<AVCCSimLookAtPath> SelectedLookAtPath;
+
     /** Selection mode flags */
     bool bSelectingFlashPawn = false;
-    bool bSelectingTarget = false;
+    bool bSelectingLookAtPath = false;
     
     /** Camera availability flags */
     bool bHasRGBCamera = false;

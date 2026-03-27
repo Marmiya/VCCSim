@@ -17,6 +17,7 @@
 
 #include "Utils/VCCSimConfigManager.h"
 #include "Dom/JsonObject.h"
+#include "Dom/JsonValue.h"
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
 #include "HAL/PlatformFilemanager.h"
@@ -119,7 +120,23 @@ void FVCCSimConfigManager::SaveToJsonFile()
     TexEnhancerConfigJson->SetStringField(TEXT("SceneName"), TexEnhancerConfig.SceneName);
     TexEnhancerConfigJson->SetStringField(TEXT("TexEnhancerScriptPath"), TexEnhancerConfig.TexEnhancerScriptPath);
     TexEnhancerConfigJson->SetStringField(TEXT("EstimatedMaterialsDir"), TexEnhancerConfig.EstimatedMaterialsDir);
+    {
+        TArray<TSharedPtr<FJsonValue>> GTLabelsJson;
+        for (const FString& Label : TexEnhancerConfig.GTActorLabels)
+            GTLabelsJson.Add(MakeShareable(new FJsonValueString(Label)));
+        TexEnhancerConfigJson->SetArrayField(TEXT("GTActorLabels"), GTLabelsJson);
+    }
     RootObject->SetObjectField(TEXT("TexEnhancerConfig"), TexEnhancerConfigJson);
+
+    // Save PathImageCapture configuration
+    TSharedPtr<FJsonObject> PathImageCaptureConfigJson = MakeShareable(new FJsonObject);
+    {
+        TArray<TSharedPtr<FJsonValue>> OrbitLabelsJson;
+        for (const FString& Label : PathImageCaptureConfig.OrbitActorLabels)
+            OrbitLabelsJson.Add(MakeShareable(new FJsonValueString(Label)));
+        PathImageCaptureConfigJson->SetArrayField(TEXT("OrbitActorLabels"), OrbitLabelsJson);
+    }
+    RootObject->SetObjectField(TEXT("PathImageCaptureConfig"), PathImageCaptureConfigJson);
 
     // Add metadata
     TSharedPtr<FJsonObject> Metadata = MakeShareable(new FJsonObject);
@@ -211,6 +228,35 @@ bool FVCCSimConfigManager::LoadFromJsonFile()
         (*TexEnhancerConfigJson)->TryGetStringField(TEXT("SceneName"), TexEnhancerConfig.SceneName);
         (*TexEnhancerConfigJson)->TryGetStringField(TEXT("TexEnhancerScriptPath"), TexEnhancerConfig.TexEnhancerScriptPath);
         (*TexEnhancerConfigJson)->TryGetStringField(TEXT("EstimatedMaterialsDir"), TexEnhancerConfig.EstimatedMaterialsDir);
+
+        TexEnhancerConfig.GTActorLabels.Empty();
+        const TArray<TSharedPtr<FJsonValue>>* GTLabelsArr = nullptr;
+        if ((*TexEnhancerConfigJson)->TryGetArrayField(TEXT("GTActorLabels"), GTLabelsArr))
+        {
+            for (const TSharedPtr<FJsonValue>& Val : *GTLabelsArr)
+            {
+                FString Label;
+                if (Val->TryGetString(Label))
+                    TexEnhancerConfig.GTActorLabels.Add(Label);
+            }
+        }
+    }
+
+    // Load PathImageCapture configuration
+    const TSharedPtr<FJsonObject>* PathImageCaptureConfigJson = nullptr;
+    if (RootObject->TryGetObjectField(TEXT("PathImageCaptureConfig"), PathImageCaptureConfigJson))
+    {
+        PathImageCaptureConfig.OrbitActorLabels.Empty();
+        const TArray<TSharedPtr<FJsonValue>>* OrbitLabelsArr = nullptr;
+        if ((*PathImageCaptureConfigJson)->TryGetArrayField(TEXT("OrbitActorLabels"), OrbitLabelsArr))
+        {
+            for (const TSharedPtr<FJsonValue>& Val : *OrbitLabelsArr)
+            {
+                FString Label;
+                if (Val->TryGetString(Label))
+                    PathImageCaptureConfig.OrbitActorLabels.Add(Label);
+            }
+        }
     }
 
     UE_LOG(LogVCCSimConfigManager, Log, TEXT("Panel configuration loaded from: %s"), *ConfigPath);

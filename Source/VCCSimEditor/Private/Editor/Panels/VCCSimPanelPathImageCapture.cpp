@@ -20,13 +20,21 @@ DEFINE_LOG_CATEGORY_STATIC(LogPathImageCapture, Log, All);
 #include "Editor/Panels/VCCSimPanelPathImageCapture.h"
 #include "Editor/Panels/VCCSimPanelSelection.h"
 #include "Utils/VCCSimUIHelpers.h"
+#include "Utils/VCCSimConfigManager.h"
 #include "Pawns/FlashPawn.h"
+#include "Pawns/SimLookAtPath.h"
 #include "Sensors/RGBCamera.h"
 #include "Sensors/DepthCamera.h"
 #include "Sensors/SegmentationCamera.h"
 #include "Sensors/NormalCamera.h"
-#include "Simulation/PathPlanner.h"
-#include "Simulation/SceneAnalysisManager.h"
+#include "Engine/StaticMeshActor.h"
+#include "Components/PrimitiveComponent.h"
+#include "Selection.h"
+#include "Widgets/Layout/SBorder.h"
+#include "Widgets/Layout/SBox.h"
+#include "Widgets/Views/STableRow.h"
+#include "Styling/AppStyle.h"
+#include "Styling/CoreStyle.h"
 #include "Utils/ImageProcesser.h"
 #include "Utils/TrajectoryViewer.h"
 #include "DesktopPlatformModule.h"
@@ -34,17 +42,49 @@ DEFINE_LOG_CATEGORY_STATIC(LogPathImageCapture, Log, All);
 #include "HighResScreenshot.h"
 #include "LevelEditorViewport.h"
 
+static bool EnsureGameView()
+{
+    for (FLevelEditorViewportClient* Client : GEditor->GetLevelViewportClients())
+    {
+        if (Client && Client->IsPerspective())
+        {
+            if (!Client->IsInGameView())
+            {
+                Client->SetGameView(true);
+                return true;
+            }
+            return false;
+        }
+    }
+    return false;
+}
+
+static void RestoreGameView(bool bWasChangedByUs)
+{
+    if (!bWasChangedByUs) return;
+    for (FLevelEditorViewportClient* Client : GEditor->GetLevelViewportClients())
+    {
+        if (Client && Client->IsPerspective())
+        {
+            Client->SetGameView(false);
+            return;
+        }
+    }
+}
+
 // ============================================================================
 // CONSTRUCTOR & DESTRUCTOR
 // ============================================================================
 
 FVCCSimPanelPathImageCapture::FVCCSimPanelPathImageCapture()
 {
-    // Initialize default values
-    NumPosesValue = NumPoses;
-    RadiusValue = Radius;
-    HeightOffsetValue = HeightOffset;
-    VerticalGapValue = VerticalGap;
+    OrbitMarginValue      = OrbitMargin;
+    OrbitStartHeightValue = OrbitStartHeight;
+    OrbitCameraHFOVValue  = OrbitCameraHFOV;
+    OrbitHOverlapValue    = OrbitHOverlap;
+    OrbitVOverlapValue    = OrbitVOverlap;
+    OrbitNadirAltValue    = OrbitNadirAlt;
+    OrbitNadirCountValue  = OrbitNadirCount;
     JobNum = MakeShared<std::atomic<int32>>(0);
 }
 
@@ -59,8 +99,8 @@ FVCCSimPanelPathImageCapture::~FVCCSimPanelPathImageCapture()
 
 void FVCCSimPanelPathImageCapture::Initialize()
 {
-    // Initialize job counter
     JobNum = MakeShared<std::atomic<int32>>(0);
+    LoadOrbitActorList();
 }
 
 void FVCCSimPanelPathImageCapture::Cleanup()
@@ -142,58 +182,173 @@ TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreatePathImageCapturePanel()
 TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreatePathConfigSection()
 {
     return SNew(SVerticalBox)
-    
-    // Number of poses and Vertical Gap row
+
+    // Target actor list
+    +SVerticalBox::Slot()
+    .AutoHeight()
+    .Padding(FMargin(0, 0, 0, 2))
+    [
+        SNew(SHorizontalBox)
+        +SHorizontalBox::Slot().FillWidth(1.f)
+        [
+            SNew(SButton)
+            .ButtonStyle(FAppStyle::Get(), "FlatButton.Success")
+            .ContentPadding(FMargin(5, 2))
+            .Text(FText::FromString(TEXT("+ Add Selected Actors")))
+            .ToolTipText(FText::FromString(TEXT("Add selected viewport actors to the orbit target list")))
+            .OnClicked_Lambda([this]() { return OnAddOrbitActorsClicked(); })
+        ]
+        +SHorizontalBox::Slot().AutoWidth().Padding(FMargin(4, 0, 0, 0))
+        [
+            SNew(SButton)
+            .ButtonStyle(FAppStyle::Get(), "FlatButton.Danger")
+            .ContentPadding(FMargin(5, 2))
+            .Text(FText::FromString(TEXT("Clear All")))
+            .OnClicked_Lambda([this]() -> FReply
+            {
+                OrbitActorListItems.Empty();
+                if (OrbitActorListView.IsValid())
+                    OrbitActorListView->RequestListRefresh();
+                SaveOrbitActorList();
+                return FReply::Handled();
+            })
+        ]
+    ]
+
+    +SVerticalBox::Slot()
+    .AutoHeight()
+    .Padding(FMargin(0, 0, 0, 4))
+    [
+        SNew(SBox)
+        .HeightOverride(80.f)
+        [
+            SNew(SBorder)
+            .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
+            .BorderBackgroundColor(FColor(10, 10, 10, 255))
+            .Padding(2)
+            [
+                SAssignNew(OrbitActorListView, SListView<TSharedPtr<FString>>)
+                .ListItemsSource(&OrbitActorListItems)
+                .SelectionMode(ESelectionMode::None)
+                .OnGenerateRow_Lambda([this](TSharedPtr<FString> Item,
+                    const TSharedRef<STableViewBase>& Owner) -> TSharedRef<ITableRow>
+                {
+                    return SNew(STableRow<TSharedPtr<FString>>, Owner)
+                    [
+                        SNew(SHorizontalBox)
+                        +SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center).Padding(FMargin(2, 0))
+                        [
+                            SNew(STextBlock)
+                            .Text(FText::FromString(*Item))
+                            .ColorAndOpacity(FLinearColor(0.8f, 0.9f, 0.8f))
+                            .Font(FCoreStyle::GetDefaultFontStyle("Mono", 8))
+                        ]
+                        +SHorizontalBox::Slot().AutoWidth()
+                        [
+                            SNew(SButton)
+                            .ButtonStyle(FAppStyle::Get(), "FlatButton.Danger")
+                            .ContentPadding(FMargin(4, 1))
+                            .Text(FText::FromString(TEXT("×")))
+                            .OnClicked_Lambda([this, Item]() -> FReply
+                            {
+                                if (Item.IsValid())
+                                {
+                                    const FString S = *Item;
+                                    OrbitActorListItems.RemoveAll([&S](const TSharedPtr<FString>& P)
+                                    {
+                                        return P.IsValid() && *P == S;
+                                    });
+                                    if (OrbitActorListView.IsValid())
+                                        OrbitActorListView->RequestListRefresh();
+                                    SaveOrbitActorList();
+                                }
+                                return FReply::Handled();
+                            })
+                        ]
+                    ];
+                })
+            ]
+        ]
+    ]
+
+    +SVerticalBox::Slot()
+    .MaxHeight(1)
+    [
+        FVCCSimUIHelpers::CreateSeparator()
+    ]
+
+    // Orbit parameters
+    +SVerticalBox::Slot()
+    .AutoHeight()
+    .Padding(FMargin(0, 4, 0, 4))
+    [
+        FVCCSimUIHelpers::CreateNumericPropertyRowFloat(
+            TEXT("Margin (cm)"), OrbitMarginSpinBox, OrbitMarginValue, OrbitMargin, 50.f, 50.f)
+    ]
+
     +SVerticalBox::Slot()
     .AutoHeight()
     .Padding(FMargin(0, 0, 0, 4))
     [
         SNew(SHorizontalBox)
-        +SHorizontalBox::Slot()
-        .FillWidth(1.0f)
-        .Padding(FMargin(0, 0, 8, 0))
+        +SHorizontalBox::Slot().FillWidth(1.f).Padding(FMargin(0, 0, 4, 0))
         [
-            FVCCSimUIHelpers::CreateNumericPropertyRowInt32("Pose Count", NumPosesSpinBox, NumPosesValue, NumPoses, 1, 1)
+            FVCCSimUIHelpers::CreateNumericPropertyRowFloat(
+                TEXT("H-FOV (deg)"), OrbitCameraHFOVSpinBox, OrbitCameraHFOVValue, OrbitCameraHFOV, 5.f, 5.f)
         ]
-        +SHorizontalBox::Slot()
-        .FillWidth(1.0f)
+        +SHorizontalBox::Slot().FillWidth(1.f)
         [
-            FVCCSimUIHelpers::CreateNumericPropertyRowFloat("Vertical Gap", VerticalGapSpinBox, VerticalGapValue, VerticalGap, 0.0f, 5.0f)
+            FVCCSimUIHelpers::CreateNumericPropertyRowFloat(
+                TEXT("Start H (cm)"), OrbitStartHeightSpinBox, OrbitStartHeightValue, OrbitStartHeight, 0.f, 50.f)
         ]
     ]
-    
-    +SVerticalBox::Slot()
-    .MaxHeight(1)
-    .Padding(FMargin(0, 0, 0, 0))
-    [
-        FVCCSimUIHelpers::CreateSeparator()
-    ]
-    
-    // Radius and Height Offset row
+
     +SVerticalBox::Slot()
     .AutoHeight()
-    .Padding(FMargin(0, 4, 0, 4))
+    .Padding(FMargin(0, 0, 0, 4))
     [
         SNew(SHorizontalBox)
-        +SHorizontalBox::Slot()
-        .FillWidth(1.0f)
-        .Padding(FMargin(0, 0, 8, 0))
+        +SHorizontalBox::Slot().FillWidth(1.f).Padding(FMargin(0, 0, 4, 0))
         [
-            FVCCSimUIHelpers::CreateNumericPropertyRowFloat("Radius", RadiusSpinBox, RadiusValue, Radius, 100.0f, 10.0f)
+            FVCCSimUIHelpers::CreateNumericPropertyRowFloat(
+                TEXT("H-Overlap"), OrbitHOverlapSpinBox, OrbitHOverlapValue, OrbitHOverlap, 0.f, 0.05f)
         ]
-        +SHorizontalBox::Slot()
-        .FillWidth(1.0f)
+        +SHorizontalBox::Slot().FillWidth(1.f)
         [
-            FVCCSimUIHelpers::CreateNumericPropertyRowFloat("Height Offset", HeightOffsetSpinBox, HeightOffsetValue, HeightOffset, 0.0f, 10.0f)
+            FVCCSimUIHelpers::CreateNumericPropertyRowFloat(
+                TEXT("V-Overlap"), OrbitVOverlapSpinBox, OrbitVOverlapValue, OrbitVOverlap, 0.f, 0.05f)
         ]
     ]
-    
+
+    +SVerticalBox::Slot()
+    .AutoHeight()
+    .Padding(FMargin(0, 0, 0, 4))
+    [
+        SNew(SHorizontalBox)
+        +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(0, 0, 4, 0))
+        [
+            SNew(SCheckBox)
+            .IsChecked_Lambda([this]() { return bOrbitIncludeNadir ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+            .OnCheckStateChanged_Lambda([this](ECheckBoxState S) { bOrbitIncludeNadir = (S == ECheckBoxState::Checked); })
+        ]
+        +SHorizontalBox::Slot().FillWidth(1.f).Padding(FMargin(0, 0, 4, 0))
+        [
+            FVCCSimUIHelpers::CreateNumericPropertyRowInt32(
+                TEXT("Nadir Count"), OrbitNadirCountSpinBox, OrbitNadirCountValue, OrbitNadirCount, 1, 1)
+        ]
+        +SHorizontalBox::Slot().FillWidth(1.f)
+        [
+            FVCCSimUIHelpers::CreateNumericPropertyRowFloat(
+                TEXT("Nadir Alt (cm)"), OrbitNadirAltSpinBox, OrbitNadirAltValue, OrbitNadirAlt, 100.f, 100.f)
+        ]
+    ]
+
     +SVerticalBox::Slot()
     .MaxHeight(1)
     [
         FVCCSimUIHelpers::CreateSeparator()
     ]
-    
+
     // Load/Save Pose buttons
     +SVerticalBox::Slot()
     .AutoHeight()
@@ -201,13 +356,13 @@ TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreatePathConfigSection()
     [
         CreatePoseFileButtons()
     ]
-    
+
     +SVerticalBox::Slot()
     .MaxHeight(1)
     [
         FVCCSimUIHelpers::CreateSeparator()
     ]
-    
+
     // Action buttons
     +SVerticalBox::Slot()
     .AutoHeight()
@@ -260,54 +415,192 @@ FReply FVCCSimPanelPathImageCapture::OnGeneratePosesClicked()
     return FReply::Handled();
 }
 
-void FVCCSimPanelPathImageCapture::GeneratePosesAroundTarget()
+FReply FVCCSimPanelPathImageCapture::OnAddOrbitActorsClicked()
 {
-    TWeakObjectPtr<AFlashPawn> SelectedFlashPawn;
-    TWeakObjectPtr<AActor> SelectedTargetObject;
-    
-    if (SelectionManager.IsValid())
-    {
-        SelectedFlashPawn = SelectionManager.Pin()->GetSelectedFlashPawn();
-        SelectedTargetObject = SelectionManager.Pin()->GetSelectedTargetObject();
-    }
-    
-    if (!SelectedFlashPawn.IsValid() || !SelectedTargetObject.IsValid())
-    {
-        UE_LOG(LogPathImageCapture, Warning, TEXT("Must select both a FlashPawn and a target object"));
-        return;
-    }
+    USelection* Sel = GEditor ? GEditor->GetSelectedActors() : nullptr;
+    if (!Sel) return FReply::Handled();
 
-    TArray<FVector> Positions;
-    TArray<FRotator> Rotations;
-    TArray<FMeshInfo> MeshInfos;
-
-    TArray<UStaticMeshComponent*> MeshComponents;
-    SelectedTargetObject->GetComponents<UStaticMeshComponent>(MeshComponents);
-    for (UStaticMeshComponent* MeshComponent : MeshComponents)
+    bool bAdded = false;
+    for (int32 i = 0; i < Sel->Num(); ++i)
     {
-        if (MeshComponent)
+        AActor* Actor = Cast<AActor>(Sel->GetSelectedObject(i));
+        if (!Actor) continue;
+
+        const FString Label = Actor->GetActorLabel();
+        bool bDuplicate = OrbitActorListItems.ContainsByPredicate(
+            [&Label](const TSharedPtr<FString>& P) { return P.IsValid() && *P == Label; });
+
+        if (!bDuplicate)
         {
-            FMeshInfo MeshInfo;
-            ASceneAnalysisManager::ExtractMeshData(MeshComponent, MeshInfo);
-            MeshInfos.Add(MeshInfo);
+            OrbitActorListItems.Add(MakeShareable(new FString(Label)));
+            bAdded = true;
         }
     }
 
-    UPathPlanner::SemiSphericalPath(
-        MeshInfos, Radius, NumPoses,
-        VerticalGap, Positions, Rotations);
-    
-    // Set the path on the FlashPawn
-    SelectedFlashPawn->SetPathPanel(Positions, Rotations);
-    SelectedFlashPawn->MoveTo(0);
-    
-    // Update NumPoses to match actual number of generated poses
-    NumPoses = Positions.Num();
-    NumPosesValue = NumPoses;
-    
-    // Reset any ongoing auto-capture
+    if (bAdded && OrbitActorListView.IsValid())
+        OrbitActorListView->RequestListRefresh();
+    if (bAdded)
+        SaveOrbitActorList();
+
+    return FReply::Handled();
+}
+
+FBox FVCCSimPanelPathImageCapture::ComputeCombinedBounds() const
+{
+    UWorld* World = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
+    if (!World) return FBox(ForceInit);
+
+    TMap<FString, AActor*> LabelMap;
+    for (TActorIterator<AActor> It(World); It; ++It)
+    {
+        if (AActor* A = *It)
+            LabelMap.Add(A->GetActorLabel(), A);
+    }
+
+    FBox Combined(ForceInit);
+    for (const TSharedPtr<FString>& LabelPtr : OrbitActorListItems)
+    {
+        if (!LabelPtr.IsValid()) continue;
+        AActor** Found = LabelMap.Find(*LabelPtr);
+        if (!Found || !*Found) continue;
+
+        TArray<UPrimitiveComponent*> Prims;
+        (*Found)->GetComponents<UPrimitiveComponent>(Prims);
+        for (UPrimitiveComponent* Prim : Prims)
+        {
+            if (!Prim || !Prim->IsRegistered()) continue;
+            Combined += Prim->CalcBounds(Prim->GetComponentTransform()).GetBox();
+        }
+    }
+    return Combined;
+}
+
+void FVCCSimPanelPathImageCapture::GeneratePosesAroundTarget()
+{
+    if (!SelectionManager.IsValid() || !SelectionManager.Pin()->GetSelectedFlashPawn().IsValid())
+    {
+        UE_LOG(LogPathImageCapture, Warning, TEXT("No FlashPawn selected"));
+        return;
+    }
+
+    if (OrbitActorListItems.IsEmpty())
+    {
+        UE_LOG(LogPathImageCapture, Warning, TEXT("No target actors. Add actors to the orbit list first."));
+        return;
+    }
+
+    FBox CombinedBox = ComputeCombinedBounds();
+    if (!CombinedBox.IsValid)
+    {
+        UE_LOG(LogPathImageCapture, Warning, TEXT("Could not compute valid bounds from selected actors."));
+        return;
+    }
+
+    const FVector BoxCenter = CombinedBox.GetCenter();
+    const FVector BoxExtent = CombinedBox.GetExtent();
+    const float   HX        = BoxExtent.X;
+    const float   HY        = BoxExtent.Y;
+    const float   BoxMinZ   = CombinedBox.Min.Z + OrbitStartHeight;
+    const float   BoxMaxZ   = CombinedBox.Max.Z;
+
+    // Coverage-based ring/pose computation
+    const float HFovRad  = FMath::DegreesToRadians(FMath::Max(OrbitCameraHFOV, 5.f));
+    const FIntPoint CamRes = SelectionManager.Pin()->GetActiveCameraResolution();
+    const float AspectRatio = (CamRes.Y > 0) ? (float)CamRes.X / CamRes.Y : 16.f / 9.f;
+    const float VFovRad  = 2.f * FMath::Atan(FMath::Tan(HFovRad * 0.5f) / AspectRatio);
+
+    const float AvgDist = (HX + HY) * 0.5f + OrbitMargin;
+
+    const float FootprintH = 2.f * AvgDist * FMath::Tan(HFovRad * 0.5f);
+    const float FootprintV = 2.f * AvgDist * FMath::Tan(VFovRad * 0.5f);
+
+    const float StepH = FootprintH * FMath::Max(1.f - OrbitHOverlap, 0.05f);
+    const float StepV = FootprintV * FMath::Max(1.f - OrbitVOverlap, 0.05f);
+
+    const float Perimeter  = 4.f * (HX + HY + 2.f * OrbitMargin);
+    const int32 PosesPerRing = FMath::Max(4, FMath::CeilToInt(Perimeter / StepH));
+
+    const float BuildingH = FMath::Max(BoxMaxZ - BoxMinZ, 0.f);
+    const int32 NumRings  = FMath::Max(1, FMath::CeilToInt(BuildingH / StepV));
+
+    UE_LOG(LogPathImageCapture, Log,
+        TEXT("Orbit coverage: HFov=%.0f VFov=%.0f AvgDist=%.0f Footprint=%.0fx%.0f Step=%.0fx%.0f -> %d rings x %d poses"),
+        FMath::RadiansToDegrees(HFovRad), FMath::RadiansToDegrees(VFovRad),
+        AvgDist, FootprintH, FootprintV, StepH, StepV, NumRings, PosesPerRing);
+
+    TArray<FVector>  Positions;
+    TArray<FRotator> Rotations;
+
+    for (int32 Ring = 0; Ring < NumRings; ++Ring)
+    {
+        const float T = (NumRings > 1) ? (float)Ring / (NumRings - 1) : 0.5f;
+        const float Z = BoxMinZ + T * BuildingH;
+
+        for (int32 PoseIdx = 0; PoseIdx < PosesPerRing; ++PoseIdx)
+        {
+            const float AngleRad = FMath::DegreesToRadians(360.f * PoseIdx / PosesPerRing);
+            const float CosA = FMath::Cos(AngleRad);
+            const float SinA = FMath::Sin(AngleRad);
+
+            float DistToEdge;
+            if (FMath::Abs(CosA) < KINDA_SMALL_NUMBER)
+                DistToEdge = HY;
+            else if (FMath::Abs(SinA) < KINDA_SMALL_NUMBER)
+                DistToEdge = HX;
+            else
+                DistToEdge = FMath::Min(HX / FMath::Abs(CosA), HY / FMath::Abs(SinA));
+
+            const FVector CamPos(BoxCenter.X + (DistToEdge + OrbitMargin) * CosA,
+                                 BoxCenter.Y + (DistToEdge + OrbitMargin) * SinA, Z);
+            const FVector LookTarget(BoxCenter.X, BoxCenter.Y, CamPos.Z);
+            const FVector LookDir = (LookTarget - CamPos).GetSafeNormal();
+
+            Positions.Add(CamPos);
+            Rotations.Add(LookDir.ToOrientationRotator());
+        }
+    }
+
+    if (bOrbitIncludeNadir && OrbitNadirCount > 0)
+    {
+        const float NadirZ = BoxMaxZ + OrbitNadirAlt;
+        const float NadirR = FMath::Max(HX, HY) * 0.5f;
+        for (int32 i = 0; i < OrbitNadirCount; ++i)
+        {
+            const float AngleRad = FMath::DegreesToRadians(360.f * i / OrbitNadirCount);
+            const FVector CamPos(BoxCenter.X + NadirR * FMath::Cos(AngleRad),
+                                 BoxCenter.Y + NadirR * FMath::Sin(AngleRad), NadirZ);
+            Positions.Add(CamPos);
+            Rotations.Add(FRotator(-90.f, FMath::RadiansToDegrees(AngleRad), 0.f));
+        }
+    }
+
+    // Set path on FlashPawn
+    TWeakObjectPtr<AFlashPawn> FlashPawn = SelectionManager.Pin()->GetSelectedFlashPawn();
+    FlashPawn->SetPathPanel(Positions, Rotations);
+    FlashPawn->MoveTo(0);
+
+    // Set spline on selected LookAt actor if available
+    AVCCSimLookAtPath* LookAt = SelectionManager.Pin()->GetSelectedLookAtPath().Get();
+    if (LookAt && LookAt->Spline)
+    {
+        LookAt->Spline->ClearSplinePoints(false);
+        for (int32 i = 0; i < Positions.Num(); ++i)
+        {
+            LookAt->Spline->AddSplinePoint(Positions[i], ESplineCoordinateSpace::World, false);
+            LookAt->Spline->SetSplinePointType(i, ESplinePointType::Linear, false);
+        }
+        LookAt->Spline->UpdateSpline();
+        LookAt->FreeOrientations  = Rotations;
+        LookAt->OrientationMode   = EOrientationMode::FreeOrientation;
+        if (LookAt->TargetPoint)
+            LookAt->TargetPoint->SetWorldLocation(BoxCenter);
+    }
+
     bAutoCaptureInProgress = false;
     GEditor->GetTimerManager()->ClearTimer(AutoCaptureTimerHandle);
+
+    UE_LOG(LogPathImageCapture, Log, TEXT("Bounding-box orbit: %d poses (%d rings x %d + %d nadir)"),
+        Positions.Num(), NumRings, PosesPerRing, bOrbitIncludeNadir ? OrbitNadirCount : 0);
 }
 
 FReply FVCCSimPanelPathImageCapture::OnLoadPoseClicked()
@@ -401,10 +694,6 @@ void FVCCSimPanelPathImageCapture::LoadPredefinedPose()
                 {
                     // Set the path on the FlashPawn
                     SelectedFlashPawn->SetPathPanel(Positions, Rotations);
-                    
-                    // Update NumPoses
-                    NumPoses = Positions.Num();
-                    NumPosesValue = NumPoses;
                     
                     // Clean up any existing visualization
                     HidePathVisualization();
@@ -642,7 +931,9 @@ void FVCCSimPanelPathImageCapture::HidePathVisualization()
 
 FReply FVCCSimPanelPathImageCapture::OnCaptureImagesClicked()
 {
+    const bool bChanged = EnsureGameView();
     CaptureImageFromCurrentPose();
+    RestoreGameView(bChanged);
     return FReply::Handled();
 }
 
@@ -1018,7 +1309,7 @@ void FVCCSimPanelPathImageCapture::StartAutoCapture()
     SaveDirectory = FPaths::ProjectSavedDir() / TEXT("VCCSimCaptures") / GetTimestampedFilename();
     IFileManager::Get().MakeDirectory(*SaveDirectory, true);
     
-    // Start the capture process
+    bGameViewChangedForCapture = EnsureGameView();
     bAutoCaptureInProgress = true;
     *JobNum = 0;
 
@@ -1037,11 +1328,10 @@ void FVCCSimPanelPathImageCapture::StartAutoCapture()
             
             if (!bAutoCaptureInProgress || !SelectedFlashPawn.IsValid())
             {
-                // Stop the timer if auto-capture is cancelled or FlashPawn is invalid
                 GEditor->GetTimerManager()->ClearTimer(AutoCaptureTimerHandle);
                 bAutoCaptureInProgress = false;
-                
-                // Reset button style to original color
+                RestoreGameView(bGameViewChangedForCapture);
+                bGameViewChangedForCapture = false;
                 if (AutoCaptureButton.IsValid())
                 {
                     AutoCaptureButton->SetButtonStyle(&FAppStyle::Get().
@@ -1056,14 +1346,15 @@ void FVCCSimPanelPathImageCapture::StartAutoCapture()
                 CaptureImageFromCurrentPose();
                 SelectedFlashPawn->MoveToNext();
                 
-                // If we've finished capturing all poses, stop the auto-capture
-                if (SelectedFlashPawn->GetCurrentIndex() == NumPoses - 1)
+                TArray<FVector> PathPos; TArray<FRotator> PathRot;
+                SelectedFlashPawn->GetCurrentPath(PathPos, PathRot);
+                if (SelectedFlashPawn->GetCurrentIndex() == PathPos.Num() - 1)
                 {
-                    SaveDirectory.Empty(); // Reset for next capture session
+                    SaveDirectory.Empty();
                     bAutoCaptureInProgress = false;
                     GEditor->GetTimerManager()->ClearTimer(AutoCaptureTimerHandle);
-                    
-                    // Reset button style to original color
+                    RestoreGameView(bGameViewChangedForCapture);
+                    bGameViewChangedForCapture = false;
                     if (AutoCaptureButton.IsValid())
                     {
                         AutoCaptureButton->SetButtonStyle(&FAppStyle::Get().
@@ -1086,13 +1377,11 @@ void FVCCSimPanelPathImageCapture::StopAutoCapture()
     if (bAutoCaptureInProgress)
     {
         bAutoCaptureInProgress = false;
-        
         if (GEditor)
-        {
             GEditor->GetTimerManager()->ClearTimer(AutoCaptureTimerHandle);
-        }
-        
-        SaveDirectory.Empty(); // Reset for next capture session
+        RestoreGameView(bGameViewChangedForCapture);
+        bGameViewChangedForCapture = false;
+        SaveDirectory.Empty();
         UE_LOG(LogPathImageCapture, Log, TEXT("Auto-capture stopped by user"));
     }
 }
@@ -1154,8 +1443,8 @@ TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreatePoseActionButtons()
         .OnClicked_Lambda([this]() { return OnGeneratePosesClicked(); })
         .IsEnabled_Lambda([this]() {
             return SelectionManager.IsValid() &&
-                SelectionManager.Pin()->GetSelectedFlashPawn().IsValid() && 
-                   SelectionManager.Pin()->GetSelectedTargetObject().IsValid();
+                SelectionManager.Pin()->GetSelectedFlashPawn().IsValid() &&
+                !OrbitActorListItems.IsEmpty();
         })
     ]
     +SHorizontalBox::Slot()
@@ -1244,7 +1533,7 @@ TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreateCaptureButtons()
         SNew(SButton)
         .ButtonStyle(FAppStyle::Get(), "FlatButton.Success")
         .ContentPadding(FMargin(5, 2))
-        .Text(FText::FromString("Capture Current View"))
+        .Text(FText::FromString("Capture This Pose"))
         .HAlign(HAlign_Center)
         .OnClicked_Lambda([this]() { return OnCaptureImagesClicked(); })
         .IsEnabled_Lambda([this]() {
@@ -1270,8 +1559,8 @@ TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreateCaptureButtons()
         .ContentPadding(FMargin(5, 2))
         .Text_Lambda([this]() {
             return bAutoCaptureInProgress ? 
-                FText::FromString("Stop Capture") : 
-                FText::FromString("Auto-Capture All Poses");
+                FText::FromString("Stop Capture") :
+                FText::FromString("Capture All Poses");
         })
         .HAlign(HAlign_Center)
         .OnClicked_Lambda([this]() {
@@ -1306,4 +1595,26 @@ FString FVCCSimPanelPathImageCapture::GetTimestampedFilename()
     return FString::Printf(TEXT("%04d-%02d-%02d_%02d-%02d-%02d"),
         Now.GetYear(), Now.GetMonth(), Now.GetDay(),
         Now.GetHour(), Now.GetMinute(), Now.GetSecond());
+}
+
+void FVCCSimPanelPathImageCapture::SaveOrbitActorList()
+{
+    FVCCSimConfigManager::FPathImageCaptureConfig Config = FVCCSimConfigManager::Get().GetPathImageCaptureConfig();
+    Config.OrbitActorLabels.Empty();
+    for (const TSharedPtr<FString>& Label : OrbitActorListItems)
+    {
+        if (Label.IsValid())
+            Config.OrbitActorLabels.Add(*Label);
+    }
+    FVCCSimConfigManager::Get().SetPathImageCaptureConfig(Config);
+}
+
+void FVCCSimPanelPathImageCapture::LoadOrbitActorList()
+{
+    const auto& Config = FVCCSimConfigManager::Get().GetPathImageCaptureConfig();
+    OrbitActorListItems.Empty();
+    for (const FString& Label : Config.OrbitActorLabels)
+        OrbitActorListItems.Add(MakeShareable(new FString(Label)));
+    if (OrbitActorListView.IsValid())
+        OrbitActorListView->RequestListRefresh();
 }

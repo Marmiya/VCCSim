@@ -136,10 +136,11 @@ void SVCCSimPanel::Construct(const FArguments& InArgs)
     // Create the main widget layout
     CreateMainLayout();
 
-    // Auto-select FlashPawn if available in the scene (after UI is created)
+    // Auto-select FlashPawn and LookAtPath if available in the scene (after UI is created)
     if (SelectionManager.IsValid())
     {
         SelectionManager->AutoSelectFlashPawn();
+        SelectionManager->AutoSelectLookAtPath();
     }
 }
 

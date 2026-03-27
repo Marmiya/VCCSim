@@ -18,19 +18,24 @@
 #pragma once
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
-#include <atomic>
 
 #include "SimLookAtPath.generated.h"
 
 class USplineComponent;
 class UStaticMeshComponent;
-class AFlashPawn;
 
 UENUM(BlueprintType)
 enum class ELookAtSamplingMode : uint8
 {
 	ControlPoints	UMETA(DisplayName = "Control Points"),
 	EqualDivisions	UMETA(DisplayName = "Equal Divisions")
+};
+
+UENUM(BlueprintType)
+enum class EOrientationMode : uint8
+{
+	LookAtTarget    UMETA(DisplayName = "Look At Target"),
+	FreeOrientation UMETA(DisplayName = "Free Orientation")
 };
 
 UCLASS(HideCategories=("Default", "Replication", "Rendering", "Collision",
@@ -52,12 +57,6 @@ public:
 	UFUNCTION(BlueprintCallable, meta=(CallInEditor=true), Category="Path")
 	void SnapAllPointsToGround();
 
-	UFUNCTION(BlueprintCallable, meta=(CallInEditor=true), Category="Capture")
-	void StartCapture();
-
-	UFUNCTION(BlueprintCallable, meta=(CallInEditor=true), Category="Capture")
-	void StopCapture();
-
 	void GetSamplePoses(TArray<FVector>& OutPositions, TArray<FRotator>& OutRotations) const;
 	int32 GetNumSamplePoints() const;
 
@@ -65,38 +64,24 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category="Default")
 	TObjectPtr<USplineComponent> Spline;
 
-	// Point Q: select this component in Details panel and drag freely in the viewport
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category="Target")
 	TObjectPtr<UStaticMeshComponent> TargetPoint;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category="Mode")
 	ELookAtSamplingMode SamplingMode;
 
-	// Only active in Equal Divisions mode
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category="Mode",
 		meta=(EditCondition="SamplingMode==ELookAtSamplingMode::EqualDivisions",
 			  EditConditionHides, ClampMin="2", ClampMax="2000"))
 	int32 NumDivisions;
 
-	// FlashPawn that will be teleported through each pose and used for capture
-	UPROPERTY(BlueprintReadWrite, EditInstanceOnly, Category="Capture")
-	TObjectPtr<AFlashPawn> FlashPawnRef;
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category="Mode")
+	EOrientationMode OrientationMode;
 
-	// Base directory; a timestamped subfolder is created automatically per session
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category="Capture")
-	FString SaveDirectoryBase;
-
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category="Capture")
-	bool bCaptureRGB = true;
-
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category="Capture")
-	bool bCaptureDepth = true;
-
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category="Capture")
-	bool bCaptureSeg = false;
-
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category="Capture")
-	bool bCaptureNormal = false;
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category="Mode",
+		meta=(EditCondition="OrientationMode==EOrientationMode::FreeOrientation",
+			  EditConditionHides))
+	TArray<FRotator> FreeOrientations;
 
 	UPROPERTY(BlueprintReadWrite, VisibleAnywhere, Category="Read Only")
 	float PathLength;
@@ -106,17 +91,4 @@ public:
 
 	UPROPERTY(BlueprintReadWrite, EditInstanceOnly, Category="Hidden")
 	TArray<AActor*> ExcludedInTrace;
-
-private:
-	bool bCaptureInProgress = false;
-	FTimerHandle CaptureTimerHandle;
-	TSharedPtr<std::atomic<int32>> JobNum;
-	FString ActiveSaveDirectory;
-
-	void ProcessCaptureTick();
-	void CaptureCurrentPose();
-	void SaveRGB(int32 PoseIndex, bool& bAnyCaptured);
-	void SaveDepth(int32 PoseIndex, bool& bAnyCaptured);
-	void SaveSeg(int32 PoseIndex, bool& bAnyCaptured);
-	void SaveNormal(int32 PoseIndex, bool& bAnyCaptured);
 };

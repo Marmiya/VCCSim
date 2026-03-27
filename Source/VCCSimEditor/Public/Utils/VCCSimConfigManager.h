@@ -76,6 +76,13 @@ public:
         FString SceneName = TEXT("Scene_A");
         FString TexEnhancerScriptPath;
         FString EstimatedMaterialsDir;
+        TArray<FString> GTActorLabels;
+    };
+
+    // PathImageCapture configuration
+    struct FPathImageCaptureConfig
+    {
+        TArray<FString> OrbitActorLabels;
     };
 
     // Getters and setters for panel states
@@ -89,6 +96,10 @@ public:
     // Getters and setters for TexEnhancer config
     const FTexEnhancerConfig& GetTexEnhancerConfig() const { return TexEnhancerConfig; }
     void SetTexEnhancerConfig(const FTexEnhancerConfig& InConfig) { TexEnhancerConfig = InConfig; }
+
+    // Getters and setters for PathImageCapture config
+    const FPathImageCaptureConfig& GetPathImageCaptureConfig() const { return PathImageCaptureConfig; }
+    void SetPathImageCaptureConfig(const FPathImageCaptureConfig& InConfig) { PathImageCaptureConfig = InConfig; }
 
     // Individual state setters
     void SetFlashPawnSectionExpanded(bool bExpanded) { PanelStates.bFlashPawnSectionExpanded = bExpanded; }
@@ -118,6 +129,7 @@ private:
     FPanelStates PanelStates;
     FRatSplattingConfig RatSplattingConfig;
     FTexEnhancerConfig TexEnhancerConfig;
+    FPathImageCaptureConfig PathImageCaptureConfig;
 
     // ============================================================================
     // INTERNAL JSON OPERATIONS

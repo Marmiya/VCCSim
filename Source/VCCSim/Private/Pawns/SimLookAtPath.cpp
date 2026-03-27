@@ -16,18 +16,10 @@
 */
 
 #include "Pawns/SimLookAtPath.h"
-#include "Pawns/FlashPawn.h"
-#include "Sensors/RGBCamera.h"
-#include "Sensors/DepthCamera.h"
-#include "Sensors/SegmentationCamera.h"
-#include "Sensors/NormalCamera.h"
-#include "Utils/ImageProcesser.h"
 #include "Components/SplineComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Kismet/GameplayStatics.h"
-#include "HAL/FileManager.h"
-#include "Async/AsyncWork.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogSimLookAtPath, Log, All);
 
@@ -51,13 +43,11 @@ AVCCSimLookAtPath::AVCCSimLookAtPath()
 	TargetPoint->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	TargetPoint->SetRelativeLocation(FVector(0.f, 0.f, 300.f));
 
-	SamplingMode = ELookAtSamplingMode::ControlPoints;
-	NumDivisions = 50;
-	PathLength = 0.f;
+	SamplingMode    = ELookAtSamplingMode::ControlPoints;
+	OrientationMode = EOrientationMode::LookAtTarget;
+	NumDivisions    = 50;
+	PathLength      = 0.f;
 	NumSamplePoints = 0;
-	SaveDirectoryBase = FPaths::ProjectSavedDir() / TEXT("VCCSimLookAtCaptures");
-
-	JobNum = MakeShared<std::atomic<int32>>(0);
 }
 
 void AVCCSimLookAtPath::OnConstruction(const FTransform& Transform)
@@ -66,7 +56,7 @@ void AVCCSimLookAtPath::OnConstruction(const FTransform& Transform)
 
 	DiscoverTraceIgnores();
 
-	PathLength = Spline->GetSplineLength();
+	PathLength      = Spline->GetSplineLength();
 	NumSamplePoints = GetNumSamplePoints();
 }
 
@@ -124,8 +114,39 @@ void AVCCSimLookAtPath::GetSamplePoses(
 	OutPositions.Empty();
 	OutRotations.Empty();
 
-	if (!Spline || !TargetPoint) return;
+	if (!Spline) return;
 
+	if (OrientationMode == EOrientationMode::FreeOrientation)
+	{
+		const int32 NumPoints = Spline->GetNumberOfSplinePoints();
+		const bool bHasFreeRots = (FreeOrientations.Num() == NumPoints);
+		OutPositions.Reserve(NumPoints);
+		OutRotations.Reserve(NumPoints);
+
+		for (int32 i = 0; i < NumPoints; i++)
+		{
+			const FVector Position =
+				Spline->GetLocationAtSplinePoint(i, ESplineCoordinateSpace::World);
+			OutPositions.Add(Position);
+
+			if (bHasFreeRots)
+			{
+				OutRotations.Add(FreeOrientations[i]);
+			}
+			else if (TargetPoint)
+			{
+				const FVector Dir = (TargetPoint->GetComponentLocation() - Position).GetSafeNormal();
+				OutRotations.Add(Dir.Rotation());
+			}
+			else
+			{
+				OutRotations.Add(FRotator::ZeroRotator);
+			}
+		}
+		return;
+	}
+
+	if (!TargetPoint) return;
 	const FVector TargetLocation = TargetPoint->GetComponentLocation();
 
 	if (SamplingMode == ELookAtSamplingMode::ControlPoints)
@@ -138,9 +159,8 @@ void AVCCSimLookAtPath::GetSamplePoses(
 		{
 			const FVector Position =
 				Spline->GetLocationAtSplinePoint(i, ESplineCoordinateSpace::World);
-			const FVector Direction = (TargetLocation - Position).GetSafeNormal();
 			OutPositions.Add(Position);
-			OutRotations.Add(Direction.Rotation());
+			OutRotations.Add((TargetLocation - Position).GetSafeNormal().Rotation());
 		}
 	}
 	else
@@ -155,321 +175,18 @@ void AVCCSimLookAtPath::GetSamplePoses(
 				static_cast<float>(NumDivisions - 1);
 			const FVector Position =
 				Spline->GetLocationAtDistanceAlongSpline(Distance, ESplineCoordinateSpace::World);
-			const FVector Direction = (TargetLocation - Position).GetSafeNormal();
 			OutPositions.Add(Position);
-			OutRotations.Add(Direction.Rotation());
+			OutRotations.Add((TargetLocation - Position).GetSafeNormal().Rotation());
 		}
 	}
 }
 
 int32 AVCCSimLookAtPath::GetNumSamplePoints() const
 {
+	if (OrientationMode == EOrientationMode::FreeOrientation)
+		return Spline ? Spline->GetNumberOfSplinePoints() : 0;
+
 	if (SamplingMode == ELookAtSamplingMode::ControlPoints)
 		return Spline ? Spline->GetNumberOfSplinePoints() : 0;
 	return NumDivisions;
-}
-
-void AVCCSimLookAtPath::StartCapture()
-{
-	if (!FlashPawnRef)
-	{
-		UE_LOG(LogSimLookAtPath, Warning, TEXT("FlashPawnRef is not set"));
-		return;
-	}
-
-	TArray<FVector> Positions;
-	TArray<FRotator> Rotations;
-	GetSamplePoses(Positions, Rotations);
-
-	if (Positions.IsEmpty())
-	{
-		UE_LOG(LogSimLookAtPath, Warning, TEXT("No sample poses generated"));
-		return;
-	}
-
-	const FString Timestamp = FDateTime::Now().ToString(TEXT("%Y-%m-%d_%H-%M-%S"));
-	ActiveSaveDirectory = SaveDirectoryBase / Timestamp;
-	IFileManager::Get().MakeDirectory(*ActiveSaveDirectory, true);
-
-	if (bCaptureRGB)
-	{
-		TArray<URGBCameraComponent*> Cams;
-		FlashPawnRef->GetComponents(Cams);
-		for (URGBCameraComponent* Cam : Cams)
-		{
-			if (!Cam->GetRenderTarget())
-			{
-				FRGBCameraConfig Config;
-				Config.FOV = Cam->FOV;
-				Config.Width = Cam->Width;
-				Config.Height = Cam->Height;
-				Cam->Configure(Config);
-			}
-		}
-	}
-	if (bCaptureDepth)
-	{
-		TArray<UDepthCameraComponent*> Cams;
-		FlashPawnRef->GetComponents(Cams);
-		for (UDepthCameraComponent* Cam : Cams)
-		{
-			if (!Cam->GetRenderTarget())
-			{
-				FDepthCameraConfig Config;
-				Config.FOV = Cam->FOV;
-				Config.Width = Cam->Width;
-				Config.Height = Cam->Height;
-				Cam->Configure(Config);
-			}
-		}
-	}
-	if (bCaptureSeg)
-	{
-		TArray<USegCameraComponent*> Cams;
-		FlashPawnRef->GetComponents(Cams);
-		for (USegCameraComponent* Cam : Cams)
-		{
-			if (!Cam->GetRenderTarget())
-			{
-				FSegmentationCameraConfig Config;
-				Config.FOV = Cam->FOV;
-				Config.Width = Cam->Width;
-				Config.Height = Cam->Height;
-				Cam->Configure(Config);
-			}
-		}
-	}
-	if (bCaptureNormal)
-	{
-		TArray<UNormalCameraComponent*> Cams;
-		FlashPawnRef->GetComponents(Cams);
-		for (UNormalCameraComponent* Cam : Cams)
-		{
-			if (!Cam->GetRenderTarget())
-			{
-				FNormalCameraConfig Config;
-				Config.FOV = Cam->FOV;
-				Config.Width = Cam->Width;
-				Config.Height = Cam->Height;
-				Cam->Configure(Config);
-			}
-		}
-	}
-
-	FlashPawnRef->SetPathPanel(Positions, Rotations);
-	FlashPawnRef->MoveTo(0);
-
-	bCaptureInProgress = true;
-	*JobNum = 0;
-
-	GetWorldTimerManager().SetTimer(
-		CaptureTimerHandle,
-		this,
-		&AVCCSimLookAtPath::ProcessCaptureTick,
-		0.2f,
-		true
-	);
-
-	UE_LOG(LogSimLookAtPath, Log, TEXT("Capture started: %d poses → %s"),
-		Positions.Num(), *ActiveSaveDirectory);
-}
-
-void AVCCSimLookAtPath::StopCapture()
-{
-	bCaptureInProgress = false;
-	GetWorldTimerManager().ClearTimer(CaptureTimerHandle);
-	ActiveSaveDirectory.Empty();
-	UE_LOG(LogSimLookAtPath, Log, TEXT("Capture stopped"));
-}
-
-void AVCCSimLookAtPath::ProcessCaptureTick()
-{
-	if (!bCaptureInProgress || !FlashPawnRef)
-	{
-		StopCapture();
-		return;
-	}
-
-	if (FlashPawnRef->IsReady())
-	{
-		const int32 PoseIndex = FlashPawnRef->GetCurrentIndex();
-		CaptureCurrentPose();
-		FlashPawnRef->MoveToNext();
-
-		if (PoseIndex >= FlashPawnRef->GetPoseCount() - 1)
-		{
-			StopCapture();
-		}
-	}
-	else if (*JobNum == 0)
-	{
-		FlashPawnRef->MoveForward();
-	}
-}
-
-void AVCCSimLookAtPath::CaptureCurrentPose()
-{
-	if (!FlashPawnRef) return;
-
-	const int32 PoseIndex = FlashPawnRef->GetCurrentIndex();
-	bool bAnyCaptured = false;
-
-	if (bCaptureRGB)   SaveRGB(PoseIndex, bAnyCaptured);
-	if (bCaptureDepth) SaveDepth(PoseIndex, bAnyCaptured);
-	if (bCaptureSeg)   SaveSeg(PoseIndex, bAnyCaptured);
-	if (bCaptureNormal) SaveNormal(PoseIndex, bAnyCaptured);
-}
-
-void AVCCSimLookAtPath::SaveRGB(int32 PoseIndex, bool& bAnyCaptured)
-{
-	TArray<URGBCameraComponent*> Cameras;
-	FlashPawnRef->GetComponents<URGBCameraComponent>(Cameras);
-	*JobNum += Cameras.Num();
-
-	for (int32 i = 0; i < Cameras.Num(); ++i)
-	{
-		URGBCameraComponent* Camera = Cameras[i];
-		if (!Camera)
-		{
-			*JobNum -= 1;
-			continue;
-		}
-
-		if (!Camera->IsActive()) Camera->SetActive(true);
-
-		int32 CamIdx = Camera->GetSensorIndex();
-		if (CamIdx < 0) CamIdx = i;
-
-		FString Filename = ActiveSaveDirectory / FString::Printf(
-			TEXT("RGB_Cam%02d_Pose%03d.png"), CamIdx, PoseIndex);
-
-		const FIntPoint Size = {Camera->GetImageSize().first, Camera->GetImageSize().second};
-
-		Camera->AsyncGetRGBImageData(
-			[Filename, Size, JobNum = this->JobNum](const TArray<FColor>& ImageData)
-			{
-				(new FAutoDeleteAsyncTask<FAsyncImageSaveTask>(ImageData, Size, Filename))
-					->StartBackgroundTask();
-				*JobNum -= 1;
-			});
-
-		bAnyCaptured = true;
-	}
-}
-
-void AVCCSimLookAtPath::SaveDepth(int32 PoseIndex, bool& bAnyCaptured)
-{
-	TArray<UDepthCameraComponent*> Cameras;
-	FlashPawnRef->GetComponents<UDepthCameraComponent>(Cameras);
-	*JobNum += Cameras.Num();
-
-	for (int32 i = 0; i < Cameras.Num(); ++i)
-	{
-		UDepthCameraComponent* Camera = Cameras[i];
-		if (!Camera)
-		{
-			*JobNum -= 1;
-			continue;
-		}
-
-		if (!Camera->IsActive()) Camera->SetActive(true);
-
-		int32 CamIdx = Camera->GetSensorIndex();
-		if (CamIdx < 0) CamIdx = i;
-
-		FString Filename = ActiveSaveDirectory / FString::Printf(
-			TEXT("Depth16_Cam%02d_Pose%03d.png"), CamIdx, PoseIndex);
-
-		const FIntPoint Size = {Camera->GetImageSize().first, Camera->GetImageSize().second};
-
-		Camera->AsyncGetDepthImageData(
-			[Filename, Size, JobNum = this->JobNum](const TArray<FFloat16Color>& ImageData)
-			{
-				TArray<float> DepthValues;
-				DepthValues.SetNum(ImageData.Num());
-				for (int32 idx = 0; idx < ImageData.Num(); ++idx)
-				{
-					DepthValues[idx] = ImageData[idx].R;
-				}
-				(new FAutoDeleteAsyncTask<FAsyncDepthSaveTask>(DepthValues, Size, Filename))
-					->StartBackgroundTask();
-				*JobNum -= 1;
-			});
-
-		bAnyCaptured = true;
-	}
-}
-
-void AVCCSimLookAtPath::SaveSeg(int32 PoseIndex, bool& bAnyCaptured)
-{
-	TArray<USegCameraComponent*> Cameras;
-	FlashPawnRef->GetComponents<USegCameraComponent>(Cameras);
-	*JobNum += Cameras.Num();
-
-	for (int32 i = 0; i < Cameras.Num(); ++i)
-	{
-		USegCameraComponent* Camera = Cameras[i];
-		if (!Camera)
-		{
-			*JobNum -= 1;
-			continue;
-		}
-
-		if (!Camera->IsActive()) Camera->SetActive(true);
-
-		int32 CamIdx = Camera->GetSensorIndex();
-		if (CamIdx < 0) CamIdx = i;
-
-		FString Filename = ActiveSaveDirectory / FString::Printf(
-			TEXT("Seg_Cam%02d_Pose%03d.png"), CamIdx, PoseIndex);
-
-		const FIntPoint Size = {Camera->GetImageSize().first, Camera->GetImageSize().second};
-
-		Camera->AsyncGetSegmentationImageData(
-			[Filename, Size, JobNum = this->JobNum](const TArray<FColor>& ImageData)
-			{
-				(new FAutoDeleteAsyncTask<FAsyncImageSaveTask>(ImageData, Size, Filename))
-					->StartBackgroundTask();
-				*JobNum -= 1;
-			});
-
-		bAnyCaptured = true;
-	}
-}
-
-void AVCCSimLookAtPath::SaveNormal(int32 PoseIndex, bool& bAnyCaptured)
-{
-	TArray<UNormalCameraComponent*> Cameras;
-	FlashPawnRef->GetComponents<UNormalCameraComponent>(Cameras);
-	*JobNum += Cameras.Num();
-
-	for (int32 i = 0; i < Cameras.Num(); ++i)
-	{
-		UNormalCameraComponent* Camera = Cameras[i];
-		if (!Camera)
-		{
-			*JobNum -= 1;
-			continue;
-		}
-
-		if (!Camera->IsActive()) Camera->SetActive(true);
-
-		int32 CamIdx = Camera->GetSensorIndex();
-		if (CamIdx < 0) CamIdx = i;
-
-		FString Filename = ActiveSaveDirectory / FString::Printf(
-			TEXT("Normal_Cam%02d_Pose%03d.exr"), CamIdx, PoseIndex);
-
-		const FIntPoint Size = {Camera->GetImageSize().first, Camera->GetImageSize().second};
-
-		Camera->AsyncGetNormalImageData(
-			[Filename, Size, JobNum = this->JobNum](const TArray<FFloat16Color>& NormalData)
-			{
-				(new FAutoDeleteAsyncTask<FAsyncNormalEXRSaveTask>(NormalData, Size, Filename))
-					->StartBackgroundTask();
-				*JobNum -= 1;
-			});
-
-		bAnyCaptured = true;
-	}
 }

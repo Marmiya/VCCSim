@@ -21,7 +21,9 @@
 #include "Widgets/SCompoundWidget.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SNumericEntryBox.h"
+#include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Text/STextBlock.h"
+#include "Widgets/Views/SListView.h"
 #include "Engine/TimerHandle.h"
 #include <atomic>
 
@@ -59,11 +61,18 @@ private:
     // UI ELEMENTS
     // ============================================================================
     
-    // Path Configuration UI
-    TSharedPtr<SNumericEntryBox<int32>> NumPosesSpinBox;
-    TSharedPtr<SNumericEntryBox<float>> RadiusSpinBox;
-    TSharedPtr<SNumericEntryBox<float>> HeightOffsetSpinBox;
-    TSharedPtr<SNumericEntryBox<float>> VerticalGapSpinBox;
+    // Target actor list for bounding-box orbit
+    TSharedPtr<SListView<TSharedPtr<FString>>> OrbitActorListView;
+    TArray<TSharedPtr<FString>>               OrbitActorListItems;
+
+    // Orbit path parameter spinboxes
+    TSharedPtr<SNumericEntryBox<float>> OrbitMarginSpinBox;
+    TSharedPtr<SNumericEntryBox<float>> OrbitStartHeightSpinBox;
+    TSharedPtr<SNumericEntryBox<float>> OrbitCameraHFOVSpinBox;
+    TSharedPtr<SNumericEntryBox<float>> OrbitHOverlapSpinBox;
+    TSharedPtr<SNumericEntryBox<float>> OrbitVOverlapSpinBox;
+    TSharedPtr<SNumericEntryBox<float>> OrbitNadirAltSpinBox;
+    TSharedPtr<SNumericEntryBox<int32>> OrbitNadirCountSpinBox;
     
     // Path Visualization UI
     TSharedPtr<SButton> VisualizePathButton;
@@ -75,17 +84,24 @@ private:
     // STATE VARIABLES
     // ============================================================================
     
-    // Path configuration parameters
-    int32 NumPoses = 50;
-    float Radius = 500.0f;
-    float HeightOffset = 0.0f;
-    float VerticalGap = 50.0f;
-    
+    // Orbit path configuration parameters
+    float OrbitMargin       = 500.0f;
+    float OrbitStartHeight  = 200.0f;
+    float OrbitCameraHFOV   = 90.0f;
+    float OrbitHOverlap     = 0.80f;
+    float OrbitVOverlap     = 0.80f;
+    float OrbitNadirAlt     = 500.0f;
+    int32 OrbitNadirCount   = 4;
+    bool  bOrbitIncludeNadir = true;
+
     // TOptional attributes for SpinBox values
-    TOptional<int32> NumPosesValue;
-    TOptional<float> RadiusValue;
-    TOptional<float> HeightOffsetValue;
-    TOptional<float> VerticalGapValue;
+    TOptional<float> OrbitMarginValue;
+    TOptional<float> OrbitStartHeightValue;
+    TOptional<float> OrbitCameraHFOVValue;
+    TOptional<float> OrbitHOverlapValue;
+    TOptional<float> OrbitVOverlapValue;
+    TOptional<float> OrbitNadirAltValue;
+    TOptional<int32> OrbitNadirCountValue;
     
     // Path visualization state
     bool bPathVisualized = false;
@@ -94,6 +110,7 @@ private:
     
     // Auto-capture state
     bool bAutoCaptureInProgress = false;
+    bool bGameViewChangedForCapture = false;
     FTimerHandle AutoCaptureTimerHandle;
     TSharedPtr<std::atomic<int32>> JobNum;
     FString SaveDirectory;
@@ -107,7 +124,9 @@ private:
     // ============================================================================
     // PATH CONFIGURATION OPERATIONS
     // ============================================================================
-    
+
+    FReply OnAddOrbitActorsClicked();
+    FBox  ComputeCombinedBounds() const;
     FReply OnGeneratePosesClicked();
     void GeneratePosesAroundTarget();
     FReply OnLoadPoseClicked();
@@ -152,4 +171,6 @@ private:
     
     // Utility functions
     static FString GetTimestampedFilename();
+    void SaveOrbitActorList();
+    void LoadOrbitActorList();
 };

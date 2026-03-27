@@ -50,12 +50,6 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateTexEnhancerPanel()
         [ FVCCSimUIHelpers::CreateSeparator() ]
 
         +SVerticalBox::Slot().AutoHeight()
-        [ CreateCaptureSection() ]
-
-        +SVerticalBox::Slot().MaxHeight(1).Padding(FMargin(0, 4, 0, 4))
-        [ FVCCSimUIHelpers::CreateSeparator() ]
-
-        +SVerticalBox::Slot().AutoHeight()
         [ CreateGTExportSection() ]
 
         +SVerticalBox::Slot().MaxHeight(1).Padding(FMargin(0, 4, 0, 4))
@@ -68,7 +62,24 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateTexEnhancerPanel()
         [ FVCCSimUIHelpers::CreateSeparator() ]
 
         +SVerticalBox::Slot().AutoHeight()
-        [ CreateEvaluationSection() ],
+        [ CreateEvaluationSection() ]
+
+        +SVerticalBox::Slot().MaxHeight(1).Padding(FMargin(0, 4, 0, 4))
+        [ FVCCSimUIHelpers::CreateSeparator() ]
+
+        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(4, 2))
+        [
+            SNew(SBorder)
+            .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
+            .BorderBackgroundColor(FColor(5, 5, 5, 200))
+            .Padding(FMargin(6, 3))
+            [
+                SAssignNew(StatusTextBlock, STextBlock)
+                .Text(FText::FromString(TEXT("Ready.")))
+                .ColorAndOpacity(FLinearColor(0.7f, 0.7f, 0.7f))
+                .AutoWrapText(true)
+            ]
+        ],
 
         bSectionExpanded
     );
@@ -209,16 +220,6 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateLightingScheduleSection()
                         SNew(STextBlock)
                         .Text(FText::FromString(TEXT("Set-B  (Evaluation — Held-out)")))
                         .ColorAndOpacity(FLinearColor(1.f, 0.6f, 0.2f))
-                        .Font(FCoreStyle::GetDefaultFontStyle("Bold", 9))
-                    ]
-                    +SHorizontalBox::Slot().AutoWidth()
-                    [
-                        SNew(STextBlock)
-                        .Text_Lambda([this]()
-                        {
-                            return FText::FromString(bSetBLocked ? TEXT("🔒 LOCKED") : TEXT(""));
-                        })
-                        .ColorAndOpacity(FLinearColor(1.f, 0.3f, 0.3f))
                         .Font(FCoreStyle::GetDefaultFontStyle("Bold", 9))
                     ]
                 ]
@@ -601,181 +602,7 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateSetBLightingEntry(int32 Index
         .ContentPadding(FMargin(4, 2))
         .Text(FText::FromString(TEXT("Apply")))
         .ToolTipText(FText::FromString(TEXT("Apply this evaluation lighting — use only after Set-B is captured")))
-        .IsEnabled_Lambda([this]() { return bSetBLocked; })
         .OnClicked_Lambda([this, Index]() { return OnApplySetBLightingClicked(Index); })
-    ];
-}
-
-// ============================================================================
-// SECTION 3: CAPTURE PROTOCOL
-// ============================================================================
-
-TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateCaptureSection()
-{
-    return FVCCSimUIHelpers::CreateSectionContent(
-        SNew(SVerticalBox)
-
-        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
-        [
-            FVCCSimUIHelpers::CreateSectionHeader(TEXT("Capture Protocol"))
-        ]
-
-        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
-        [ CreateSemiSphericalParams() ]
-
-        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
-        [ CreateNadirGridParams() ]
-
-        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
-        [ CreateCameraIntrinsicsParams() ]
-
-        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
-        [
-            SNew(SButton)
-            .ButtonStyle(FAppStyle::Get(), "FlatButton.Primary")
-            .ContentPadding(FMargin(5, 2))
-            .Text(FText::FromString(TEXT("Check Coverage")))
-            .ToolTipText(FText::FromString(TEXT("Estimate pose count and coverage")))
-            .OnClicked_Lambda([this]() { return OnCheckCoverageClicked(); })
-        ]
-
-        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
-        [
-            SNew(SButton)
-            .ButtonStyle(FAppStyle::Get(), "FlatButton.Success")
-            .ContentPadding(FMargin(5, 2))
-            .Text(FText::FromString(TEXT("Capture Set-A")))
-            .ToolTipText(FText::FromString(TEXT("Capture estimation image set (requires FlashPawn)")))
-            .IsEnabled_Lambda([this]() { return !bCaptureInProgress && SelectionManager.IsValid(); })
-            .OnClicked_Lambda([this]() { return OnStartCaptureSetAClicked(); })
-        ]
-
-        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
-        [
-            SNew(SButton)
-            .ButtonStyle(FAppStyle::Get(), "FlatButton.Danger")
-            .ContentPadding(FMargin(5, 2))
-            .Text(FText::FromString(TEXT("Capture Set-B (Lock)")))
-            .ToolTipText(FText::FromString(TEXT("Capture evaluation image set — locks Set-B after completion")))
-            .IsEnabled_Lambda([this]() { return !bCaptureInProgress && !bSetBLocked && SelectionManager.IsValid(); })
-            .OnClicked_Lambda([this]() { return OnStartCaptureSetBClicked(); })
-        ]
-
-        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
-        [
-            SNew(SBorder)
-            .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
-            .BorderBackgroundColor(FColor(5, 5, 5, 200))
-            .Padding(FMargin(6, 3))
-            [
-                SAssignNew(StatusTextBlock, STextBlock)
-                .Text(FText::FromString(TEXT("Ready.")))
-                .ColorAndOpacity(FLinearColor(0.7f, 0.7f, 0.7f))
-                .AutoWrapText(true)
-            ]
-        ]
-    );
-}
-
-TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateSemiSphericalParams()
-{
-    return SNew(SVerticalBox)
-
-    +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 0, 0, 2))
-    [
-        SNew(STextBlock)
-        .Text(FText::FromString(TEXT("Semi-Spherical Trajectory")))
-        .ColorAndOpacity(FLinearColor(0.6f, 0.8f, 0.6f))
-        .Font(FCoreStyle::GetDefaultFontStyle("Regular", 8))
-    ]
-
-    +SVerticalBox::Slot().AutoHeight()
-    [
-        FVCCSimUIHelpers::CreateNumericPropertyRowFloat(
-            TEXT("Radius (cm)"), SphereRadiusSpinBox, SphereRadiusValue,
-            SphereRadius, 500.f, 100.f)
-    ]
-
-    +SVerticalBox::Slot().AutoHeight()
-    [
-        FVCCSimUIHelpers::CreateNumericPropertyRowInt32(
-            TEXT("Rings"), SphereRingsSpinBox, SphereRingsValue,
-            SphereRings, 1, 1)
-    ]
-
-    +SVerticalBox::Slot().AutoHeight()
-    [
-        FVCCSimUIHelpers::CreateNumericPropertyRowInt32(
-            TEXT("Poses / Ring"), PosesPerRingSpinBox, PosesPerRingValue,
-            PosesPerRing, 4, 2)
-    ];
-}
-
-TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateNadirGridParams()
-{
-    return SNew(SVerticalBox)
-
-    +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 0, 0, 2))
-    [
-        SNew(STextBlock)
-        .Text(FText::FromString(TEXT("Nadir Grid")))
-        .ColorAndOpacity(FLinearColor(0.6f, 0.8f, 0.6f))
-        .Font(FCoreStyle::GetDefaultFontStyle("Regular", 8))
-    ]
-
-    +SVerticalBox::Slot().AutoHeight()
-    [
-        FVCCSimUIHelpers::CreateNumericPropertyRowFloat(
-            TEXT("Altitude (cm)"), NadirAltitudeSpinBox, NadirAltitudeValue,
-            NadirAltitude, 1000.f, 500.f)
-    ]
-
-    +SVerticalBox::Slot().AutoHeight()
-    [
-        FVCCSimUIHelpers::CreateNumericPropertyRowFloat(
-            TEXT("Front Overlap"), FrontOverlapSpinBox, FrontOverlapValue,
-            FrontOverlap, 0.5f, 0.05f)
-    ]
-
-    +SVerticalBox::Slot().AutoHeight()
-    [
-        FVCCSimUIHelpers::CreateNumericPropertyRowFloat(
-            TEXT("Side Overlap"), SideOverlapSpinBox, SideOverlapValue,
-            SideOverlap, 0.5f, 0.05f)
-    ];
-}
-
-TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateCameraIntrinsicsParams()
-{
-    return SNew(SVerticalBox)
-
-    +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 0, 0, 2))
-    [
-        SNew(STextBlock)
-        .Text(FText::FromString(TEXT("Camera Intrinsics")))
-        .ColorAndOpacity(FLinearColor(0.6f, 0.8f, 0.6f))
-        .Font(FCoreStyle::GetDefaultFontStyle("Regular", 8))
-    ]
-
-    +SVerticalBox::Slot().AutoHeight()
-    [
-        FVCCSimUIHelpers::CreateNumericPropertyRowFloat(
-            TEXT("FOV (°)"), CaptureFOVSpinBox, CaptureFOVValue,
-            CaptureFOVDegrees, 10.f, 1.f)
-    ]
-
-    +SVerticalBox::Slot().AutoHeight()
-    [
-        FVCCSimUIHelpers::CreateNumericPropertyRowInt32(
-            TEXT("Width (px)"), CaptureWidthSpinBox, CaptureWidthValue,
-            CaptureWidth, 320, 16)
-    ]
-
-    +SVerticalBox::Slot().AutoHeight()
-    [
-        FVCCSimUIHelpers::CreateNumericPropertyRowInt32(
-            TEXT("Height (px)"), CaptureHeightSpinBox, CaptureHeightValue,
-            CaptureHeight, 240, 16)
     ];
 }
 
@@ -795,12 +622,31 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateGTExportSection()
 
         +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
         [
-            SNew(SButton)
-            .ButtonStyle(FAppStyle::Get(), "FlatButton.Success")
-            .ContentPadding(FMargin(5, 2))
-            .Text(FText::FromString(TEXT("+ Add Selected Actors")))
-            .ToolTipText(FText::FromString(TEXT("Add currently selected StaticMeshActors from the viewport")))
-            .OnClicked_Lambda([this]() { return OnAddSelectedActorsClicked(); })
+            SNew(SHorizontalBox)
+            +SHorizontalBox::Slot().FillWidth(1.f)
+            [
+                SNew(SButton)
+                .ButtonStyle(FAppStyle::Get(), "FlatButton.Success")
+                .ContentPadding(FMargin(5, 2))
+                .Text(FText::FromString(TEXT("+ Add Selected Actors")))
+                .ToolTipText(FText::FromString(TEXT("Add currently selected StaticMeshActors from the viewport")))
+                .OnClicked_Lambda([this]() { return OnAddSelectedActorsClicked(); })
+            ]
+            +SHorizontalBox::Slot().AutoWidth().Padding(FMargin(4, 0, 0, 0))
+            [
+                SNew(SButton)
+                .ButtonStyle(FAppStyle::Get(), "FlatButton.Danger")
+                .ContentPadding(FMargin(5, 2))
+                .Text(FText::FromString(TEXT("Clear All")))
+                .OnClicked_Lambda([this]() -> FReply
+                {
+                    GTActorListItems.Empty();
+                    if (GTActorListView.IsValid())
+                        GTActorListView->RequestListRefresh();
+                    SavePaths();
+                    return FReply::Handled();
+                })
+            ]
         ]
 
         +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 0, 0, 2))
@@ -846,6 +692,7 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateGTExportSection()
                                         });
                                         if (GTActorListView.IsValid())
                                             GTActorListView->RequestListRefresh();
+                                        SavePaths();
                                     }
                                     return FReply::Handled();
                                 })

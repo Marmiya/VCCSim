@@ -65,26 +65,6 @@ private:
     TOptional<float> SetBElevationValue[4];
     TOptional<float> SetBAzimuthValue[4];
 
-    TSharedPtr<SNumericEntryBox<float>> SphereRadiusSpinBox;
-    TSharedPtr<SNumericEntryBox<int32>> SphereRingsSpinBox;
-    TSharedPtr<SNumericEntryBox<int32>> PosesPerRingSpinBox;
-    TSharedPtr<SNumericEntryBox<float>> NadirAltitudeSpinBox;
-    TSharedPtr<SNumericEntryBox<float>> FrontOverlapSpinBox;
-    TSharedPtr<SNumericEntryBox<float>> SideOverlapSpinBox;
-    TOptional<float> SphereRadiusValue;
-    TOptional<int32> SphereRingsValue;
-    TOptional<int32> PosesPerRingValue;
-    TOptional<float> NadirAltitudeValue;
-    TOptional<float> FrontOverlapValue;
-    TOptional<float> SideOverlapValue;
-
-    TSharedPtr<SNumericEntryBox<float>> CaptureFOVSpinBox;
-    TSharedPtr<SNumericEntryBox<int32>> CaptureWidthSpinBox;
-    TSharedPtr<SNumericEntryBox<int32>> CaptureHeightSpinBox;
-    TOptional<float> CaptureFOVValue;
-    TOptional<int32> CaptureWidthValue;
-    TOptional<int32> CaptureHeightValue;
-
     TSharedPtr<SEditableTextBox> TexEnhancerScriptTextBox;
     TSharedPtr<SEditableTextBox> EstimatedMaterialsDirTextBox;
     TSharedPtr<STextBlock> LightingStatusTextBlock;
@@ -124,27 +104,14 @@ private:
     float SetBElevation[MaxLightingEntries] = { 25.f, 75.f, 0.f, 0.f };
     float SetBAzimuth[MaxLightingEntries]   = { 200.f, 60.f, 0.f, 0.f };
 
-    float SphereRadius  = 3000.f;
-    int32 SphereRings   = 3;
-    int32 PosesPerRing  = 18;
-    float NadirAltitude = 5000.f;
-    float FrontOverlap  = 0.80f;
-    float SideOverlap   = 0.70f;
-
-    float CaptureFOVDegrees = 90.f;
-    int32 CaptureWidth      = 1920;
-    int32 CaptureHeight     = 1080;
-
     FString OutputDirectory;
     FString SceneName = TEXT("Scene_A");
     FString TexEnhancerScriptPath;
     FString EstimatedMaterialsDir;
     FString StatusMessage;
 
-    bool bCaptureInProgress  = false;
     bool bPipelineInProgress = false;
     bool bEvalInProgress     = false;
-    bool bSetBLocked         = false;
 
     int32 GTTextureResolution = 1024;
 
@@ -176,9 +143,7 @@ private:
     TOptional<int32> SunCalcFillSlotValue;
 
     FTimerHandle StatusTimerHandle;
-    FTimerHandle CaptureTimerHandle;
     FProcHandle  PipelineProcHandle;
-    FString      CaptureImageDir;
 
     TWeakPtr<FVCCSimPanelSelection> SelectionManager;
 
@@ -205,20 +170,6 @@ private:
     FReply OnToggleDayCycleClicked();
     void   TickDayCycle();
     void ApplyLightingCondition(float ElevationDeg, float AzimuthDeg, bool bMarkDirty = true);
-
-    // ============================================================================
-    // SECTION 3: CAPTURE PROTOCOL
-    // ============================================================================
-
-    TSharedRef<SWidget> CreateCaptureSection();
-    TSharedRef<SWidget> CreateSemiSphericalParams();
-    TSharedRef<SWidget> CreateNadirGridParams();
-    TSharedRef<SWidget> CreateCameraIntrinsicsParams();
-    FReply OnCheckCoverageClicked();
-    FReply OnStartCaptureSetAClicked();
-    FReply OnStartCaptureSetBClicked();
-    void ExecuteCapturePipeline(bool bIsSetB);
-    void GenerateCameraInfoFromFlashPawn(const FString& ImageDir);
 
     // ============================================================================
     // SECTION 4: GT MATERIAL EXPORT
@@ -266,5 +217,4 @@ private:
 
     void SavePaths();
     void LoadPaths();
-    FString GetPathConfigFilePath() const;
 };

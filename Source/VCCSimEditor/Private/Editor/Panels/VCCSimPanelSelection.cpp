@@ -23,6 +23,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogSelection, Log, All);
 #include "Engine/Engine.h"
 #include "EngineUtils.h"
 #include "Pawns/FlashPawn.h"
+#include "Pawns/SimLookAtPath.h"
 #include "Sensors/RGBCamera.h"
 #include "Sensors/DepthCamera.h"
 #include "Sensors/SegmentationCamera.h"
@@ -58,8 +59,8 @@ void FVCCSimPanelSelection::Cleanup()
     // Clear UI references
     SelectedFlashPawnText.Reset();
     SelectFlashPawnToggle.Reset();
-    SelectedTargetObjectText.Reset();
-    SelectTargetToggle.Reset();
+    SelectedLookAtText.Reset();
+    SelectLookAtToggle.Reset();
 }
 
 TSharedRef<SWidget> FVCCSimPanelSelection::CreateSelectionPanel()
@@ -110,7 +111,7 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateSelectionPanel()
                 [
                     CreateCameraSelectPanel()
                 ]
-                
+
                 // Visual Separator
                 +SVerticalBox::Slot()
                 .AutoHeight()
@@ -118,12 +119,12 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateSelectionPanel()
                 [
                     FVCCSimUIHelpers::CreateSeparator()
                 ]
-                
-                // Target Object Selection
+
+                // LookAt Path Selection
                 +SVerticalBox::Slot()
                 .AutoHeight()
                 [
-                    CreateTargetSelectPanel()
+                    CreateLookAtSelectPanel()
                 ]
             ]
         ];
@@ -166,30 +167,29 @@ void FVCCSimPanelSelection::HandleActorSelection(AActor* Actor)
             UE_LOG(LogSelection, Log, TEXT("Selected FlashPawn: %s"), *FlashPawn->GetActorLabel());
         }
     }
-    // Handle Target selection
-    else if (bSelectingTarget)
+    // Handle LookAtPath selection
+    else if (bSelectingLookAtPath)
     {
-        // Skip if it's a FlashPawn (can't target itself)
-        if (!Actor->IsA<AFlashPawn>())
+        AVCCSimLookAtPath* LookAt = Cast<AVCCSimLookAtPath>(Actor);
+        if (LookAt)
         {
-            SelectedTargetObject = Actor;
-            if (SelectedTargetObjectText.IsValid())
+            SelectedLookAtPath = LookAt;
+            if (SelectedLookAtText.IsValid())
             {
-                SelectedTargetObjectText->SetText(FText::FromString(Actor->GetActorLabel()));
+                SelectedLookAtText->SetText(FText::FromString(LookAt->GetActorLabel()));
             }
-            
-            // Disable selection mode
-            bSelectingTarget = false;
-            if (SelectTargetToggle.IsValid())
+
+            bSelectingLookAtPath = false;
+            if (SelectLookAtToggle.IsValid())
             {
-                SelectTargetToggle->SetIsChecked(ECheckBoxState::Unchecked);
+                SelectLookAtToggle->SetIsChecked(ECheckBoxState::Unchecked);
             }
-            
-            UE_LOG(LogSelection, Log, TEXT("Selected Target Object: %s"), *Actor->GetActorLabel());
+
+            UE_LOG(LogSelection, Log, TEXT("Selected LookAtPath: %s"), *LookAt->GetActorLabel());
         }
         else
         {
-            UE_LOG(LogSelection, Warning, TEXT("Cannot select a FlashPawn as a target"));
+            UE_LOG(LogSelection, Warning, TEXT("Selected actor is not a VCCSimLookAtPath"));
         }
     }
 }
@@ -234,13 +234,44 @@ void FVCCSimPanelSelection::AutoSelectFlashPawn()
     }
     else
     {
-        // No FlashPawn found, ensure UI shows "None selected"
         if (SelectedFlashPawnText.IsValid())
         {
             SelectedFlashPawnText->SetText(FText::FromString("None selected"));
         }
         UE_LOG(LogSelection, Log, TEXT("No FlashPawn found in the scene for auto-selection"));
     }
+}
+
+void FVCCSimPanelSelection::AutoSelectLookAtPath()
+{
+    UWorld* World = GEditor->GetEditorWorldContext().World();
+    if (!World)
+    {
+        return;
+    }
+
+    SelectedLookAtPath = nullptr;
+
+    for (TActorIterator<AVCCSimLookAtPath> It(World); It; ++It)
+    {
+        AVCCSimLookAtPath* LookAt = *It;
+        if (LookAt && IsValid(LookAt))
+        {
+            SelectedLookAtPath = LookAt;
+            if (SelectedLookAtText.IsValid())
+            {
+                SelectedLookAtText->SetText(FText::FromString(LookAt->GetActorLabel()));
+            }
+            UE_LOG(LogSelection, Log, TEXT("Auto-selected LookAtPath: %s"), *LookAt->GetActorLabel());
+            return;
+        }
+    }
+
+    if (SelectedLookAtText.IsValid())
+    {
+        SelectedLookAtText->SetText(FText::FromString("None selected"));
+    }
+    UE_LOG(LogSelection, Log, TEXT("No VCCSimLookAtPath found in the scene for auto-selection"));
 }
 
 // ============================================================================
@@ -411,9 +442,18 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateCameraSelectPanel()
     ];
 }
 
-TSharedRef<SWidget> FVCCSimPanelSelection::CreateTargetSelectPanel()
+TSharedRef<SWidget> FVCCSimPanelSelection::CreateLookAtSelectPanel()
 {
     return SNew(SVerticalBox)
+    +SVerticalBox::Slot()
+    .AutoHeight()
+    .Padding(FMargin(0, 0, 0, 4))
+    [
+        SNew(STextBlock)
+        .Text(FText::FromString("LookAt Path:"))
+        .Font(FAppStyle::GetFontStyle("PropertyWindow.BoldFont"))
+        .ColorAndOpacity(FColor(233, 233, 233))
+    ]
     +SVerticalBox::Slot()
     .AutoHeight()
     .Padding(FMargin(0, 4, 0, 4))
@@ -436,7 +476,7 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateTargetSelectPanel()
             SNew(SBorder)
             .Padding(4)
             [
-                SAssignNew(SelectedTargetObjectText, STextBlock)
+                SAssignNew(SelectedLookAtText, STextBlock)
                 .Text(FText::FromString("None selected"))
                 .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
                 .ColorAndOpacity(FColor(233, 233, 233))
@@ -447,9 +487,9 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateTargetSelectPanel()
         .VAlign(VAlign_Center)
         .Padding(FMargin(8, 0, 4, 0))
         [
-            SAssignNew(SelectTargetToggle, SCheckBox)
-            .IsChecked(bSelectingTarget ? ECheckBoxState::Checked : ECheckBoxState::Unchecked)
-            .OnCheckStateChanged(this, &FVCCSimPanelSelection::OnSelectTargetToggleChanged)
+            SAssignNew(SelectLookAtToggle, SCheckBox)
+            .IsChecked(bSelectingLookAtPath ? ECheckBoxState::Checked : ECheckBoxState::Unchecked)
+            .OnCheckStateChanged(this, &FVCCSimPanelSelection::OnSelectLookAtToggleChanged)
         ]
         +SHorizontalBox::Slot()
         .AutoWidth()
@@ -565,24 +605,22 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateCameraStatusBox(
 void FVCCSimPanelSelection::OnSelectFlashPawnToggleChanged(ECheckBoxState NewState)
 {
     bSelectingFlashPawn = (NewState == ECheckBoxState::Checked);
-    
-    // If turning on FlashPawn selection, disable target selection
-    if (bSelectingFlashPawn && bSelectingTarget)
+
+    if (bSelectingFlashPawn && bSelectingLookAtPath)
     {
-        bSelectingTarget = false;
-        if (SelectTargetToggle.IsValid())
+        bSelectingLookAtPath = false;
+        if (SelectLookAtToggle.IsValid())
         {
-            SelectTargetToggle->SetIsChecked(ECheckBoxState::Unchecked);
+            SelectLookAtToggle->SetIsChecked(ECheckBoxState::Unchecked);
         }
     }
 }
 
-void FVCCSimPanelSelection::OnSelectTargetToggleChanged(ECheckBoxState NewState)
+void FVCCSimPanelSelection::OnSelectLookAtToggleChanged(ECheckBoxState NewState)
 {
-    bSelectingTarget = (NewState == ECheckBoxState::Checked);
-    
-    // If turning on Target selection, disable FlashPawn selection
-    if (bSelectingTarget && bSelectingFlashPawn)
+    bSelectingLookAtPath = (NewState == ECheckBoxState::Checked);
+
+    if (bSelectingLookAtPath && bSelectingFlashPawn)
     {
         bSelectingFlashPawn = false;
         if (SelectFlashPawnToggle.IsValid())
@@ -649,9 +687,9 @@ void FVCCSimPanelSelection::RefreshCameraAvailability()
 void FVCCSimPanelSelection::ClearSelections()
 {
     SelectedFlashPawn.Reset();
-    SelectedTargetObject.Reset();
+    SelectedLookAtPath.Reset();
     bSelectingFlashPawn = false;
-    bSelectingTarget = false;
+    bSelectingLookAtPath = false;
     
     // Reset camera states
     bHasRGBCamera = false;
