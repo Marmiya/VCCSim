@@ -500,7 +500,16 @@ void FVCCSimPanelPathImageCapture::GeneratePosesAroundTarget()
     const float   BoxMaxZ   = CombinedBox.Max.Z;
 
     const float HFovRad  = FMath::DegreesToRadians(FMath::Max(OrbitCameraHFOV, 5.f));
-    const FIntPoint CamRes = SelectionManager.Pin()->GetActiveCameraResolution();
+    TArray<URGBCameraComponent*> RGBCameras;
+    SelectionManager.Pin()->GetSelectedFlashPawn()->GetComponents<URGBCameraComponent>(RGBCameras);
+    if (RGBCameras.IsEmpty())
+    {
+        UE_LOG(LogPathImageCapture, Warning, 
+            TEXT("No RGBCamera found on the selected FlashPawn. "
+                 "Using default resolution (1920*1080) for FOV calculations."));
+    }
+    const FIntPoint CamRes = (RGBCameras.Num() > 0) ? 
+        RGBCameras[0]->FOV : FIntPoint(1920, 1080);
     const float AspectRatio = (CamRes.Y > 0) ? (float)CamRes.X / CamRes.Y : 16.f / 9.f;
     const float VFovRad  = 2.f * FMath::Atan(FMath::Tan(HFovRad * 0.5f) / AspectRatio);
 
@@ -1046,18 +1055,6 @@ void FVCCSimPanelPathImageCapture::CaptureImageFromCurrentPose()
         // Pose index for filename
         int32 PoseIndex = SelectedFlashPawn->GetCurrentIndex();
 
-        // ── WARMUP: Render non-RGB cameras twice at the first position ─────
-        if (PoseIndex == 0)
-        {
-            TArray<USceneCaptureComponent2D*> Captures;
-            SelectedFlashPawn->GetComponents<USceneCaptureComponent2D>(Captures);
-            for (auto* Comp : Captures)
-            {
-                if (Comp) Comp->CaptureScene();
-            }
-            UE_LOG(LogPathImageCapture, Log, TEXT("Performed warmup (pass 1) for Pose 0 sensors"));
-        }
-
         // Track if any cameras were captured
         bool bAnyCaptured = false;
         
@@ -1130,14 +1127,11 @@ void FVCCSimPanelPathImageCapture::SaveRGB(int32 PoseIndex, bool& bAnyCaptured)
             URGBCameraComponent* Camera = RGBCameras[i];
             if (Camera)
             {
-                if (!Camera->IsActive())
-                {
-                    Camera->SetActive(true);
-                }
                 int32 CameraIndex = Camera->GetSensorIndex();
                 if (CameraIndex < 0) CameraIndex = i;
 
-                FString Filename = SaveDirectory / FString::Printf(TEXT("RGB_Cam%02d_Pose%03d.png"), CameraIndex, PoseIndex);
+                FString Filename = SaveDirectory /
+                    FString::Printf(TEXT("RGB_Cam%02d_Pose%03d.png"), CameraIndex, PoseIndex);
                 FIntPoint Size = {Camera->GetImageSize().first, Camera->GetImageSize().second};
 
                 Camera->AsyncGetRGBImageData(
@@ -1185,11 +1179,6 @@ void FVCCSimPanelPathImageCapture::SaveRGB(int32 PoseIndex, bool& bAnyCaptured)
             
             if (Camera)
             {
-                if (!Camera->IsActive())
-                {
-                    Camera->SetActive(true);
-                    UE_LOG(LogPathImageCapture, Log, TEXT("SaveRGB: Activated camera[%d]"), i);
-                }
                 int32 CameraIndex = Camera->GetSensorIndex();
                 if (CameraIndex < 0) CameraIndex = i;
                 
@@ -1251,16 +1240,9 @@ void FVCCSimPanelPathImageCapture::SaveDepth(int32 PoseIndex, bool& bAnyCaptured
         
         if (Camera)
         {
-            // Ensure camera is active for capture
-            if (!Camera->IsActive())
-            {
-                Camera->SetActive(true);
-                UE_LOG(LogPathImageCapture, Log, TEXT("SaveDepth: Activated camera[%d]"), i);
-            }
-            // Get camera index or use iterator index
             int32 CameraIndex = Camera->GetSensorIndex();
             if (CameraIndex < 0) CameraIndex = i;
-            
+
             FString DepthFilename = SaveDirectory / FString::Printf(
                 TEXT("Depth16_Cam%02d_Pose%03d.png"), 
                 CameraIndex, 
@@ -1319,17 +1301,9 @@ void FVCCSimPanelPathImageCapture::SaveSeg(int32 PoseIndex, bool& bAnyCaptured)
         
         if (Camera)
         {
-            // Ensure camera is active for capture
-            if (!Camera->IsActive())
-            {
-                Camera->SetActive(true);
-                UE_LOG(LogPathImageCapture, Log, TEXT("SaveSeg: Activated camera[%d]"), i);
-            }
-            // Get camera index or use iterator index
             int32 CameraIndex = Camera->GetSensorIndex();
             if (CameraIndex < 0) CameraIndex = i;
-                    
-            // Filename for this camera
+
             FString Filename = SaveDirectory / FString::Printf(
                 TEXT("Seg_Cam%02d_Pose%03d.png"), 
                 CameraIndex, 
@@ -1376,17 +1350,9 @@ void FVCCSimPanelPathImageCapture::SaveNormal(int32 PoseIndex, bool& bAnyCapture
         
         if (Camera)
         {
-            // Ensure camera is active for capture
-            if (!Camera->IsActive())
-            {
-                Camera->SetActive(true);
-                UE_LOG(LogPathImageCapture, Log, TEXT("SaveNormal: Activated camera[%d]"), i);
-            }
-            // Get camera index or use iterator index
             int32 CameraIndex = Camera->GetSensorIndex();
             if (CameraIndex < 0) CameraIndex = i;
-            
-            // Generate filename for EXR format
+
             FString NormalEXRFilename = SaveDirectory / FString::Printf(
                 TEXT("Normal_Cam%02d_Pose%03d.exr"), 
                 CameraIndex, 
@@ -1435,9 +1401,6 @@ void FVCCSimPanelPathImageCapture::SaveBaseColor(int32 PoseIndex, bool& bAnyCapt
         UBaseColorCameraComponent* Camera = Cameras[i];
         if (Camera)
         {
-            if (!Camera->IsActive())
-                Camera->SetActive(true);
-
             int32 CameraIndex = Camera->GetSensorIndex();
             if (CameraIndex < 0) CameraIndex = i;
 
@@ -1482,9 +1445,6 @@ void FVCCSimPanelPathImageCapture::SaveMaterialProperties(int32 PoseIndex, bool&
         UMaterialPropertiesCameraComponent* Camera = Cameras[i];
         if (Camera)
         {
-            if (!Camera->IsActive())
-                Camera->SetActive(true);
-
             int32 CameraIndex = Camera->GetSensorIndex();
             if (CameraIndex < 0) CameraIndex = i;
 

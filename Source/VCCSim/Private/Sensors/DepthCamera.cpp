@@ -67,17 +67,14 @@ void UDepthCameraComponent::InitializeRenderTargets()
 
 void UDepthCameraComponent::CaptureDepthScene()
 {
-    if (!RenderTarget)
+    if (!CheckComponentAndRenderTarget())
     {
+        UE_LOG(LogDepthCamera, Error, 
+            TEXT("Component or RenderTarget not valid! Try to initialize them."));
         InitializeRenderTargets();
         SetCaptureComponent();
     }
-
-    if (!CheckComponentAndRenderTarget())
-    {
-        UE_LOG(LogDepthCamera, Error, TEXT("Component or RenderTarget not valid!"));
-        return;
-    }
+    
     if (IsInGameThread())
     {
         CaptureComponent->CaptureSceneDeferred();
@@ -115,18 +112,13 @@ void UDepthCameraComponent::AsyncGetDepthImageData(
 {
     AsyncTask(ENamedThreads::GameThread,
         [this, Callback = MoveTemp(Callback)]() {
-        if (!RenderTarget)
-        {
-            InitializeRenderTargets();
-            SetCaptureComponent();
-        }
-
-        if (!CheckComponentAndRenderTarget())
-        {
-            UE_LOG(LogDepthCamera, Error, TEXT("Component or RenderTarget not valid!"));
-            Callback({});
-            return;
-        }
+            if (!CheckComponentAndRenderTarget())
+            {
+                UE_LOG(LogDepthCamera, Warning, 
+                    TEXT("Component or RenderTarget not valid! Try to initialize them."));
+                InitializeRenderTargets();
+                SetCaptureComponent();
+            }
         
         CaptureComponent->CaptureScene();
         ProcessDepthTextureParam(Callback);
@@ -135,16 +127,12 @@ void UDepthCameraComponent::AsyncGetDepthImageData(
 
 void UDepthCameraComponent::AsyncGetPointCloudData(TFunction<void()> Callback)
 {
-    if (!RenderTarget)
-    {
-        InitializeRenderTargets();
-        SetCaptureComponent();
-    }
-
     if (!CheckComponentAndRenderTarget())
     {
-        UE_LOG(LogDepthCamera, Error, TEXT("Component or RenderTarget not valid!"));
-        return;
+        UE_LOG(LogDepthCamera, Warning, 
+            TEXT("Component or RenderTarget not valid! Try to initialize them."));
+        InitializeRenderTargets();
+        SetCaptureComponent();
     }
 
     CaptureDepthScene();

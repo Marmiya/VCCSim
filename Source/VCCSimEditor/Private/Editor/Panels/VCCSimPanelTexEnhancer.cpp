@@ -637,8 +637,8 @@ static FString BG_BuildOBJContent(const TArray<FGTActorBuilt>& Built)
         for (int32 fi = 0; fi < A.FaceVerts.Num(); fi += 3)
             F_str += FString::Printf(TEXT("f %d/%d %d/%d %d/%d\n"),
                 A.FaceVerts[fi],   A.FaceUVs[fi],
-                A.FaceVerts[fi+1], A.FaceUVs[fi+1],
-                A.FaceVerts[fi+2], A.FaceUVs[fi+2]);
+                A.FaceVerts[fi+2], A.FaceUVs[fi+2],
+                A.FaceVerts[fi+1], A.FaceUVs[fi+1]);
     }
     return V + UV_str + F_str;
 }

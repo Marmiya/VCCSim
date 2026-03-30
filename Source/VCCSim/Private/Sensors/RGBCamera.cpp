@@ -50,7 +50,7 @@ void URGBCameraComponent::SetCaptureComponent() const
 {
     Super::SetCaptureComponent();
 
-    CaptureComponent->CaptureSource = SCS_FinalColorHDR;
+    CaptureComponent->CaptureSource = SCS_FinalColorLDR;
     CaptureComponent->bAlwaysPersistRenderingState = true;
     CaptureComponent->PrimaryComponentTick.bCanEverTick = true;
     CaptureComponent->bRenderInMainRenderer = true;
@@ -61,17 +61,24 @@ void URGBCameraComponent::SetCaptureComponent() const
     SF.SetLensFlares(false);
     SF.SetVignette(false);
     SF.SetGrain(false);
+    
+    SF.SetGlobalIllumination(true);
+    SF.SetLumenGlobalIllumination(true);
+    SF.SetReflectionEnvironment(true);
+    SF.SetLumenReflections(true);
+    CaptureComponent->bUseRayTracingIfEnabled = true;
 }
 
 void URGBCameraComponent::InitializeRenderTargets()
 {
     RenderTarget = NewObject<UTextureRenderTarget2D>(this);
 
-    RenderTarget->TargetGamma = GEngine->GetDisplayGamma();
-    RenderTarget->InitCustomFormat(Width, Height,
-        PF_B8G8R8A8, false);
-    RenderTarget->bForceLinearGamma = false;
+    RenderTarget->InitCustomFormat(Width, Height, PF_B8G8R8A8, false);
+    
+    RenderTarget->bForceLinearGamma = false; 
     RenderTarget->SRGB = true;
+    RenderTarget->TargetGamma = 0.0f;
+    
     RenderTarget->RenderTargetFormat = RTF_RGBA8;
     RenderTarget->bGPUSharedFlag = true;
     RenderTarget->bAutoGenerateMips = false;
@@ -80,19 +87,13 @@ void URGBCameraComponent::InitializeRenderTargets()
 }
 
 void URGBCameraComponent::CaptureRGBScene()
-{
-    
-    if (!RenderTarget)
-    {
-        InitializeRenderTargets();
-        SetCaptureComponent();
-    }
-
-    
+{    
     if (!CheckComponentAndRenderTarget())
     {
-        UE_LOG(LogCameraSensor, Error, TEXT("Component or RenderTarget not valid!"));
-        return;
+        UE_LOG(LogCameraSensor, Warning, 
+            TEXT("Component or RenderTarget not valid! Try to initialize them."));
+        InitializeRenderTargets();
+        SetCaptureComponent();
     }
 
     if (IsInGameThread())
@@ -111,16 +112,12 @@ void URGBCameraComponent::CaptureRGBScene()
 void URGBCameraComponent::AsyncGetRGBImageData(
     TFunction<void(const TArray<FColor>&)> Callback)
 {
-    if (!RenderTarget)
-    {
-        InitializeRenderTargets();
-        SetCaptureComponent();
-    }
-    
     if (!CheckComponentAndRenderTarget())
     {
-        UE_LOG(LogCameraSensor, Error, TEXT("Component or RenderTarget not valid!"));
-        return;
+        UE_LOG(LogCameraSensor, Warning, 
+            TEXT("Component or RenderTarget not valid! Try to initialize them."));
+        InitializeRenderTargets();
+        SetCaptureComponent();
     }
 
     CaptureRGBScene();

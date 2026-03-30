@@ -92,15 +92,12 @@ void USegCameraComponent::SetCaptureComponent() const
 
 void USegCameraComponent::CaptureSegmentationScene()
 {
-    if (!RenderTarget)
-    {
-        InitializeRenderTargets();
-        SetCaptureComponent();
-    }
-
     if (!CheckComponentAndRenderTarget())
     {
-        return;
+        UE_LOG(LogSegmentCamera, Warning, 
+            TEXT("Component or RenderTarget not valid! Try to initialize them."));
+        InitializeRenderTargets();
+        SetCaptureComponent();
     }
 
     if (IsInGameThread())
@@ -121,16 +118,12 @@ void USegCameraComponent::AsyncGetSegmentationImageData(
 {
     AsyncTask(ENamedThreads::GameThread, [this, Callback = MoveTemp(Callback)]()
     {
-        if (!RenderTarget)
-        {
-            InitializeRenderTargets();
-            SetCaptureComponent();
-        }
-
         if (!CheckComponentAndRenderTarget())
         {
-            Callback({});
-            return;
+            UE_LOG(LogSegmentCamera, Warning, 
+                TEXT("Component or RenderTarget not valid! Try to initialize them."));
+            InitializeRenderTargets();
+            SetCaptureComponent();
         }
 
         CaptureComponent->CaptureScene();

@@ -86,8 +86,10 @@ void UMaterialPropertiesCameraComponent::CaptureMaterialPropertiesScene()
 {
     if (!CheckComponentAndRenderTarget())
     {
-        UE_LOG(LogMaterialPropertiesCamera, Error, TEXT("Component or RenderTarget not valid!"));
-        return;
+        UE_LOG(LogMaterialPropertiesCamera, Warning, 
+            TEXT("Component or RenderTarget not valid! Try to initialize them."));
+        InitializeRenderTargets();
+        SetCaptureComponent();
     }
 
     if (IsInGameThread())
@@ -120,17 +122,12 @@ void UMaterialPropertiesCameraComponent::AsyncGetMaterialPropertiesImageData(
     AsyncTask(ENamedThreads::GameThread,
         [this, Callback = MoveTemp(Callback)]()
         {
-            if (!RenderTarget)
-            {
-                InitializeRenderTargets();
-                SetCaptureComponent();
-            }
-
             if (!CheckComponentAndRenderTarget())
             {
-                UE_LOG(LogMaterialPropertiesCamera, Error, TEXT("Component or RenderTarget not valid!"));
-                Callback({});
-                return;
+                UE_LOG(LogMaterialPropertiesCamera, Warning, 
+                    TEXT("Component or RenderTarget not valid! Try to initialize them."));
+                InitializeRenderTargets();
+                SetCaptureComponent();
             }
 
             CaptureComponent->CaptureScene();

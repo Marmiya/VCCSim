@@ -144,6 +144,7 @@ public:
 	virtual std::pair<int32, int32> GetImageSize() const { return {Width, Height}; }
 	virtual void Configure(const FSensorConfig& Config) override {};
 
+	void WarmupCapture();
 	void ComputeIntrinsics();
 	FMatrix44f GetCameraIntrinsics() const { return CameraIntrinsics; }
 	double GetLastCaptureTimestamp() const { return LastCaptureTimestamp; }
@@ -163,9 +164,9 @@ public:
 	int32 Height = CameraDefaults::Height;
 
 protected:
-	UPROPERTY()
+	UPROPERTY(Transient)
 	USceneCaptureComponent2D* CaptureComponent = nullptr;
-	UPROPERTY()
+	UPROPERTY(Transient)
 	UTextureRenderTarget2D* RenderTarget = nullptr;
 
 	FMatrix44f CameraIntrinsics;

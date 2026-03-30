@@ -72,8 +72,10 @@ void UBaseColorCameraComponent::CaptureBaseColorScene()
 {
     if (!CheckComponentAndRenderTarget())
     {
-        UE_LOG(LogBaseColorCamera, Error, TEXT("Component or RenderTarget not valid!"));
-        return;
+        UE_LOG(LogBaseColorCamera, Warning, 
+            TEXT("Component or RenderTarget not valid! Try to initialize them."));
+        InitializeRenderTargets();
+        SetCaptureComponent();
     }
 
     if (IsInGameThread())
@@ -106,17 +108,12 @@ void UBaseColorCameraComponent::AsyncGetBaseColorImageData(
     AsyncTask(ENamedThreads::GameThread,
         [this, Callback = MoveTemp(Callback)]()
         {
-            if (!RenderTarget)
-            {
-                InitializeRenderTargets();
-                SetCaptureComponent();
-            }
-
             if (!CheckComponentAndRenderTarget())
             {
-                UE_LOG(LogBaseColorCamera, Error, TEXT("Component or RenderTarget not valid!"));
-                Callback({});
-                return;
+                UE_LOG(LogBaseColorCamera, Warning, 
+                    TEXT("Component or RenderTarget not valid! Try to initialize them."));
+                InitializeRenderTargets();
+                SetCaptureComponent();
             }
 
             CaptureComponent->CaptureScene();

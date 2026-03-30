@@ -77,6 +77,16 @@ bool UCameraBaseComponent::CheckComponentAndRenderTarget() const
 	return CaptureComponent && RenderTarget;
 }
 
+void UCameraBaseComponent::WarmupCapture()
+{
+	InitializeRenderTargets();
+	SetCaptureComponent();
+	if (CaptureComponent)
+	{
+		CaptureComponent->CaptureScene();
+	}
+}
+
 void UCameraBaseComponent::ComputeIntrinsics()
 {
 	const float HalfFOVRad = FMath::DegreesToRadians(FOV / 2.0f);

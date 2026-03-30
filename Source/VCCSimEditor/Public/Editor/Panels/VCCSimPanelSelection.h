@@ -99,15 +99,17 @@ public:
     bool IsUsingBaseColorCamera() const { return bUseBaseColorCamera; }
     bool IsUsingMaterialPropertiesCamera() const { return bUseMaterialPropertiesCamera; }
     
-    /** Get camera parameters from active cameras */
-    float GetActiveCameraFOV() const;
-    FIntPoint GetActiveCameraResolution() const;
-    
     /** Check if any camera is both available and active */
     bool HasAnyActiveCamera() const;
 
     /** Check if RGB capture should use RGBCamera class instead of screenshot */
     bool ShouldUseRGBCameraClass() const { return bUseRGBCameraClass; }
+
+    /** Check if cameras have been warmed up */
+    bool IsWarmedUp() const { return bIsWarmedUp; }
+
+    /** Initialize and warmup all cameras on the selected FlashPawn */
+    void WarmupCameras();
 
 private:
     // ============================================================================
@@ -207,7 +209,10 @@ private:
     
     /** Flag to use RGBCamera class for capture instead of high-res screenshot */
     bool bUseRGBCameraClass = false;
-    
+
+    /** Flag indicating cameras have been initialized and warmed up */
+    bool bIsWarmedUp = false;
+
     /** UI section expansion state */
     bool bFlashPawnSectionExpanded = false;
 };

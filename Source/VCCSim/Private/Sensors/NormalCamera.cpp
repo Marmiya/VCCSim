@@ -67,17 +67,14 @@ void UNormalCameraComponent::InitializeRenderTargets()
 
 void UNormalCameraComponent::CaptureNormalScene()
 {
-    if (!RenderTarget)
+    if (!CheckComponentAndRenderTarget())
     {
+        UE_LOG(LogNormalCamera, Warning, 
+            TEXT("Component or RenderTarget not valid! Try to initialize them."));
         InitializeRenderTargets();
         SetCaptureComponent();
     }
-
-    if (!CheckComponentAndRenderTarget())
-    {
-        UE_LOG(LogNormalCamera, Error, TEXT("Component or RenderTarget not valid!"));
-        return;
-    }
+    
     if (IsInGameThread())
     {
         CaptureComponent->CaptureSceneDeferred();
@@ -115,18 +112,13 @@ void UNormalCameraComponent::AsyncGetNormalImageData(
 {
     AsyncTask(ENamedThreads::GameThread,
         [this, Callback = MoveTemp(Callback)]() {
-        if (!RenderTarget)
-        {
-            InitializeRenderTargets();
-            SetCaptureComponent();
-        }
-
-        if (!CheckComponentAndRenderTarget())
-        {
-            UE_LOG(LogNormalCamera, Error, TEXT("Component or RenderTarget not valid!"));
-            Callback({});
-            return;
-        }
+            if (!CheckComponentAndRenderTarget())
+            {
+                UE_LOG(LogNormalCamera, Warning, 
+                    TEXT("Component or RenderTarget not valid! Try to initialize them."));
+                InitializeRenderTargets();
+                SetCaptureComponent();
+            }
         
         CaptureComponent->CaptureScene();
         ProcessNormalTextureParam(Callback);

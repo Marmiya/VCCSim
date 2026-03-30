@@ -24,6 +24,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogSelection, Log, All);
 #include "EngineUtils.h"
 #include "Pawns/FlashPawn.h"
 #include "Pawns/SimLookAtPath.h"
+#include "Sensors/SensorBase.h"
 #include "Sensors/RGBCamera.h"
 #include "Sensors/DepthCamera.h"
 #include "Sensors/SegmentationCamera.h"
@@ -160,7 +161,8 @@ void FVCCSimPanelSelection::HandleActorSelection(AActor* Actor)
             
             // Update camera availability
             RefreshCameraAvailability();
-            
+            bIsWarmedUp = false;
+
             UE_LOG(LogSelection, Log, TEXT("Selected FlashPawn: %s"), *FlashPawn->GetActorLabel());
         }
     }
@@ -226,7 +228,8 @@ void FVCCSimPanelSelection::AutoSelectFlashPawn()
         
         // Update camera availability
         RefreshCameraAvailability();
-        
+        bIsWarmedUp = false;
+
         UE_LOG(LogSelection, Log, TEXT("Auto-selected FlashPawn: %s"), *FirstFoundFlashPawn->GetActorLabel());
     }
     else
@@ -362,82 +365,38 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateCameraSelectPanel()
         +SHorizontalBox::Slot()
         .AutoWidth()
         .VAlign(VAlign_Center)
-        .Padding(FMargin(0, 0, 8, 0))
-        [
-            SNew(STextBlock)
-            .Text(FText::FromString("FOV:"))
-            .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
-            .ColorAndOpacity(FColor(233, 233, 233))
-        ]
-        +SHorizontalBox::Slot()
-        .AutoWidth()
-        .VAlign(VAlign_Center)
-        .Padding(FMargin(0, 0, 16, 0))
-        [
-            SNew(STextBlock)
-            .Text_Lambda([this]()
-            {
-                if (SelectedFlashPawn.IsValid() && HasAnyActiveCamera())
-                {
-                    float FOV = GetActiveCameraFOV();
-                    return FText::FromString(FString::Printf(TEXT("%.1f°"), FOV));
-                }
-                return FText::FromString(TEXT("N/A"));
-            })
-            .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
-            .ColorAndOpacity(FColor(180, 180, 180))
-        ]
-        +SHorizontalBox::Slot()
-        .AutoWidth()
-        .VAlign(VAlign_Center)
-        .Padding(FMargin(0, 0, 8, 0))
-        [
-            SNew(STextBlock)
-            .Text(FText::FromString("Resolution:"))
-            .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
-            .ColorAndOpacity(FColor(233, 233, 233))
-        ]
-        +SHorizontalBox::Slot()
-        .AutoWidth()
-        .VAlign(VAlign_Center)
-        .Padding(FMargin(0, 0, 16, 0))
-        [
-            SNew(STextBlock)
-            .Text_Lambda([this]()
-            {
-                if (SelectedFlashPawn.IsValid() && HasAnyActiveCamera())
-                {
-                    FIntPoint Resolution = GetActiveCameraResolution();
-                    return FText::FromString(FString::Printf(TEXT("%dx%d"), Resolution.X, Resolution.Y));
-                }
-                return FText::FromString(TEXT("N/A"));
-            })
-            .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
-            .ColorAndOpacity(FColor(180, 180, 180))
-        ]
-        +SHorizontalBox::Slot()
-        .FillWidth(1.0f)
-        [
-            SNew(SSpacer)
-        ]
-        +SHorizontalBox::Slot()
-        .AutoWidth()
-        .VAlign(VAlign_Center)
         .Padding(FMargin(16, 0, 4, 0))
         [
             SNew(STextBlock)
-            .Text(FText::FromString("RGB from Camera Class:"))
+            .Text(FText::FromString("RGB Camera:"))
             .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
             .ColorAndOpacity(FColor(233, 233, 233))
         ]
         +SHorizontalBox::Slot()
         .AutoWidth()
         .VAlign(VAlign_Center)
+        .Padding(FMargin(0, 0, 12, 0))
         [
             SNew(SCheckBox)
             .IsChecked_Lambda([this]() { return bUseRGBCameraClass ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
             .OnCheckStateChanged(this, &FVCCSimPanelSelection::OnUseRGBCameraClassCheckboxChanged)
             .IsEnabled_Lambda([this]() { return bHasRGBCamera && bUseRGBCamera; })
+        ]
+        +SHorizontalBox::Slot()
+        .AutoWidth()
+        .VAlign(VAlign_Center)
+        [
+            SNew(SButton)
+            .Text_Lambda([this]()
+            {
+                return FText::FromString(bIsWarmedUp ? "Cams Ready" : "Warmup Cams");
+            })
+            .IsEnabled_Lambda([this]() { return SelectedFlashPawn.IsValid(); })
+            .OnClicked_Lambda([this]()
+            {
+                WarmupCameras();
+                return FReply::Handled();
+            })
         ]
     ];
 }
@@ -729,6 +688,28 @@ void FVCCSimPanelSelection::RefreshCameraAvailability()
     bHasMaterialPropertiesCamera = (MatPropsCameras.Num() > 0);
 }
 
+void FVCCSimPanelSelection::WarmupCameras()
+{
+    if (!SelectedFlashPawn.IsValid())
+    {
+        return;
+    }
+
+    TArray<UCameraBaseComponent*> AllCameras;
+    SelectedFlashPawn->GetComponents<UCameraBaseComponent>(AllCameras);
+
+    for (UCameraBaseComponent* Camera : AllCameras)
+    {
+        if (Camera)
+        {
+            Camera->WarmupCapture();
+        }
+    }
+
+    bIsWarmedUp = true;
+    UE_LOG(LogSelection, Log, TEXT("Warmed up %d camera(s) on FlashPawn"), AllCameras.Num());
+}
+
 void FVCCSimPanelSelection::ClearSelections()
 {
     SelectedFlashPawn.Reset();
@@ -759,134 +740,4 @@ bool FVCCSimPanelSelection::HasAnyActiveCamera() const
            (bHasNormalCamera && bUseNormalCamera) ||
            (bHasBaseColorCamera && bUseBaseColorCamera) ||
            (bHasMaterialPropertiesCamera && bUseMaterialPropertiesCamera);
-}
-
-float FVCCSimPanelSelection::GetActiveCameraFOV() const
-{
-    if (!SelectedFlashPawn.IsValid())
-    {
-        return 90.0f; // Default FOV
-    }
-    
-    // Priority order: RGB -> Depth -> Segmentation -> Normal
-    if (bHasRGBCamera && bUseRGBCamera)
-    {
-        TArray<URGBCameraComponent*> RGBCameras;
-        SelectedFlashPawn->GetComponents<URGBCameraComponent>(RGBCameras);
-        if (RGBCameras.Num() > 0 && RGBCameras[0])
-        {
-            return RGBCameras[0]->FOV;
-        }
-    }
-    
-    if (bHasDepthCamera && bUseDepthCamera)
-    {
-        TArray<UDepthCameraComponent*> DepthCameras;
-        SelectedFlashPawn->GetComponents<UDepthCameraComponent>(DepthCameras);
-        if (DepthCameras.Num() > 0 && DepthCameras[0])
-        {
-            return DepthCameras[0]->FOV;
-        }
-    }
-    
-    if (bHasSegmentationCamera && bUseSegmentationCamera)
-    {
-        TArray<USegCameraComponent*> SegmentationCameras;
-        SelectedFlashPawn->GetComponents<USegCameraComponent>(SegmentationCameras);
-        if (SegmentationCameras.Num() > 0 && SegmentationCameras[0])
-        {
-            return SegmentationCameras[0]->FOV;
-        }
-    }
-    
-    if (bHasNormalCamera && bUseNormalCamera)
-    {
-        TArray<UNormalCameraComponent*> NormalCameras;
-        SelectedFlashPawn->GetComponents<UNormalCameraComponent>(NormalCameras);
-        if (NormalCameras.Num() > 0 && NormalCameras[0])
-            return NormalCameras[0]->FOV;
-    }
-
-    if (bHasBaseColorCamera && bUseBaseColorCamera)
-    {
-        TArray<UBaseColorCameraComponent*> BaseColorCameras;
-        SelectedFlashPawn->GetComponents<UBaseColorCameraComponent>(BaseColorCameras);
-        if (BaseColorCameras.Num() > 0 && BaseColorCameras[0])
-            return BaseColorCameras[0]->FOV;
-    }
-
-    if (bHasMaterialPropertiesCamera && bUseMaterialPropertiesCamera)
-    {
-        TArray<UMaterialPropertiesCameraComponent*> MatPropsCameras;
-        SelectedFlashPawn->GetComponents<UMaterialPropertiesCameraComponent>(MatPropsCameras);
-        if (MatPropsCameras.Num() > 0 && MatPropsCameras[0])
-            return MatPropsCameras[0]->FOV;
-    }
-
-    return 90.0f;
-}
-
-FIntPoint FVCCSimPanelSelection::GetActiveCameraResolution() const
-{
-    if (!SelectedFlashPawn.IsValid())
-    {
-        return FIntPoint(1920, 1080); // Default resolution
-    }
-    
-    // Priority order: RGB -> Depth -> Segmentation -> Normal
-    if (bHasRGBCamera && bUseRGBCamera)
-    {
-        TArray<URGBCameraComponent*> RGBCameras;
-        SelectedFlashPawn->GetComponents<URGBCameraComponent>(RGBCameras);
-        if (RGBCameras.Num() > 0 && RGBCameras[0])
-        {
-            return FIntPoint(RGBCameras[0]->Width, RGBCameras[0]->Height);
-        }
-    }
-    
-    if (bHasDepthCamera && bUseDepthCamera)
-    {
-        TArray<UDepthCameraComponent*> DepthCameras;
-        SelectedFlashPawn->GetComponents<UDepthCameraComponent>(DepthCameras);
-        if (DepthCameras.Num() > 0 && DepthCameras[0])
-        {
-            return FIntPoint(DepthCameras[0]->Width, DepthCameras[0]->Height);
-        }
-    }
-    
-    if (bHasSegmentationCamera && bUseSegmentationCamera)
-    {
-        TArray<USegCameraComponent*> SegmentationCameras;
-        SelectedFlashPawn->GetComponents<USegCameraComponent>(SegmentationCameras);
-        if (SegmentationCameras.Num() > 0 && SegmentationCameras[0])
-        {
-            return FIntPoint(SegmentationCameras[0]->Width, SegmentationCameras[0]->Height);
-        }
-    }
-    
-    if (bHasNormalCamera && bUseNormalCamera)
-    {
-        TArray<UNormalCameraComponent*> NormalCameras;
-        SelectedFlashPawn->GetComponents<UNormalCameraComponent>(NormalCameras);
-        if (NormalCameras.Num() > 0 && NormalCameras[0])
-            return FIntPoint(NormalCameras[0]->Width, NormalCameras[0]->Height);
-    }
-
-    if (bHasBaseColorCamera && bUseBaseColorCamera)
-    {
-        TArray<UBaseColorCameraComponent*> BaseColorCameras;
-        SelectedFlashPawn->GetComponents<UBaseColorCameraComponent>(BaseColorCameras);
-        if (BaseColorCameras.Num() > 0 && BaseColorCameras[0])
-            return FIntPoint(BaseColorCameras[0]->Width, BaseColorCameras[0]->Height);
-    }
-
-    if (bHasMaterialPropertiesCamera && bUseMaterialPropertiesCamera)
-    {
-        TArray<UMaterialPropertiesCameraComponent*> MatPropsCameras;
-        SelectedFlashPawn->GetComponents<UMaterialPropertiesCameraComponent>(MatPropsCameras);
-        if (MatPropsCameras.Num() > 0 && MatPropsCameras[0])
-            return FIntPoint(MatPropsCameras[0]->Width, MatPropsCameras[0]->Height);
-    }
-
-    return FIntPoint(1920, 1080);
 }
