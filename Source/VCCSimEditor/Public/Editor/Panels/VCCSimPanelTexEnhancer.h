@@ -31,7 +31,7 @@ class AStaticMeshActor;
 class UStaticMesh;
 class UTexture2D;
 
-class VCCSIMEDITOR_API FVCCSimPanelTexEnhancer
+class VCCSIMEDITOR_API FVCCSimPanelTexEnhancer : public TSharedFromThis<FVCCSimPanelTexEnhancer>
 {
 public:
     FVCCSimPanelTexEnhancer();
@@ -68,7 +68,6 @@ private:
     TSharedPtr<SEditableTextBox> TexEnhancerScriptTextBox;
     TSharedPtr<SEditableTextBox> EstimatedMaterialsDirTextBox;
     TSharedPtr<STextBlock> LightingStatusTextBlock;
-    TSharedPtr<STextBlock> StatusTextBlock;
     TSharedPtr<STextBlock> EvalResultsTextBlock;
 
     TSharedPtr<SListView<TSharedPtr<FString>>> GTActorListView;
@@ -108,10 +107,10 @@ private:
     FString SceneName = TEXT("Scene_A");
     FString TexEnhancerScriptPath;
     FString EstimatedMaterialsDir;
-    FString StatusMessage;
 
-    bool bPipelineInProgress = false;
-    bool bEvalInProgress     = false;
+    bool bPipelineInProgress  = false;
+    bool bEvalInProgress      = false;
+    bool bGTExportInProgress  = false;
 
     int32 GTTextureResolution = 1024;
 
@@ -181,10 +180,8 @@ private:
     FReply OnExportGTMaterialsClicked();
     void ExportGTMaterialsFromScene();
     void ExportMergedGTMaterials(const FString& BaseDir);
-    bool WriteMergedOBJ(const TArray<AStaticMeshActor*>& Actors, const TArray<int32>& SlotCounts, const TArray<int32>& ActorTileOffsets, int32 AtlasCols, int32 AtlasRows, const FString& ObjPath);
-    TArray<FColor> ReadMaterialChannelPixels(UMaterialInterface* Mat, bool bRoughness, int32 TargetSize);
-    TArray<FColor> SampleTexture(UTexture2D* Tex, int32 Channel, int32 TargetSize);
-    bool WriteAtlasPNG(const TArray<TArray<FColor>>& Tiles, int32 TileSize, int32 Cols, int32 Rows, const FString& PngPath);
+    static bool WriteAtlasPNG(const TArray<TArray<FColor>>& Tiles, int32 TileSize, int32 Cols, int32 Rows, const FString& PngPath);
+    bool WriteMTLFile(const FString& MtlPath);
 
     // ============================================================================
     // SECTION 6: TEXENHANCER PIPELINE
@@ -209,7 +206,6 @@ private:
     // UTILITIES
     // ============================================================================
 
-    void UpdateStatus(const FString& Message);
     FString GetSetACaptureDir() const;
     FString GetSetBCaptureDir() const;
     FString GetGTMaterialsPath() const;

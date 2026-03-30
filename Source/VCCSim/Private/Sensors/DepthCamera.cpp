@@ -48,6 +48,7 @@ void UDepthCameraComponent::SetCaptureComponent() const
     Super::SetCaptureComponent();
     
     CaptureComponent->CaptureSource = SCS_SceneDepth;
+    CaptureComponent->bAlwaysPersistRenderingState = true;
     
     CaptureComponent->ShowFlags.DisableFeaturesForUnlit();
     CaptureComponent->ShowFlags.SetAntiAliasing(false);
@@ -60,11 +61,18 @@ void UDepthCameraComponent::InitializeRenderTargets()
     RenderTarget->InitCustomFormat(Width, Height,
         PF_FloatRGBA, true);
     RenderTarget->bAutoGenerateMips = false;
+    RenderTarget->RenderTargetFormat = RTF_RGBA16f;
     RenderTarget->UpdateResource();
 }
 
 void UDepthCameraComponent::CaptureDepthScene()
 {
+    if (!RenderTarget)
+    {
+        InitializeRenderTargets();
+        SetCaptureComponent();
+    }
+
     if (!CheckComponentAndRenderTarget())
     {
         UE_LOG(LogDepthCamera, Error, TEXT("Component or RenderTarget not valid!"));
@@ -107,6 +115,12 @@ void UDepthCameraComponent::AsyncGetDepthImageData(
 {
     AsyncTask(ENamedThreads::GameThread,
         [this, Callback = MoveTemp(Callback)]() {
+        if (!RenderTarget)
+        {
+            InitializeRenderTargets();
+            SetCaptureComponent();
+        }
+
         if (!CheckComponentAndRenderTarget())
         {
             UE_LOG(LogDepthCamera, Error, TEXT("Component or RenderTarget not valid!"));
@@ -121,6 +135,12 @@ void UDepthCameraComponent::AsyncGetDepthImageData(
 
 void UDepthCameraComponent::AsyncGetPointCloudData(TFunction<void()> Callback)
 {
+    if (!RenderTarget)
+    {
+        InitializeRenderTargets();
+        SetCaptureComponent();
+    }
+
     if (!CheckComponentAndRenderTarget())
     {
         UE_LOG(LogDepthCamera, Error, TEXT("Component or RenderTarget not valid!"));
@@ -156,7 +176,7 @@ TArray<FDCPoint> UDepthCameraComponent::GeneratePointCloud()
         for (int32 X = 0; X < Width; ++X)
         {
             const int32 Index = Y * Width + X;
-            const float Depth = DepthData[Index].R;
+            const float Depth = DepthData[Index].A;
 
             if (Depth > MinRange && Depth < MaxRange)
             {

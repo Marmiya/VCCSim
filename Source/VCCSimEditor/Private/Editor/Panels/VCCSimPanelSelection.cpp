@@ -420,6 +420,25 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateCameraSelectPanel()
         [
             SNew(SSpacer)
         ]
+        +SHorizontalBox::Slot()
+        .AutoWidth()
+        .VAlign(VAlign_Center)
+        .Padding(FMargin(16, 0, 4, 0))
+        [
+            SNew(STextBlock)
+            .Text(FText::FromString("RGB from Camera Class:"))
+            .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
+            .ColorAndOpacity(FColor(233, 233, 233))
+        ]
+        +SHorizontalBox::Slot()
+        .AutoWidth()
+        .VAlign(VAlign_Center)
+        [
+            SNew(SCheckBox)
+            .IsChecked_Lambda([this]() { return bUseRGBCameraClass ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+            .OnCheckStateChanged(this, &FVCCSimPanelSelection::OnUseRGBCameraClassCheckboxChanged)
+            .IsEnabled_Lambda([this]() { return bHasRGBCamera && bUseRGBCamera; })
+        ]
     ];
 }
 
@@ -665,6 +684,11 @@ void FVCCSimPanelSelection::OnMaterialPropertiesCameraCheckboxChanged(ECheckBoxS
     bUseMaterialPropertiesCamera = (NewState == ECheckBoxState::Checked);
 }
 
+void FVCCSimPanelSelection::OnUseRGBCameraClassCheckboxChanged(ECheckBoxState NewState)
+{
+    bUseRGBCameraClass = (NewState == ECheckBoxState::Checked);
+}
+
 // ============================================================================
 // SELECTION LOGIC
 // ============================================================================
@@ -724,6 +748,7 @@ void FVCCSimPanelSelection::ClearSelections()
     bUseNormalCamera = false;
     bUseBaseColorCamera = false;
     bUseMaterialPropertiesCamera = false;
+    bUseRGBCameraClass = false;
 }
 
 bool FVCCSimPanelSelection::HasAnyActiveCamera() const

@@ -156,9 +156,10 @@ void FAsyncNormalEXRSaveTask::DoWork()
 {
     // Use modern UE image API with FImage
     FImage Image;
-    Image.Init(Size.X, Size.Y, ERawImageFormat::RGBA32F);
+    // Assertion failed: Format == ERawImageFormat::RGBA16F if we use RGBA32F and then call AsRGBA16F
+    Image.Init(Size.X, Size.Y, ERawImageFormat::RGBA16F);
 
-    // Convert FLinearColor to FImage data
+    // Convert FFloat16Color to FImage data
     TArrayView64<FFloat16Color> ImageData = Image.AsRGBA16F();
 
     if (ImageData.Num() != NormalPixels.Num())

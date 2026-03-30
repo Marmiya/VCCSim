@@ -49,6 +49,7 @@ void UNormalCameraComponent::SetCaptureComponent() const
     Super::SetCaptureComponent();
     
     CaptureComponent->CaptureSource = SCS_Normal;
+    CaptureComponent->bAlwaysPersistRenderingState = true;
     
     CaptureComponent->ShowFlags.DisableFeaturesForUnlit();
     CaptureComponent->ShowFlags.SetAntiAliasing(false);
@@ -60,11 +61,18 @@ void UNormalCameraComponent::InitializeRenderTargets()
     RenderTarget = NewObject<UTextureRenderTarget2D>(this);
     RenderTarget->InitCustomFormat(Width, Height,
         PF_FloatRGBA, true);
+    RenderTarget->RenderTargetFormat = RTF_RGBA16f;
     RenderTarget->UpdateResource();
 }
 
 void UNormalCameraComponent::CaptureNormalScene()
 {
+    if (!RenderTarget)
+    {
+        InitializeRenderTargets();
+        SetCaptureComponent();
+    }
+
     if (!CheckComponentAndRenderTarget())
     {
         UE_LOG(LogNormalCamera, Error, TEXT("Component or RenderTarget not valid!"));
@@ -107,6 +115,12 @@ void UNormalCameraComponent::AsyncGetNormalImageData(
 {
     AsyncTask(ENamedThreads::GameThread,
         [this, Callback = MoveTemp(Callback)]() {
+        if (!RenderTarget)
+        {
+            InitializeRenderTargets();
+            SetCaptureComponent();
+        }
+
         if (!CheckComponentAndRenderTarget())
         {
             UE_LOG(LogNormalCamera, Error, TEXT("Component or RenderTarget not valid!"));

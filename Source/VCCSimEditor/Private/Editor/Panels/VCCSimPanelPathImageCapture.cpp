@@ -853,37 +853,37 @@ void FVCCSimPanelPathImageCapture::SaveGeneratedPose()
             TArray<FVector> Positions;
             TArray<FRotator> Rotations;
             SelectedFlashPawn->GetCurrentPath(Positions, Rotations);
-            
-            FString FileContent;
-            FileContent += TEXT("# UE coordinate system poses (left-handed, cm)\n");
-            FileContent += TEXT("# Coordinate axes: +X forward, +Y right, +Z up\n");
-            FileContent += TEXT("# Format: Timestamp X Y Z Qx Qy Qz Qw\n");
-            FileContent += TEXT("# Quaternion order: [x, y, z, w] (UE format, scalar last)\n");
-            FileContent += TEXT("# Timestamp: Sequential pseudo timestamps for pose ordering\n");
-
-            for (int32 i = 0; i < Positions.Num(); ++i)
-            {
-                const FVector& Pos = Positions[i];
-                const FRotator& Rot = Rotations[i];
-
-                // Convert rotator to quaternion
-                FQuat Quat = Rot.Quaternion();
-
-                double PseudoTimestamp = static_cast<double>(i);
-                FileContent += FString::Printf(
-                    TEXT("%.1f %.6f %.6f %.6f %.6f %.6f %.6f %.6f\n"),
-                    PseudoTimestamp,
-                    Pos.X, Pos.Y, Pos.Z,
-                    Quat.X, Quat.Y, Quat.Z, Quat.W
-                );
-            }
-            
-            // Save to file
-            if (!FFileHelper::SaveStringToFile(FileContent, *SelectedFile))
-            {
-                UE_LOG(LogPathImageCapture, Warning, TEXT("Failed to save file"));
-            }
+            WritePosesToFile(Positions, Rotations, SelectedFile);
         }
+    }
+}
+
+void FVCCSimPanelPathImageCapture::WritePosesToFile(
+    const TArray<FVector>& Positions,
+    const TArray<FRotator>& Rotations,
+    const FString& FilePath)
+{
+    FString FileContent;
+    FileContent += TEXT("# UE coordinate system poses (left-handed, cm)\n");
+    FileContent += TEXT("# Coordinate axes: +X forward, +Y right, +Z up\n");
+    FileContent += TEXT("# Format: Timestamp X Y Z Qx Qy Qz Qw\n");
+    FileContent += TEXT("# Quaternion order: [x, y, z, w] (UE format, scalar last)\n");
+    FileContent += TEXT("# Timestamp: Sequential pseudo timestamps for pose ordering\n");
+
+    for (int32 i = 0; i < Positions.Num(); ++i)
+    {
+        const FQuat Quat = Rotations[i].Quaternion();
+        FileContent += FString::Printf(
+            TEXT("%.1f %.6f %.6f %.6f %.6f %.6f %.6f %.6f\n"),
+            static_cast<double>(i),
+            Positions[i].X, Positions[i].Y, Positions[i].Z,
+            Quat.X, Quat.Y, Quat.Z, Quat.W
+        );
+    }
+
+    if (!FFileHelper::SaveStringToFile(FileContent, *FilePath))
+    {
+        UE_LOG(LogPathImageCapture, Warning, TEXT("Failed to save poses to %s"), *FilePath);
     }
 }
 
@@ -1045,35 +1045,40 @@ void FVCCSimPanelPathImageCapture::CaptureImageFromCurrentPose()
     {
         // Pose index for filename
         int32 PoseIndex = SelectedFlashPawn->GetCurrentIndex();
-        
+
+        // ── WARMUP: Render non-RGB cameras twice at the first position ─────
+        if (PoseIndex == 0)
+        {
+            TArray<USceneCaptureComponent2D*> Captures;
+            SelectedFlashPawn->GetComponents<USceneCaptureComponent2D>(Captures);
+            for (auto* Comp : Captures)
+            {
+                if (Comp) Comp->CaptureScene();
+            }
+            UE_LOG(LogPathImageCapture, Log, TEXT("Performed warmup (pass 1) for Pose 0 sensors"));
+        }
+
         // Track if any cameras were captured
         bool bAnyCaptured = false;
         
         auto SelectionManagerPin = SelectionManager.Pin();
         if (!SelectionManagerPin.IsValid()) return;
         
-        // Capture with RGB cameras if enabled
         if (SelectionManagerPin->IsUsingRGBCamera() && SelectionManagerPin->HasRGBCamera())
         {
-            UE_LOG(LogPathImageCapture, Log, TEXT("Capturing RGB camera - Using: %s, Has: %s"), 
-                SelectionManagerPin->IsUsingRGBCamera() ? TEXT("Yes") : TEXT("No"),
-                SelectionManagerPin->HasRGBCamera() ? TEXT("Yes") : TEXT("No"));
             SaveRGB(PoseIndex, bAnyCaptured);
         }
         
-        // Capture with Depth cameras if enabled
         if (SelectionManagerPin->IsUsingDepthCamera() && SelectionManagerPin->HasDepthCamera())
         {
             SaveDepth(PoseIndex, bAnyCaptured);
         }
         
-        // Capture with Normal cameras if enabled
         if (SelectionManagerPin->IsUsingNormalCamera() && SelectionManagerPin->HasNormalCamera())
         {
             SaveNormal(PoseIndex, bAnyCaptured);
         }
         
-        // Capture with Segmentation cameras if enabled
         if (SelectionManagerPin->IsUsingSegmentationCamera() &&
             SelectionManagerPin->HasSegmentationCamera())
         {
@@ -1108,88 +1113,117 @@ void FVCCSimPanelPathImageCapture::CaptureImageFromCurrentPose()
 
 void FVCCSimPanelPathImageCapture::SaveRGB(int32 PoseIndex, bool& bAnyCaptured)
 {
-    TWeakObjectPtr<AFlashPawn> SelectedFlashPawn;
-    if (SelectionManager.IsValid())
+    auto SelectionManagerPin = SelectionManager.Pin();
+    if (!SelectionManagerPin.IsValid()) return;
+
+    TWeakObjectPtr<AFlashPawn> SelectedFlashPawn = SelectionManagerPin->GetSelectedFlashPawn();
+    if (!SelectedFlashPawn.IsValid()) return;
+
+    if (SelectionManagerPin->ShouldUseRGBCameraClass())
     {
-        SelectedFlashPawn = SelectionManager.Pin()->GetSelectedFlashPawn();
-    }
-    
-    if (!SelectedFlashPawn.IsValid())
-    {
-        return;
-    }
-    
-    // Get the RGB cameras
-    TArray<URGBCameraComponent*> RGBCameras;
-    SelectedFlashPawn->GetComponents<URGBCameraComponent>(RGBCameras);
-    *JobNum += RGBCameras.Num();
-    
-    // Get the editor viewport
-    FEditorViewportClient* ViewportClient = nullptr;
-    for (FLevelEditorViewportClient* LevelVC : GEditor->GetLevelViewportClients())
-    {
-        if (LevelVC && LevelVC->Viewport && !LevelVC->IsOrtho())
+        TArray<URGBCameraComponent*> RGBCameras;
+        SelectedFlashPawn->GetComponents<URGBCameraComponent>(RGBCameras);
+        *JobNum += RGBCameras.Num();
+
+        for (int32 i = 0; i < RGBCameras.Num(); ++i)
         {
-            ViewportClient = LevelVC;
-            break;
-        }
-    }
-    
-    if (!ViewportClient)
-    {
-        UE_LOG(LogPathImageCapture, Error, TEXT("No valid editor viewport found"));
-        *JobNum -= RGBCameras.Num();
-        return;
-    }
-    
-    for (int32 i = 0; i < RGBCameras.Num(); ++i)
-    {
-        URGBCameraComponent* Camera = RGBCameras[i];
-        
-        if (Camera)
-        {
-            // Ensure camera is active for capture
-            if (!Camera->IsActive())
+            URGBCameraComponent* Camera = RGBCameras[i];
+            if (Camera)
             {
-                Camera->SetActive(true);
-                UE_LOG(LogPathImageCapture, Log, TEXT("SaveRGB: Activated camera[%d]"), i);
+                if (!Camera->IsActive())
+                {
+                    Camera->SetActive(true);
+                }
+                int32 CameraIndex = Camera->GetSensorIndex();
+                if (CameraIndex < 0) CameraIndex = i;
+
+                FString Filename = SaveDirectory / FString::Printf(TEXT("RGB_Cam%02d_Pose%03d.png"), CameraIndex, PoseIndex);
+                FIntPoint Size = {Camera->GetImageSize().first, Camera->GetImageSize().second};
+
+                Camera->AsyncGetRGBImageData(
+                    [Filename, Size, JobNum = this->JobNum](const TArray<FColor>& ImageData)
+                    {
+                        (new FAutoDeleteAsyncTask<FAsyncImageSaveTask>(ImageData, Size, Filename))
+                        ->StartBackgroundTask();
+                        *JobNum -= 1;
+                    });
+                bAnyCaptured = true;
             }
-            // Get camera index or use iterator index
-            int32 CameraIndex = Camera->GetSensorIndex();
-            if (CameraIndex < 0) CameraIndex = i;
-            
-            // Filename for this camera
-            FString Filename = SaveDirectory / FString::Printf(
-                TEXT("RGB_Cam%02d_Pose%03d.png"), 
-                CameraIndex, 
-                PoseIndex
-            );
-            
-            FIntPoint CameraSize = {Camera->GetImageSize().first,
-                Camera->GetImageSize().second};
-            FTransform CameraTransform = Camera->GetComponentTransform();
-            
-            ViewportClient->SetViewLocation(CameraTransform.GetLocation());
-            ViewportClient->SetViewRotation(CameraTransform.GetRotation().Rotator());
-            ViewportClient->ViewFOV = 67.38f;
-            ViewportClient->Invalidate();
-            ViewportClient->Viewport->Draw();
-            
-            // Setup high resolution screenshot
-            FHighResScreenshotConfig& HighResScreenshotConfig = GetHighResScreenshotConfig();
-            HighResScreenshotConfig.SetResolution(CameraSize.X, CameraSize.Y);
-            HighResScreenshotConfig.SetFilename(Filename);
-            HighResScreenshotConfig.bMaskEnabled = false;
-            HighResScreenshotConfig.bCaptureHDR = false;
-            
-            FScreenshotRequest::RequestScreenshot(Filename, false, false);
-            *JobNum -= 1;
-            
-            bAnyCaptured = true;
+            else
+            {
+                *JobNum -= 1;
+            }
         }
-        else
+    }
+    else
+    {
+        // Existing logic: Use high-res screenshot
+        TArray<URGBCameraComponent*> RGBCameras;
+        SelectedFlashPawn->GetComponents<URGBCameraComponent>(RGBCameras);
+        *JobNum += RGBCameras.Num();
+        
+        FEditorViewportClient* ViewportClient = nullptr;
+        for (FLevelEditorViewportClient* LevelVC : GEditor->GetLevelViewportClients())
         {
-            *JobNum -= 1;
+            if (LevelVC && LevelVC->Viewport && !LevelVC->IsOrtho())
+            {
+                ViewportClient = LevelVC;
+                break;
+            }
+        }
+        
+        if (!ViewportClient)
+        {
+            UE_LOG(LogPathImageCapture, Error, TEXT("No valid editor viewport found"));
+            *JobNum -= RGBCameras.Num();
+            return;
+        }
+        
+        for (int32 i = 0; i < RGBCameras.Num(); ++i)
+        {
+            URGBCameraComponent* Camera = RGBCameras[i];
+            
+            if (Camera)
+            {
+                if (!Camera->IsActive())
+                {
+                    Camera->SetActive(true);
+                    UE_LOG(LogPathImageCapture, Log, TEXT("SaveRGB: Activated camera[%d]"), i);
+                }
+                int32 CameraIndex = Camera->GetSensorIndex();
+                if (CameraIndex < 0) CameraIndex = i;
+                
+                FString Filename = SaveDirectory / FString::Printf(
+                    TEXT("RGB_Cam%02d_Pose%03d.png"), 
+                    CameraIndex, 
+                    PoseIndex
+                );
+                
+                FIntPoint CameraSize = {Camera->GetImageSize().first,
+                    Camera->GetImageSize().second};
+                FTransform CameraTransform = Camera->GetComponentTransform();
+                
+                ViewportClient->SetViewLocation(CameraTransform.GetLocation());
+                ViewportClient->SetViewRotation(CameraTransform.GetRotation().Rotator());
+                ViewportClient->ViewFOV = 67.38f;
+                ViewportClient->Invalidate();
+                ViewportClient->Viewport->Draw();
+                
+                FHighResScreenshotConfig& HighResScreenshotConfig = GetHighResScreenshotConfig();
+                HighResScreenshotConfig.SetResolution(CameraSize.X, CameraSize.Y);
+                HighResScreenshotConfig.SetFilename(Filename);
+                HighResScreenshotConfig.bMaskEnabled = false;
+                HighResScreenshotConfig.bCaptureHDR = false;
+                
+                FScreenshotRequest::RequestScreenshot(Filename, false, false);
+                *JobNum -= 1;
+                
+                bAnyCaptured = true;
+            }
+            else
+            {
+                *JobNum -= 1;
+            }
         }
     }
 }
@@ -1495,7 +1529,12 @@ void FVCCSimPanelPathImageCapture::StartAutoCapture()
     // Create a directory for saving images
     SaveDirectory = FPaths::ProjectSavedDir() / TEXT("VCCSimCaptures") / GetTimestampedFilename();
     IFileManager::Get().MakeDirectory(*SaveDirectory, true);
-    
+
+    TArray<FVector> Positions;
+    TArray<FRotator> Rotations;
+    SelectedFlashPawn->GetCurrentPath(Positions, Rotations);
+    WritePosesToFile(Positions, Rotations, SaveDirectory / TEXT("poses.txt"));
+
     bGameViewChangedForCapture = EnsureGameView();
     bAutoCaptureInProgress = true;
     *JobNum = 0;
@@ -1550,9 +1589,9 @@ void FVCCSimPanelPathImageCapture::StartAutoCapture()
                 }
             }
             else if (*JobNum == 0)
-            {
+                {
                 SelectedFlashPawn->MoveForward();
-            }
+                }
         },
         0.2f,
         true

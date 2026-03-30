@@ -65,21 +65,7 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateTexEnhancerPanel()
         [ CreateEvaluationSection() ]
 
         +SVerticalBox::Slot().MaxHeight(1).Padding(FMargin(0, 4, 0, 4))
-        [ FVCCSimUIHelpers::CreateSeparator() ]
-
-        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(4, 2))
-        [
-            SNew(SBorder)
-            .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
-            .BorderBackgroundColor(FColor(5, 5, 5, 200))
-            .Padding(FMargin(6, 3))
-            [
-                SAssignNew(StatusTextBlock, STextBlock)
-                .Text(FText::FromString(TEXT("Ready.")))
-                .ColorAndOpacity(FLinearColor(0.7f, 0.7f, 0.7f))
-                .AutoWrapText(true)
-            ]
-        ],
+        [ FVCCSimUIHelpers::CreateSeparator() ],
 
         bSectionExpanded
     );
@@ -715,14 +701,16 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateGTExportSection()
             SNew(SButton)
             .ButtonStyle(FAppStyle::Get(), "FlatButton.Primary")
             .ContentPadding(FMargin(5, 2))
-            .Text(FText::FromString(TEXT("Export GT Materials")))
+            .Text_Lambda([this]() {
+                return bGTExportInProgress ? FText::FromString(TEXT("GT export in progress...")) : FText::FromString(TEXT("Export GT Materials"));
+            })
             .ToolTipText_Lambda([this]()
             {
                 return FText::FromString(FString::Printf(
                     TEXT("Export mesh OBJ + PBR textures for %d actor(s) -> %s/gt_materials/"),
                     GTActorListItems.Num(), *OutputDirectory));
             })
-            .IsEnabled_Lambda([this]() { return !OutputDirectory.IsEmpty() && !GTActorListItems.IsEmpty(); })
+            .IsEnabled_Lambda([this]() { return !bGTExportInProgress && !OutputDirectory.IsEmpty() && !GTActorListItems.IsEmpty(); })
             .OnClicked_Lambda([this]() { return OnExportGTMaterialsClicked(); })
         ]
     );

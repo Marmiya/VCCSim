@@ -92,6 +92,12 @@ void USegCameraComponent::SetCaptureComponent() const
 
 void USegCameraComponent::CaptureSegmentationScene()
 {
+    if (!RenderTarget)
+    {
+        InitializeRenderTargets();
+        SetCaptureComponent();
+    }
+
     if (!CheckComponentAndRenderTarget())
     {
         return;
@@ -115,8 +121,15 @@ void USegCameraComponent::AsyncGetSegmentationImageData(
 {
     AsyncTask(ENamedThreads::GameThread, [this, Callback = MoveTemp(Callback)]()
     {
+        if (!RenderTarget)
+        {
+            InitializeRenderTargets();
+            SetCaptureComponent();
+        }
+
         if (!CheckComponentAndRenderTarget())
         {
+            Callback({});
             return;
         }
 

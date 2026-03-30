@@ -106,6 +106,9 @@ public:
     /** Check if any camera is both available and active */
     bool HasAnyActiveCamera() const;
 
+    /** Check if RGB capture should use RGBCamera class instead of screenshot */
+    bool ShouldUseRGBCameraClass() const { return bUseRGBCameraClass; }
+
 private:
     // ============================================================================
     // UI CREATION
@@ -149,6 +152,7 @@ private:
     void OnNormalCameraCheckboxChanged(ECheckBoxState NewState);
     void OnBaseColorCameraCheckboxChanged(ECheckBoxState NewState);
     void OnMaterialPropertiesCameraCheckboxChanged(ECheckBoxState NewState);
+    void OnUseRGBCameraClassCheckboxChanged(ECheckBoxState NewState);
     
     // ============================================================================
     // SELECTION LOGIC
@@ -200,6 +204,9 @@ private:
     bool bUseNormalCamera = false;
     bool bUseBaseColorCamera = false;
     bool bUseMaterialPropertiesCamera = false;
+    
+    /** Flag to use RGBCamera class for capture instead of high-res screenshot */
+    bool bUseRGBCameraClass = false;
     
     /** UI section expansion state */
     bool bFlashPawnSectionExpanded = false;

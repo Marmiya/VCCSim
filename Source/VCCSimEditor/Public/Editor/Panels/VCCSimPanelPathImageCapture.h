@@ -132,6 +132,7 @@ private:
     FReply OnSavePoseClicked();
     void LoadPredefinedPose();
     void SaveGeneratedPose();
+    void WritePosesToFile(const TArray<FVector>& Positions, const TArray<FRotator>& Rotations, const FString& FilePath);
     
     // ============================================================================
     // PATH VISUALIZATION OPERATIONS

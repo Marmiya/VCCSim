@@ -81,6 +81,14 @@ void URGBCameraComponent::InitializeRenderTargets()
 
 void URGBCameraComponent::CaptureRGBScene()
 {
+    
+    if (!RenderTarget)
+    {
+        InitializeRenderTargets();
+        SetCaptureComponent();
+    }
+
+    
     if (!CheckComponentAndRenderTarget())
     {
         UE_LOG(LogCameraSensor, Error, TEXT("Component or RenderTarget not valid!"));
@@ -103,6 +111,12 @@ void URGBCameraComponent::CaptureRGBScene()
 void URGBCameraComponent::AsyncGetRGBImageData(
     TFunction<void(const TArray<FColor>&)> Callback)
 {
+    if (!RenderTarget)
+    {
+        InitializeRenderTargets();
+        SetCaptureComponent();
+    }
+    
     if (!CheckComponentAndRenderTarget())
     {
         UE_LOG(LogCameraSensor, Error, TEXT("Component or RenderTarget not valid!"));

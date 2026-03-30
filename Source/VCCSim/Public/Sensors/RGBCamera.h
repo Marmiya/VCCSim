@@ -72,7 +72,6 @@ public:
     
 protected:
     virtual void InitializeRenderTargets() override;
-
     virtual void SetCaptureComponent() const override;
     void ProcessRGBTexture(TFunction<void()> OnComplete);
     void ProcessRGBTextureParam(TFunction<void(const TArray<FColor>&)> OnComplete);
