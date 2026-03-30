@@ -180,11 +180,11 @@ private:
     FReply OnRemoveFromGTListClicked();
     FReply OnExportGTMaterialsClicked();
     void ExportGTMaterialsFromScene();
-    void ExportSingleActorGT(AStaticMeshActor* Actor, const FString& BaseDir, TSharedPtr<FJsonObject> ActorJson);
-    bool ExportMeshAsOBJ(UStaticMesh* SM, const FString& ObjPath);
-    bool ExportTextureAsPNG(UTexture2D* Tex, const FString& PngPath, int32 Channel);
-    bool ExportSolidColorPNG(float Value, int32 Resolution, const FString& PngPath);
-    bool ExportMaterialSlotTextures(UMaterialInterface* Mat, int32 SlotIdx, const FString& ActorDir, TSharedPtr<FJsonObject> SlotJson);
+    void ExportMergedGTMaterials(const FString& BaseDir);
+    bool WriteMergedOBJ(const TArray<AStaticMeshActor*>& Actors, const TArray<int32>& SlotCounts, const TArray<int32>& ActorTileOffsets, int32 AtlasCols, int32 AtlasRows, const FString& ObjPath);
+    TArray<FColor> ReadMaterialChannelPixels(UMaterialInterface* Mat, bool bRoughness, int32 TargetSize);
+    TArray<FColor> SampleTexture(UTexture2D* Tex, int32 Channel, int32 TargetSize);
+    bool WriteAtlasPNG(const TArray<TArray<FColor>>& Tiles, int32 TileSize, int32 Cols, int32 Rows, const FString& PngPath);
 
     // ============================================================================
     // SECTION 6: TEXENHANCER PIPELINE

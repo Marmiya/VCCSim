@@ -451,6 +451,15 @@ void FVCCSimPanelTexEnhancer::ExportGTMaterialsFromScene()
         return;
     }
 
+    const FString Timestamp = FDateTime::Now().ToString(TEXT("%Y%m%d_%H%M%S"));
+    const FString BaseDir = OutputDirectory / TEXT("gt_materials") / Timestamp;
+    FPlatformFileManager::Get().GetPlatformFile().CreateDirectoryTree(*BaseDir);
+
+    ExportMergedGTMaterials(BaseDir);
+}
+
+void FVCCSimPanelTexEnhancer::ExportMergedGTMaterials(const FString& BaseDir)
+{
     UWorld* World = GEditor->GetEditorWorldContext().World();
 
     TMap<FString, AStaticMeshActor*> LabelMap;
@@ -460,299 +469,318 @@ void FVCCSimPanelTexEnhancer::ExportGTMaterialsFromScene()
             LabelMap.Add(A->GetActorLabel(), A);
     }
 
-    const FString BaseDir = OutputDirectory / TEXT("gt_materials");
-    FPlatformFileManager::Get().GetPlatformFile().CreateDirectoryTree(*BaseDir);
-
-    TSharedPtr<FJsonObject> RootJson    = MakeShareable(new FJsonObject);
-    TArray<TSharedPtr<FJsonValue>> ActorArray;
-    int32 ExportedCount = 0;
+    TArray<AStaticMeshActor*> Actors;
+    TArray<int32>             SlotCounts;
+    TArray<FString>           Labels;
 
     for (const TSharedPtr<FString>& LabelPtr : GTActorListItems)
     {
         if (!LabelPtr.IsValid()) continue;
-
         AStaticMeshActor** Found = LabelMap.Find(*LabelPtr);
         if (!Found)
         {
             UE_LOG(LogTexEnhancerPanel, Warning, TEXT("GT Export: actor '%s' not found in world"), **LabelPtr);
             continue;
         }
+        AStaticMeshActor* Actor = *Found;
+        UStaticMeshComponent* MC = Actor->GetStaticMeshComponent();
+        const int32 NSlots = MC ? MC->GetNumMaterials() : 0;
+        if (NSlots == 0) continue;
 
-        TSharedPtr<FJsonObject> ActorJson = MakeShareable(new FJsonObject);
-        ExportSingleActorGT(*Found, BaseDir, ActorJson);
-        ActorArray.Add(MakeShareable(new FJsonValueObject(ActorJson)));
-        ++ExportedCount;
+        Actors.Add(Actor);
+        SlotCounts.Add(NSlots);
+        Labels.Add(*LabelPtr);
     }
+
+    if (Actors.IsEmpty())
+    {
+        FVCCSimUIHelpers::ShowNotification(TEXT("No valid actors to export."), true);
+        return;
+    }
+
+    int32 TotalTiles = 0;
+    TArray<int32> ActorTileOffsets;
+    for (int32 i = 0; i < Actors.Num(); ++i)
+    {
+        ActorTileOffsets.Add(TotalTiles);
+        TotalTiles += SlotCounts[i];
+    }
+
+    const int32 AtlasCols = FMath::Max(1, FMath::CeilToInt(FMath::Sqrt((float)TotalTiles)));
+    const int32 AtlasRows = FMath::Max(1, FMath::CeilToInt((float)TotalTiles / AtlasCols));
+
+    WriteMergedOBJ(Actors, SlotCounts, ActorTileOffsets, AtlasCols, AtlasRows, BaseDir / TEXT("merged_mesh.obj"));
+
+    TArray<TArray<FColor>> RoughnessTiles, MetallicTiles;
+    RoughnessTiles.SetNum(TotalTiles);
+    MetallicTiles.SetNum(TotalTiles);
+
+    TSharedPtr<FJsonObject> RootJson = MakeShareable(new FJsonObject);
+    TArray<TSharedPtr<FJsonValue>> ActorArray;
+
+    for (int32 ai = 0; ai < Actors.Num(); ++ai)
+    {
+        UStaticMeshComponent* MC = Actors[ai]->GetStaticMeshComponent();
+        TSharedPtr<FJsonObject> ActorJson = MakeShareable(new FJsonObject);
+        ActorJson->SetStringField(TEXT("label"),     Labels[ai]);
+        ActorJson->SetStringField(TEXT("mesh_file"), TEXT("merged_mesh.obj"));
+
+        TArray<TSharedPtr<FJsonValue>> SlotArray;
+        for (int32 si = 0; si < SlotCounts[ai]; ++si)
+        {
+            const int32 TileIdx = ActorTileOffsets[ai] + si;
+            UMaterialInterface* Mat = MC->GetMaterial(si);
+
+            RoughnessTiles[TileIdx] = ReadMaterialChannelPixels(Mat, true,  GTTextureResolution);
+            MetallicTiles[TileIdx]  = ReadMaterialChannelPixels(Mat, false, GTTextureResolution);
+
+            TSharedPtr<FJsonObject> SlotJson = MakeShareable(new FJsonObject);
+            SlotJson->SetNumberField(TEXT("slot"),          si);
+            SlotJson->SetStringField(TEXT("material_name"), Mat ? Mat->GetName() : TEXT(""));
+            SlotJson->SetNumberField(TEXT("atlas_tile"),    TileIdx);
+            SlotArray.Add(MakeShareable(new FJsonValueObject(SlotJson)));
+        }
+        ActorJson->SetArrayField(TEXT("slots"), SlotArray);
+        ActorArray.Add(MakeShareable(new FJsonValueObject(ActorJson)));
+    }
+
+    WriteAtlasPNG(RoughnessTiles, GTTextureResolution, AtlasCols, AtlasRows, BaseDir / TEXT("roughness_atlas.png"));
+    WriteAtlasPNG(MetallicTiles,  GTTextureResolution, AtlasCols, AtlasRows, BaseDir / TEXT("metallic_atlas.png"));
 
     TSharedPtr<FJsonObject> MetaJson = MakeShareable(new FJsonObject);
     MetaJson->SetStringField(TEXT("scene_name"),        SceneName);
     MetaJson->SetStringField(TEXT("exported_at"),       FDateTime::Now().ToString());
-    MetaJson->SetNumberField(TEXT("actor_count"),       ExportedCount);
+    MetaJson->SetNumberField(TEXT("actor_count"),       Actors.Num());
     MetaJson->SetNumberField(TEXT("texture_resolution"), GTTextureResolution);
+    MetaJson->SetNumberField(TEXT("atlas_cols"),        AtlasCols);
+    MetaJson->SetNumberField(TEXT("atlas_rows"),        AtlasRows);
+    MetaJson->SetStringField(TEXT("roughness_atlas"),   TEXT("roughness_atlas.png"));
+    MetaJson->SetStringField(TEXT("metallic_atlas"),    TEXT("metallic_atlas.png"));
+    MetaJson->SetStringField(TEXT("mesh_file"),         TEXT("merged_mesh.obj"));
     RootJson->SetObjectField(TEXT("metadata"), MetaJson);
-    RootJson->SetArrayField(TEXT("actors"),   ActorArray);
+    RootJson->SetArrayField(TEXT("actors"),    ActorArray);
 
     FString JsonStr;
     TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&JsonStr);
     FJsonSerializer::Serialize(RootJson.ToSharedRef(), Writer);
 
     if (!FFileHelper::SaveStringToFile(JsonStr, *(BaseDir / TEXT("manifest.json"))))
-    {
         UE_LOG(LogTexEnhancerPanel, Warning, TEXT("GT Export: failed to write manifest.json -> %s"), *BaseDir);
-    }
 
-    const FString Msg = FString::Printf(TEXT("GT export done: %d actors -> %s"), ExportedCount, *BaseDir);
+    const FString Msg = FString::Printf(
+        TEXT("GT merged export done: %d actors, %d tiles (%dx%d atlas) -> %s"),
+        Actors.Num(), TotalTiles, AtlasCols, AtlasRows, *BaseDir);
     UpdateStatus(Msg);
     FVCCSimUIHelpers::ShowNotification(Msg, false);
     UE_LOG(LogTexEnhancerPanel, Log, TEXT("%s"), *Msg);
 }
 
-void FVCCSimPanelTexEnhancer::ExportSingleActorGT(
-    AStaticMeshActor* Actor, const FString& BaseDir, TSharedPtr<FJsonObject> ActorJson)
+bool FVCCSimPanelTexEnhancer::WriteMergedOBJ(
+    const TArray<AStaticMeshActor*>& Actors,
+    const TArray<int32>& SlotCounts,
+    const TArray<int32>& ActorTileOffsets,
+    int32 AtlasCols, int32 AtlasRows,
+    const FString& ObjPath)
 {
-    const FString Label = Actor->GetActorLabel();
+    FString VertBuf, UVBuf, FaceBuf;
+    int32 GlobalVertexOffset = 0;
+    int32 GlobalUVIndex      = 1;
 
-    FString SafeLabel = Label;
-    for (TCHAR& Ch : SafeLabel)
+    for (int32 ai = 0; ai < Actors.Num(); ++ai)
     {
-        if (Ch == TEXT(' ')  || Ch == TEXT('/') || Ch == TEXT('\\') ||
-            Ch == TEXT(':')  || Ch == TEXT('*') || Ch == TEXT('?')  ||
-            Ch == TEXT('"')  || Ch == TEXT('<')  || Ch == TEXT('>')  || Ch == TEXT('|'))
+        UStaticMesh* SM = Actors[ai]->GetStaticMeshComponent()->GetStaticMesh();
+        if (!SM) continue;
+        SM->ConditionalPostLoad();
+
+        const FMeshDescription* MD = SM->GetMeshDescription(0);
+        if (!MD) continue;
+
+        FStaticMeshConstAttributes Attrs(*MD);
+        TVertexAttributesConstRef<FVector3f>         Positions = Attrs.GetVertexPositions();
+        TVertexInstanceAttributesConstRef<FVector2f> UVs       = Attrs.GetVertexInstanceUVs();
+
+        const FTransform& Transform = Actors[ai]->GetActorTransform();
+
+        for (const FVertexID VID : MD->Vertices().GetElementIDs())
         {
-            Ch = TEXT('_');
+            const FVector3f& LP = Positions[VID];
+            const FVector WP = Transform.TransformPosition(FVector(LP.X, LP.Y, LP.Z));
+            VertBuf += FString::Printf(TEXT("v %f %f %f\n"), WP.X, WP.Y, WP.Z);
         }
-    }
 
-    const FString ActorDir = BaseDir / SafeLabel;
-    FPlatformFileManager::Get().GetPlatformFile().CreateDirectoryTree(*ActorDir);
-
-    UStaticMeshComponent* MeshComp = Actor->GetStaticMeshComponent();
-    UStaticMesh*           SM      = MeshComp ? MeshComp->GetStaticMesh() : nullptr;
-
-    FString MeshFile;
-    if (SM)
-    {
-        const FString ObjPath = ActorDir / TEXT("mesh.obj");
-        if (ExportMeshAsOBJ(SM, ObjPath))
-            MeshFile = SafeLabel / TEXT("mesh.obj");
-        else
-            UE_LOG(LogTexEnhancerPanel, Warning, TEXT("GT Export: mesh export failed for '%s'"), *Label);
-    }
-
-    ActorJson->SetStringField(TEXT("label"),     Label);
-    ActorJson->SetStringField(TEXT("mesh_file"), MeshFile);
-
-    TArray<TSharedPtr<FJsonValue>> SlotArray;
-    if (MeshComp)
-    {
-        for (int32 SlotIdx = 0; SlotIdx < MeshComp->GetNumMaterials(); ++SlotIdx)
+        TMap<FPolygonGroupID, int32> GroupToSlot;
         {
-            UMaterialInterface* Mat = MeshComp->GetMaterial(SlotIdx);
-            if (!Mat) continue;
-
-            TSharedPtr<FJsonObject> SlotJson = MakeShareable(new FJsonObject);
-            SlotJson->SetNumberField(TEXT("slot"),          SlotIdx);
-            SlotJson->SetStringField(TEXT("material_name"), Mat->GetName());
-
-            ExportMaterialSlotTextures(Mat, SlotIdx, ActorDir, SlotJson);
-            SlotArray.Add(MakeShareable(new FJsonValueObject(SlotJson)));
+            int32 SlotIdx = 0;
+            for (const FPolygonGroupID PGID : MD->PolygonGroups().GetElementIDs())
+                GroupToSlot.Add(PGID, SlotIdx++);
         }
-    }
-    ActorJson->SetArrayField(TEXT("slots"), SlotArray);
-}
 
-bool FVCCSimPanelTexEnhancer::ExportMeshAsOBJ(UStaticMesh* SM, const FString& ObjPath)
-{
-    SM->ConditionalPostLoad();
-
-    const FMeshDescription* MD = SM->GetMeshDescription(0);
-    if (!MD)
-    {
-        UE_LOG(LogTexEnhancerPanel, Warning, TEXT("No MeshDescription for LOD0 on '%s'"), *SM->GetName());
-        return false;
-    }
-
-    FStaticMeshConstAttributes Attrs(*MD);
-    TVertexAttributesConstRef<FVector3f>    Positions = Attrs.GetVertexPositions();
-    TVertexInstanceAttributesConstRef<FVector2f> UVs  = Attrs.GetVertexInstanceUVs();
-
-    FString Obj;
-    Obj.Reserve(MD->Vertices().Num() * 32 + MD->VertexInstances().Num() * 20 + MD->Triangles().Num() * 24);
-
-    for (const FVertexID VID : MD->Vertices().GetElementIDs())
-    {
-        const FVector3f& P = Positions[VID];
-        Obj += FString::Printf(TEXT("v %f %f %f\n"), P.X, P.Y, P.Z);
-    }
-
-    for (const FVertexInstanceID IID : MD->VertexInstances().GetElementIDs())
-    {
-        const FVector2f UV = UVs.Get(IID, 0);
-        Obj += FString::Printf(TEXT("vt %f %f\n"), UV.X, 1.f - UV.Y);
-    }
-
-    for (const FTriangleID TID : MD->Triangles().GetElementIDs())
-    {
-        TArrayView<const FVertexInstanceID> Insts = MD->GetTriangleVertexInstances(TID);
-        Obj += TEXT("f");
-        for (const FVertexInstanceID IID : Insts)
+        TMap<FVertexInstanceID, int32> InstanceToTile;
+        for (const FTriangleID TID : MD->Triangles().GetElementIDs())
         {
-            const int32 VI = MD->GetVertexInstanceVertex(IID).GetValue() + 1;
-            const int32 UI = IID.GetValue() + 1;
-            Obj += FString::Printf(TEXT(" %d/%d"), VI, UI);
+            const FPolygonGroupID GID = MD->GetTrianglePolygonGroup(TID);
+            const int32 Tile = ActorTileOffsets[ai] + GroupToSlot.FindRef(GID);
+            for (const FVertexInstanceID IID : MD->GetTriangleVertexInstances(TID))
+            {
+                if (!InstanceToTile.Contains(IID))
+                    InstanceToTile.Add(IID, Tile);
+            }
         }
-        Obj += TEXT("\n");
+
+        TMap<FVertexInstanceID, int32> InstanceToUVIdx;
+        for (const FVertexInstanceID IID : MD->VertexInstances().GetElementIDs())
+        {
+            const int32 Tile = InstanceToTile.FindRef(IID);
+            const int32 Col  = Tile % AtlasCols;
+            const int32 Row  = Tile / AtlasCols;
+            const FVector2f& UV = UVs.Get(IID, 0);
+            const float U = UV.X / AtlasCols + (float)Col / AtlasCols;
+            const float V = (1.f - UV.Y) / AtlasRows + (float)Row / AtlasRows;
+            UVBuf += FString::Printf(TEXT("vt %f %f\n"), U, V);
+            InstanceToUVIdx.Add(IID, GlobalUVIndex++);
+        }
+
+        for (const FTriangleID TID : MD->Triangles().GetElementIDs())
+        {
+            FaceBuf += TEXT("f");
+            for (const FVertexInstanceID IID : MD->GetTriangleVertexInstances(TID))
+            {
+                const int32 VI = MD->GetVertexInstanceVertex(IID).GetValue() + 1 + GlobalVertexOffset;
+                const int32 UI = InstanceToUVIdx[IID];
+                FaceBuf += FString::Printf(TEXT(" %d/%d"), VI, UI);
+            }
+            FaceBuf += TEXT("\n");
+        }
+
+        GlobalVertexOffset += MD->Vertices().Num();
     }
 
-    return FFileHelper::SaveStringToFile(Obj, *ObjPath,
+    return FFileHelper::SaveStringToFile(VertBuf + UVBuf + FaceBuf, *ObjPath,
         FFileHelper::EEncodingOptions::AutoDetect, &IFileManager::Get(), FILEWRITE_EvenIfReadOnly);
 }
 
-bool FVCCSimPanelTexEnhancer::ExportTextureAsPNG(UTexture2D* Tex, const FString& PngPath, int32 Channel)
+TArray<FColor> FVCCSimPanelTexEnhancer::SampleTexture(UTexture2D* Tex, int32 Channel, int32 TargetSize)
 {
-    if (!Tex) return false;
+    TArray<FColor> Empty;
+    if (!Tex) return Empty;
 
     FTextureSource& Source = Tex->Source;
-    if (!Source.IsValid()) return false;
+    if (!Source.IsValid() || Source.GetFormat() != TSF_BGRA8) return Empty;
 
-    const int32              W      = Source.GetSizeX();
-    const int32              H      = Source.GetSizeY();
-    const ETextureSourceFormat Fmt  = Source.GetFormat();
+    const int32 SrcW = Source.GetSizeX();
+    const int32 SrcH = Source.GetSizeY();
 
     TArray64<uint8> Raw;
-    if (!Source.GetMipData(Raw, 0)) return false;
+    if (!Source.GetMipData(Raw, 0)) return Empty;
 
-    TArray<FColor> Pixels;
-    Pixels.SetNumUninitialized(W * H);
-
-    auto WritePixel = [&](int32 i, uint8 R, uint8 G, uint8 B, uint8 A)
+    TArray<FColor> SrcPixels;
+    SrcPixels.SetNumUninitialized(SrcW * SrcH);
+    for (int32 i = 0; i < SrcW * SrcH; ++i)
     {
-        if (Channel == 0)      Pixels[i] = FColor(R, R, R, 255);
-        else if (Channel == 1) Pixels[i] = FColor(G, G, G, 255);
-        else if (Channel == 2) Pixels[i] = FColor(B, B, B, 255);
-        else                   Pixels[i] = FColor(R, G, B, A);
+        const uint8 B = Raw[i*4+0], G = Raw[i*4+1], R = Raw[i*4+2], A = Raw[i*4+3];
+        if      (Channel == 0) SrcPixels[i] = FColor(R, R, R, 255);
+        else if (Channel == 1) SrcPixels[i] = FColor(G, G, G, 255);
+        else if (Channel == 2) SrcPixels[i] = FColor(B, B, B, 255);
+        else                   SrcPixels[i] = FColor(R, G, B, A);
+    }
+
+    if (SrcW == TargetSize && SrcH == TargetSize) return SrcPixels;
+
+    TArray<FColor> DstPixels;
+    DstPixels.SetNumUninitialized(TargetSize * TargetSize);
+    for (int32 Dy = 0; Dy < TargetSize; ++Dy)
+    {
+        for (int32 Dx = 0; Dx < TargetSize; ++Dx)
+        {
+            const int32 Sx = FMath::Clamp(Dx * SrcW / TargetSize, 0, SrcW - 1);
+            const int32 Sy = FMath::Clamp(Dy * SrcH / TargetSize, 0, SrcH - 1);
+            DstPixels[Dy * TargetSize + Dx] = SrcPixels[Sy * SrcW + Sx];
+        }
+    }
+    return DstPixels;
+}
+
+TArray<FColor> FVCCSimPanelTexEnhancer::ReadMaterialChannelPixels(
+    UMaterialInterface* Mat, bool bRoughness, int32 TargetSize)
+{
+    const float DefaultScalar = bRoughness ? 1.f : 0.f;
+
+    auto MakeSolid = [&](float Value) -> TArray<FColor>
+    {
+        const uint8 V = (uint8)FMath::Clamp(FMath::RoundToInt(Value * 255.f), 0, 255);
+        TArray<FColor> Pixels;
+        Pixels.Init(FColor(V, V, V, 255), TargetSize * TargetSize);
+        return Pixels;
     };
 
-    if (Fmt == TSF_BGRA8)
-    {
-        for (int32 i = 0; i < W * H; ++i)
-            WritePixel(i, Raw[i*4+2], Raw[i*4+1], Raw[i*4+0], Raw[i*4+3]);
-    }
-    else
-    {
-        UE_LOG(LogTexEnhancerPanel, Warning,
-            TEXT("ExportTextureAsPNG: unsupported source format %d on '%s' — skipping"),
-            (int32)Fmt, *Tex->GetName());
-        return false;
-    }
-
-    IImageWrapperModule& IWM = FModuleManager::LoadModuleChecked<IImageWrapperModule>("ImageWrapper");
-    TSharedPtr<IImageWrapper> Wrapper = IWM.CreateImageWrapper(EImageFormat::PNG);
-    if (!Wrapper.IsValid()) return false;
-
-    Wrapper->SetRaw(Pixels.GetData(), Pixels.Num() * sizeof(FColor), W, H, ERGBFormat::BGRA, 8);
-    TArray64<uint8> PngData = Wrapper->GetCompressed();
-    if (PngData.IsEmpty()) return false;
-
-    return FFileHelper::SaveArrayToFile(PngData, *PngPath);
-}
-
-bool FVCCSimPanelTexEnhancer::ExportSolidColorPNG(float Value, int32 Resolution, const FString& PngPath)
-{
-    const uint8 Val = (uint8)FMath::Clamp(FMath::RoundToInt(Value * 255.f), 0, 255);
-
-    TArray<FColor> Pixels;
-    Pixels.Init(FColor(Val, Val, Val, 255), Resolution * Resolution);
-
-    IImageWrapperModule& IWM = FModuleManager::LoadModuleChecked<IImageWrapperModule>("ImageWrapper");
-    TSharedPtr<IImageWrapper> Wrapper = IWM.CreateImageWrapper(EImageFormat::PNG);
-    if (!Wrapper.IsValid()) return false;
-
-    Wrapper->SetRaw(Pixels.GetData(), Pixels.Num() * sizeof(FColor),
-        Resolution, Resolution, ERGBFormat::BGRA, 8);
-    TArray64<uint8> PngData = Wrapper->GetCompressed();
-    if (PngData.IsEmpty()) return false;
-
-    return FFileHelper::SaveArrayToFile(PngData, *PngPath);
-}
-
-bool FVCCSimPanelTexEnhancer::ExportMaterialSlotTextures(
-    UMaterialInterface* Mat, int32 SlotIdx, const FString& ActorDir, TSharedPtr<FJsonObject> SlotJson)
-{
-    if (!Mat) return false;
+    if (!Mat) return MakeSolid(DefaultScalar);
 
     auto TryGetTex2D = [&](const FString& ParamName) -> UTexture2D*
     {
-        const FName ParamFName(*ParamName);
-        FHashedMaterialParameterInfo ParamInfo(ParamFName);
         UTexture* T = nullptr;
-        if (Mat->GetTextureParameterValue(ParamInfo, T) && T)
-            return Cast<UTexture2D>(T);
-        return nullptr;
+        Mat->GetTextureParameterValue(FHashedMaterialParameterInfo(FName(*ParamName)), T);
+        return T ? Cast<UTexture2D>(T) : nullptr;
     };
 
-    auto GetScalar = [&](const FString& ParamName, float Default) -> float
+    if (UTexture2D* ORM = TryGetTex2D(TEXT("ORM")))
     {
-        float V = Default;
-        const FName ParamFName(*ParamName);
-        FHashedMaterialParameterInfo ParamInfo(ParamFName);
-        Mat->GetScalarParameterValue(ParamInfo, V);
-        return V;
-    };
+        TArray<FColor> Pixels = SampleTexture(ORM, bRoughness ? 1 : 2, TargetSize);
+        if (Pixels.Num() > 0) return Pixels;
+    }
 
-    static const TArray<FString> RoughnessNames = {
-        TEXT("Roughness"), TEXT("RoughnessMap"), TEXT("T_Roughness"), TEXT("MetallicRoughnessTexture") };
-    static const TArray<FString> MetallicNames = {
-        TEXT("Metallic"), TEXT("MetallicMap"), TEXT("T_Metallic"), TEXT("MetallicRoughnessTexture") };
-
-    auto ExportPBRChannel = [&](
-        const TArray<FString>& DedicatedNames,
-        const FString& ORMParamName, int32 ORMChannel,
-        const FString& ScalarParamName, float ScalarDefault,
-        const FString& SlotPrefix)
+    static const TArray<FString> RoughnessNames = { TEXT("Roughness"), TEXT("RoughnessMap"), TEXT("T_Roughness"), TEXT("MetallicRoughnessTexture") };
+    static const TArray<FString> MetallicNames  = { TEXT("Metallic"),  TEXT("MetallicMap"),  TEXT("T_Metallic"),  TEXT("MetallicRoughnessTexture") };
+    for (const FString& Name : (bRoughness ? RoughnessNames : MetallicNames))
     {
-        const FString PngName    = FString::Printf(TEXT("%s_s%d.png"), *SlotPrefix, SlotIdx);
-        const FString PngPath    = ActorDir / PngName;
-        const FString SourceKey  = SlotPrefix + TEXT("_source");
-        const FString TexKey     = SlotPrefix + TEXT("_tex");
-        const FString ScalarKey  = SlotPrefix + TEXT("_scalar");
-
-        if (UTexture2D* ORM = TryGetTex2D(ORMParamName))
+        if (UTexture2D* T = TryGetTex2D(Name))
         {
-            if (ExportTextureAsPNG(ORM, PngPath, ORMChannel))
+            TArray<FColor> Pixels = SampleTexture(T, -1, TargetSize);
+            if (Pixels.Num() > 0) return Pixels;
+        }
+    }
+
+    float ScalarVal = DefaultScalar;
+    Mat->GetScalarParameterValue(
+        FHashedMaterialParameterInfo(FName(bRoughness ? TEXT("Roughness") : TEXT("Metallic"))), ScalarVal);
+    return MakeSolid(ScalarVal);
+}
+
+bool FVCCSimPanelTexEnhancer::WriteAtlasPNG(
+    const TArray<TArray<FColor>>& Tiles,
+    int32 TileSize, int32 Cols, int32 Rows,
+    const FString& PngPath)
+{
+    const int32 W = TileSize * Cols;
+    const int32 H = TileSize * Rows;
+    TArray<FColor> Atlas;
+    Atlas.SetNumZeroed(W * H);
+
+    for (int32 TileIdx = 0; TileIdx < Tiles.Num(); ++TileIdx)
+    {
+        const int32 Col = TileIdx % Cols;
+        const int32 Row = TileIdx / Cols;
+        const TArray<FColor>& Tile = Tiles[TileIdx];
+        for (int32 Py = 0; Py < TileSize; ++Py)
+        {
+            for (int32 Px = 0; Px < TileSize; ++Px)
             {
-                const FString ORMSource = FString::Printf(TEXT("orm_%s_channel"),
-                    ORMChannel == 1 ? TEXT("g") : TEXT("b"));
-                SlotJson->SetStringField(SourceKey, ORMSource);
-                SlotJson->SetStringField(TexKey,    PngName);
-                return;
+                const int32 SrcIdx = Py * TileSize + Px;
+                const int32 DstIdx = (Row * TileSize + Py) * W + (Col * TileSize + Px);
+                if (SrcIdx < Tile.Num())
+                    Atlas[DstIdx] = Tile[SrcIdx];
             }
         }
+    }
 
-        for (const FString& Name : DedicatedNames)
-        {
-            if (UTexture2D* T = TryGetTex2D(Name))
-            {
-                if (ExportTextureAsPNG(T, PngPath, -1))
-                {
-                    SlotJson->SetStringField(SourceKey, TEXT("texture"));
-                    SlotJson->SetStringField(TexKey,    PngName);
-                    return;
-                }
-            }
-        }
+    IImageWrapperModule& IWM = FModuleManager::LoadModuleChecked<IImageWrapperModule>("ImageWrapper");
+    TSharedPtr<IImageWrapper> Wrapper = IWM.CreateImageWrapper(EImageFormat::PNG);
+    if (!Wrapper.IsValid()) return false;
 
-        const float Scalar = GetScalar(ScalarParamName, ScalarDefault);
-        ExportSolidColorPNG(Scalar, GTTextureResolution, PngPath);
-        SlotJson->SetStringField(SourceKey, TEXT("scalar"));
-        SlotJson->SetStringField(TexKey,    PngName);
-        SlotJson->SetNumberField(ScalarKey, Scalar);
-    };
+    Wrapper->SetRaw(Atlas.GetData(), Atlas.Num() * sizeof(FColor), W, H, ERGBFormat::BGRA, 8);
+    TArray64<uint8> PngData = Wrapper->GetCompressed();
+    if (PngData.IsEmpty()) return false;
 
-    ExportPBRChannel(RoughnessNames, TEXT("ORM"), 1, TEXT("Roughness"), 1.f, TEXT("roughness"));
-    ExportPBRChannel(MetallicNames,  TEXT("ORM"), 2, TEXT("Metallic"),  0.f, TEXT("metallic"));
-
-    return true;
+    return FFileHelper::SaveArrayToFile(PngData, *PngPath);
 }
 
 // ============================================================================
