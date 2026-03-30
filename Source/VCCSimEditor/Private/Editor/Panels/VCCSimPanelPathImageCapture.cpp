@@ -1194,7 +1194,7 @@ void FVCCSimPanelPathImageCapture::SaveRGB(int32 PoseIndex, bool& bAnyCaptured)
                 
                 ViewportClient->SetViewLocation(CameraTransform.GetLocation());
                 ViewportClient->SetViewRotation(CameraTransform.GetRotation().Rotator());
-                ViewportClient->ViewFOV = 67.38f;
+                ViewportClient->ViewFOV = Camera->FOV;
                 ViewportClient->Invalidate();
                 ViewportClient->Viewport->Draw();
                 
