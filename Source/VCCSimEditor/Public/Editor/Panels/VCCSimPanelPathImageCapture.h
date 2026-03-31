@@ -27,7 +27,10 @@
 #include "Engine/TimerHandle.h"
 #include <atomic>
 
+// Forward declarations
 class AFlashPawn;
+class FPathGenerator;
+class FImageCaptureService;
 class FVCCSimPanelSelection;
 
 /**
@@ -58,121 +61,93 @@ public:
 
     void LoadFromConfigManager();
     
-private:
-    // ============================================================================
-    // UI ELEMENTS
-    // ============================================================================
-    
-    // Target actor list for bounding-box orbit
-    TSharedPtr<SListView<TSharedPtr<FString>>> OrbitActorListView;
-    TArray<TSharedPtr<FString>>               OrbitActorListItems;
+    // UI Construction (public for _UI.cpp)
+    TSharedRef<SWidget> CreatePathConfigSection();
+    TSharedRef<SWidget> CreateImageCaptureSection();
+    TSharedRef<SWidget> CreatePoseFileButtons();
+    TSharedRef<SWidget> CreatePoseActionButtons();
+    TSharedRef<SWidget> CreateMovementButtons();
+    TSharedRef<SWidget> CreateCaptureButtons();
 
-    // Orbit path parameter spinboxes
+private:
+    // UI Callbacks
+    FReply OnAddOrbitActorsClicked();
+    FReply OnGeneratePosesClicked();
+    FReply OnLoadPoseClicked();
+    FReply OnSavePoseClicked();
+    FReply OnTogglePathVisualizationClicked();
+    FReply OnCaptureImagesClicked();
+    
+    // Path Configuration & Generation
+    FBox ComputeCombinedBounds() const;
+    void GeneratePosesAroundTarget();
+    
+    // Pose File I/O
+    void LoadPredefinedPose();
+    void SaveGeneratedPose();
+    void WritePosesToFile(const TArray<FVector>& Positions, const TArray<FRotator>& Rotations, const FString& FilePath);
+    
+    // Path Visualization
+    void UpdatePathVisualization();
+    void ShowPathVisualization();
+    void HidePathVisualization();
+    
+    // Image Capture
+    void CaptureImageFromCurrentPose();
+    void StartAutoCapture();
+    void StopAutoCapture();
+    
+    // Utility
+    void SaveOrbitActorList();
+    void LoadOrbitActorList();
+    static FString GetTimestampedFilename();
+
+    // UI Widgets
+    TSharedPtr<SListView<TSharedPtr<FString>>> OrbitActorListView;
     TSharedPtr<SNumericEntryBox<float>> OrbitMarginSpinBox;
     TSharedPtr<SNumericEntryBox<float>> OrbitStartHeightSpinBox;
     TSharedPtr<SNumericEntryBox<float>> OrbitCameraHFOVSpinBox;
     TSharedPtr<SNumericEntryBox<float>> OrbitHOverlapSpinBox;
     TSharedPtr<SNumericEntryBox<float>> OrbitVOverlapSpinBox;
     TSharedPtr<SNumericEntryBox<float>> OrbitNadirAltSpinBox;
-    
-    // Path Visualization UI
+    TSharedPtr<SNumericEntryBox<float>> OrbitNadirTiltSpinBox;
     TSharedPtr<SButton> VisualizePathButton;
-    
-    // Image Capture UI
     TSharedPtr<SButton> AutoCaptureButton;
     
-    // ============================================================================
-    // STATE VARIABLES
-    // ============================================================================
+    // State Variables
+    TArray<TSharedPtr<FString>> OrbitActorListItems;
     
-    // Orbit path configuration parameters
-    float OrbitMargin       = 500.0f;
-    float OrbitStartHeight  = 200.0f;
-    float OrbitCameraHFOV   = 90.0f;
-    float OrbitHOverlap     = 0.60f;
-    float OrbitVOverlap     = 0.60f;
-    float OrbitNadirAlt     = 500.0f;
-    bool  bOrbitIncludeNadir = true;
+    float OrbitMargin = 500.0f;
+    float OrbitStartHeight = 200.0f;
+    float OrbitCameraHFOV = 90.0f;
+    float OrbitHOverlap = 0.60f;
+    float OrbitVOverlap = 0.60f;
+    float OrbitNadirAlt = 500.0f;
+    float OrbitNadirTiltAngle = 45.0f;
+    bool bOrbitIncludeNadir = true;
 
-    // TOptional attributes for SpinBox values
     TOptional<float> OrbitMarginValue;
     TOptional<float> OrbitStartHeightValue;
     TOptional<float> OrbitCameraHFOVValue;
     TOptional<float> OrbitHOverlapValue;
     TOptional<float> OrbitVOverlapValue;
     TOptional<float> OrbitNadirAltValue;
+    TOptional<float> OrbitNadirTiltValue;
     
-    // Path visualization state
     bool bPathVisualized = false;
     bool bPathNeedsUpdate = true;
     TWeakObjectPtr<AActor> PathVisualizationActor;
     
-    // Auto-capture state
     bool bAutoCaptureInProgress = false;
+    bool bGenerationInProgress = false;
     bool bGameViewChangedForCapture = false;
     FTimerHandle AutoCaptureTimerHandle;
-    TSharedPtr<std::atomic<int32>> JobNum;
     FString SaveDirectory;
     
-    // Panel state
     bool bPathImageCaptureSectionExpanded = false;
     
-    // Selection manager reference
+    // Dependencies
     TWeakPtr<FVCCSimPanelSelection> SelectionManager;
-    
-    // ============================================================================
-    // PATH CONFIGURATION OPERATIONS
-    // ============================================================================
-
-    FReply OnAddOrbitActorsClicked();
-    FBox  ComputeCombinedBounds() const;
-    FReply OnGeneratePosesClicked();
-    void GeneratePosesAroundTarget();
-    FReply OnLoadPoseClicked();
-    FReply OnSavePoseClicked();
-    void LoadPredefinedPose();
-    void SaveGeneratedPose();
-    void WritePosesToFile(const TArray<FVector>& Positions, const TArray<FRotator>& Rotations, const FString& FilePath);
-    
-    // ============================================================================
-    // PATH VISUALIZATION OPERATIONS
-    // ============================================================================
-    
-    FReply OnTogglePathVisualizationClicked();
-    void UpdatePathVisualization();
-    void ShowPathVisualization();
-    void HidePathVisualization();
-    
-    // ============================================================================
-    // IMAGE CAPTURE OPERATIONS
-    // ============================================================================
-    
-    FReply OnCaptureImagesClicked();
-    void CaptureImageFromCurrentPose();
-    void SaveRGB(int32 PoseIndex, bool& bAnyCaptured);
-    void SaveDepth(int32 PoseIndex, bool& bAnyCaptured);
-    void SaveSeg(int32 PoseIndex, bool& bAnyCaptured);
-    void SaveNormal(int32 PoseIndex, bool& bAnyCaptured);
-    void SaveBaseColor(int32 PoseIndex, bool& bAnyCaptured);
-    void SaveMaterialProperties(int32 PoseIndex, bool& bAnyCaptured);
-    void StartAutoCapture();
-    void StopAutoCapture();
-    
-    // ============================================================================
-    // UI CONSTRUCTION HELPERS
-    // ============================================================================
-    
-    TSharedRef<SWidget> CreatePathConfigSection();
-    TSharedRef<SWidget> CreateImageCaptureSection();
-    
-    // Button group creators
-    TSharedRef<SWidget> CreatePoseFileButtons();
-    TSharedRef<SWidget> CreatePoseActionButtons();
-    TSharedRef<SWidget> CreateMovementButtons();
-    TSharedRef<SWidget> CreateCaptureButtons();
-    
-    // Utility functions
-    static FString GetTimestampedFilename();
-    void SaveOrbitActorList();
-    void LoadOrbitActorList();
+    TSharedPtr<FPathGenerator> PathGenerator;
+    TSharedPtr<FImageCaptureService> ImageCaptureService;
 };

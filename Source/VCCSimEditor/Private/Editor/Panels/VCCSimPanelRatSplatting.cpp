@@ -1175,10 +1175,6 @@ void FVCCSimPanelRatSplatting::SavePaths()
 
 void FVCCSimPanelRatSplatting::LoadPaths()
 {
-    // Note: Loading is now handled by main panel in SVCCSimPanel::LoadPanelState()
-    // This method is kept for backward compatibility but should not be called directly
-    // The LoadFromCentralizedConfig method will be called instead
-
     if (LoadPathsFromProjectFile())
     {
         // Update UI values to reflect loaded configuration

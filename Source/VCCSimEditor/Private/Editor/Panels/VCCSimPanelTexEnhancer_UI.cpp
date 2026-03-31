@@ -155,23 +155,15 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateLightingScheduleSection()
         ];
     }
 
-    return FVCCSimUIHelpers::CreateSectionContent(
+    return FVCCSimUIHelpers::CreateCollapsibleSection(TEXT("Lighting Schedule"),
         SNew(SVerticalBox)
 
         +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
         [
-            SNew(SHorizontalBox)
-            +SHorizontalBox::Slot().FillWidth(1.f)
-            [
-                FVCCSimUIHelpers::CreateSectionHeader(TEXT("Lighting Schedule"))
-            ]
-            +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(6, 0, 0, 0))
-            [
-                SAssignNew(LightingStatusTextBlock, STextBlock)
-                .Text(FText::GetEmpty())
-                .ColorAndOpacity(FLinearColor(0.6f, 0.9f, 0.6f))
-                .Font(FCoreStyle::GetDefaultFontStyle("Mono", 8))
-            ]
+            SAssignNew(LightingStatusTextBlock, STextBlock)
+            .Text(FText::GetEmpty())
+            .ColorAndOpacity(FLinearColor(0.6f, 0.9f, 0.6f))
+            .Font(FCoreStyle::GetDefaultFontStyle("Mono", 8))
         ]
 
         +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
@@ -223,8 +215,8 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateLightingScheduleSection()
         ]
 
         +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
-        [ CreateSunPositionCalculatorWidget() ]
-    );
+        [ CreateSunPositionCalculatorWidget() ],
+        bLightingScheduleExpanded);
 }
 
 TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateSunPositionCalculatorWidget()
@@ -757,13 +749,8 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateNanobananaSection()
         );
     };
 
-    return FVCCSimUIHelpers::CreateSectionContent(
+    return FVCCSimUIHelpers::CreateCollapsibleSection(TEXT("Nanobanana Projection"),
         SNew(SVerticalBox)
-
-        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
-        [
-            FVCCSimUIHelpers::CreateSectionHeader(TEXT("Nanobanana Projection"))
-        ]
 
         +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
         [
@@ -884,16 +871,7 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateNanobananaSection()
                 .OnClicked_Lambda([this]() { return OnRunNanobananaProjectionClicked(); })
             ]
         ]
-
-        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
-        [
-            SAssignNew(NanobananaStatusTextBlock, STextBlock)
-            .Text_Lambda([this]() { return FText::FromString(NanobananaStatusText); })
-            .ColorAndOpacity(FLinearColor(0.6f, 0.85f, 0.6f))
-            .Font(FCoreStyle::GetDefaultFontStyle("Mono", 8))
-            .AutoWrapText(true)
-        ]
-    );
+    , bNanobananaExpanded);
 }
 
 // ============================================================================

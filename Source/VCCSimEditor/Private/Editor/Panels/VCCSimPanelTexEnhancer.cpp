@@ -19,24 +19,16 @@
 #include "Utils/VCCSimSunPositionHelper.h"
 #include "Utils/VCCSimUIHelpers.h"
 #include "Utils/VCCSimConfigManager.h"
-#include "Utils/ColmapManager.h"
+#include "Utils/LightingManager.h"
+#include "Utils/GTMaterialExporter.h"
 #include "Editor/Panels/VCCSimPanelSelection.h"
-#include "Pawns/FlashPawn.h"
-#include "Engine/DirectionalLight.h"
-#include "Components/DirectionalLightComponent.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/Texture.h"
 #include "Engine/Texture2D.h"
 #include "Materials/MaterialInterface.h"
-#include "EngineUtils.h"
 #include "Selection.h"
 #include "MeshDescription.h"
-#include "StaticMeshAttributes.h"
-#include "Utils/VCCSimDataConverter.h"
-
-#include "IImageWrapper.h"
-#include "IImageWrapperModule.h"
 #include "Modules/ModuleManager.h"
 
 #include "Serialization/JsonSerializer.h"
@@ -60,6 +52,12 @@ DEFINE_LOG_CATEGORY_STATIC(LogTexEnhancerPanel, Log, All);
 
 FVCCSimPanelTexEnhancer::FVCCSimPanelTexEnhancer()
 {
+    GTMaterialExporter = MakeShared<FGTMaterialExporter>();
+    if (GEditor && GEditor->GetEditorWorldContext().World())
+    {
+        NanobananaManager = MakeShared<FNanobananaManager>(GEditor->GetEditorWorldContext().World());
+    }
+    
     for (int32 i = 0; i < MaxLightingEntries; ++i)
     {
         SetAElevationValue[i] = SetAElevation[i];
@@ -96,19 +94,18 @@ FVCCSimPanelTexEnhancer::~FVCCSimPanelTexEnhancer()
 
 void FVCCSimPanelTexEnhancer::Initialize()
 {
+    LightingManager = MakeShared<FLightingManager>(GEditor->GetEditorWorldContext().World());
     LoadPaths();
     UE_LOG(LogTexEnhancerPanel, Log, TEXT("TexEnhancer panel initialized"));
 }
 
 void FVCCSimPanelTexEnhancer::Cleanup()
 {
+    LightingManager.Reset();
     if (GEditor)
     {
         GEditor->GetTimerManager()->ClearTimer(StatusTimerHandle);
-        GEditor->GetTimerManager()->ClearTimer(DayCycleTimerHandle);
-        GEditor->GetTimerManager()->ClearTimer(NanobananaTimerHandle);
     }
-    bDayCycleActive       = false;
     bNanobananaInProgress = false;
 
     if (PipelineProcHandle.IsValid())
@@ -229,68 +226,28 @@ FReply FVCCSimPanelTexEnhancer::OnBrowseOutputDirClicked()
 // SECTION 2: LIGHTING SCHEDULE
 // ============================================================================
 
-void FVCCSimPanelTexEnhancer::ApplyLightingCondition(float ElevationDeg, float AzimuthDeg, bool bMarkDirty)
-{
-    if (!GEditor || !GEditor->GetEditorWorldContext().World())
-    {
-        UE_LOG(LogTexEnhancerPanel, Error, TEXT("Error: No editor world available"));
-        return;
-    }
-
-    UWorld* World = GEditor->GetEditorWorldContext().World();
-
-    ADirectionalLight* DirectionalLight = nullptr;
-    for (TActorIterator<ADirectionalLight> It(World); It; ++It)
-    {
-        ADirectionalLight* Candidate = *It;
-        if (!Candidate) continue;
-
-        UDirectionalLightComponent* LightComp = Candidate->GetComponent();
-        if (LightComp && LightComp->bAtmosphereSunLight)
-        {
-            DirectionalLight = Candidate;
-            break;
-        }
-
-        if (!DirectionalLight)
-        {
-            DirectionalLight = Candidate;
-        }
-    }
-
-    if (!DirectionalLight)
-    {
-        UE_LOG(LogTexEnhancerPanel, Warning, TEXT("Warning: No Directional Light found in scene"));
-        return;
-    }
-
-    if (bMarkDirty) DirectionalLight->Modify();
-    FRotator NewRotation(-ElevationDeg, AzimuthDeg - 180.f, 0.f);
-    DirectionalLight->SetActorRotation(NewRotation);
-    GEditor->RedrawAllViewports();
-
-    FString Msg = FString::Printf(TEXT("Elev=%.1f\u00B0  Az=%.1f\u00B0  applied"), ElevationDeg, AzimuthDeg);
-    if (LightingStatusTextBlock.IsValid())
-        LightingStatusTextBlock->SetText(FText::FromString(Msg));
-    UE_LOG(LogTexEnhancerPanel, Log, TEXT("Lighting applied: Elevation=%.1f Az=%.1f"), ElevationDeg, AzimuthDeg);
-}
-
 FReply FVCCSimPanelTexEnhancer::OnApplySetALightingClicked(int32 Index)
 {
-    if (Index < 0 || Index >= NumLightingSetA) return FReply::Handled();
-    ApplyLightingCondition(SetAElevation[Index], SetAAzimuth[Index]);
+    if (Index < 0 || Index >= NumLightingSetA || !LightingManager.IsValid()) return FReply::Handled();
+    LightingManager->ApplyLightingCondition(SetAElevation[Index], SetAAzimuth[Index]);
+    if (LightingStatusTextBlock.IsValid())
+        LightingStatusTextBlock->SetText(FText::FromString(FString::Printf(TEXT("Set-A%d Applied: Elev=%.1f\u00B0 Az=%.1f\u00B0"), Index + 1, SetAElevation[Index], SetAAzimuth[Index])));
     return FReply::Handled();
 }
 
 FReply FVCCSimPanelTexEnhancer::OnApplySetBLightingClicked(int32 Index)
 {
-    if (Index < 0 || Index >= NumLightingSetB) return FReply::Handled();
-    ApplyLightingCondition(SetBElevation[Index], SetBAzimuth[Index]);
+    if (Index < 0 || Index >= NumLightingSetB || !LightingManager.IsValid()) return FReply::Handled();
+    LightingManager->ApplyLightingCondition(SetBElevation[Index], SetBAzimuth[Index]);
+    if (LightingStatusTextBlock.IsValid())
+        LightingStatusTextBlock->SetText(FText::FromString(FString::Printf(TEXT("Set-B%d Applied: Elev=%.1f\u00B0 Az=%.1f\u00B0"), Index + 1, SetBElevation[Index], SetBAzimuth[Index])));
     return FReply::Handled();
 }
 
 FReply FVCCSimPanelTexEnhancer::OnCalculateSunPositionClicked()
 {
+    if (!LightingManager.IsValid()) return FReply::Handled();
+
     FVCCSimSunPositionHelper::FSunParams Params;
     Params.Latitude  = SunCalcLatitude;
     Params.Longitude = SunCalcLongitude;
@@ -301,14 +258,12 @@ FReply FVCCSimPanelTexEnhancer::OnCalculateSunPositionClicked()
     Params.Hour      = SunCalcHour;
     Params.Minute    = SunCalcMinute;
 
-    bool bAboveHorizon = FVCCSimSunPositionHelper::Calculate(Params, SunCalcElevation, SunCalcAzimuth);
-
-    ApplyLightingCondition(SunCalcElevation, SunCalcAzimuth);
-
-    if (!bAboveHorizon)
-    {
-        UE_LOG(LogTexEnhancerPanel, Log, TEXT("Night: Sun %.1f below horizon"), -SunCalcElevation);
-    }
+    TPair<float, float> SunPos = LightingManager->CalculateAndApplySunPosition(Params);
+    SunCalcElevation = SunPos.Key;
+    SunCalcAzimuth = SunPos.Value;
+    
+    if (LightingStatusTextBlock.IsValid())
+        LightingStatusTextBlock->SetText(FText::FromString(FString::Printf(TEXT("Calculated & Applied: Elev=%.1f\u00B0 Az=%.1f\u00B0"), SunCalcElevation, SunCalcAzimuth)));
 
     return FReply::Handled();
 }
@@ -363,33 +318,10 @@ FReply FVCCSimPanelTexEnhancer::OnFillSetBFromSunPositionClicked()
 
 FReply FVCCSimPanelTexEnhancer::OnToggleDayCycleClicked()
 {
-    if (!GEditor) return FReply::Handled();
+    if (!LightingManager.IsValid()) return FReply::Handled();
 
     bDayCycleActive = !bDayCycleActive;
-
-    if (bDayCycleActive)
-    {
-        DayCycleSimMinute = 0.f;
-        FTimerDelegate Del = FTimerDelegate::CreateRaw(this, &FVCCSimPanelTexEnhancer::TickDayCycle);
-        GEditor->GetTimerManager()->SetTimer(DayCycleTimerHandle, Del, 0.1f, true);
-    }
-    else
-    {
-        GEditor->GetTimerManager()->ClearTimer(DayCycleTimerHandle);
-    }
-
-    return FReply::Handled();
-}
-
-void FVCCSimPanelTexEnhancer::TickDayCycle()
-{
-    const float MinutesPerTick = 1440.f * 0.1f / FMath::Max(DayCycleSpeed, 1.f);
-    DayCycleSimMinute += MinutesPerTick;
-    if (DayCycleSimMinute >= 1440.f) DayCycleSimMinute -= 1440.f;
-
-    const int32 SimH = FMath::FloorToInt(DayCycleSimMinute / 60.f) % 24;
-    const int32 SimM = FMath::FloorToInt(DayCycleSimMinute) % 60;
-
+    
     FVCCSimSunPositionHelper::FSunParams Params;
     Params.Latitude  = SunCalcLatitude;
     Params.Longitude = SunCalcLongitude;
@@ -397,13 +329,10 @@ void FVCCSimPanelTexEnhancer::TickDayCycle()
     Params.Year      = SunCalcYear;
     Params.Month     = SunCalcMonth;
     Params.Day       = SunCalcDay;
-    Params.Hour      = SimH;
-    Params.Minute    = SimM;
 
-    float Elev = 0.f, Az = 0.f;
-    FVCCSimSunPositionHelper::Calculate(Params, Elev, Az);
+    LightingManager->ToggleDayCycle(bDayCycleActive, Params, DayCycleSpeed);
 
-    ApplyLightingCondition(Elev, Az, false);
+    return FReply::Handled();
 }
 
 // ============================================================================
@@ -479,580 +408,39 @@ FReply FVCCSimPanelTexEnhancer::OnExportGTMaterialsClicked()
         FVCCSimUIHelpers::ShowNotification(TEXT("GT actor list is empty. Select actors in viewport and click '+ Add Selected'."), true);
         return FReply::Handled();
     }
-
-    ExportGTMaterialsFromScene();
-    return FReply::Handled();
-}
-
-void FVCCSimPanelTexEnhancer::ExportGTMaterialsFromScene()
-{
     if (!GEditor || !GEditor->GetEditorWorldContext().World())
     {
         FVCCSimUIHelpers::ShowNotification(TEXT("No editor world available."), true);
-        return;
+        return FReply::Handled();
     }
-
-    const FString Timestamp = FDateTime::Now().ToString(TEXT("%Y%m%d_%H%M%S"));
-    const FString BaseDir = OutputDirectory / TEXT("gt_materials") / Timestamp;
-    FPlatformFileManager::Get().GetPlatformFile().CreateDirectoryTree(*BaseDir);
-
-    ExportMergedGTMaterials(BaseDir);
-}
-
-// ============================================================================
-// GT EXPORT — internal POD structures (file-local)
-// ============================================================================
-
-struct FGTRawTex
-{
-    TArray64<uint8> Bytes;
-    int32  W        = 0;
-    int32  H        = 0;
-    int32  Ch       = -1;
-    float  Fallback = 0.f;
-};
-
-struct FGTMeshRaw
-{
-    FString    Label;
-    FTransform WorldTransform;
-    int32      ActorTileOffset = 0;
-
-    TArray<FVector3f> LocalVertPos;
-    TArray<int32>     InstVertIdx;
-    TArray<FVector2f> InstUV0;
-    TArray<int32>     TriInstFlat;
-    TArray<int32>     TriSlotFlat;
-
-    struct FSlotRaw
-    {
-        FString   MatName;
-        FGTRawTex Rough, Metal, Color;
-        int32     TileIdx = 0;
-    };
-    TArray<FSlotRaw> Slots;
-};
-
-struct FGTActorBuilt
-{
-    TArray<FVector>   WorldVerts;
-    TArray<FVector2f> AtlasUVs;
-    TArray<int32>     FaceVerts;
-    TArray<int32>     FaceUVs;
-};
-
-// ── Game-thread helpers (UE object access) ─────────────────────────────────
-
-static void GT_ExtractRawTex(UTexture2D* Tex, int32 Ch, FGTRawTex& Out)
-{
-    if (!Tex) return;
-    FTextureSource& S = Tex->Source;
-    if (!S.IsValid() || S.GetFormat() != TSF_BGRA8) return;
-    Out.W = S.GetSizeX();
-    Out.H = S.GetSizeY();
-    Out.Ch = Ch;
-    S.GetMipData(Out.Bytes, 0);
-}
-
-static void GT_CollectMatChannel(UMaterialInterface* Mat, bool bRough, FGTRawTex& Out)
-{
-    Out.Fallback = bRough ? 1.f : 0.f;
-    if (!Mat) return;
-
-    auto Get = [&](const FString& N) -> UTexture2D*
-    {
-        UTexture* T = nullptr;
-        Mat->GetTextureParameterValue(FHashedMaterialParameterInfo(FName(*N)), T);
-        return T ? Cast<UTexture2D>(T) : nullptr;
-    };
-
-    if (UTexture2D* ORM = Get(TEXT("ORM")))
-    {
-        GT_ExtractRawTex(ORM, bRough ? 1 : 2, Out);
-        if (Out.Bytes.Num() > 0) return;
-    }
-
-    static const TArray<FString> RN = { TEXT("Roughness"), TEXT("RoughnessMap"), TEXT("T_Roughness"), TEXT("MetallicRoughnessTexture") };
-    static const TArray<FString> MN = { TEXT("Metallic"),  TEXT("MetallicMap"),  TEXT("T_Metallic"),  TEXT("MetallicRoughnessTexture") };
-    for (const FString& N : (bRough ? RN : MN))
-    {
-        if (UTexture2D* T = Get(N)) { GT_ExtractRawTex(T, -1, Out); if (Out.Bytes.Num() > 0) return; }
-    }
-
-    float V = Out.Fallback;
-    Mat->GetScalarParameterValue(
-        FHashedMaterialParameterInfo(FName(bRough ? TEXT("Roughness") : TEXT("Metallic"))), V);
-    Out.Fallback = V;
-}
-
-static void GT_CollectBaseColor(UMaterialInterface* Mat, FGTRawTex& Out)
-{
-    Out.Fallback = 1.f;
-    if (!Mat) return;
-
-    auto Get = [&](const FString& N) -> UTexture2D*
-    {
-        UTexture* T = nullptr;
-        Mat->GetTextureParameterValue(FHashedMaterialParameterInfo(FName(*N)), T);
-        return T ? Cast<UTexture2D>(T) : nullptr;
-    };
-
-    static const TArray<FString> TexNames = {
-        TEXT("BaseColor"), TEXT("Base Color"), TEXT("BaseColorMap"),
-        TEXT("Albedo"), TEXT("AlbedoMap"), TEXT("DiffuseColor"),
-        TEXT("Diffuse"), TEXT("T_BaseColor"), TEXT("Color")
-    };
-    for (const FString& N : TexNames)
-    {
-        if (UTexture2D* T = Get(N)) { GT_ExtractRawTex(T, -1, Out); if (Out.Bytes.Num() > 0) return; }
-    }
-
-    FLinearColor Vec = FLinearColor::White;
-    for (const FString& N : { FString(TEXT("BaseColor")), FString(TEXT("Base Color")), FString(TEXT("Color")) })
-    {
-        if (Mat->GetVectorParameterValue(FHashedMaterialParameterInfo(FName(*N)), Vec))
-        {
-            const FColor C = Vec.ToFColor(true);
-            Out.Bytes.SetNumUninitialized(4);
-            Out.Bytes[0] = C.B; Out.Bytes[1] = C.G; Out.Bytes[2] = C.R; Out.Bytes[3] = C.A;
-            Out.W = Out.H = 1; Out.Ch = -1;
-            return;
-        }
-    }
-}
-
-// ── Background-safe helpers ────────────────────────────────────────────────
-
-static TArray<FColor> BG_SampleFromRaw(const FGTRawTex& R, int32 TargetSize)
-{
-    TArray<FColor> Out;
-    if (R.Bytes.IsEmpty())
-    {
-        const uint8 V = (uint8)FMath::Clamp(FMath::RoundToInt(R.Fallback * 255.f), 0, 255);
-        Out.Init(FColor(V, V, V, 255), TargetSize * TargetSize);
-        return Out;
-    }
-
-    const int32 N = R.W * R.H;
-    TArray<FColor> Src;
-    Src.SetNumUninitialized(N);
-    for (int32 i = 0; i < N; ++i)
-    {
-        const uint8 B = R.Bytes[i*4], G = R.Bytes[i*4+1], Rv = R.Bytes[i*4+2], A = R.Bytes[i*4+3];
-        if      (R.Ch == 0) Src[i] = FColor(Rv, Rv, Rv, 255);
-        else if (R.Ch == 1) Src[i] = FColor(G,  G,  G,  255);
-        else if (R.Ch == 2) Src[i] = FColor(B,  B,  B,  255);
-        else                Src[i] = FColor(Rv, G,  B,  A);
-    }
-
-    if (R.W == TargetSize && R.H == TargetSize) return Src;
-
-    Out.SetNumUninitialized(TargetSize * TargetSize);
-    for (int32 Dy = 0; Dy < TargetSize; ++Dy)
-    for (int32 Dx = 0; Dx < TargetSize; ++Dx)
-    {
-        const int32 Sx = FMath::Clamp(Dx * R.W / TargetSize, 0, R.W - 1);
-        const int32 Sy = FMath::Clamp(Dy * R.H / TargetSize, 0, R.H - 1);
-        Out[Dy * TargetSize + Dx] = Src[Sy * R.W + Sx];
-    }
-    return Out;
-}
-
-static FString BG_BuildOBJContent(const TArray<FGTActorBuilt>& Built)
-{
-    FString V = TEXT("mtllib merged_mesh.mtl\nusemtl merged_material\n");
-    FString UV_str, F_str;
-    for (const FGTActorBuilt& A : Built)
-    {
-        for (const FVector& P : A.WorldVerts)
-            V += FString::Printf(TEXT("v %f %f %f\n"), P.X, P.Y, P.Z);
-        for (const FVector2f& UV : A.AtlasUVs)
-            UV_str += FString::Printf(TEXT("vt %f %f\n"), UV.X, UV.Y);
-        for (int32 fi = 0; fi < A.FaceVerts.Num(); fi += 3)
-            F_str += FString::Printf(TEXT("f %d/%d %d/%d %d/%d\n"),
-                A.FaceVerts[fi],   A.FaceUVs[fi],
-                A.FaceVerts[fi+2], A.FaceUVs[fi+2],
-                A.FaceVerts[fi+1], A.FaceUVs[fi+1]);
-    }
-    return V + UV_str + F_str;
-}
-
-// ── ExportMergedGTMaterials ────────────────────────────────────────────────
-
-void FVCCSimPanelTexEnhancer::ExportMergedGTMaterials(const FString& BaseDir)
-{
-    UWorld* World = GEditor->GetEditorWorldContext().World();
-
-    TMap<FString, AStaticMeshActor*> LabelMap;
-    for (TActorIterator<AStaticMeshActor> It(World); It; ++It)
-        if (AStaticMeshActor* A = *It) LabelMap.Add(A->GetActorLabel(), A);
-
-    TArray<AStaticMeshActor*> Actors;
-    TArray<int32>             SlotCounts;
-    TArray<FString>           Labels;
-
-    for (const TSharedPtr<FString>& LabelPtr : GTActorListItems)
-    {
-        if (!LabelPtr.IsValid()) continue;
-        AStaticMeshActor** Found = LabelMap.Find(*LabelPtr);
-        if (!Found)
-        {
-            UE_LOG(LogTexEnhancerPanel, Warning, TEXT("GT Export: actor '%s' not found"), **LabelPtr);
-            continue;
-        }
-        UStaticMeshComponent* MC = (*Found)->GetStaticMeshComponent();
-        const int32 NS = MC ? MC->GetNumMaterials() : 0;
-        if (NS == 0) continue;
-        Actors.Add(*Found); SlotCounts.Add(NS); Labels.Add(*LabelPtr);
-    }
-
-    if (Actors.IsEmpty()) { FVCCSimUIHelpers::ShowNotification(TEXT("No valid actors to export."), true); return; }
-
-    int32 TotalTiles = 0;
-    TArray<int32> ActorTileOffsets;
-    for (int32 i = 0; i < Actors.Num(); ++i) { ActorTileOffsets.Add(TotalTiles); TotalTiles += SlotCounts[i]; }
-
-    const int32 AtlasCols = FMath::Max(1, FMath::CeilToInt(FMath::Sqrt((float)TotalTiles)));
-    const int32 AtlasRows = FMath::Max(1, FMath::CeilToInt((float)TotalTiles / AtlasCols));
-
-    // ── Game thread: minimal UObject access, copy to plain arrays ──────────
-
-    TArray<FGTMeshRaw> RawMeshes;
-    RawMeshes.Reserve(Actors.Num());
-
-    TSharedPtr<FJsonObject> RootJson = MakeShareable(new FJsonObject);
-    TArray<TSharedPtr<FJsonValue>> ActorArray;
-
-    for (int32 ai = 0; ai < Actors.Num(); ++ai)
-    {
-        UStaticMeshComponent* MC = Actors[ai]->GetStaticMeshComponent();
-        UStaticMesh* SM = MC->GetStaticMesh();
-        if (!SM) continue;
-        SM->ConditionalPostLoad();
-
-        const FMeshDescription* MD = SM->GetMeshDescription(0);
-        if (!MD) continue;
-
-        FGTMeshRaw Raw;
-        Raw.Label           = Labels[ai];
-        Raw.WorldTransform  = Actors[ai]->GetActorTransform();
-        Raw.ActorTileOffset = ActorTileOffsets[ai];
-
-        FStaticMeshConstAttributes Attrs(*MD);
-        TVertexAttributesConstRef<FVector3f>         Positions = Attrs.GetVertexPositions();
-        TVertexInstanceAttributesConstRef<FVector2f> UVs       = Attrs.GetVertexInstanceUVs();
-
-        // Build dense vertex ID → local index via TArray (cache-friendly, avoids TMap)
-        int32 MaxVID = -1;
-        for (const FVertexID VID : MD->Vertices().GetElementIDs())
-            MaxVID = FMath::Max(MaxVID, VID.GetValue());
-
-        TArray<int32> VIDToLocal;
-        VIDToLocal.Init(-1, MaxVID + 1);
-        Raw.LocalVertPos.Reserve(MD->Vertices().Num());
-        for (const FVertexID VID : MD->Vertices().GetElementIDs())
-        {
-            VIDToLocal[VID.GetValue()] = Raw.LocalVertPos.Num();
-            Raw.LocalVertPos.Add(Positions[VID]);
-        }
-
-        // Build dense instance ID → local index
-        int32 MaxIID = -1;
-        for (const FVertexInstanceID IID : MD->VertexInstances().GetElementIDs())
-            MaxIID = FMath::Max(MaxIID, IID.GetValue());
-
-        TArray<int32> IIDToLocal;
-        IIDToLocal.Init(-1, MaxIID + 1);
-        Raw.InstVertIdx.Reserve(MD->VertexInstances().Num());
-        Raw.InstUV0.Reserve(MD->VertexInstances().Num());
-        for (const FVertexInstanceID IID : MD->VertexInstances().GetElementIDs())
-        {
-            IIDToLocal[IID.GetValue()] = Raw.InstVertIdx.Num();
-            Raw.InstVertIdx.Add(VIDToLocal[MD->GetVertexInstanceVertex(IID).GetValue()]);
-            Raw.InstUV0.Add(UVs.Get(IID, 0));
-        }
-
-        // Polygon group → slot (small TMap, typically < 10 entries)
-        TMap<int32, int32> GroupToSlot;
-        { int32 Idx = 0; for (const FPolygonGroupID GID : MD->PolygonGroups().GetElementIDs()) GroupToSlot.Add(GID.GetValue(), Idx++); }
-
-        // Copy triangle topology as plain int arrays
-        const int32 NumTris = MD->Triangles().Num();
-        Raw.TriInstFlat.Reserve(NumTris * 3);
-        Raw.TriSlotFlat.Reserve(NumTris);
-        for (const FTriangleID TID : MD->Triangles().GetElementIDs())
-        {
-            Raw.TriSlotFlat.Add(GroupToSlot.FindRef(MD->GetTrianglePolygonGroup(TID).GetValue()));
-            for (const FVertexInstanceID IID : MD->GetTriangleVertexInstances(TID))
-                Raw.TriInstFlat.Add(IIDToLocal[IID.GetValue()]);
-        }
-
-        // Collect texture raw data per slot (GetMipData must be game thread)
-        TSharedPtr<FJsonObject> ActorJson = MakeShareable(new FJsonObject);
-        ActorJson->SetStringField(TEXT("label"),     Labels[ai]);
-        ActorJson->SetStringField(TEXT("mesh_file"), TEXT("merged_mesh.obj"));
-
-        {
-            auto MakeVec3Json = [](FVector V) -> TArray<TSharedPtr<FJsonValue>>
-            {
-                return { MakeShareable(new FJsonValueNumber(V.X)),
-                         MakeShareable(new FJsonValueNumber(V.Y)),
-                         MakeShareable(new FJsonValueNumber(V.Z)) };
-            };
-
-            const FVector  Loc   = Actors[ai]->GetActorLocation();
-            const FRotator Rot   = Actors[ai]->GetActorRotation();
-            const FVector  Scale = Actors[ai]->GetActorScale3D();
-
-            TSharedPtr<FJsonObject> TransformJson = MakeShareable(new FJsonObject);
-            TransformJson->SetArrayField(TEXT("location"), MakeVec3Json(Loc));
-            TransformJson->SetArrayField(TEXT("rotation"),
-                TArray<TSharedPtr<FJsonValue>>{
-                    MakeShareable(new FJsonValueNumber(Rot.Pitch)),
-                    MakeShareable(new FJsonValueNumber(Rot.Yaw)),
-                    MakeShareable(new FJsonValueNumber(Rot.Roll)) });
-            TransformJson->SetArrayField(TEXT("scale"), MakeVec3Json(Scale));
-            ActorJson->SetObjectField(TEXT("actor_transform"), TransformJson);
-
-            FVector Origin, Extent;
-            Actors[ai]->GetActorBounds(false, Origin, Extent);
-            TSharedPtr<FJsonObject> AABBJson = MakeShareable(new FJsonObject);
-            AABBJson->SetArrayField(TEXT("min"), MakeVec3Json(Origin - Extent));
-            AABBJson->SetArrayField(TEXT("max"), MakeVec3Json(Origin + Extent));
-            ActorJson->SetObjectField(TEXT("world_aabb"), AABBJson);
-        }
-
-        TArray<TSharedPtr<FJsonValue>> SlotArray;
-
-        for (int32 si = 0; si < SlotCounts[ai]; ++si)
-        {
-            UMaterialInterface* Mat = MC->GetMaterial(si);
-            const int32 TileIdx = ActorTileOffsets[ai] + si;
-
-            FGTMeshRaw::FSlotRaw Slot;
-            Slot.MatName = Mat ? Mat->GetName() : TEXT("");
-            Slot.TileIdx = TileIdx;
-            GT_CollectMatChannel(Mat, true,  Slot.Rough);
-            GT_CollectMatChannel(Mat, false, Slot.Metal);
-            GT_CollectBaseColor (Mat,        Slot.Color);
-
-            TSharedPtr<FJsonObject> SlotJson = MakeShareable(new FJsonObject);
-            SlotJson->SetNumberField(TEXT("slot"),          si);
-            SlotJson->SetStringField(TEXT("material_name"), Slot.MatName);
-            SlotJson->SetNumberField(TEXT("atlas_tile"),    TileIdx);
-            SlotArray.Add(MakeShareable(new FJsonValueObject(SlotJson)));
-            Raw.Slots.Add(MoveTemp(Slot));
-        }
-        ActorJson->SetArrayField(TEXT("slots"), SlotArray);
-        ActorArray.Add(MakeShareable(new FJsonValueObject(ActorJson)));
-        RawMeshes.Add(MoveTemp(Raw));
-    }
-
-    if (RawMeshes.IsEmpty()) { FVCCSimUIHelpers::ShowNotification(TEXT("No valid mesh data to export."), true); return; }
-
-    TSharedPtr<FJsonObject> MetaJson = MakeShareable(new FJsonObject);
-    MetaJson->SetStringField(TEXT("scene_name"),         SceneName);
-    MetaJson->SetStringField(TEXT("exported_at"),        FDateTime::Now().ToString());
-    MetaJson->SetNumberField(TEXT("actor_count"),        RawMeshes.Num());
-    MetaJson->SetNumberField(TEXT("texture_resolution"), GTTextureResolution);
-    MetaJson->SetNumberField(TEXT("atlas_cols"),         AtlasCols);
-    MetaJson->SetNumberField(TEXT("atlas_rows"),         AtlasRows);
-    MetaJson->SetStringField(TEXT("basecolor_atlas"),    TEXT("basecolor_atlas.png"));
-    MetaJson->SetStringField(TEXT("roughness_atlas"),    TEXT("roughness_atlas.png"));
-    MetaJson->SetStringField(TEXT("metallic_atlas"),     TEXT("metallic_atlas.png"));
-    MetaJson->SetStringField(TEXT("mesh_file"),          TEXT("merged_mesh.obj"));
-    RootJson->SetObjectField(TEXT("metadata"), MetaJson);
-    RootJson->SetArrayField(TEXT("actors"),    ActorArray);
-
-    FString JsonStr;
-    TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&JsonStr);
-    FJsonSerializer::Serialize(RootJson.ToSharedRef(), Writer);
-
-    // ── Dispatch ALL heavy computation and I/O to background thread ────────
 
     bGTExportInProgress = true;
+    FVCCSimUIHelpers::ShowNotification(TEXT("Starting GT material export..."));
 
-    const int32 TexRes = GTTextureResolution;
-    TWeakPtr<FVCCSimPanelTexEnhancer> WeakSelf = AsShared();
-
-    Async(EAsyncExecution::Thread,
-        [RawMeshes = MoveTemp(RawMeshes),
-         JsonStr   = MoveTemp(JsonStr),
-         BaseDir, AtlasCols, AtlasRows, TotalTiles, TexRes, WeakSelf]()
+    FSimpleDelegate OnComplete = FSimpleDelegate::CreateLambda([this]()
     {
-        // ── Step 1: Build geometry and UV data ─────────────────────────────
-        TArray<FGTActorBuilt> BuiltActors;
-        BuiltActors.Reserve(RawMeshes.Num());
-
-        int32 GlobalVertBase = 1;
-        int32 GlobalUVBase   = 1;
-
-        for (const FGTMeshRaw& Raw : RawMeshes)
-        {
-            const int32 NumVerts = Raw.LocalVertPos.Num();
-            const int32 NumInsts = Raw.InstUV0.Num();
-            const int32 NumTris  = Raw.TriSlotFlat.Num();
-
-            FGTActorBuilt Built;
-
-            // Transform vertices to right-handed world coords
-            Built.WorldVerts.SetNumUninitialized(NumVerts);
-            for (int32 vi = 0; vi < NumVerts; ++vi)
-                Built.WorldVerts[vi] = FVCCSimDataConverter::ConvertLocation(
-                    Raw.WorldTransform.TransformPosition(FVector(Raw.LocalVertPos[vi])));
-
-            // Determine atlas tile per instance from triangle assignments
-            TArray<int32> InstTile;
-            InstTile.Init(-1, NumInsts);
-            for (int32 ti = 0; ti < NumTris; ++ti)
-            {
-                const int32 TileIdx = Raw.ActorTileOffset + Raw.TriSlotFlat[ti];
-                for (int32 k = 0; k < 3; ++k)
-                {
-                    const int32 IIdx = Raw.TriInstFlat[ti * 3 + k];
-                    if (IIdx >= 0 && IIdx < NumInsts && InstTile[IIdx] < 0)
-                        InstTile[IIdx] = TileIdx;
-                }
-            }
-
-            // Compute atlas UV for each instance
-            // PNG: Y=0=top, Row=0 is at top of image
-            // OBJ: V=0=bottom, V=1=top
-            // UE UV: V=0=top (DirectX convention)
-            // Correct formula: V = (1 - srcV) / AtlasRows + (AtlasRows - Row - 1) / AtlasRows
-            Built.AtlasUVs.SetNumUninitialized(NumInsts);
-            for (int32 ii = 0; ii < NumInsts; ++ii)
-            {
-                const int32 Tile = (InstTile[ii] >= 0) ? InstTile[ii] : Raw.ActorTileOffset;
-                const int32 Col  = Tile % AtlasCols;
-                const int32 Row  = Tile / AtlasCols;
-                const FVector2f SrcUV = Raw.InstUV0[ii];
-                const float U = SrcUV.X / AtlasCols + (float)Col / AtlasCols;
-                const float V = (1.f - SrcUV.Y) / AtlasRows + (float)(AtlasRows - Row - 1) / AtlasRows;
-                Built.AtlasUVs[ii] = FVector2f(U, V);
-            }
-
-            // Build 1-based global face index arrays
-            Built.FaceVerts.SetNumUninitialized(NumTris * 3);
-            Built.FaceUVs.SetNumUninitialized(NumTris * 3);
-            for (int32 ti = 0; ti < NumTris; ++ti)
-            {
-                for (int32 k = 0; k < 3; ++k)
-                {
-                    const int32 IIdx = Raw.TriInstFlat[ti * 3 + k];
-                    Built.FaceVerts[ti * 3 + k] = GlobalVertBase + Raw.InstVertIdx[IIdx];
-                    Built.FaceUVs  [ti * 3 + k] = GlobalUVBase   + IIdx;
-                }
-            }
-
-            GlobalVertBase += NumVerts;
-            GlobalUVBase   += NumInsts;
-
-            BuiltActors.Add(MoveTemp(Built));
-        }
-
-        // ── Step 2: Sample atlas tiles ─────────────────────────────────────
-        TArray<TArray<FColor>> RoughTiles, MetalTiles, ColorTiles;
-        RoughTiles.SetNum(TotalTiles);
-        MetalTiles.SetNum(TotalTiles);
-        ColorTiles.SetNum(TotalTiles);
-
-        for (const FGTMeshRaw& Raw : RawMeshes)
-            for (const FGTMeshRaw::FSlotRaw& S : Raw.Slots)
-            {
-                RoughTiles[S.TileIdx] = BG_SampleFromRaw(S.Rough, TexRes);
-                MetalTiles[S.TileIdx] = BG_SampleFromRaw(S.Metal, TexRes);
-                ColorTiles[S.TileIdx] = BG_SampleFromRaw(S.Color, TexRes);
-            }
-
-        // ── Step 3: Write all output files ─────────────────────────────────
-        const FString ObjContent = BG_BuildOBJContent(BuiltActors);
-
-        const bool bObjOk   = FFileHelper::SaveStringToFile(ObjContent, *(BaseDir / TEXT("merged_mesh.obj")),
-            FFileHelper::EEncodingOptions::AutoDetect, &IFileManager::Get(), FILEWRITE_EvenIfReadOnly);
-        const bool bMtlOk   = FFileHelper::SaveStringToFile(
-            TEXT("newmtl merged_material\nKa 1.0 1.0 1.0\nKd 1.0 1.0 1.0\nKs 0.0 0.0 0.0\n")
-            TEXT("map_Kd basecolor_atlas.png\nmap_Pr roughness_atlas.png\nmap_Pm metallic_atlas.png\n"),
-            *(BaseDir / TEXT("merged_mesh.mtl")));
-        const bool bColorOk = FVCCSimPanelTexEnhancer::WriteAtlasPNG(ColorTiles, TexRes, AtlasCols, AtlasRows, BaseDir / TEXT("basecolor_atlas.png"));
-        const bool bRoughOk = FVCCSimPanelTexEnhancer::WriteAtlasPNG(RoughTiles, TexRes, AtlasCols, AtlasRows, BaseDir / TEXT("roughness_atlas.png"));
-        const bool bMetalOk = FVCCSimPanelTexEnhancer::WriteAtlasPNG(MetalTiles, TexRes, AtlasCols, AtlasRows, BaseDir / TEXT("metallic_atlas.png"));
-        const bool bJsonOk  = FFileHelper::SaveStringToFile(JsonStr, *(BaseDir / TEXT("manifest.json")));
-
-        if (!bObjOk)   UE_LOG(LogTexEnhancerPanel, Warning, TEXT("GT Export: failed merged_mesh.obj"));
-        if (!bMtlOk)   UE_LOG(LogTexEnhancerPanel, Warning, TEXT("GT Export: failed merged_mesh.mtl"));
-        if (!bColorOk) UE_LOG(LogTexEnhancerPanel, Warning, TEXT("GT Export: failed basecolor_atlas.png"));
-        if (!bRoughOk) UE_LOG(LogTexEnhancerPanel, Warning, TEXT("GT Export: failed roughness_atlas.png"));
-        if (!bMetalOk) UE_LOG(LogTexEnhancerPanel, Warning, TEXT("GT Export: failed metallic_atlas.png"));
-        if (!bJsonOk)  UE_LOG(LogTexEnhancerPanel, Warning, TEXT("GT Export: failed manifest.json"));
-
-        const bool bSuccess = bObjOk && bMtlOk && bColorOk && bRoughOk && bMetalOk && bJsonOk;
-        const FString Msg = bSuccess
-            ? FString::Printf(TEXT("GT export done: %d actors, %d tiles (%dx%d atlas) -> %s"),
-                RawMeshes.Num(), TotalTiles, AtlasCols, AtlasRows, *BaseDir)
-            : FString::Printf(TEXT("GT export completed with errors -> %s"), *BaseDir);
-
-        UE_LOG(LogTexEnhancerPanel, Log, TEXT("%s"), *Msg);
-
-        AsyncTask(ENamedThreads::GameThread, [WeakSelf, Msg, bSuccess]()
-        {
-            TSharedPtr<FVCCSimPanelTexEnhancer> Panel = WeakSelf.Pin();
-            if (!Panel.IsValid()) return;
-            Panel->bGTExportInProgress = false;
-            FVCCSimUIHelpers::ShowNotification(Msg, !bSuccess);
-        });
+        bGTExportInProgress = false;
     });
-}
 
-bool FVCCSimPanelTexEnhancer::WriteMTLFile(const FString& MtlPath)
-{
-    FString Mtl;
-    Mtl += TEXT("newmtl merged_material\n");
-    Mtl += TEXT("Ka 1.0 1.0 1.0\n");
-    Mtl += TEXT("Kd 1.0 1.0 1.0\n");
-    Mtl += TEXT("Ks 0.0 0.0 0.0\n");
-    Mtl += TEXT("map_Kd basecolor_atlas.png\n");
-    Mtl += TEXT("map_Pr roughness_atlas.png\n");
-    Mtl += TEXT("map_Pm metallic_atlas.png\n");
-    return FFileHelper::SaveStringToFile(Mtl, *MtlPath);
-}
-
-bool FVCCSimPanelTexEnhancer::WriteAtlasPNG(
-    const TArray<TArray<FColor>>& Tiles,
-    int32 TileSize, int32 Cols, int32 Rows,
-    const FString& PngPath)
-{
-    const int32 W = TileSize * Cols;
-    const int32 H = TileSize * Rows;
-    TArray<FColor> Atlas;
-    Atlas.SetNumZeroed(W * H);
-
-    for (int32 TileIdx = 0; TileIdx < Tiles.Num(); ++TileIdx)
+    TArray<FString> ActorLabels;
+    for (const auto& Item : GTActorListItems)
     {
-        const int32 Col = TileIdx % Cols;
-        const int32 Row = TileIdx / Cols;
-        const TArray<FColor>& Tile = Tiles[TileIdx];
-        for (int32 Py = 0; Py < TileSize; ++Py)
-        {
-            for (int32 Px = 0; Px < TileSize; ++Px)
-            {
-                const int32 SrcIdx = Py * TileSize + Px;
-                const int32 DstIdx = (Row * TileSize + Py) * W + (Col * TileSize + Px);
-                if (SrcIdx < Tile.Num())
-                    Atlas[DstIdx] = Tile[SrcIdx];
-            }
-        }
+        if(Item.IsValid()) ActorLabels.Add(*Item);
     }
+    
+    const FString Timestamp = FDateTime::Now().ToString(TEXT("%Y%m%d_%H%M%S"));
+    const FString BaseDir = OutputDirectory / TEXT("gt_materials") / Timestamp;
 
-    IImageWrapperModule& IWM = FModuleManager::LoadModuleChecked<IImageWrapperModule>("ImageWrapper");
-    TSharedPtr<IImageWrapper> Wrapper = IWM.CreateImageWrapper(EImageFormat::PNG);
-    if (!Wrapper.IsValid()) return false;
-
-    Wrapper->SetRaw(Atlas.GetData(), Atlas.Num() * sizeof(FColor), W, H, ERGBFormat::BGRA, 8);
-    TArray64<uint8> PngData = Wrapper->GetCompressed();
-    if (PngData.IsEmpty()) return false;
-
-    return FFileHelper::SaveArrayToFile(PngData, *PngPath);
+    GTMaterialExporter->ExportMaterials(
+        ActorLabels,
+        GEditor->GetEditorWorldContext().World(),
+        BaseDir,
+        SceneName,
+        GTTextureResolution,
+        OnComplete
+    );
+    
+    return FReply::Handled();
 }
 
 // ============================================================================
@@ -1416,23 +804,6 @@ FString FVCCSimPanelTexEnhancer::GetEvaluationOutputDir() const
 // SECTION 5: NANOBANANA PROJECTION
 // ============================================================================
 
-namespace
-{
-    struct FNBClassDef { const TCHAR* Name; uint8 R, G, B; };
-    static const FNBClassDef NBClasses[] = {
-        { TEXT("concrete"),     128, 128, 128 },
-        { TEXT("brick"),        180,  80,  50 },
-        { TEXT("glass"),        100, 180, 220 },
-        { TEXT("metal"),        180, 180, 200 },
-        { TEXT("wood"),         140,  90,  40 },
-        { TEXT("vegetation"),    60, 140,  60 },
-        { TEXT("painted_wall"), 220, 210, 200 },
-        { TEXT("asphalt"),       60,  60,  70 },
-    };
-    static const int32 NBClassCount = UE_ARRAY_COUNT(NBClasses);
-    static const int32 NBTolerance  = 40;
-}
-
 FReply FVCCSimPanelTexEnhancer::OnBrowseNanobananaResultDirClicked()
 {
     IDesktopPlatform* DP = FDesktopPlatformModule::Get();
@@ -1505,311 +876,56 @@ FReply FVCCSimPanelTexEnhancer::OnRunNanobananaProjectionClicked()
         FVCCSimUIHelpers::ShowNotification(TEXT("manifest.json not set or missing."), true);
         return FReply::Handled();
     }
-    RunNanobananaProjection();
-    return FReply::Handled();
-}
 
-void FVCCSimPanelTexEnhancer::RunNanobananaProjection()
-{
-    FString ManifestStr;
-    if (!FFileHelper::LoadFileToString(ManifestStr, *NanobananaManifestFile))
+    if (!NanobananaManager.IsValid())
     {
-        FVCCSimUIHelpers::ShowNotification(TEXT("Cannot load manifest.json"), true);
-        return;
-    }
-    TSharedPtr<FJsonObject> ManifestRoot;
-    TSharedRef<TJsonReader<>> MReader = TJsonReaderFactory<>::Create(ManifestStr);
-    if (!FJsonSerializer::Deserialize(MReader, ManifestRoot) || !ManifestRoot.IsValid())
-    {
-        FVCCSimUIHelpers::ShowNotification(TEXT("Failed to parse manifest.json"), true);
-        return;
-    }
-
-    NanobananaManifestActors.Empty();
-    const TArray<TSharedPtr<FJsonValue>>* ActorsArr = nullptr;
-    if (ManifestRoot->TryGetArrayField(TEXT("actors"), ActorsArr))
-    {
-        for (const TSharedPtr<FJsonValue>& Val : *ActorsArr)
+        if (GEditor && GEditor->GetEditorWorldContext().World())
         {
-            if (Val->Type != EJson::Object) continue;
-            FString Label;
-            Val->AsObject()->TryGetStringField(TEXT("label"), Label);
-            if (!Label.IsEmpty()) NanobananaManifestActors.Add(Label);
-        }
-    }
-
-    if (NanobananaManifestActors.IsEmpty())
-    {
-        FVCCSimUIHelpers::ShowNotification(TEXT("No actors found in manifest."), true);
-        return;
-    }
-
-    NanobananaVotes.Empty();
-    for (const FString& Label : NanobananaManifestActors)
-        NanobananaVotes.Add(Label, TMap<FString, int32>());
-
-    NanobananaPendingRays.Empty();
-    NanobananaProcessedRayCount = 0;
-    NanobananaTotalRayCount     = 0;
-    NanobananaStatusText        = TEXT("Loading images...");
-    NanobananaOutputDir         = FPaths::GetPath(NanobananaManifestFile);
-    bNanobananaInProgress       = true;
-
-    const FString ResultDir    = NanobananaResultDir;
-    const FString PosesFile    = NanobananaPosesFile;
-    const float   HFOVDeg      = NanobananaHFOV;
-    const int32   ImgW         = NanobananaImageWidth;
-    const int32   ImgH         = NanobananaImageHeight;
-    const int32   RaysPerClass = NanobananaRaysPerClass;
-    TWeakPtr<FVCCSimPanelTexEnhancer> WeakSelf = AsShared();
-
-    IImageWrapperModule* IWMPtr = &FModuleManager::LoadModuleChecked<IImageWrapperModule>("ImageWrapper");
-
-    Async(EAsyncExecution::Thread,
-        [ResultDir, PosesFile, HFOVDeg, ImgW, ImgH, RaysPerClass, WeakSelf, IWMPtr]()
-    {
-        TArray<FString> PoseLines;
-        FFileHelper::LoadFileToStringArray(PoseLines, *PosesFile);
-
-        TArray<FVCCSimPoseData> Poses;
-        for (const FString& Line : PoseLines)
-        {
-            if (Line.IsEmpty() || Line.StartsWith(TEXT("#"))) continue;
-            FVCCSimPoseData P = FVCCSimDataConverter::ParsePoseLine(Line);
-            if (!P.Location.IsZero() || !P.Quaternion.IsIdentity())
-                Poses.Add(P);
-        }
-
-        TArray<FString> PngFiles;
-        IFileManager::Get().FindFilesRecursive(PngFiles, *ResultDir, TEXT("*.png"), true, false);
-        PngFiles.Sort();
-
-        const int32 NumImages = FMath::Min(Poses.Num(), PngFiles.Num());
-        const float HFOVRad   = FMath::DegreesToRadians(HFOVDeg);
-        const float Fx        = (ImgW * 0.5f) / FMath::Tan(HFOVRad * 0.5f);
-
-        TArray<FVCCSimPanelTexEnhancer::FNanobananaRay> AllRays;
-        AllRays.Reserve(NumImages * NBClassCount * RaysPerClass);
-
-        for (int32 ImgIdx = 0; ImgIdx < NumImages; ++ImgIdx)
-        {
-            const FVCCSimPoseData& Pose = Poses[ImgIdx];
-
-            TArray<uint8> FileBytes;
-            if (!FFileHelper::LoadFileToArray(FileBytes, *PngFiles[ImgIdx])) continue;
-
-            TSharedPtr<IImageWrapper> Wrapper = IWMPtr->CreateImageWrapper(EImageFormat::PNG);
-            if (!Wrapper.IsValid()) continue;
-            if (!Wrapper->SetCompressed(FileBytes.GetData(), FileBytes.Num())) continue;
-
-            TArray<uint8> Raw;
-            if (!Wrapper->GetRaw(ERGBFormat::BGRA, 8, Raw)) continue;
-
-            const int32 W = Wrapper->GetWidth();
-            const int32 H = Wrapper->GetHeight();
-            if (W == 0 || H == 0 || Raw.Num() != W * H * 4) continue;
-
-            TArray<TArray<FIntPoint>> PixelsByClass;
-            PixelsByClass.SetNum(NBClassCount);
-
-            for (int32 y = 0; y < H; ++y)
-            for (int32 x = 0; x < W; ++x)
-            {
-                const int32 Idx = (y * W + x) * 4;
-                const uint8 Bv  = Raw[Idx], Gv = Raw[Idx+1], Rv = Raw[Idx+2];
-                int32 BestClass = -1, BestDist = NBTolerance + 1;
-                for (int32 c = 0; c < NBClassCount; ++c)
-                {
-                    const int32 Dist = FMath::Abs((int32)Rv - NBClasses[c].R)
-                                     + FMath::Abs((int32)Gv - NBClasses[c].G)
-                                     + FMath::Abs((int32)Bv - NBClasses[c].B);
-                    if (Dist < BestDist) { BestDist = Dist; BestClass = c; }
-                }
-                if (BestClass >= 0) PixelsByClass[BestClass].Add(FIntPoint(x, y));
-            }
-
-            for (int32 c = 0; c < NBClassCount; ++c)
-            {
-                const TArray<FIntPoint>& Pixels = PixelsByClass[c];
-                if (Pixels.IsEmpty()) continue;
-
-                const int32 Total  = Pixels.Num();
-                const int32 N      = FMath::Min(Total, RaysPerClass);
-                const int32 Stride = FMath::Max(1, Total / N);
-
-                for (int32 s = 0; s < N; ++s)
-                {
-                    const FIntPoint& Px = Pixels[FMath::Min(s * Stride, Total - 1)];
-                    const float u = Px.X + 0.5f;
-                    const float v = Px.Y + 0.5f;
-                    const FVector DirCam(1.f, (u - ImgW * 0.5f) / Fx, -(v - ImgH * 0.5f) / Fx);
-                    FVCCSimPanelTexEnhancer::FNanobananaRay Ray;
-                    Ray.Origin    = Pose.Location;
-                    Ray.Direction = Pose.Quaternion.RotateVector(DirCam).GetSafeNormal();
-                    Ray.ClassName = FString(NBClasses[c].Name);
-                    AllRays.Add(MoveTemp(Ray));
-                }
-            }
-        }
-
-        const int32 TotalRays = AllRays.Num();
-        UE_LOG(LogTexEnhancerPanel, Log, TEXT("[Nanobanana] Generated %d rays from %d images"), TotalRays, NumImages);
-
-        AsyncTask(ENamedThreads::GameThread, [WeakSelf, AllRays = MoveTemp(AllRays), TotalRays, NumImages]() mutable
-        {
-            TSharedPtr<FVCCSimPanelTexEnhancer> Panel = WeakSelf.Pin();
-            if (!Panel.IsValid()) return;
-
-            Panel->NanobananaPendingRays        = MoveTemp(AllRays);
-            Panel->NanobananaTotalRayCount      = TotalRays;
-            Panel->NanobananaProcessedRayCount  = 0;
-            Panel->NanobananaStatusText         = FString::Printf(
-                TEXT("Casting %d rays (%d images)..."), TotalRays, NumImages);
-
-            if (TotalRays == 0)
-            {
-                Panel->FinalizeNanobananaProjection();
-                return;
-            }
-
-            FTimerDelegate Del = FTimerDelegate::CreateRaw(
-                Panel.Get(), &FVCCSimPanelTexEnhancer::TickNanobananaRayCasting);
-            GEditor->GetTimerManager()->SetTimer(Panel->NanobananaTimerHandle, Del, 0.05f, true);
-        });
-    });
-}
-
-void FVCCSimPanelTexEnhancer::TickNanobananaRayCasting()
-{
-    if (!GEditor) return;
-    UWorld* World = GEditor->GetEditorWorldContext().World();
-    if (!World) return;
-
-    static const int32 BatchSize = 200;
-    const int32 Start = NanobananaProcessedRayCount;
-    const int32 End   = FMath::Min(Start + BatchSize, NanobananaTotalRayCount);
-
-    FCollisionQueryParams QParams;
-    QParams.bTraceComplex = false;
-
-    for (int32 i = Start; i < End; ++i)
-    {
-        const FNanobananaRay& Ray = NanobananaPendingRays[i];
-        FHitResult Hit;
-        if (World->LineTraceSingleByChannel(
-            Hit, Ray.Origin, Ray.Origin + Ray.Direction * 100000.f, ECC_Visibility, QParams))
-        {
-            AActor* HitActor = Hit.GetActor();
-            if (HitActor)
-            {
-                TMap<FString, int32>* Votes = NanobananaVotes.Find(HitActor->GetActorLabel());
-                if (Votes)
-                    ++Votes->FindOrAdd(Ray.ClassName, 0);
-            }
-        }
-    }
-
-    NanobananaProcessedRayCount = End;
-
-    if (NanobananaProcessedRayCount >= NanobananaTotalRayCount)
-    {
-        GEditor->GetTimerManager()->ClearTimer(NanobananaTimerHandle);
-        FinalizeNanobananaProjection();
-    }
-    else
-    {
-        NanobananaStatusText = FString::Printf(
-            TEXT("Casting rays: %d / %d"), NanobananaProcessedRayCount, NanobananaTotalRayCount);
-    }
-}
-
-void FVCCSimPanelTexEnhancer::FinalizeNanobananaProjection()
-{
-    const int32 TotalActors = NanobananaManifestActors.Num();
-    int32 LabeledActors     = 0;
-    int32 NotHitActors      = 0;
-    int32 MultiClassConflicts = 0;
-
-    TSharedPtr<FJsonObject> RootJson = MakeShareable(new FJsonObject);
-    TArray<TSharedPtr<FJsonValue>> ActorResults;
-
-    for (const FString& Label : NanobananaManifestActors)
-    {
-        TMap<FString, int32>* VoteMap = NanobananaVotes.Find(Label);
-        TSharedPtr<FJsonObject> ActorJson = MakeShareable(new FJsonObject);
-        ActorJson->SetStringField(TEXT("label"), Label);
-
-        if (!VoteMap || VoteMap->IsEmpty())
-        {
-            ++NotHitActors;
-            ActorJson->SetStringField(TEXT("class"), TEXT(""));
-            ActorJson->SetNumberField(TEXT("votes"), 0);
-            UE_LOG(LogTexEnhancerPanel, Warning,
-                TEXT("[Nanobanana] Actor %-30s → NOT HIT (0 rays)"), *Label);
+            NanobananaManager = MakeShared<FNanobananaManager>(GEditor->GetEditorWorldContext().World());
         }
         else
         {
-            ++LabeledActors;
-            FString BestClass;
-            int32 BestVotes = 0, TotalVotes = 0;
-            for (const auto& Pair : *VoteMap)
-            {
-                TotalVotes += Pair.Value;
-                if (Pair.Value > BestVotes) { BestVotes = Pair.Value; BestClass = Pair.Key; }
-            }
-
-            bool bConflict = false;
-            TSharedPtr<FJsonObject> DistJson = MakeShareable(new FJsonObject);
-            FString DistStr;
-            for (const auto& Pair : *VoteMap)
-            {
-                DistJson->SetNumberField(Pair.Key, Pair.Value);
-                if (Pair.Key != BestClass && Pair.Value * 10 > BestVotes) bConflict = true;
-                if (!DistStr.IsEmpty()) DistStr += TEXT(", ");
-                DistStr += FString::Printf(TEXT("%s:%d"), *Pair.Key, Pair.Value);
-            }
-            if (bConflict) ++MultiClassConflicts;
-
-            ActorJson->SetStringField(TEXT("class"),             BestClass);
-            ActorJson->SetNumberField(TEXT("votes"),             BestVotes);
-            ActorJson->SetObjectField(TEXT("vote_distribution"), DistJson);
-            UE_LOG(LogTexEnhancerPanel, Log,
-                TEXT("[Nanobanana] Actor %-30s → %-15s (%d votes | %s)"),
-                *Label, *BestClass, BestVotes, *DistStr);
+            FVCCSimUIHelpers::ShowNotification(TEXT("Nanobanana Manager could not be initialized."), true);
+            return FReply::Handled();
         }
-        ActorResults.Add(MakeShareable(new FJsonValueObject(ActorJson)));
     }
 
-    UE_LOG(LogTexEnhancerPanel, Log, TEXT("[Nanobanana] ─────────────────────────────────────────────"));
-    UE_LOG(LogTexEnhancerPanel, Log, TEXT("[Nanobanana] Total actors in manifest : %d"), TotalActors);
-    UE_LOG(LogTexEnhancerPanel, Log, TEXT("[Nanobanana] Labeled (>=1 vote)       : %d"), LabeledActors);
-    UE_LOG(LogTexEnhancerPanel, Log, TEXT("[Nanobanana] Not hit                  : %d"), NotHitActors);
-    UE_LOG(LogTexEnhancerPanel, Log, TEXT("[Nanobanana] Multi-class conflict >10%%: %d"), MultiClassConflicts);
+    FNanobananaManager::FProjectionParams Params;
+    Params.ResultDir = NanobananaResultDir;
+    Params.PosesFile = NanobananaPosesFile; 
+    Params.ManifestFile = NanobananaManifestFile;
+    Params.HFOV = NanobananaHFOV;
+    Params.ImageWidth = NanobananaImageWidth;
+    Params.ImageHeight = NanobananaImageHeight;
+    Params.RaysPerClass = NanobananaRaysPerClass;
 
-    TSharedPtr<FJsonObject> StatsJson = MakeShareable(new FJsonObject);
-    StatsJson->SetNumberField(TEXT("total_actors"),        TotalActors);
-    StatsJson->SetNumberField(TEXT("labeled"),             LabeledActors);
-    StatsJson->SetNumberField(TEXT("not_hit"),             NotHitActors);
-    StatsJson->SetNumberField(TEXT("multi_class_conflict"),MultiClassConflicts);
+    FOnNanobananaProgress OnProgressDelegate = FOnNanobananaProgress::CreateLambda(
+        [this](const FString& Status, int32 Processed, int32 Total)
+    {
+        if (Total > 0)
+        {
+            UE_LOG(LogTexEnhancerPanel, Log, TEXT("%s %d / %d"), *Status, Processed, Total);
+        }
+        else
+        {
+            UE_LOG(LogTexEnhancerPanel, Log, TEXT("%s"), *Status);
+        }
+    });
 
-    RootJson->SetArrayField(TEXT("actors"), ActorResults);
-    RootJson->SetObjectField(TEXT("stats"),  StatsJson);
+    FOnNanobananaComplete OnCompleteDelegate = FOnNanobananaComplete::CreateLambda(
+        [this](const FString& FinalStatus)
+    {
+        bNanobananaInProgress = false;
+        UE_LOG(LogTexEnhancerPanel, Log, TEXT("%s"), *FinalStatus);
+        FVCCSimUIHelpers::ShowNotification(TEXT("Nanobanana projection complete!"), false);
+    });
 
-    FString JsonStr;
-    TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&JsonStr);
-    FJsonSerializer::Serialize(RootJson.ToSharedRef(), Writer);
-
-    const FString OutPath = NanobananaOutputDir / TEXT("label_assignment.json");
-    FFileHelper::SaveStringToFile(JsonStr, *OutPath);
-    UE_LOG(LogTexEnhancerPanel, Log, TEXT("[Nanobanana] Saved → %s"), *OutPath);
-
-    NanobananaStatusText  = FString::Printf(
-        TEXT("Done: %d/%d labeled, %d not hit"), LabeledActors, TotalActors, NotHitActors);
-    bNanobananaInProgress = false;
-
-    FVCCSimUIHelpers::ShowNotification(
-        FString::Printf(TEXT("Nanobanana projection complete: %d/%d actors labeled."),
-            LabeledActors, TotalActors), false);
+    if (NanobananaManager->RunProjection(Params, OnProgressDelegate, OnCompleteDelegate))
+    {
+        bNanobananaInProgress = true;
+    }
+    
+    return FReply::Handled();
 }
 
 // ============================================================================
@@ -1865,4 +981,3 @@ void FVCCSimPanelTexEnhancer::LoadPaths()
     NanobananaImageHeightValue   = NanobananaImageHeight;
     NanobananaRaysPerClassValue  = NanobananaRaysPerClass;
 }
-

@@ -26,10 +26,17 @@
 #include "Engine/TimerHandle.h"
 #include "Dom/JsonObject.h"
 
+#include "Utils/LightingManager.h"
+#include "Utils/GTMaterialExporter.h"
+#include "Utils/NanobananaManager.h"
+
 class FVCCSimPanelSelection;
 class AStaticMeshActor;
 class UStaticMesh;
 class UTexture2D;
+class FLightingManager;
+class FGTMaterialExporter;
+class FNanobananaManager;
 
 class VCCSIMEDITOR_API FVCCSimPanelTexEnhancer : public TSharedFromThis<FVCCSimPanelTexEnhancer>
 {
@@ -91,7 +98,9 @@ private:
     // STATE VARIABLES
     // ============================================================================
 
-    bool bSectionExpanded = false;
+    bool bSectionExpanded             = false;
+    bool bLightingScheduleExpanded    = false;
+    bool bNanobananaExpanded          = false;
 
     static constexpr int32 MaxLightingEntries = 4;
     int32 NumLightingSetA = 3;
@@ -112,15 +121,14 @@ private:
     bool bEvalInProgress        = false;
     bool bGTExportInProgress    = false;
     bool bNanobananaInProgress  = false;
-
-    FTimerHandle                    GTExportTimerHandle;
-    TSharedPtr<struct FGTExportCtx> GTExportCtx;
+    bool bDayCycleActive        = false;
 
     int32 GTTextureResolution = 1024;
 
     float SunCalcLatitude  = 22.52933f;
     float SunCalcLongitude = 113.94092f;
     float SunCalcTimeZone  = 8.0f;
+    float DayCycleSpeed    = 10.f;
     int32 SunCalcYear      = 2026;
     int32 SunCalcMonth     = 3;
     int32 SunCalcDay       = 20;
@@ -129,12 +137,7 @@ private:
     int32 SunCalcFillSlot  = 1;
     float SunCalcElevation = 0.f;
     float SunCalcAzimuth   = 0.f;
-
-    bool  bDayCycleActive   = false;
-    float DayCycleSpeed     = 10.f;
-    float DayCycleSimMinute = 0.f;
-    FTimerHandle DayCycleTimerHandle;
-
+    
     TOptional<float> SunCalcLatValue;
     TOptional<float> SunCalcLonValue;
     TOptional<float> SunCalcTZValue;
@@ -149,11 +152,14 @@ private:
     FProcHandle  PipelineProcHandle;
 
     TWeakPtr<FVCCSimPanelSelection> SelectionManager;
+    TSharedPtr<FLightingManager>    LightingManager;
+    TSharedPtr<FGTMaterialExporter> GTMaterialExporter;
+    TSharedPtr<FNanobananaManager>  NanobananaManager;
 
     // ============================================================================
-    // NANOBANANA STATE
+    // NANOBANANA UI STATE
     // ============================================================================
-
+    
     TSharedPtr<SEditableTextBox>          NanobananaResultDirTextBox;
     TSharedPtr<SEditableTextBox>          NanobananaPosesFileTextBox;
     TSharedPtr<SEditableTextBox>          NanobananaManifestFileTextBox;
@@ -161,7 +167,6 @@ private:
     TSharedPtr<SNumericEntryBox<int32>>   NanobananaImageWidthSpinBox;
     TSharedPtr<SNumericEntryBox<int32>>   NanobananaImageHeightSpinBox;
     TSharedPtr<SNumericEntryBox<int32>>   NanobananaRaysPerClassSpinBox;
-    TSharedPtr<STextBlock>                NanobananaStatusTextBlock;
 
     FString NanobananaResultDir;
     FString NanobananaPosesFile;
@@ -170,27 +175,11 @@ private:
     int32   NanobananaImageWidth   = 1920;
     int32   NanobananaImageHeight  = 1080;
     int32   NanobananaRaysPerClass = 80;
-    FString NanobananaStatusText;
-    FString NanobananaOutputDir;
-
+    
     TOptional<float>  NanobananaHFOVValue;
     TOptional<int32>  NanobananaImageWidthValue;
     TOptional<int32>  NanobananaImageHeightValue;
     TOptional<int32>  NanobananaRaysPerClassValue;
-
-    struct FNanobananaRay
-    {
-        FVector Origin;
-        FVector Direction;
-        FString ClassName;
-    };
-
-    TArray<FNanobananaRay>                        NanobananaPendingRays;
-    int32                                         NanobananaProcessedRayCount = 0;
-    int32                                         NanobananaTotalRayCount     = 0;
-    TMap<FString, TMap<FString, int32>>           NanobananaVotes;
-    TArray<FString>                               NanobananaManifestActors;
-    FTimerHandle                                  NanobananaTimerHandle;
 
     // ============================================================================
     // SECTION 1: DATASET CONFIGURATION
@@ -213,8 +202,6 @@ private:
     FReply OnFillSetAFromSunPositionClicked();
     FReply OnFillSetBFromSunPositionClicked();
     FReply OnToggleDayCycleClicked();
-    void   TickDayCycle();
-    void ApplyLightingCondition(float ElevationDeg, float AzimuthDeg, bool bMarkDirty = true);
 
     // ============================================================================
     // SECTION 4: GT MATERIAL EXPORT
@@ -224,10 +211,6 @@ private:
     FReply OnAddSelectedActorsClicked();
     FReply OnRemoveFromGTListClicked();
     FReply OnExportGTMaterialsClicked();
-    void ExportGTMaterialsFromScene();
-    void ExportMergedGTMaterials(const FString& BaseDir);
-    static bool WriteAtlasPNG(const TArray<TArray<FColor>>& Tiles, int32 TileSize, int32 Cols, int32 Rows, const FString& PngPath);
-    bool WriteMTLFile(const FString& MtlPath);
 
     // ============================================================================
     // SECTION 6: TEXENHANCER PIPELINE
@@ -257,9 +240,6 @@ private:
     FReply OnBrowseNanobananaPosesFileClicked();
     FReply OnBrowseNanobananaManifestFileClicked();
     FReply OnRunNanobananaProjectionClicked();
-    void RunNanobananaProjection();
-    void TickNanobananaRayCasting();
-    void FinalizeNanobananaProjection();
 
     // ============================================================================
     // UTILITIES
@@ -273,3 +253,4 @@ private:
     void SavePaths();
     void LoadPaths();
 };
+

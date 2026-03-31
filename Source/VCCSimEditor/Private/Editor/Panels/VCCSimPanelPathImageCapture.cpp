@@ -19,17 +19,13 @@ DEFINE_LOG_CATEGORY_STATIC(LogPathImageCapture, Log, All);
 
 #include "Editor/Panels/VCCSimPanelPathImageCapture.h"
 #include "Editor/Panels/VCCSimPanelSelection.h"
-#include "Utils/VCCSimUIHelpers.h"
 #include "Utils/VCCSimConfigManager.h"
+#include "Utils/PathGenerator.h"
+#include "Utils/ImageCaptureService.h"
 #include "Pawns/FlashPawn.h"
 #include "Pawns/SimLookAtPath.h"
 #include "Sensors/RGBCamera.h"
 #include "Sensors/DepthCamera.h"
-#include "Sensors/SegmentationCamera.h"
-#include "Sensors/NormalCamera.h"
-#include "Sensors/BaseColorCamera.h"
-#include "Sensors/MaterialPropertiesCamera.h"
-#include "Engine/StaticMeshActor.h"
 #include "Components/PrimitiveComponent.h"
 #include "Selection.h"
 #include "Widgets/Layout/SBorder.h"
@@ -37,12 +33,11 @@ DEFINE_LOG_CATEGORY_STATIC(LogPathImageCapture, Log, All);
 #include "Widgets/Views/STableRow.h"
 #include "Styling/AppStyle.h"
 #include "Styling/CoreStyle.h"
-#include "Utils/ImageProcesser.h"
 #include "Utils/TrajectoryViewer.h"
 #include "DesktopPlatformModule.h"
 #include "EngineUtils.h"
-#include "HighResScreenshot.h"
 #include "LevelEditorViewport.h"
+#include "Async/Async.h"
 
 static bool EnsureGameView()
 {
@@ -80,13 +75,16 @@ static void RestoreGameView(bool bWasChangedByUs)
 
 FVCCSimPanelPathImageCapture::FVCCSimPanelPathImageCapture()
 {
+    PathGenerator = MakeShared<FPathGenerator>();
+    // ImageCaptureService is initialized in SetSelectionManager, as it depends on it.
+
     OrbitMarginValue      = OrbitMargin;
     OrbitStartHeightValue = OrbitStartHeight;
     OrbitCameraHFOVValue  = OrbitCameraHFOV;
     OrbitHOverlapValue    = OrbitHOverlap;
     OrbitVOverlapValue    = OrbitVOverlap;
     OrbitNadirAltValue    = OrbitNadirAlt;
-    JobNum = MakeShared<std::atomic<int32>>(0);
+    OrbitNadirTiltValue   = OrbitNadirTiltAngle;
 }
 
 FVCCSimPanelPathImageCapture::~FVCCSimPanelPathImageCapture()
@@ -100,7 +98,6 @@ FVCCSimPanelPathImageCapture::~FVCCSimPanelPathImageCapture()
 
 void FVCCSimPanelPathImageCapture::Initialize()
 {
-    JobNum = MakeShared<std::atomic<int32>>(0);
     LoadOrbitActorList();
 }
 
@@ -143,254 +140,7 @@ void FVCCSimPanelPathImageCapture::Cleanup()
 void FVCCSimPanelPathImageCapture::SetSelectionManager(TSharedPtr<FVCCSimPanelSelection> InSelectionManager)
 {
     SelectionManager = InSelectionManager;
-}
-
-// ============================================================================
-// UI CONSTRUCTION
-// ============================================================================
-
-TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreatePathImageCapturePanel()
-{
-    return FVCCSimUIHelpers::CreateCollapsibleSection(
-        "Path Configuration & Image Capture", 
-        SNew(SVerticalBox)
-        
-        // Path Configuration Section
-        +SVerticalBox::Slot()
-        .AutoHeight()
-        [
-            CreatePathConfigSection()
-        ]
-        
-        +SVerticalBox::Slot()
-        .MaxHeight(1)
-        .Padding(FMargin(0, 8, 0, 8))
-        [
-           FVCCSimUIHelpers::CreateSeparator()
-        ]
-        
-        // Image Capture Section
-        +SVerticalBox::Slot()
-        .AutoHeight()
-        [
-            CreateImageCaptureSection()
-        ],
-        
-        bPathImageCaptureSectionExpanded
-    );
-}
-
-TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreatePathConfigSection()
-{
-    return SNew(SVerticalBox)
-
-    // Target actor list
-    +SVerticalBox::Slot()
-    .AutoHeight()
-    .Padding(FMargin(0, 0, 0, 2))
-    [
-        SNew(SHorizontalBox)
-        +SHorizontalBox::Slot().FillWidth(1.f)
-        [
-            SNew(SButton)
-            .ButtonStyle(FAppStyle::Get(), "FlatButton.Success")
-            .ContentPadding(FMargin(5, 2))
-            .Text(FText::FromString(TEXT("+ Add Selected Actors")))
-            .ToolTipText(FText::FromString(TEXT("Add selected viewport actors to the orbit target list")))
-            .OnClicked_Lambda([this]() { return OnAddOrbitActorsClicked(); })
-        ]
-        +SHorizontalBox::Slot().AutoWidth().Padding(FMargin(4, 0, 0, 0))
-        [
-            SNew(SButton)
-            .ButtonStyle(FAppStyle::Get(), "FlatButton.Danger")
-            .ContentPadding(FMargin(5, 2))
-            .Text(FText::FromString(TEXT("Clear All")))
-            .OnClicked_Lambda([this]() -> FReply
-            {
-                OrbitActorListItems.Empty();
-                if (OrbitActorListView.IsValid())
-                    OrbitActorListView->RequestListRefresh();
-                SaveOrbitActorList();
-                return FReply::Handled();
-            })
-        ]
-    ]
-
-    +SVerticalBox::Slot()
-    .AutoHeight()
-    .Padding(FMargin(0, 0, 0, 4))
-    [
-        SNew(SBox)
-        .HeightOverride(80.f)
-        [
-            SNew(SBorder)
-            .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
-            .BorderBackgroundColor(FColor(10, 10, 10, 255))
-            .Padding(2)
-            [
-                SAssignNew(OrbitActorListView, SListView<TSharedPtr<FString>>)
-                .ListItemsSource(&OrbitActorListItems)
-                .SelectionMode(ESelectionMode::None)
-                .OnGenerateRow_Lambda([this](TSharedPtr<FString> Item,
-                    const TSharedRef<STableViewBase>& Owner) -> TSharedRef<ITableRow>
-                {
-                    return SNew(STableRow<TSharedPtr<FString>>, Owner)
-                    [
-                        SNew(SHorizontalBox)
-                        +SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center).Padding(FMargin(2, 0))
-                        [
-                            SNew(STextBlock)
-                            .Text(FText::FromString(*Item))
-                            .ColorAndOpacity(FLinearColor(0.8f, 0.9f, 0.8f))
-                            .Font(FCoreStyle::GetDefaultFontStyle("Mono", 8))
-                        ]
-                        +SHorizontalBox::Slot().AutoWidth()
-                        [
-                            SNew(SButton)
-                            .ButtonStyle(FAppStyle::Get(), "FlatButton.Danger")
-                            .ContentPadding(FMargin(4, 1))
-                            .Text(FText::FromString(TEXT("×")))
-                            .OnClicked_Lambda([this, Item]() -> FReply
-                            {
-                                if (Item.IsValid())
-                                {
-                                    const FString S = *Item;
-                                    OrbitActorListItems.RemoveAll([&S](const TSharedPtr<FString>& P)
-                                    {
-                                        return P.IsValid() && *P == S;
-                                    });
-                                    if (OrbitActorListView.IsValid())
-                                        OrbitActorListView->RequestListRefresh();
-                                    SaveOrbitActorList();
-                                }
-                                return FReply::Handled();
-                            })
-                        ]
-                    ];
-                })
-            ]
-        ]
-    ]
-
-    +SVerticalBox::Slot()
-    .MaxHeight(1)
-    [
-        FVCCSimUIHelpers::CreateSeparator()
-    ]
-
-    // Orbit parameters
-    +SVerticalBox::Slot()
-    .AutoHeight()
-    .Padding(FMargin(0, 4, 0, 4))
-    [
-        FVCCSimUIHelpers::CreateNumericPropertyRowFloat(
-            TEXT("Margin (cm)"), OrbitMarginSpinBox, OrbitMarginValue, OrbitMargin, 50.f, 50.f)
-    ]
-
-    +SVerticalBox::Slot()
-    .AutoHeight()
-    .Padding(FMargin(0, 0, 0, 4))
-    [
-        SNew(SHorizontalBox)
-        +SHorizontalBox::Slot().FillWidth(1.f).Padding(FMargin(0, 0, 4, 0))
-        [
-            FVCCSimUIHelpers::CreateNumericPropertyRowFloat(
-                TEXT("H-FOV (deg)"), OrbitCameraHFOVSpinBox, OrbitCameraHFOVValue, OrbitCameraHFOV, 5.f, 5.f)
-        ]
-        +SHorizontalBox::Slot().FillWidth(1.f)
-        [
-            FVCCSimUIHelpers::CreateNumericPropertyRowFloat(
-                TEXT("Start H (cm)"), OrbitStartHeightSpinBox, OrbitStartHeightValue, OrbitStartHeight, 0.f, 50.f)
-        ]
-    ]
-
-    +SVerticalBox::Slot()
-    .AutoHeight()
-    .Padding(FMargin(0, 0, 0, 4))
-    [
-        SNew(SHorizontalBox)
-        +SHorizontalBox::Slot().FillWidth(1.f).Padding(FMargin(0, 0, 4, 0))
-        [
-            FVCCSimUIHelpers::CreateNumericPropertyRowFloat(
-                TEXT("H-Overlap"), OrbitHOverlapSpinBox, OrbitHOverlapValue, OrbitHOverlap, 0.f, 0.05f)
-        ]
-        +SHorizontalBox::Slot().FillWidth(1.f)
-        [
-            FVCCSimUIHelpers::CreateNumericPropertyRowFloat(
-                TEXT("V-Overlap"), OrbitVOverlapSpinBox, OrbitVOverlapValue, OrbitVOverlap, 0.f, 0.05f)
-        ]
-    ]
-
-    +SVerticalBox::Slot()
-    .AutoHeight()
-    .Padding(FMargin(0, 0, 0, 4))
-    [
-        SNew(SHorizontalBox)
-        +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(0, 0, 4, 0))
-        [
-            SNew(SCheckBox)
-            .IsChecked_Lambda([this]() { return bOrbitIncludeNadir ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
-            .OnCheckStateChanged_Lambda([this](ECheckBoxState S) { bOrbitIncludeNadir = (S == ECheckBoxState::Checked); })
-        ]
-        +SHorizontalBox::Slot().FillWidth(1.f)
-        [
-            FVCCSimUIHelpers::CreateNumericPropertyRowFloat(
-                TEXT("Nadir Alt (cm)"), OrbitNadirAltSpinBox, OrbitNadirAltValue, OrbitNadirAlt, 100.f, 100.f)
-        ]
-    ]
-
-    +SVerticalBox::Slot()
-    .MaxHeight(1)
-    [
-        FVCCSimUIHelpers::CreateSeparator()
-    ]
-
-    // Load/Save Pose buttons
-    +SVerticalBox::Slot()
-    .AutoHeight()
-    .Padding(FMargin(0, 4, 0, 4))
-    [
-        CreatePoseFileButtons()
-    ]
-
-    +SVerticalBox::Slot()
-    .MaxHeight(1)
-    [
-        FVCCSimUIHelpers::CreateSeparator()
-    ]
-
-    // Action buttons
-    +SVerticalBox::Slot()
-    .AutoHeight()
-    .Padding(FMargin(0, 4, 0, 2))
-    [
-        CreatePoseActionButtons()
-    ];
-}
-
-TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreateImageCaptureSection()
-{
-    return SNew(SVerticalBox)
-    
-    +SVerticalBox::Slot()
-    .AutoHeight()
-    .Padding(0, 0, 0, 4)
-    [
-        CreateMovementButtons()
-    ]
-    
-    +SVerticalBox::Slot()
-    .MaxHeight(1)
-    [
-        FVCCSimUIHelpers::CreateSeparator()
-    ]
-    
-    +SVerticalBox::Slot()
-    .AutoHeight()
-    .Padding(0, 4, 0, 0)
-    [
-        CreateCaptureButtons()
-    ];
+    ImageCaptureService = MakeShared<FImageCaptureService>(InSelectionManager);
 }
 
 // ============================================================================
@@ -399,15 +149,14 @@ TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreateImageCaptureSection()
 
 FReply FVCCSimPanelPathImageCapture::OnGeneratePosesClicked()
 {
-    GeneratePosesAroundTarget();
-    
-    // Clean up any existing visualization
+    if (bGenerationInProgress) return FReply::Handled();
+
+    bGenerationInProgress = true;
     HidePathVisualization();
-    
-    // Allow path visualization after generating poses
     bPathVisualized = false;
     bPathNeedsUpdate = false;
-    
+
+    GeneratePosesAroundTarget();
     return FReply::Handled();
 }
 
@@ -473,56 +222,27 @@ FBox FVCCSimPanelPathImageCapture::ComputeCombinedBounds() const
 
 void FVCCSimPanelPathImageCapture::GeneratePosesAroundTarget()
 {
+    auto FailCleanup = [this](const TCHAR* Msg)
+    {
+        UE_LOG(LogPathImageCapture, Warning, TEXT("%s"), Msg);
+        bGenerationInProgress = false;
+    };
+
     if (!SelectionManager.IsValid() || !SelectionManager.Pin()->GetSelectedFlashPawn().IsValid())
-    {
-        UE_LOG(LogPathImageCapture, Warning, TEXT("No FlashPawn selected"));
-        return;
-    }
-
+        return FailCleanup(TEXT("No FlashPawn selected"));
+    
     if (OrbitActorListItems.IsEmpty())
-    {
-        UE_LOG(LogPathImageCapture, Warning, TEXT("No target actors. Add actors to the orbit list first."));
-        return;
-    }
+        return FailCleanup(TEXT("No target actors in orbit list"));
+    
+    UWorld* World = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
+    if (!World)
+        return FailCleanup(TEXT("Editor world is not available"));
 
-    FBox CombinedBox = ComputeCombinedBounds();
-    if (!CombinedBox.IsValid)
-    {
-        UE_LOG(LogPathImageCapture, Warning, TEXT("Could not compute valid bounds from selected actors."));
-        return;
-    }
+    FPathGenerator::FConformalOrbitParams Params;
+    Params.TargetBounds = ComputeCombinedBounds();
+    if (!Params.TargetBounds.IsValid)
+        return FailCleanup(TEXT("Could not compute valid bounds from selected actors"));
 
-    const FVector BoxCenter = CombinedBox.GetCenter();
-    const FVector BoxExtent = CombinedBox.GetExtent();
-    const float   HX        = BoxExtent.X;
-    const float   HY        = BoxExtent.Y;
-    const float   BoxMinZ   = CombinedBox.Min.Z + OrbitStartHeight;
-    const float   BoxMaxZ   = CombinedBox.Max.Z;
-
-    const float HFovRad  = FMath::DegreesToRadians(FMath::Max(OrbitCameraHFOV, 5.f));
-    TArray<URGBCameraComponent*> RGBCameras;
-    SelectionManager.Pin()->GetSelectedFlashPawn()->GetComponents<URGBCameraComponent>(RGBCameras);
-    if (RGBCameras.IsEmpty())
-    {
-        UE_LOG(LogPathImageCapture, Warning, 
-            TEXT("No RGBCamera found on the selected FlashPawn. "
-                 "Using default resolution (1920*1080) for FOV calculations."));
-    }
-    const FIntPoint CamRes = (RGBCameras.Num() > 0) ? 
-        RGBCameras[0]->FOV : FIntPoint(1920, 1080);
-    const float AspectRatio = (CamRes.Y > 0) ? (float)CamRes.X / CamRes.Y : 16.f / 9.f;
-    const float VFovRad  = 2.f * FMath::Atan(FMath::Tan(HFovRad * 0.5f) / AspectRatio);
-
-    const float FootprintH = 2.f * OrbitMargin * FMath::Tan(HFovRad * 0.5f);
-    const float FootprintV = 2.f * OrbitMargin * FMath::Tan(VFovRad * 0.5f);
-    const float StepH = FootprintH * FMath::Max(1.f - OrbitHOverlap, 0.05f);
-    const float StepV = FootprintV * FMath::Max(1.f - OrbitVOverlap, 0.05f);
-
-    const float BuildingH = FMath::Max(BoxMaxZ - BoxMinZ, 0.f);
-    const int32 NumRings  = FMath::Max(1, FMath::CeilToInt(BuildingH / StepV));
-
-    UWorld* World = GEditor->GetEditorWorldContext().World();
-    TArray<AActor*> OrbitActors;
     for (const TSharedPtr<FString>& Label : OrbitActorListItems)
     {
         if (!Label.IsValid()) continue;
@@ -530,167 +250,70 @@ void FVCCSimPanelPathImageCapture::GeneratePosesAroundTarget()
         {
             if (It->GetActorLabel() == *Label)
             {
-                OrbitActors.Add(*It);
+                It->GetComponents<UPrimitiveComponent>(Params.TargetPrimitives);
                 break;
             }
         }
     }
+    
+    Params.World = World;
+    Params.Margin = OrbitMargin;
+    Params.StartHeight = OrbitStartHeight;
+    Params.CameraHFOV = OrbitCameraHFOV;
+    Params.HOverlap = OrbitHOverlap;
+    Params.VOverlap = OrbitVOverlap;
+    Params.bIncludeNadir = bOrbitIncludeNadir;
+    Params.NadirAltitude = OrbitNadirAlt;
+    Params.NadirTiltAngle = OrbitNadirTiltAngle;
 
-    TArray<UPrimitiveComponent*> OrbitPrimComps;
-    for (AActor* Actor : OrbitActors)
-        Actor->GetComponents<UPrimitiveComponent>(OrbitPrimComps);
-
-    const int32 NumSampleAngles = 360;
-    const float SearchRadius = (FMath::Max(HX, HY) + OrbitMargin) * 4.f + 2000.f;
-
-    FCollisionQueryParams QueryParams;
-    QueryParams.bTraceComplex = true;
-
-    TArray<FVector>  Positions;
-    TArray<FRotator> Rotations;
-
-    for (int32 Ring = 0; Ring < NumRings; ++Ring)
+    TArray<URGBCameraComponent*> RGBCameras;
+    SelectionManager.Pin()->GetSelectedFlashPawn()->GetComponents<URGBCameraComponent>(RGBCameras);
+    if (RGBCameras.Num() > 0)
     {
-        const float T = (NumRings > 1) ? (float)Ring / (NumRings - 1) : 0.5f;
-        const float Z = BoxMinZ + T * BuildingH;
-        const FVector CenterAtZ(BoxCenter.X, BoxCenter.Y, Z);
+        Params.CameraResolution = RGBCameras[0]->FOV;
+    }
 
-        TArray<FVector> FineSamples;
-        FineSamples.Reserve(NumSampleAngles);
-
-        for (int32 AngleIdx = 0; AngleIdx < NumSampleAngles; ++AngleIdx)
+    TWeakObjectPtr<AFlashPawn> FlashPawnWeak = SelectionManager.Pin()->GetSelectedFlashPawn();
+    TWeakObjectPtr<AVCCSimLookAtPath> LookAtWeak  = SelectionManager.Pin()->GetSelectedLookAtPath();
+    
+    PathGenerator->GenerateConformalOrbit(Params, FPathGenerator::FOnPathGenerated::CreateLambda(
+        [this, FlashPawnWeak, LookAtWeak](const FPathGenerator::FGeneratedPath& Path)
         {
-            const float AngleRad = FMath::DegreesToRadians(360.f * AngleIdx / NumSampleAngles);
-            const FVector Dir(FMath::Cos(AngleRad), FMath::Sin(AngleRad), 0.f);
-            const FVector TraceStart = CenterAtZ + Dir * SearchRadius;
-            const FVector TraceEnd   = CenterAtZ;
-
-            FHitResult BestHit;
-            float BestDistFromStart = FLT_MAX;
-            bool bFoundHit = false;
-
-            for (UPrimitiveComponent* Comp : OrbitPrimComps)
+            bGenerationInProgress = false;
+            if (!FlashPawnWeak.IsValid())
             {
-                FHitResult CompHit;
-                if (Comp && Comp->LineTraceComponent(CompHit, TraceStart, TraceEnd, QueryParams))
+                UE_LOG(LogPathImageCapture, Warning, TEXT("FlashPawn became invalid after path generation."));
+                return;
+            }
+
+            FlashPawnWeak->SetPathPanel(Path.Positions, Path.Rotations);
+            FlashPawnWeak->MoveTo(0);
+
+            if (AVCCSimLookAtPath* LookAt = LookAtWeak.Get())
+            {
+                if (LookAt->Spline)
                 {
-                    const float D = FVector::Dist(TraceStart, CompHit.Location);
-                    if (D < BestDistFromStart)
+                    LookAt->Spline->ClearSplinePoints(false);
+                    for (int32 i = 0; i < Path.Positions.Num(); ++i)
                     {
-                        BestDistFromStart = D;
-                        BestHit = CompHit;
-                        bFoundHit = true;
+                        LookAt->Spline->AddSplinePoint(Path.Positions[i], ESplineCoordinateSpace::World, false);
+                        LookAt->Spline->SetSplinePointType(i, ESplinePointType::Linear, false);
+                    }
+                    LookAt->Spline->UpdateSpline();
+                    LookAt->FreeOrientations = Path.Rotations;
+                    LookAt->OrientationMode  = EOrientationMode::FreeOrientation;
+                    if (LookAt->TargetPoint)
+                    {
+                        FBox Bounds = ComputeCombinedBounds();
+                        if(Bounds.IsValid)
+                            LookAt->TargetPoint->SetWorldLocation(Bounds.GetCenter());
                     }
                 }
             }
 
-            FVector CamPos;
-            if (bFoundHit)
-            {
-                const FVector N2D(BestHit.Normal.X, BestHit.Normal.Y, 0.f);
-                const FVector HitNormal2D = N2D.IsNearlyZero() ? Dir : N2D.GetSafeNormal();
-                CamPos = FVector(BestHit.Location.X + HitNormal2D.X * OrbitMargin,
-                                 BestHit.Location.Y + HitNormal2D.Y * OrbitMargin,
-                                 Z);
-            }
-            else
-            {
-                const float AbsCosA = FMath::Abs(Dir.X);
-                const float AbsSinA = FMath::Abs(Dir.Y);
-                const float BoxDist = (AbsCosA < KINDA_SMALL_NUMBER) ? HY :
-                                      (AbsSinA < KINDA_SMALL_NUMBER) ? HX :
-                                      FMath::Min(HX / AbsCosA, HY / AbsSinA);
-                CamPos = FVector(CenterAtZ.X + (BoxDist + OrbitMargin) * Dir.X,
-                                 CenterAtZ.Y + (BoxDist + OrbitMargin) * Dir.Y,
-                                 Z);
-            }
-            FineSamples.Add(CamPos);
+            UE_LOG(LogPathImageCapture, Log, TEXT("Conformal orbit generated with %d poses."), Path.Positions.Num());
         }
-
-        auto AddPose = [&](const FVector& CamPos)
-        {
-            const FVector LookDir(BoxCenter.X - CamPos.X, BoxCenter.Y - CamPos.Y, 0.f);
-            Positions.Add(CamPos);
-            Rotations.Add(LookDir.GetSafeNormal().Rotation());
-        };
-
-        AddPose(FineSamples[0]);
-        float AccumLen = 0.f;
-        for (int32 i = 0; i < NumSampleAngles; ++i)
-        {
-            const int32 Next = (i + 1) % NumSampleAngles;
-            AccumLen += FVector::Dist2D(FineSamples[i], FineSamples[Next]);
-            if (AccumLen >= StepH)
-            {
-                AddPose(FVector(FineSamples[Next].X, FineSamples[Next].Y, Z));
-                AccumLen = 0.f;
-            }
-        }
-    }
-
-    if (bOrbitIncludeNadir)
-    {
-        const float NadirZ     = CombinedBox.Max.Z + OrbitNadirAlt;
-        const float NadirFootH = 2.f * OrbitNadirAlt * FMath::Tan(HFovRad * 0.5f);
-        const float NadirFootV = 2.f * OrbitNadirAlt * FMath::Tan(VFovRad * 0.5f);
-        const float CrossStep  = NadirFootH * FMath::Max(1.f - OrbitHOverlap, 0.05f);
-        const float AlongStep  = NadirFootV * FMath::Max(1.f - OrbitVOverlap, 0.05f);
-
-        const float MinX = CombinedBox.Min.X - OrbitMargin;
-        const float MaxX = CombinedBox.Max.X + OrbitMargin;
-        const float MinY = CombinedBox.Min.Y - OrbitMargin;
-        const float MaxY = CombinedBox.Max.Y + OrbitMargin;
-
-        int32 StripIdx = 0;
-        for (float X = MinX; X <= MaxX + KINDA_SMALL_NUMBER; X += CrossStep, ++StripIdx)
-        {
-            const float Yaw = (StripIdx % 2 == 0) ? 90.f : -90.f;
-            if (StripIdx % 2 == 0)
-            {
-                for (float Y = MinY; Y <= MaxY + KINDA_SMALL_NUMBER; Y += AlongStep)
-                {
-                    Positions.Add(FVector(X, Y, NadirZ));
-                    Rotations.Add(FRotator(-90.f, Yaw, 0.f));
-                }
-            }
-            else
-            {
-                for (float Y = MaxY; Y >= MinY - KINDA_SMALL_NUMBER; Y -= AlongStep)
-                {
-                    Positions.Add(FVector(X, Y, NadirZ));
-                    Rotations.Add(FRotator(-90.f, Yaw, 0.f));
-                }
-            }
-        }
-    }
-
-    // Set path on FlashPawn
-    TWeakObjectPtr<AFlashPawn> FlashPawn = SelectionManager.Pin()->GetSelectedFlashPawn();
-    FlashPawn->SetPathPanel(Positions, Rotations);
-    FlashPawn->MoveTo(0);
-
-    // Set spline on selected LookAt actor if available
-    AVCCSimLookAtPath* LookAt = SelectionManager.Pin()->GetSelectedLookAtPath().Get();
-    if (LookAt && LookAt->Spline)
-    {
-        LookAt->Spline->ClearSplinePoints(false);
-        for (int32 i = 0; i < Positions.Num(); ++i)
-        {
-            LookAt->Spline->AddSplinePoint(Positions[i], ESplineCoordinateSpace::World, false);
-            LookAt->Spline->SetSplinePointType(i, ESplinePointType::Linear, false);
-        }
-        LookAt->Spline->UpdateSpline();
-        LookAt->FreeOrientations  = Rotations;
-        LookAt->OrientationMode   = EOrientationMode::FreeOrientation;
-        if (LookAt->TargetPoint)
-            LookAt->TargetPoint->SetWorldLocation(BoxCenter);
-    }
-
-    bAutoCaptureInProgress = false;
-    GEditor->GetTimerManager()->ClearTimer(AutoCaptureTimerHandle);
-
-    UE_LOG(LogPathImageCapture, Log, TEXT("Conformal orbit: %d total poses (%d rings%s)"),
-        Positions.Num(), NumRings, bOrbitIncludeNadir ? TEXT(" + nadir zigzag") : TEXT(""));
+    ));
 }
 
 FReply FVCCSimPanelPathImageCapture::OnLoadPoseClicked()
@@ -1029,447 +652,27 @@ FReply FVCCSimPanelPathImageCapture::OnCaptureImagesClicked()
 
 void FVCCSimPanelPathImageCapture::CaptureImageFromCurrentPose()
 {
-    TWeakObjectPtr<AFlashPawn> SelectedFlashPawn;
-    if (SelectionManager.IsValid())
+    if (!ImageCaptureService.IsValid())
     {
-        SelectedFlashPawn = SelectionManager.Pin()->GetSelectedFlashPawn();
-    }
-    
-    if (!SelectedFlashPawn.IsValid())
-    {
-        UE_LOG(LogPathImageCapture, Warning, TEXT("No FlashPawn selected"));
+        UE_LOG(LogPathImageCapture, Error, TEXT("ImageCaptureService is not valid."));
         return;
     }
     
     // Create a directory for saving images if it doesn't exist yet
     if (SaveDirectory.IsEmpty())
     {
-        SaveDirectory = FPaths::ProjectSavedDir() / TEXT("VCCSimCaptures")
-        / GetTimestampedFilename();
+        SaveDirectory = FPaths::ProjectSavedDir() / TEXT("VCCSimCaptures") / GetTimestampedFilename();
         IFileManager::Get().MakeDirectory(*SaveDirectory, true);
     }
-    
-    // Check if the FlashPawn is ready to capture
-    if (SelectedFlashPawn->IsReady())
+
+    bool bAnyCaptured = false;
+    int32 PoseIndex = -1;
+    if (SelectionManager.IsValid() && SelectionManager.Pin()->GetSelectedFlashPawn().IsValid())
     {
-        // Pose index for filename
-        int32 PoseIndex = SelectedFlashPawn->GetCurrentIndex();
-
-        // Track if any cameras were captured
-        bool bAnyCaptured = false;
-        
-        auto SelectionManagerPin = SelectionManager.Pin();
-        if (!SelectionManagerPin.IsValid()) return;
-        
-        if (SelectionManagerPin->IsUsingRGBCamera() && SelectionManagerPin->HasRGBCamera())
-        {
-            SaveRGB(PoseIndex, bAnyCaptured);
-        }
-        
-        if (SelectionManagerPin->IsUsingDepthCamera() && SelectionManagerPin->HasDepthCamera())
-        {
-            SaveDepth(PoseIndex, bAnyCaptured);
-        }
-        
-        if (SelectionManagerPin->IsUsingNormalCamera() && SelectionManagerPin->HasNormalCamera())
-        {
-            SaveNormal(PoseIndex, bAnyCaptured);
-        }
-        
-        if (SelectionManagerPin->IsUsingSegmentationCamera() &&
-            SelectionManagerPin->HasSegmentationCamera())
-        {
-            SaveSeg(PoseIndex, bAnyCaptured);
-        }
-
-        if (SelectionManagerPin->IsUsingBaseColorCamera() &&
-            SelectionManagerPin->HasBaseColorCamera())
-        {
-            SaveBaseColor(PoseIndex, bAnyCaptured);
-        }
-
-        if (SelectionManagerPin->IsUsingMaterialPropertiesCamera() &&
-            SelectionManagerPin->HasMaterialPropertiesCamera())
-        {
-            SaveMaterialProperties(PoseIndex, bAnyCaptured);
-        }
-
-        // Log if no images were captured
-        if (!bAnyCaptured)
-        {
-            UE_LOG(LogPathImageCapture, Warning, TEXT("No images captured. "
-                                          "Ensure cameras are enabled."));
-        }
-    }
-    else
-    {
-        UE_LOG(LogPathImageCapture, Warning, TEXT("FlashPawn not ready for capture. "
-                                      "Wait for it to reach position."));
-    }
-}
-
-void FVCCSimPanelPathImageCapture::SaveRGB(int32 PoseIndex, bool& bAnyCaptured)
-{
-    auto SelectionManagerPin = SelectionManager.Pin();
-    if (!SelectionManagerPin.IsValid()) return;
-
-    TWeakObjectPtr<AFlashPawn> SelectedFlashPawn = SelectionManagerPin->GetSelectedFlashPawn();
-    if (!SelectedFlashPawn.IsValid()) return;
-
-    if (SelectionManagerPin->ShouldUseRGBCameraClass())
-    {
-        TArray<URGBCameraComponent*> RGBCameras;
-        SelectedFlashPawn->GetComponents<URGBCameraComponent>(RGBCameras);
-        *JobNum += RGBCameras.Num();
-
-        for (int32 i = 0; i < RGBCameras.Num(); ++i)
-        {
-            URGBCameraComponent* Camera = RGBCameras[i];
-            if (Camera)
-            {
-                int32 CameraIndex = Camera->GetSensorIndex();
-                if (CameraIndex < 0) CameraIndex = i;
-
-                FString Filename = SaveDirectory /
-                    FString::Printf(TEXT("RGB_Cam%02d_Pose%03d.png"), CameraIndex, PoseIndex);
-                FIntPoint Size = {Camera->GetImageSize().first, Camera->GetImageSize().second};
-
-                Camera->AsyncGetRGBImageData(
-                    [Filename, Size, JobNum = this->JobNum](const TArray<FColor>& ImageData)
-                    {
-                        (new FAutoDeleteAsyncTask<FAsyncImageSaveTask>(ImageData, Size, Filename))
-                        ->StartBackgroundTask();
-                        *JobNum -= 1;
-                    });
-                bAnyCaptured = true;
-            }
-            else
-            {
-                *JobNum -= 1;
-            }
-        }
-    }
-    else
-    {
-        // Existing logic: Use high-res screenshot
-        TArray<URGBCameraComponent*> RGBCameras;
-        SelectedFlashPawn->GetComponents<URGBCameraComponent>(RGBCameras);
-        *JobNum += RGBCameras.Num();
-        
-        FEditorViewportClient* ViewportClient = nullptr;
-        for (FLevelEditorViewportClient* LevelVC : GEditor->GetLevelViewportClients())
-        {
-            if (LevelVC && LevelVC->Viewport && !LevelVC->IsOrtho())
-            {
-                ViewportClient = LevelVC;
-                break;
-            }
-        }
-        
-        if (!ViewportClient)
-        {
-            UE_LOG(LogPathImageCapture, Error, TEXT("No valid editor viewport found"));
-            *JobNum -= RGBCameras.Num();
-            return;
-        }
-        
-        for (int32 i = 0; i < RGBCameras.Num(); ++i)
-        {
-            URGBCameraComponent* Camera = RGBCameras[i];
-            
-            if (Camera)
-            {
-                int32 CameraIndex = Camera->GetSensorIndex();
-                if (CameraIndex < 0) CameraIndex = i;
-                
-                FString Filename = SaveDirectory / FString::Printf(
-                    TEXT("RGB_Cam%02d_Pose%03d.png"), 
-                    CameraIndex, 
-                    PoseIndex
-                );
-                
-                FIntPoint CameraSize = {Camera->GetImageSize().first,
-                    Camera->GetImageSize().second};
-                FTransform CameraTransform = Camera->GetComponentTransform();
-                
-                ViewportClient->SetViewLocation(CameraTransform.GetLocation());
-                ViewportClient->SetViewRotation(CameraTransform.GetRotation().Rotator());
-                ViewportClient->ViewFOV = Camera->FOV;
-                ViewportClient->Invalidate();
-                ViewportClient->Viewport->Draw();
-                
-                FHighResScreenshotConfig& HighResScreenshotConfig = GetHighResScreenshotConfig();
-                HighResScreenshotConfig.SetResolution(CameraSize.X, CameraSize.Y);
-                HighResScreenshotConfig.SetFilename(Filename);
-                HighResScreenshotConfig.bMaskEnabled = false;
-                HighResScreenshotConfig.bCaptureHDR = false;
-                
-                FScreenshotRequest::RequestScreenshot(Filename, false, false);
-                *JobNum -= 1;
-                
-                bAnyCaptured = true;
-            }
-            else
-            {
-                *JobNum -= 1;
-            }
-        }
-    }
-}
-
-void FVCCSimPanelPathImageCapture::SaveDepth(int32 PoseIndex, bool& bAnyCaptured)
-{
-    TWeakObjectPtr<AFlashPawn> SelectedFlashPawn;
-    if (SelectionManager.IsValid())
-    {
-        SelectedFlashPawn = SelectionManager.Pin()->GetSelectedFlashPawn();
+        PoseIndex = SelectionManager.Pin()->GetSelectedFlashPawn()->GetCurrentIndex();
     }
     
-    if (!SelectedFlashPawn.IsValid())
-    {
-        return;
-    }
-    
-    TArray<UDepthCameraComponent*> DepthCameras;
-    SelectedFlashPawn->GetComponents<UDepthCameraComponent>(DepthCameras);
-    *JobNum += DepthCameras.Num();
-
-    for (int32 i = 0; i < DepthCameras.Num(); ++i)
-    {
-        UDepthCameraComponent* Camera = DepthCameras[i];
-        
-        if (Camera)
-        {
-            int32 CameraIndex = Camera->GetSensorIndex();
-            if (CameraIndex < 0) CameraIndex = i;
-
-            FString DepthFilename = SaveDirectory / FString::Printf(
-                TEXT("Depth16_Cam%02d_Pose%03d.png"), 
-                CameraIndex, 
-                PoseIndex
-            );
-            
-            FIntPoint Size = {Camera->GetImageSize().first,
-                Camera->GetImageSize().second};
-
-            Camera->AsyncGetDepthImageData(
-           [DepthFilename, Size, JobNum = this->JobNum]
-           (const TArray<FFloat16Color>& ImageData)
-           {
-               TArray<float> DepthValues;
-               DepthValues.SetNum(ImageData.Num());
-               for (int32 idx = 0; idx < ImageData.Num(); ++idx)
-               {
-                   DepthValues[idx] = ImageData[idx].A;
-               }
-
-               (new FAutoDeleteAsyncTask<FAsyncDepthSaveTask>
-                   (DepthValues, Size, DepthFilename))->StartBackgroundTask();
-
-               *JobNum -= 1;
-           });
-            
-            bAnyCaptured = true;
-        }
-        else
-        {
-            *JobNum -= 1;
-        }
-    }
-}
-
-void FVCCSimPanelPathImageCapture::SaveSeg(int32 PoseIndex, bool& bAnyCaptured)
-{
-    TWeakObjectPtr<AFlashPawn> SelectedFlashPawn;
-    if (SelectionManager.IsValid())
-    {
-        SelectedFlashPawn = SelectionManager.Pin()->GetSelectedFlashPawn();
-    }
-    
-    if (!SelectedFlashPawn.IsValid())
-    {
-        return;
-    }
-    
-    TArray<USegCameraComponent*> SegmentationCameras;
-    SelectedFlashPawn->GetComponents<USegCameraComponent>(SegmentationCameras);
-    *JobNum += SegmentationCameras.Num();
-
-    for (int32 i = 0; i < SegmentationCameras.Num(); ++i)
-    {
-        USegCameraComponent* Camera = SegmentationCameras[i];
-        
-        if (Camera)
-        {
-            int32 CameraIndex = Camera->GetSensorIndex();
-            if (CameraIndex < 0) CameraIndex = i;
-
-            FString Filename = SaveDirectory / FString::Printf(
-                TEXT("Seg_Cam%02d_Pose%03d.png"), 
-                CameraIndex, 
-                PoseIndex
-            );
-                    
-            // Capture the image
-            FIntPoint Size = {Camera->GetImageSize().first, Camera->GetImageSize().second};
-                    
-            // Get image data and save asynchronously
-            Camera->AsyncGetSegmentationImageData(
-                [Filename, Size, JobNum = this->JobNum](TArray<FColor> ImageData)
-                {
-                    (new FAutoDeleteAsyncTask<FAsyncImageSaveTask>(ImageData, Size, Filename))
-                    ->StartBackgroundTask();
-                    *JobNum -= 1;
-                });
-                    
-            bAnyCaptured = true;
-        }
-    }
-}
-
-void FVCCSimPanelPathImageCapture::SaveNormal(int32 PoseIndex, bool& bAnyCaptured)
-{
-    TWeakObjectPtr<AFlashPawn> SelectedFlashPawn;
-    if (SelectionManager.IsValid())
-    {
-        SelectedFlashPawn = SelectionManager.Pin()->GetSelectedFlashPawn();
-    }
-    
-    if (!SelectedFlashPawn.IsValid())
-    {
-        return;
-    }
-    
-    TArray<UNormalCameraComponent*> NormalCameras;
-    SelectedFlashPawn->GetComponents<UNormalCameraComponent>(NormalCameras);
-    *JobNum += NormalCameras.Num();
-
-    for (int32 i = 0; i < NormalCameras.Num(); ++i)
-    {
-        UNormalCameraComponent* Camera = NormalCameras[i];
-        
-        if (Camera)
-        {
-            int32 CameraIndex = Camera->GetSensorIndex();
-            if (CameraIndex < 0) CameraIndex = i;
-
-            FString NormalEXRFilename = SaveDirectory / FString::Printf(
-                TEXT("Normal_Cam%02d_Pose%03d.exr"), 
-                CameraIndex, 
-                PoseIndex
-            );
-            
-            FIntPoint Size = {Camera->GetImageSize().first, Camera->GetImageSize().second};
-            
-            // Save high precision normals as EXR
-            Camera->AsyncGetNormalImageData(
-                [NormalEXRFilename, Size, JobNum = this->JobNum]
-                (const TArray<FFloat16Color>& NormalData)
-                {
-                    (new FAutoDeleteAsyncTask<FAsyncNormalEXRSaveTask>(
-                        NormalData, 
-                        Size, 
-                        NormalEXRFilename))
-                    ->StartBackgroundTask();
-                    
-                    *JobNum -= 1;
-                });
-            
-            bAnyCaptured = true;
-        }
-        else
-        {
-            *JobNum -= 1;
-        }
-    }
-}
-
-void FVCCSimPanelPathImageCapture::SaveBaseColor(int32 PoseIndex, bool& bAnyCaptured)
-{
-    TWeakObjectPtr<AFlashPawn> SelectedFlashPawn;
-    if (SelectionManager.IsValid())
-        SelectedFlashPawn = SelectionManager.Pin()->GetSelectedFlashPawn();
-
-    if (!SelectedFlashPawn.IsValid()) return;
-
-    TArray<UBaseColorCameraComponent*> Cameras;
-    SelectedFlashPawn->GetComponents<UBaseColorCameraComponent>(Cameras);
-    *JobNum += Cameras.Num();
-
-    for (int32 i = 0; i < Cameras.Num(); ++i)
-    {
-        UBaseColorCameraComponent* Camera = Cameras[i];
-        if (Camera)
-        {
-            int32 CameraIndex = Camera->GetSensorIndex();
-            if (CameraIndex < 0) CameraIndex = i;
-
-            FString Filename = SaveDirectory / FString::Printf(
-                TEXT("BaseColor_Cam%02d_Pose%03d.png"), CameraIndex, PoseIndex);
-
-            FIntPoint Size = {Camera->GetImageSize().first, Camera->GetImageSize().second};
-
-            Camera->AsyncGetBaseColorImageData(
-                [Filename, Size, JobNum = this->JobNum](const TArray<FColor>& ImageData)
-                {
-                    TArray<FColor> DataCopy = ImageData;
-                    for (FColor& Pixel : DataCopy) Pixel.A = 255;
-                    (new FAutoDeleteAsyncTask<FAsyncImageSaveTask>(DataCopy, Size, Filename))
-                        ->StartBackgroundTask();
-                    *JobNum -= 1;
-                });
-
-            bAnyCaptured = true;
-        }
-        else
-        {
-            *JobNum -= 1;
-        }
-    }
-}
-
-void FVCCSimPanelPathImageCapture::SaveMaterialProperties(int32 PoseIndex, bool& bAnyCaptured)
-{
-    TWeakObjectPtr<AFlashPawn> SelectedFlashPawn;
-    if (SelectionManager.IsValid())
-        SelectedFlashPawn = SelectionManager.Pin()->GetSelectedFlashPawn();
-
-    if (!SelectedFlashPawn.IsValid()) return;
-
-    TArray<UMaterialPropertiesCameraComponent*> Cameras;
-    SelectedFlashPawn->GetComponents<UMaterialPropertiesCameraComponent>(Cameras);
-    *JobNum += Cameras.Num();
-
-    for (int32 i = 0; i < Cameras.Num(); ++i)
-    {
-        UMaterialPropertiesCameraComponent* Camera = Cameras[i];
-        if (Camera)
-        {
-            int32 CameraIndex = Camera->GetSensorIndex();
-            if (CameraIndex < 0) CameraIndex = i;
-
-            FString Filename = SaveDirectory / FString::Printf(
-                TEXT("MatProps_Cam%02d_Pose%03d.png"), CameraIndex, PoseIndex);
-
-            FIntPoint Size = {Camera->GetImageSize().first, Camera->GetImageSize().second};
-
-            Camera->AsyncGetMaterialPropertiesImageData(
-                [Filename, Size, JobNum = this->JobNum](const TArray<FColor>& ImageData)
-                {
-                    TArray<FColor> DataCopy = ImageData;
-                    for (FColor& Pixel : DataCopy) Pixel.A = 255;
-                    (new FAutoDeleteAsyncTask<FAsyncImageSaveTask>(DataCopy, Size, Filename))
-                        ->StartBackgroundTask();
-                    *JobNum -= 1;
-                });
-
-            bAnyCaptured = true;
-        }
-        else
-        {
-            *JobNum -= 1;
-        }
-    }
+    ImageCaptureService->CaptureImageFromCurrentPose(PoseIndex, SaveDirectory, bAnyCaptured);
 }
 
 void FVCCSimPanelPathImageCapture::StartAutoCapture()
@@ -1497,7 +700,6 @@ void FVCCSimPanelPathImageCapture::StartAutoCapture()
 
     bGameViewChangedForCapture = EnsureGameView();
     bAutoCaptureInProgress = true;
-    *JobNum = 0;
 
     SelectedFlashPawn->MoveTo(0);
     
@@ -1548,10 +750,10 @@ void FVCCSimPanelPathImageCapture::StartAutoCapture()
                     }
                 }
             }
-            else if (*JobNum == 0)
-                {
+            else
+            {
                 SelectedFlashPawn->MoveForward();
-                }
+            }
         },
         0.2f,
         true
@@ -1573,209 +775,8 @@ void FVCCSimPanelPathImageCapture::StopAutoCapture()
 }
 
 // ============================================================================
-// UI BUTTON GROUPS
+// UTILITIES
 // ============================================================================
-
-TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreatePoseFileButtons()
-{
-    return SNew(SHorizontalBox)
-    +SHorizontalBox::Slot()
-    .MaxWidth(180)
-    .Padding(FMargin(0, 0, 4, 0))
-    .HAlign(HAlign_Fill)
-    [
-        SNew(SButton)
-        .ButtonStyle(FAppStyle::Get(), "FlatButton.Default")
-        .ContentPadding(FMargin(4, 2))
-        .Text(FText::FromString("Load Predefined Pose"))
-        .HAlign(HAlign_Center)
-        .OnClicked_Lambda([this]() { return OnLoadPoseClicked(); })
-        .IsEnabled_Lambda([this]() {
-            return SelectionManager.IsValid() &&
-                SelectionManager.Pin()->GetSelectedFlashPawn().IsValid();
-        })
-    ]
-    +SHorizontalBox::Slot()
-    .MaxWidth(180)
-    .Padding(FMargin(4, 0, 4, 0))
-    .HAlign(HAlign_Fill)
-    [
-        SNew(SButton)
-        .ButtonStyle(FAppStyle::Get(), "FlatButton.Default")
-        .ContentPadding(FMargin(4, 2))
-        .HAlign(HAlign_Center)
-        .Text(FText::FromString("Save Generated Pose"))
-        .OnClicked_Lambda([this]() { return OnSavePoseClicked(); })
-        .IsEnabled_Lambda([this]() {
-            return SelectionManager.IsValid() &&
-                SelectionManager.Pin()->GetSelectedFlashPawn().IsValid() && 
-                   SelectionManager.Pin()->GetSelectedFlashPawn()->GetPoseCount() > 0;
-        })
-    ];
-}
-TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreatePoseActionButtons()
-{
-    return SNew(SHorizontalBox)
-    +SHorizontalBox::Slot()
-    .MaxWidth(180)
-    .Padding(FMargin(0, 0, 4, 0))
-    .HAlign(HAlign_Fill)
-    [
-        SNew(SButton)
-        .ButtonStyle(FAppStyle::Get(), "FlatButton.Success")
-        .ContentPadding(FMargin(5, 2))
-        .Text(FText::FromString("Generate Poses"))
-        .HAlign(HAlign_Center)
-        .OnClicked_Lambda([this]() { return OnGeneratePosesClicked(); })
-        .IsEnabled_Lambda([this]() {
-            return SelectionManager.IsValid() &&
-                SelectionManager.Pin()->GetSelectedFlashPawn().IsValid() &&
-                !OrbitActorListItems.IsEmpty();
-        })
-    ]
-    +SHorizontalBox::Slot()
-    .MaxWidth(180)
-    .Padding(FMargin(4, 0, 4, 0))
-    .HAlign(HAlign_Fill)
-    [
-        SAssignNew(VisualizePathButton, SButton)
-        .ButtonStyle(bPathVisualized ? 
-           &FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Danger") : 
-           &FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Primary"))
-        .ContentPadding(FMargin(5, 2))
-        .HAlign(HAlign_Center)
-        .Text_Lambda([this]() {
-            return FText::FromString(bPathVisualized ? "Hide Path" : "Show Path");
-        })
-        .OnClicked_Lambda([this]() { return OnTogglePathVisualizationClicked(); })
-        .IsEnabled_Lambda([this]() {
-            return SelectionManager.IsValid() &&
-                SelectionManager.Pin()->GetSelectedFlashPawn().IsValid() && !bPathNeedsUpdate;
-        })
-    ];
-}
-
-TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreateMovementButtons()
-{
-    return SNew(SHorizontalBox)
-    +SHorizontalBox::Slot()
-    .MaxWidth(180)
-    .Padding(FMargin(0, 0, 4, 0))
-    .HAlign(HAlign_Fill)
-    [
-        SNew(SButton)
-        .ButtonStyle(FAppStyle::Get(), "FlatButton.Default")
-        .ContentPadding(FMargin(5, 2))
-        .Text(FText::FromString("Move Back"))
-        .HAlign(HAlign_Center)
-        .OnClicked_Lambda([this]() {
-            if (SelectionManager.IsValid() &&
-                SelectionManager.Pin()->GetSelectedFlashPawn().IsValid())
-            {
-                SelectionManager.Pin()->GetSelectedFlashPawn()->MoveBackward();
-            }
-            return FReply::Handled();
-        })
-        .IsEnabled_Lambda([this]() {
-            return SelectionManager.IsValid() &&
-                SelectionManager.Pin()->GetSelectedFlashPawn().IsValid();
-        })
-    ]
-    +SHorizontalBox::Slot()
-    .MaxWidth(180)
-    .Padding(FMargin(4, 0, 4, 0))
-    .HAlign(HAlign_Fill)
-    [
-        SNew(SButton)
-        .ButtonStyle(FAppStyle::Get(), "FlatButton.Default")
-        .ContentPadding(FMargin(5, 2))
-        .Text(FText::FromString("Move Next"))
-        .HAlign(HAlign_Center)
-        .OnClicked_Lambda([this]() {
-            if (SelectionManager.IsValid() &&
-                SelectionManager.Pin()->GetSelectedFlashPawn().IsValid())
-            {
-                SelectionManager.Pin()->GetSelectedFlashPawn()->MoveForward();
-            }
-            return FReply::Handled();
-        })
-        .IsEnabled_Lambda([this]() {
-            return SelectionManager.IsValid() &&
-                SelectionManager.Pin()->GetSelectedFlashPawn().IsValid();
-        })
-    ];
-}
-
-TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreateCaptureButtons()
-{
-    return SNew(SHorizontalBox)
-    
-    // Single Capture button
-    +SHorizontalBox::Slot()
-    .MaxWidth(180)
-    .Padding(FMargin(0, 0, 4, 0))
-    .HAlign(HAlign_Fill)
-    [
-        SNew(SButton)
-        .ButtonStyle(FAppStyle::Get(), "FlatButton.Success")
-        .ContentPadding(FMargin(5, 2))
-        .Text(FText::FromString("Capture This Pose"))
-        .HAlign(HAlign_Center)
-        .OnClicked_Lambda([this]() { return OnCaptureImagesClicked(); })
-        .IsEnabled_Lambda([this]() {
-            if (!SelectionManager.IsValid()) return false;
-            auto SelectionManagerPin = SelectionManager.Pin();
-            if (!SelectionManagerPin.IsValid() || !SelectionManagerPin->GetSelectedFlashPawn().IsValid()) return false;
-            
-            return (SelectionManagerPin->IsUsingRGBCamera() && SelectionManagerPin->HasRGBCamera()) ||
-                   (SelectionManagerPin->IsUsingDepthCamera() && SelectionManagerPin->HasDepthCamera()) ||
-                   (SelectionManagerPin->IsUsingNormalCamera() && SelectionManagerPin->HasNormalCamera()) ||
-                   (SelectionManagerPin->IsUsingSegmentationCamera() && SelectionManagerPin->HasSegmentationCamera()) ||
-                   (SelectionManagerPin->IsUsingBaseColorCamera() && SelectionManagerPin->HasBaseColorCamera()) ||
-                   (SelectionManagerPin->IsUsingMaterialPropertiesCamera() && SelectionManagerPin->HasMaterialPropertiesCamera());
-        })
-    ]
-    
-    // Auto Capture button
-    +SHorizontalBox::Slot()
-    .MaxWidth(180)
-    .Padding(FMargin(4, 0, 4, 0))
-    .HAlign(HAlign_Fill)
-    [
-        SAssignNew(AutoCaptureButton, SButton)
-        .ButtonStyle(FAppStyle::Get(), "FlatButton.Primary")
-        .ContentPadding(FMargin(5, 2))
-        .Text_Lambda([this]() {
-            return bAutoCaptureInProgress ? 
-                FText::FromString("Stop Capture") :
-                FText::FromString("Capture All Poses");
-        })
-        .HAlign(HAlign_Center)
-        .OnClicked_Lambda([this]() {
-            if (bAutoCaptureInProgress)
-            {
-                StopAutoCapture();
-                AutoCaptureButton->SetButtonStyle(&FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Primary"));
-            }
-            else
-            {
-                StartAutoCapture();
-                AutoCaptureButton->SetButtonStyle(&FAppStyle::Get().GetWidgetStyle<FButtonStyle>("FlatButton.Danger"));
-            }
-            return FReply::Handled();
-        })
-        .IsEnabled_Lambda([this]() {
-            if (!SelectionManager.IsValid()) return false;
-            auto SelectionManagerPin = SelectionManager.Pin();
-            if (!SelectionManagerPin.IsValid() || !SelectionManagerPin->GetSelectedFlashPawn().IsValid()) return false;
-            
-            return (SelectionManagerPin->IsUsingRGBCamera() && SelectionManagerPin->HasRGBCamera()) || 
-                   (SelectionManagerPin->IsUsingDepthCamera() && SelectionManagerPin->HasDepthCamera()) || 
-                   (SelectionManagerPin->IsUsingSegmentationCamera() && SelectionManagerPin->HasSegmentationCamera()) ||
-                   (SelectionManagerPin->IsUsingNormalCamera() && SelectionManagerPin->HasNormalCamera());
-        })
-    ];
-}
 
 FString FVCCSimPanelPathImageCapture::GetTimestampedFilename()
 {
