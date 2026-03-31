@@ -20,6 +20,7 @@
 #include "CoreMinimal.h"
 
 class UPrimitiveComponent;
+class AActor;
 
 /**
  * Generates complex camera paths for scene capture.
@@ -31,6 +32,7 @@ public:
     struct FConformalOrbitParams
     {
         FBox TargetBounds;
+        TArray<AActor*> TargetActors;
         TArray<UPrimitiveComponent*> TargetPrimitives;
         UWorld* World;
 

@@ -250,6 +250,7 @@ void FVCCSimPanelPathImageCapture::GeneratePosesAroundTarget()
         {
             if (It->GetActorLabel() == *Label)
             {
+                Params.TargetActors.Add(*It);
                 It->GetComponents<UPrimitiveComponent>(Params.TargetPrimitives);
                 break;
             }

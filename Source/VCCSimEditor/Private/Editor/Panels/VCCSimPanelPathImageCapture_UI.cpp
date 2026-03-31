@@ -374,7 +374,9 @@ TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreateMovementButtons()
             if (SelectionManager.IsValid() &&
                 SelectionManager.Pin()->GetSelectedFlashPawn().IsValid())
             {
-                SelectionManager.Pin()->GetSelectedFlashPawn()->MoveBackward();
+                AFlashPawn* Pawn = SelectionManager.Pin()->GetSelectedFlashPawn().Get();
+                Pawn->MoveBackward();
+                Pawn->PostEditMove(true);
             }
             return FReply::Handled();
         })
@@ -397,7 +399,9 @@ TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreateMovementButtons()
             if (SelectionManager.IsValid() &&
                 SelectionManager.Pin()->GetSelectedFlashPawn().IsValid())
             {
-                SelectionManager.Pin()->GetSelectedFlashPawn()->MoveForward();
+                AFlashPawn* Pawn = SelectionManager.Pin()->GetSelectedFlashPawn().Get();
+                Pawn->MoveForward();
+                Pawn->PostEditMove(true);
             }
             return FReply::Handled();
         })

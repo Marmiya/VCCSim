@@ -61,7 +61,6 @@ void AFlashPawn::SetPathPanel(
 
 void AFlashPawn::MoveForward()
 {
-	MoveToNext();
 	CurrentIndex++;
 	if (CurrentIndex >= PendingPositions.Num())
 	{
@@ -75,7 +74,6 @@ void AFlashPawn::MoveForward()
 
 void AFlashPawn::MoveBackward()
 {
-	MoveToNext();
 	CurrentIndex--;
 	if (CurrentIndex < 0)
 	{
@@ -89,7 +87,6 @@ void AFlashPawn::MoveBackward()
 
 void AFlashPawn::MoveTo(const int32& Index)
 {
-	MoveToNext();
 	CurrentIndex = Index;
 	if (CurrentIndex < 0)
 	{

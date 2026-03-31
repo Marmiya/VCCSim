@@ -19,90 +19,12 @@
 #include "Async/Async.h"
 #include "Components/PrimitiveComponent.h"
 #include "Engine/World.h"
-#include "DrawDebugHelpers.h"
-
-DEFINE_LOG_CATEGORY_STATIC(LogPathGenerator, Log, All);
-
-// ============================================================================
-// CONVEX HULL AND POLYGON EXPANSION HELPERS (Copied from VCCSimPanelPathImageCapture.cpp)
-// ============================================================================
-
-namespace PathGeneratorHelpers
-{
-    TArray<FVector2D> ComputeConvexHull2D(TArray<FVector2D> Points)
-    {
-        const int32 N = Points.Num();
-        if (N < 3) return Points;
-
-        int32 Pivot = 0;
-        for (int32 i = 1; i < N; i++)
-        {
-            if (Points[i].Y < Points[Pivot].Y ||
-                (Points[i].Y == Points[Pivot].Y && Points[i].X < Points[Pivot].X))
-                Pivot = i;
-        }
-        Points.Swap(0, Pivot);
-        const FVector2D P0 = Points[0];
-
-        Points.Sort([P0](const FVector2D& A, const FVector2D& B)
-        {
-            const FVector2D dA = A - P0, dB = B - P0;
-            const float Cross = dA.X * dB.Y - dA.Y * dB.X;
-            if (FMath::Abs(Cross) > KINDA_SMALL_NUMBER) return Cross > 0.f;
-            return (dA.X * dA.X + dA.Y * dA.Y) < (dB.X * dB.X + dB.Y * dB.Y);
-        });
-
-        TArray<FVector2D> Stack;
-        Stack.Reserve(N);
-        for (const FVector2D& P : Points)
-        {
-            while (Stack.Num() >= 2)
-            {
-                const FVector2D O = Stack[Stack.Num() - 2];
-                const FVector2D A = Stack[Stack.Num() - 1];
-                if ((A.X - O.X) * (P.Y - O.Y) - (A.Y - O.Y) * (P.X - O.X) <= 0.f)
-                    Stack.Pop(EAllowShrinking::No);
-                else break;
-            }
-            Stack.Add(P);
-        }
-        return Stack;
-    }
-
-    TArray<FVector2D> ExpandConvexPolygon(const TArray<FVector2D>& Hull, float D)
-    {
-        const int32 N = Hull.Num();
-        if (N < 2) return Hull;
-
-        TArray<FVector2D> Result;
-        Result.Reserve(N);
-        for (int32 i = 0; i < N; i++)
-        {
-            const FVector2D Prev = Hull[(i - 1 + N) % N];
-            const FVector2D Curr = Hull[i];
-            const FVector2D Next = Hull[(i + 1) % N];
-
-            const FVector2D E1 = (Curr - Prev).GetSafeNormal();
-            const FVector2D E2 = (Next - Curr).GetSafeNormal();
-            const FVector2D N1(E1.Y, -E1.X);
-            const FVector2D N2(E2.Y, -E2.X);
-
-            const FVector2D Bisector = (N1 + N2).GetSafeNormal();
-            const float SinHalf = FMath::Abs(N1.X * Bisector.Y - N1.Y * Bisector.X);
-            const float Scale = (SinHalf > 0.02f) ? FMath::Min(D / SinHalf, D * 10.f) : D;
-
-            Result.Add(Curr + Bisector * Scale);
-        }
-        return Result;
-    }
-}
-
+#include "GameFramework/Actor.h"
 
 void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params, FOnPathGenerated OnComplete)
 {
     if (!Params.World)
     {
-        UE_LOG(LogPathGenerator, Error, TEXT("World is null, cannot generate path."));
         return;
     }
 
@@ -120,7 +42,9 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
     const float StepV = FMath::Max(
         2.f * Params.Margin * FMath::Tan(VFovRad * 0.5f) * FMath::Max(1.f - Params.VOverlap, 0.05f), 10.f);
 
-    const float BuildingH = FMath::Max(BoxMaxZ - BoxMinZ, 0.f);
+    // Lower the highest ring to position the building top at the 1/4 mark of the frame (reserving 1/4 for the sky).
+    const float BoxMaxZ_Rings = FMath::Max(BoxMaxZ - Params.Margin * FMath::Tan(VFovRad * 0.25f), BoxMinZ + StepV);
+    const float BuildingH = FMath::Max(BoxMaxZ_Rings - BoxMinZ, 0.f);
     const int32 NumRings = FMath::Max(1, FMath::CeilToInt(BuildingH / StepV));
 
     const float SearchRadius = (FMath::Max(BoxExtent.X, BoxExtent.Y) + Params.Margin) * 4.f + 2000.f;
@@ -128,11 +52,20 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
     FCollisionQueryParams QueryParams;
     QueryParams.bTraceComplex = true;
 
-    // Phase 1 (game thread): cast probe rays per ring to discover building outline
-    TArray<TArray<FVector2D>> AllRingHits;
+    // Phase 1 (game thread): For each ring and each direction, cast a ray to get an orbit point (hit surface + Margin).
+    TArray<TArray<FVector>> AllRingOrbitPoints;   // Camera orbit positions, in angular order, 360 per ring.
     TArray<float> AllRingZs;
-    AllRingHits.Reserve(NumRings);
+    AllRingOrbitPoints.Reserve(NumRings);
     AllRingZs.Reserve(NumRings);
+
+    // Build a fast lookup set of Actors; if the list is empty, fall back to bounding box filtering.
+    TSet<AActor*> TargetActorSet;
+    for (AActor* A : Params.TargetActors)
+    {
+        if (A) TargetActorSet.Add(A);
+    }
+    const bool bUseActorFilter = TargetActorSet.Num() > 0;
+    const FBox FallbackBounds = Params.TargetBounds.ExpandBy(Params.Margin * 0.5f);
 
     for (int32 Ring = 0; Ring < NumRings; ++Ring)
     {
@@ -140,8 +73,8 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
         const float Z = BoxMinZ + T * BuildingH;
         const FVector CenterAtZ(BoxCenter.X, BoxCenter.Y, Z);
 
-        TArray<FVector2D> Hits;
-        Hits.Reserve(NumProbes);
+        TArray<FVector> OrbitPoints;
+        OrbitPoints.Reserve(NumProbes);
 
         for (int32 a = 0; a < NumProbes; ++a)
         {
@@ -149,88 +82,121 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
             const FVector Dir(FMath::Cos(AngleRad), FMath::Sin(AngleRad), 0.f);
             const FVector TraceStart = CenterAtZ + Dir * SearchRadius;
 
-            FHitResult BestHit;
-            float BestDist = FLT_MAX;
             bool bFound = false;
+            float HitDistFromCenter = 0.f;
+            FVector HitPoint;
 
-            for (UPrimitiveComponent* Comp : Params.TargetPrimitives)
+            // Main method: World-level raycast, penetrating non-target Actors until a target Actor is hit.
+            // LineTraceMultiByChannel stops at the first blocking hit, so we iterate, ignoring non-target Actors, 
+            // and tracing multiple times until a target is hit or there are no more hits.
             {
-                if (!Comp || !Comp->IsRegistered()) continue;
-                FHitResult Hit;
-                if (Comp->LineTraceComponent(Hit, TraceStart, CenterAtZ, QueryParams))
+                FCollisionQueryParams ProbeParams = QueryParams;
+                int32 MaxPenetrations = 16;
+
+                while (!bFound && MaxPenetrations-- > 0)
                 {
-                    const float D = FVector::Dist(TraceStart, Hit.ImpactPoint);
-                    if (D < BestDist) { BestDist = D; BestHit = Hit; bFound = true; }
+                    FHitResult Hit;
+                    if (!Params.World->LineTraceSingleByChannel(
+                            Hit, TraceStart, CenterAtZ, ECC_Visibility, ProbeParams))
+                        break;
+
+                    AActor* HitActor = Hit.GetActor();
+                    if (!HitActor)
+                        break;
+
+                    if (bUseActorFilter)
+                    {
+                        if (TargetActorSet.Contains(HitActor))
+                        {
+                            HitPoint = Hit.ImpactPoint;
+                            bFound = true;
+                        }
+                        else
+                        {
+                            // Non-target, ignore and continue to penetrate.
+                            ProbeParams.AddIgnoredActor(HitActor);
+                        }
+                    }
+                    else
+                    {
+                        // When there is no Actor list, fall back to bounding box filtering.
+                        if (FallbackBounds.IsInsideOrOn(Hit.ImpactPoint))
+                        {
+                            HitPoint = Hit.ImpactPoint;
+                            bFound = true;
+                        }
+                        else
+                        {
+                            ProbeParams.AddIgnoredActor(HitActor);
+                        }
+                    }
+                }
+
+                if (bFound)
+                {
+                    HitDistFromCenter = FMath::Sqrt(
+                        FMath::Square(HitPoint.X - CenterAtZ.X) +
+                        FMath::Square(HitPoint.Y - CenterAtZ.Y));
                 }
             }
 
             if (bFound)
             {
-                Hits.Add(FVector2D(BestHit.ImpactPoint.X, BestHit.ImpactPoint.Y));
+                // Orbit point = hit point moved outwards by Margin in the same direction.
+                OrbitPoints.Add(FVector(
+                    CenterAtZ.X + Dir.X * (HitDistFromCenter + Params.Margin),
+                    CenterAtZ.Y + Dir.Y * (HitDistFromCenter + Params.Margin),
+                    Z));
+            }
+            else
+            {
+                // Bounding box fallback based on angle: find the distance to the intersection of the ray and the AABB boundary.
+                const float tX = FMath::Abs(Dir.X) > KINDA_SMALL_NUMBER ? BoxExtent.X / FMath::Abs(Dir.X) : FLT_MAX;
+                const float tY = FMath::Abs(Dir.Y) > KINDA_SMALL_NUMBER ? BoxExtent.Y / FMath::Abs(Dir.Y) : FLT_MAX;
+                const float FallbackDist = FMath::Min(tX, tY);
+                OrbitPoints.Add(FVector(
+                    CenterAtZ.X + Dir.X * (FallbackDist + Params.Margin),
+                    CenterAtZ.Y + Dir.Y * (FallbackDist + Params.Margin),
+                    Z));
             }
         }
 
-        if (Hits.Num() < 4)
-        {
-            Hits = {
-                FVector2D(Params.TargetBounds.Min.X, Params.TargetBounds.Min.Y),
-                FVector2D(Params.TargetBounds.Max.X, Params.TargetBounds.Min.Y),
-                FVector2D(Params.TargetBounds.Max.X, Params.TargetBounds.Max.Y),
-                FVector2D(Params.TargetBounds.Min.X, Params.TargetBounds.Max.Y)
-            };
-        }
-
         AllRingZs.Add(Z);
-        AllRingHits.Add(MoveTemp(Hits));
+        AllRingOrbitPoints.Add(MoveTemp(OrbitPoints));
     }
 
-    UWorld* World = Params.World;
-
-    // Phase 2 (background): hull + expand + sample; Phase 3 (game thread): call delegate
+    // Phase 2 (background): Sample along the orbital polygon; Phase 3 (game thread): Callback.
     Async(EAsyncExecution::LargeThreadPool,
-        [World, Params, OnComplete,
-         AllRingHits = MoveTemp(AllRingHits),
+        [Params, OnComplete,
+         AllRingOrbitPoints = MoveTemp(AllRingOrbitPoints),
          AllRingZs = MoveTemp(AllRingZs),
          BoxCenter, StepH, HFovRad, VFovRad]() mutable
         {
             FGeneratedPath GeneratedPath;
-            TArray<TArray<FVector>> DebugHulls, DebugExpandedPolygons;
 
             const int32 NumRings = AllRingZs.Num();
             for (int32 r = 0; r < NumRings; ++r)
             {
-                const float Z = AllRingZs[r];
-                TArray<FVector2D> Hull2D = PathGeneratorHelpers::ComputeConvexHull2D(AllRingHits[r]);
-                TArray<FVector2D> Expanded2D = PathGeneratorHelpers::ExpandConvexPolygon(Hull2D, Params.Margin);
-
-                TArray<FVector> Hull3D, Expanded3D;
-                for(const FVector2D& P : Hull2D) Hull3D.Add(FVector(P.X, P.Y, Z));
-                for(const FVector2D& P : Expanded2D) Expanded3D.Add(FVector(P.X, P.Y, Z));
-                DebugHulls.Add(MoveTemp(Hull3D));
-                DebugExpandedPolygons.Add(MoveTemp(Expanded3D));
-                
-                const int32 M = Expanded2D.Num();
-                if (M < 2) continue;
-
-                auto LookAtCenter = [&](const FVector2D& P) -> FRotator
-                {
-                    return (FVector(BoxCenter.X, BoxCenter.Y, BoxCenter.Z) -
-                            FVector(P.X, P.Y, Z)).GetSafeNormal().Rotation();
-                };
+                const TArray<FVector>& OrbitPoints = AllRingOrbitPoints[r];
+                const int32 M = OrbitPoints.Num();
+                if (M < 4) continue;
 
                 float DistUntilNext = 0.f;
                 for (int32 i = 0; i < M; ++i)
                 {
-                    const FVector2D A = Expanded2D[i];
-                    const FVector2D B = Expanded2D[(i + 1) % M];
-                    const float SegLen = FVector2D::Distance(A, B);
+                    const FVector& A = OrbitPoints[i];
+                    const FVector& B = OrbitPoints[(i + 1) % M];
+                    const float SegLen = FMath::Sqrt(FMath::Square(B.X - A.X) + FMath::Square(B.Y - A.Y));
                     if (SegLen < KINDA_SMALL_NUMBER) continue;
+
+                    const FVector EdgeDir = FVector(B.X - A.X, B.Y - A.Y, 0.f) / SegLen;
+                    const FRotator SegRot = FVector(-EdgeDir.Y, EdgeDir.X, 0.f).Rotation();
 
                     while (DistUntilNext <= SegLen)
                     {
-                        const FVector2D P = A + (B - A) * (DistUntilNext / SegLen);
-                        GeneratedPath.Positions.Add(FVector(P.X, P.Y, Z));
-                        GeneratedPath.Rotations.Add(LookAtCenter(P));
+                        const float t = DistUntilNext / SegLen;
+                        GeneratedPath.Positions.Add(FMath::Lerp(A, B, t));
+                        GeneratedPath.Rotations.Add(SegRot);
                         DistUntilNext += StepH;
                     }
                     DistUntilNext -= SegLen;
@@ -242,61 +208,145 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
                 const float TiltRad = FMath::DegreesToRadians(FMath::Clamp(Params.NadirTiltAngle, 0.f, 80.f));
                 const float SlantDist = Params.NadirAltitude / FMath::Max(FMath::Cos(TiltRad), 0.01f);
                 const float NadirFootH = 2.f * SlantDist * FMath::Tan(HFovRad * 0.5f);
-                const float FarAngle = FMath::Min(TiltRad + VFovRad * 0.5f, PI * 0.5f - 0.017f);
-                const float NadirFootV = FMath::Max(
-                    Params.NadirAltitude * (FMath::Tan(FarAngle) - FMath::Tan(TiltRad - VFovRad * 0.5f)), 50.f);
+                const float NadirFootV = 2.f * SlantDist * FMath::Tan(VFovRad * 0.5f);
 
                 const float CrossStep = FMath::Max(NadirFootH * FMath::Max(1.f - Params.HOverlap, 0.05f), 10.f);
                 const float AlongStep = FMath::Max(NadirFootV * FMath::Max(1.f - Params.VOverlap, 0.05f), 10.f);
                 const float CamPitch = -(90.f - Params.NadirTiltAngle);
                 const float NadirZ = Params.TargetBounds.Max.Z + Params.NadirAltitude;
 
-                const float MinX = Params.TargetBounds.Min.X - Params.Margin;
-                const float MaxX = Params.TargetBounds.Max.X + Params.Margin;
-                const float MinY = Params.TargetBounds.Min.Y - Params.Margin;
-                const float MaxY = Params.TargetBounds.Max.Y + Params.Margin;
-
-                int32 StripIdx = 0;
-                for (float X = MinX; X <= MaxX + KINDA_SMALL_NUMBER; X += CrossStep, ++StripIdx)
+                const TArray<FVector>& TopRingPoints = AllRingOrbitPoints.Last();
+                float NadirMinX = FLT_MAX, NadirMaxX = -FLT_MAX;
+                float NadirMinY = FLT_MAX, NadirMaxY = -FLT_MAX;
+                for (const FVector& P : TopRingPoints)
                 {
-                    const float Yaw = (StripIdx % 2 == 0) ? 90.f : -90.f;
-                    if (StripIdx % 2 == 0)
+                    NadirMinX = FMath::Min(NadirMinX, P.X);
+                    NadirMaxX = FMath::Max(NadirMaxX, P.X);
+                    NadirMinY = FMath::Min(NadirMinY, P.Y);
+                    NadirMaxY = FMath::Max(NadirMaxY, P.Y);
+                }
+
+                const FVector LastOrbitPos = GeneratedPath.Positions.Num() > 0
+                    ? GeneratedPath.Positions.Last()
+                    : FVector((NadirMinX + NadirMaxX) * 0.5f, (NadirMinY + NadirMaxY) * 0.5f, 0.f);
+
+                auto IsPointInPolygon = [](const FVector& Pt, const TArray<FVector>& Polygon) -> bool
+                {
+                    bool bInside = false;
+                    for (int32 i = 0, j = Polygon.Num() - 1; i < Polygon.Num(); j = i++)
                     {
-                        for (float Y = MinY; Y <= MaxY + KINDA_SMALL_NUMBER; Y += AlongStep)
+                        if (((Polygon[i].Y > Pt.Y) != (Polygon[j].Y > Pt.Y)) &&
+                            (Pt.X < (Polygon[j].X - Polygon[i].X) * (Pt.Y - Polygon[i].Y) / (Polygon[j].Y - Polygon[i].Y) + Polygon[i].X))
                         {
-                            GeneratedPath.Positions.Add(FVector(X, Y, NadirZ));
-                            GeneratedPath.Rotations.Add(FRotator(CamPitch, Yaw, 0.f));
+                            bInside = !bInside;
                         }
                     }
-                    else
+                    return bInside;
+                };
+
+                float DistToXMin = FMath::Abs(LastOrbitPos.X - NadirMinX);
+                float DistToXMax = FMath::Abs(LastOrbitPos.X - NadirMaxX);
+                float DistToYMin = FMath::Abs(LastOrbitPos.Y - NadirMinY);
+                float DistToYMax = FMath::Abs(LastOrbitPos.Y - NadirMaxY);
+
+                float MinDist = FMath::Min(DistToXMin, DistToXMax, DistToYMin, DistToYMax);
+                bool bStripsAlongY = (MinDist == DistToXMin || MinDist == DistToXMax);
+
+                struct FGridPoint { FVector Pos; FRotator Rot; };
+                TArray<FGridPoint> GridPoints;
+
+                if (bStripsAlongY)
+                {
+                    bool bStartXMax = (DistToXMax < DistToXMin);
+                    float XStart = bStartXMax ? NadirMaxX : NadirMinX;
+                    float XEnd = bStartXMax ? NadirMinX : NadirMaxX;
+                    float XStepDir = bStartXMax ? -1.f : 1.f;
+                    
+                    bool bFirstStripGoesNegY = (LastOrbitPos.Y >= (NadirMinY + NadirMaxY) * 0.5f);
+
+                    int32 StripIdx = 0;
+                    for (float X = XStart; 
+                         bStartXMax ? (X >= XEnd - KINDA_SMALL_NUMBER) : (X <= XEnd + KINDA_SMALL_NUMBER); 
+                         X += XStepDir * CrossStep, ++StripIdx)
                     {
-                        for (float Y = MaxY; Y >= MinY - KINDA_SMALL_NUMBER; Y -= AlongStep)
+                        const bool bGoNegY = (StripIdx % 2 == 0) ? bFirstStripGoesNegY : !bFirstStripGoesNegY;
+                        const float Yaw = bGoNegY ? -90.f : 90.f;
+                        
+                        TArray<FGridPoint> StripPoints;
+                        for (float Y = NadirMinY; Y <= NadirMaxY + KINDA_SMALL_NUMBER; Y += AlongStep)
                         {
-                            GeneratedPath.Positions.Add(FVector(X, Y, NadirZ));
-                            GeneratedPath.Rotations.Add(FRotator(CamPitch, Yaw, 0.f));
+                            FVector Pt(X, Y, NadirZ);
+                            if (IsPointInPolygon(Pt, TopRingPoints))
+                            {
+                                StripPoints.Add({Pt, FRotator(CamPitch, Yaw, 0.f)});
+                            }
+                        }
+                        
+                        if (bGoNegY)
+                        {
+                            for (int32 i = StripPoints.Num() - 1; i >= 0; --i)
+                            {
+                                GridPoints.Add(StripPoints[i]);
+                            }
+                        }
+                        else
+                        {
+                            GridPoints.Append(StripPoints);
                         }
                     }
+                }
+                else
+                {
+                    bool bStartYMax = (DistToYMax < DistToYMin);
+                    float YStart = bStartYMax ? NadirMaxY : NadirMinY;
+                    float YEnd = bStartYMax ? NadirMinY : NadirMaxY;
+                    float YStepDir = bStartYMax ? -1.f : 1.f;
+                    
+                    bool bFirstStripGoesNegX = (LastOrbitPos.X >= (NadirMinX + NadirMaxX) * 0.5f);
+
+                    int32 StripIdx = 0;
+                    for (float Y = YStart; 
+                         bStartYMax ? (Y >= YEnd - KINDA_SMALL_NUMBER) : (Y <= YEnd + KINDA_SMALL_NUMBER); 
+                         Y += YStepDir * CrossStep, ++StripIdx)
+                    {
+                        const bool bGoNegX = (StripIdx % 2 == 0) ? bFirstStripGoesNegX : !bFirstStripGoesNegX;
+                        const float Yaw = bGoNegX ? 180.f : 0.f;
+                        
+                        TArray<FGridPoint> StripPoints;
+                        for (float X = NadirMinX; X <= NadirMaxX + KINDA_SMALL_NUMBER; X += AlongStep)
+                        {
+                            FVector Pt(X, Y, NadirZ);
+                            if (IsPointInPolygon(Pt, TopRingPoints))
+                            {
+                                StripPoints.Add({Pt, FRotator(CamPitch, Yaw, 0.f)});
+                            }
+                        }
+                        
+                        if (bGoNegX)
+                        {
+                            for (int32 i = StripPoints.Num() - 1; i >= 0; --i)
+                            {
+                                GridPoints.Add(StripPoints[i]);
+                            }
+                        }
+                        else
+                        {
+                            GridPoints.Append(StripPoints);
+                        }
+                    }
+                }
+
+                for (const FGridPoint& GP : GridPoints)
+                {
+                    GeneratedPath.Positions.Add(GP.Pos);
+                    GeneratedPath.Rotations.Add(GP.Rot);
                 }
             }
 
-            AsyncTask(ENamedThreads::GameThread, [OnComplete, GeneratedPath = MoveTemp(GeneratedPath), DebugHulls, DebugExpandedPolygons, World]()
-            {
-                for (const auto& Hull : DebugHulls)
+            AsyncTask(ENamedThreads::GameThread,
+                [OnComplete, GeneratedPath = MoveTemp(GeneratedPath)]()
                 {
-                    for (int32 i = 0; i < Hull.Num(); ++i)
-                    {
-                        DrawDebugLine(World, Hull[i], Hull[(i + 1) % Hull.Num()], FColor::Cyan, false, 30.f, 0, 10.f);
-                    }
-                }
-                for (const auto& Expanded : DebugExpandedPolygons)
-                {
-                    for (int32 i = 0; i < Expanded.Num(); ++i)
-                    {
-                        DrawDebugLine(World, Expanded[i], Expanded[(i + 1) % Expanded.Num()], FColor::Magenta, false, 30.f, 0, 10.f);
-                    }
-                }
-                
-                OnComplete.ExecuteIfBound(GeneratedPath);
-            });
+                    OnComplete.ExecuteIfBound(GeneratedPath);
+                });
         });
 }

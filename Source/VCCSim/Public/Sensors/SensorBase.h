@@ -164,9 +164,9 @@ public:
 	int32 Height = CameraDefaults::Height;
 
 protected:
-	UPROPERTY(Transient)
+	UPROPERTY()
 	USceneCaptureComponent2D* CaptureComponent = nullptr;
-	UPROPERTY(Transient)
+	UPROPERTY()
 	UTextureRenderTarget2D* RenderTarget = nullptr;
 
 	FMatrix44f CameraIntrinsics;
