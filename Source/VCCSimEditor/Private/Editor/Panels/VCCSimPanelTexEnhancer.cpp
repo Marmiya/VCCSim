@@ -78,6 +78,11 @@ FVCCSimPanelTexEnhancer::FVCCSimPanelTexEnhancer()
     SunCalcFillSlotValue = SunCalcFillSlot;
     GTTexResValue        = GTTextureResolution;
     DayCycleSpeedValue   = DayCycleSpeed;
+
+    NanobananaHFOVValue         = NanobananaHFOV;
+    NanobananaImageWidthValue   = NanobananaImageWidth;
+    NanobananaImageHeightValue  = NanobananaImageHeight;
+    NanobananaRaysPerClassValue = NanobananaRaysPerClass;
 }
 
 FVCCSimPanelTexEnhancer::~FVCCSimPanelTexEnhancer()
@@ -101,8 +106,10 @@ void FVCCSimPanelTexEnhancer::Cleanup()
     {
         GEditor->GetTimerManager()->ClearTimer(StatusTimerHandle);
         GEditor->GetTimerManager()->ClearTimer(DayCycleTimerHandle);
+        GEditor->GetTimerManager()->ClearTimer(NanobananaTimerHandle);
     }
-    bDayCycleActive = false;
+    bDayCycleActive       = false;
+    bNanobananaInProgress = false;
 
     if (PipelineProcHandle.IsValid())
     {
@@ -164,6 +171,33 @@ void FVCCSimPanelTexEnhancer::LoadFromConfigManager()
         if (GTActorListView.IsValid())
             GTActorListView->RequestListRefresh();
     }
+
+    if (!Config.NanobananaResultDir.IsEmpty())
+    {
+        NanobananaResultDir = Config.NanobananaResultDir;
+        if (NanobananaResultDirTextBox.IsValid())
+            NanobananaResultDirTextBox->SetText(FText::FromString(NanobananaResultDir));
+    }
+    if (!Config.NanobananaPosesFile.IsEmpty())
+    {
+        NanobananaPosesFile = Config.NanobananaPosesFile;
+        if (NanobananaPosesFileTextBox.IsValid())
+            NanobananaPosesFileTextBox->SetText(FText::FromString(NanobananaPosesFile));
+    }
+    if (!Config.NanobananaManifestFile.IsEmpty())
+    {
+        NanobananaManifestFile = Config.NanobananaManifestFile;
+        if (NanobananaManifestFileTextBox.IsValid())
+            NanobananaManifestFileTextBox->SetText(FText::FromString(NanobananaManifestFile));
+    }
+    NanobananaHFOV         = Config.NanobananaHFOV;
+    NanobananaImageWidth   = Config.NanobananaImageWidth;
+    NanobananaImageHeight  = Config.NanobananaImageHeight;
+    NanobananaRaysPerClass = Config.NanobananaRaysPerClass;
+    NanobananaHFOVValue         = NanobananaHFOV;
+    NanobananaImageWidthValue   = NanobananaImageWidth;
+    NanobananaImageHeightValue  = NanobananaImageHeight;
+    NanobananaRaysPerClassValue = NanobananaRaysPerClass;
 }
 
 // ============================================================================
@@ -757,6 +791,37 @@ void FVCCSimPanelTexEnhancer::ExportMergedGTMaterials(const FString& BaseDir)
         TSharedPtr<FJsonObject> ActorJson = MakeShareable(new FJsonObject);
         ActorJson->SetStringField(TEXT("label"),     Labels[ai]);
         ActorJson->SetStringField(TEXT("mesh_file"), TEXT("merged_mesh.obj"));
+
+        {
+            auto MakeVec3Json = [](FVector V) -> TArray<TSharedPtr<FJsonValue>>
+            {
+                return { MakeShareable(new FJsonValueNumber(V.X)),
+                         MakeShareable(new FJsonValueNumber(V.Y)),
+                         MakeShareable(new FJsonValueNumber(V.Z)) };
+            };
+
+            const FVector  Loc   = Actors[ai]->GetActorLocation();
+            const FRotator Rot   = Actors[ai]->GetActorRotation();
+            const FVector  Scale = Actors[ai]->GetActorScale3D();
+
+            TSharedPtr<FJsonObject> TransformJson = MakeShareable(new FJsonObject);
+            TransformJson->SetArrayField(TEXT("location"), MakeVec3Json(Loc));
+            TransformJson->SetArrayField(TEXT("rotation"),
+                TArray<TSharedPtr<FJsonValue>>{
+                    MakeShareable(new FJsonValueNumber(Rot.Pitch)),
+                    MakeShareable(new FJsonValueNumber(Rot.Yaw)),
+                    MakeShareable(new FJsonValueNumber(Rot.Roll)) });
+            TransformJson->SetArrayField(TEXT("scale"), MakeVec3Json(Scale));
+            ActorJson->SetObjectField(TEXT("actor_transform"), TransformJson);
+
+            FVector Origin, Extent;
+            Actors[ai]->GetActorBounds(false, Origin, Extent);
+            TSharedPtr<FJsonObject> AABBJson = MakeShareable(new FJsonObject);
+            AABBJson->SetArrayField(TEXT("min"), MakeVec3Json(Origin - Extent));
+            AABBJson->SetArrayField(TEXT("max"), MakeVec3Json(Origin + Extent));
+            ActorJson->SetObjectField(TEXT("world_aabb"), AABBJson);
+        }
+
         TArray<TSharedPtr<FJsonValue>> SlotArray;
 
         for (int32 si = 0; si < SlotCounts[ai]; ++si)
@@ -1348,6 +1413,406 @@ FString FVCCSimPanelTexEnhancer::GetEvaluationOutputDir() const
 }
 
 // ============================================================================
+// SECTION 5: NANOBANANA PROJECTION
+// ============================================================================
+
+namespace
+{
+    struct FNBClassDef { const TCHAR* Name; uint8 R, G, B; };
+    static const FNBClassDef NBClasses[] = {
+        { TEXT("concrete"),     128, 128, 128 },
+        { TEXT("brick"),        180,  80,  50 },
+        { TEXT("glass"),        100, 180, 220 },
+        { TEXT("metal"),        180, 180, 200 },
+        { TEXT("wood"),         140,  90,  40 },
+        { TEXT("vegetation"),    60, 140,  60 },
+        { TEXT("painted_wall"), 220, 210, 200 },
+        { TEXT("asphalt"),       60,  60,  70 },
+    };
+    static const int32 NBClassCount = UE_ARRAY_COUNT(NBClasses);
+    static const int32 NBTolerance  = 40;
+}
+
+FReply FVCCSimPanelTexEnhancer::OnBrowseNanobananaResultDirClicked()
+{
+    IDesktopPlatform* DP = FDesktopPlatformModule::Get();
+    if (!DP) return FReply::Handled();
+    FString Sel;
+    void* Handle = const_cast<void*>(FSlateApplication::Get().FindBestParentWindowHandleForDialogs(nullptr));
+    if (DP->OpenDirectoryDialog(Handle, TEXT("Select Nanobanana Result Directory"), NanobananaResultDir, Sel))
+    {
+        NanobananaResultDir = Sel;
+        if (NanobananaResultDirTextBox.IsValid())
+            NanobananaResultDirTextBox->SetText(FText::FromString(Sel));
+        SavePaths();
+    }
+    return FReply::Handled();
+}
+
+FReply FVCCSimPanelTexEnhancer::OnBrowseNanobananaPosesFileClicked()
+{
+    IDesktopPlatform* DP = FDesktopPlatformModule::Get();
+    if (!DP) return FReply::Handled();
+    TArray<FString> Files;
+    void* Handle = const_cast<void*>(FSlateApplication::Get().FindBestParentWindowHandleForDialogs(nullptr));
+    if (DP->OpenFileDialog(Handle, TEXT("Select Poses File"), FPaths::GetPath(NanobananaPosesFile),
+        TEXT(""), TEXT("Text Files (*.txt)|*.txt|All Files (*.*)|*.*"), EFileDialogFlags::None, Files) && Files.Num() > 0)
+    {
+        NanobananaPosesFile = Files[0];
+        if (NanobananaPosesFileTextBox.IsValid())
+            NanobananaPosesFileTextBox->SetText(FText::FromString(Files[0]));
+        SavePaths();
+    }
+    return FReply::Handled();
+}
+
+FReply FVCCSimPanelTexEnhancer::OnBrowseNanobananaManifestFileClicked()
+{
+    IDesktopPlatform* DP = FDesktopPlatformModule::Get();
+    if (!DP) return FReply::Handled();
+    TArray<FString> Files;
+    void* Handle = const_cast<void*>(FSlateApplication::Get().FindBestParentWindowHandleForDialogs(nullptr));
+    if (DP->OpenFileDialog(Handle, TEXT("Select manifest.json"), FPaths::GetPath(NanobananaManifestFile),
+        TEXT(""), TEXT("JSON Files (*.json)|*.json|All Files (*.*)|*.*"), EFileDialogFlags::None, Files) && Files.Num() > 0)
+    {
+        NanobananaManifestFile = Files[0];
+        if (NanobananaManifestFileTextBox.IsValid())
+            NanobananaManifestFileTextBox->SetText(FText::FromString(Files[0]));
+        SavePaths();
+    }
+    return FReply::Handled();
+}
+
+FReply FVCCSimPanelTexEnhancer::OnRunNanobananaProjectionClicked()
+{
+    if (bNanobananaInProgress)
+    {
+        FVCCSimUIHelpers::ShowNotification(TEXT("Nanobanana projection already running."), true);
+        return FReply::Handled();
+    }
+    if (NanobananaResultDir.IsEmpty() || !FPaths::DirectoryExists(NanobananaResultDir))
+    {
+        FVCCSimUIHelpers::ShowNotification(TEXT("Nanobanana result directory not set or missing."), true);
+        return FReply::Handled();
+    }
+    if (NanobananaPosesFile.IsEmpty() || !FPaths::FileExists(NanobananaPosesFile))
+    {
+        FVCCSimUIHelpers::ShowNotification(TEXT("Poses file not set or missing."), true);
+        return FReply::Handled();
+    }
+    if (NanobananaManifestFile.IsEmpty() || !FPaths::FileExists(NanobananaManifestFile))
+    {
+        FVCCSimUIHelpers::ShowNotification(TEXT("manifest.json not set or missing."), true);
+        return FReply::Handled();
+    }
+    RunNanobananaProjection();
+    return FReply::Handled();
+}
+
+void FVCCSimPanelTexEnhancer::RunNanobananaProjection()
+{
+    FString ManifestStr;
+    if (!FFileHelper::LoadFileToString(ManifestStr, *NanobananaManifestFile))
+    {
+        FVCCSimUIHelpers::ShowNotification(TEXT("Cannot load manifest.json"), true);
+        return;
+    }
+    TSharedPtr<FJsonObject> ManifestRoot;
+    TSharedRef<TJsonReader<>> MReader = TJsonReaderFactory<>::Create(ManifestStr);
+    if (!FJsonSerializer::Deserialize(MReader, ManifestRoot) || !ManifestRoot.IsValid())
+    {
+        FVCCSimUIHelpers::ShowNotification(TEXT("Failed to parse manifest.json"), true);
+        return;
+    }
+
+    NanobananaManifestActors.Empty();
+    const TArray<TSharedPtr<FJsonValue>>* ActorsArr = nullptr;
+    if (ManifestRoot->TryGetArrayField(TEXT("actors"), ActorsArr))
+    {
+        for (const TSharedPtr<FJsonValue>& Val : *ActorsArr)
+        {
+            if (Val->Type != EJson::Object) continue;
+            FString Label;
+            Val->AsObject()->TryGetStringField(TEXT("label"), Label);
+            if (!Label.IsEmpty()) NanobananaManifestActors.Add(Label);
+        }
+    }
+
+    if (NanobananaManifestActors.IsEmpty())
+    {
+        FVCCSimUIHelpers::ShowNotification(TEXT("No actors found in manifest."), true);
+        return;
+    }
+
+    NanobananaVotes.Empty();
+    for (const FString& Label : NanobananaManifestActors)
+        NanobananaVotes.Add(Label, TMap<FString, int32>());
+
+    NanobananaPendingRays.Empty();
+    NanobananaProcessedRayCount = 0;
+    NanobananaTotalRayCount     = 0;
+    NanobananaStatusText        = TEXT("Loading images...");
+    NanobananaOutputDir         = FPaths::GetPath(NanobananaManifestFile);
+    bNanobananaInProgress       = true;
+
+    const FString ResultDir    = NanobananaResultDir;
+    const FString PosesFile    = NanobananaPosesFile;
+    const float   HFOVDeg      = NanobananaHFOV;
+    const int32   ImgW         = NanobananaImageWidth;
+    const int32   ImgH         = NanobananaImageHeight;
+    const int32   RaysPerClass = NanobananaRaysPerClass;
+    TWeakPtr<FVCCSimPanelTexEnhancer> WeakSelf = AsShared();
+
+    IImageWrapperModule* IWMPtr = &FModuleManager::LoadModuleChecked<IImageWrapperModule>("ImageWrapper");
+
+    Async(EAsyncExecution::Thread,
+        [ResultDir, PosesFile, HFOVDeg, ImgW, ImgH, RaysPerClass, WeakSelf, IWMPtr]()
+    {
+        TArray<FString> PoseLines;
+        FFileHelper::LoadFileToStringArray(PoseLines, *PosesFile);
+
+        TArray<FVCCSimPoseData> Poses;
+        for (const FString& Line : PoseLines)
+        {
+            if (Line.IsEmpty() || Line.StartsWith(TEXT("#"))) continue;
+            FVCCSimPoseData P = FVCCSimDataConverter::ParsePoseLine(Line);
+            if (!P.Location.IsZero() || !P.Quaternion.IsIdentity())
+                Poses.Add(P);
+        }
+
+        TArray<FString> PngFiles;
+        IFileManager::Get().FindFilesRecursive(PngFiles, *ResultDir, TEXT("*.png"), true, false);
+        PngFiles.Sort();
+
+        const int32 NumImages = FMath::Min(Poses.Num(), PngFiles.Num());
+        const float HFOVRad   = FMath::DegreesToRadians(HFOVDeg);
+        const float Fx        = (ImgW * 0.5f) / FMath::Tan(HFOVRad * 0.5f);
+
+        TArray<FVCCSimPanelTexEnhancer::FNanobananaRay> AllRays;
+        AllRays.Reserve(NumImages * NBClassCount * RaysPerClass);
+
+        for (int32 ImgIdx = 0; ImgIdx < NumImages; ++ImgIdx)
+        {
+            const FVCCSimPoseData& Pose = Poses[ImgIdx];
+
+            TArray<uint8> FileBytes;
+            if (!FFileHelper::LoadFileToArray(FileBytes, *PngFiles[ImgIdx])) continue;
+
+            TSharedPtr<IImageWrapper> Wrapper = IWMPtr->CreateImageWrapper(EImageFormat::PNG);
+            if (!Wrapper.IsValid()) continue;
+            if (!Wrapper->SetCompressed(FileBytes.GetData(), FileBytes.Num())) continue;
+
+            TArray<uint8> Raw;
+            if (!Wrapper->GetRaw(ERGBFormat::BGRA, 8, Raw)) continue;
+
+            const int32 W = Wrapper->GetWidth();
+            const int32 H = Wrapper->GetHeight();
+            if (W == 0 || H == 0 || Raw.Num() != W * H * 4) continue;
+
+            TArray<TArray<FIntPoint>> PixelsByClass;
+            PixelsByClass.SetNum(NBClassCount);
+
+            for (int32 y = 0; y < H; ++y)
+            for (int32 x = 0; x < W; ++x)
+            {
+                const int32 Idx = (y * W + x) * 4;
+                const uint8 Bv  = Raw[Idx], Gv = Raw[Idx+1], Rv = Raw[Idx+2];
+                int32 BestClass = -1, BestDist = NBTolerance + 1;
+                for (int32 c = 0; c < NBClassCount; ++c)
+                {
+                    const int32 Dist = FMath::Abs((int32)Rv - NBClasses[c].R)
+                                     + FMath::Abs((int32)Gv - NBClasses[c].G)
+                                     + FMath::Abs((int32)Bv - NBClasses[c].B);
+                    if (Dist < BestDist) { BestDist = Dist; BestClass = c; }
+                }
+                if (BestClass >= 0) PixelsByClass[BestClass].Add(FIntPoint(x, y));
+            }
+
+            for (int32 c = 0; c < NBClassCount; ++c)
+            {
+                const TArray<FIntPoint>& Pixels = PixelsByClass[c];
+                if (Pixels.IsEmpty()) continue;
+
+                const int32 Total  = Pixels.Num();
+                const int32 N      = FMath::Min(Total, RaysPerClass);
+                const int32 Stride = FMath::Max(1, Total / N);
+
+                for (int32 s = 0; s < N; ++s)
+                {
+                    const FIntPoint& Px = Pixels[FMath::Min(s * Stride, Total - 1)];
+                    const float u = Px.X + 0.5f;
+                    const float v = Px.Y + 0.5f;
+                    const FVector DirCam(1.f, (u - ImgW * 0.5f) / Fx, -(v - ImgH * 0.5f) / Fx);
+                    FVCCSimPanelTexEnhancer::FNanobananaRay Ray;
+                    Ray.Origin    = Pose.Location;
+                    Ray.Direction = Pose.Quaternion.RotateVector(DirCam).GetSafeNormal();
+                    Ray.ClassName = FString(NBClasses[c].Name);
+                    AllRays.Add(MoveTemp(Ray));
+                }
+            }
+        }
+
+        const int32 TotalRays = AllRays.Num();
+        UE_LOG(LogTexEnhancerPanel, Log, TEXT("[Nanobanana] Generated %d rays from %d images"), TotalRays, NumImages);
+
+        AsyncTask(ENamedThreads::GameThread, [WeakSelf, AllRays = MoveTemp(AllRays), TotalRays, NumImages]() mutable
+        {
+            TSharedPtr<FVCCSimPanelTexEnhancer> Panel = WeakSelf.Pin();
+            if (!Panel.IsValid()) return;
+
+            Panel->NanobananaPendingRays        = MoveTemp(AllRays);
+            Panel->NanobananaTotalRayCount      = TotalRays;
+            Panel->NanobananaProcessedRayCount  = 0;
+            Panel->NanobananaStatusText         = FString::Printf(
+                TEXT("Casting %d rays (%d images)..."), TotalRays, NumImages);
+
+            if (TotalRays == 0)
+            {
+                Panel->FinalizeNanobananaProjection();
+                return;
+            }
+
+            FTimerDelegate Del = FTimerDelegate::CreateRaw(
+                Panel.Get(), &FVCCSimPanelTexEnhancer::TickNanobananaRayCasting);
+            GEditor->GetTimerManager()->SetTimer(Panel->NanobananaTimerHandle, Del, 0.05f, true);
+        });
+    });
+}
+
+void FVCCSimPanelTexEnhancer::TickNanobananaRayCasting()
+{
+    if (!GEditor) return;
+    UWorld* World = GEditor->GetEditorWorldContext().World();
+    if (!World) return;
+
+    static const int32 BatchSize = 200;
+    const int32 Start = NanobananaProcessedRayCount;
+    const int32 End   = FMath::Min(Start + BatchSize, NanobananaTotalRayCount);
+
+    FCollisionQueryParams QParams;
+    QParams.bTraceComplex = false;
+
+    for (int32 i = Start; i < End; ++i)
+    {
+        const FNanobananaRay& Ray = NanobananaPendingRays[i];
+        FHitResult Hit;
+        if (World->LineTraceSingleByChannel(
+            Hit, Ray.Origin, Ray.Origin + Ray.Direction * 100000.f, ECC_Visibility, QParams))
+        {
+            AActor* HitActor = Hit.GetActor();
+            if (HitActor)
+            {
+                TMap<FString, int32>* Votes = NanobananaVotes.Find(HitActor->GetActorLabel());
+                if (Votes)
+                    ++Votes->FindOrAdd(Ray.ClassName, 0);
+            }
+        }
+    }
+
+    NanobananaProcessedRayCount = End;
+
+    if (NanobananaProcessedRayCount >= NanobananaTotalRayCount)
+    {
+        GEditor->GetTimerManager()->ClearTimer(NanobananaTimerHandle);
+        FinalizeNanobananaProjection();
+    }
+    else
+    {
+        NanobananaStatusText = FString::Printf(
+            TEXT("Casting rays: %d / %d"), NanobananaProcessedRayCount, NanobananaTotalRayCount);
+    }
+}
+
+void FVCCSimPanelTexEnhancer::FinalizeNanobananaProjection()
+{
+    const int32 TotalActors = NanobananaManifestActors.Num();
+    int32 LabeledActors     = 0;
+    int32 NotHitActors      = 0;
+    int32 MultiClassConflicts = 0;
+
+    TSharedPtr<FJsonObject> RootJson = MakeShareable(new FJsonObject);
+    TArray<TSharedPtr<FJsonValue>> ActorResults;
+
+    for (const FString& Label : NanobananaManifestActors)
+    {
+        TMap<FString, int32>* VoteMap = NanobananaVotes.Find(Label);
+        TSharedPtr<FJsonObject> ActorJson = MakeShareable(new FJsonObject);
+        ActorJson->SetStringField(TEXT("label"), Label);
+
+        if (!VoteMap || VoteMap->IsEmpty())
+        {
+            ++NotHitActors;
+            ActorJson->SetStringField(TEXT("class"), TEXT(""));
+            ActorJson->SetNumberField(TEXT("votes"), 0);
+            UE_LOG(LogTexEnhancerPanel, Warning,
+                TEXT("[Nanobanana] Actor %-30s → NOT HIT (0 rays)"), *Label);
+        }
+        else
+        {
+            ++LabeledActors;
+            FString BestClass;
+            int32 BestVotes = 0, TotalVotes = 0;
+            for (const auto& Pair : *VoteMap)
+            {
+                TotalVotes += Pair.Value;
+                if (Pair.Value > BestVotes) { BestVotes = Pair.Value; BestClass = Pair.Key; }
+            }
+
+            bool bConflict = false;
+            TSharedPtr<FJsonObject> DistJson = MakeShareable(new FJsonObject);
+            FString DistStr;
+            for (const auto& Pair : *VoteMap)
+            {
+                DistJson->SetNumberField(Pair.Key, Pair.Value);
+                if (Pair.Key != BestClass && Pair.Value * 10 > BestVotes) bConflict = true;
+                if (!DistStr.IsEmpty()) DistStr += TEXT(", ");
+                DistStr += FString::Printf(TEXT("%s:%d"), *Pair.Key, Pair.Value);
+            }
+            if (bConflict) ++MultiClassConflicts;
+
+            ActorJson->SetStringField(TEXT("class"),             BestClass);
+            ActorJson->SetNumberField(TEXT("votes"),             BestVotes);
+            ActorJson->SetObjectField(TEXT("vote_distribution"), DistJson);
+            UE_LOG(LogTexEnhancerPanel, Log,
+                TEXT("[Nanobanana] Actor %-30s → %-15s (%d votes | %s)"),
+                *Label, *BestClass, BestVotes, *DistStr);
+        }
+        ActorResults.Add(MakeShareable(new FJsonValueObject(ActorJson)));
+    }
+
+    UE_LOG(LogTexEnhancerPanel, Log, TEXT("[Nanobanana] ─────────────────────────────────────────────"));
+    UE_LOG(LogTexEnhancerPanel, Log, TEXT("[Nanobanana] Total actors in manifest : %d"), TotalActors);
+    UE_LOG(LogTexEnhancerPanel, Log, TEXT("[Nanobanana] Labeled (>=1 vote)       : %d"), LabeledActors);
+    UE_LOG(LogTexEnhancerPanel, Log, TEXT("[Nanobanana] Not hit                  : %d"), NotHitActors);
+    UE_LOG(LogTexEnhancerPanel, Log, TEXT("[Nanobanana] Multi-class conflict >10%%: %d"), MultiClassConflicts);
+
+    TSharedPtr<FJsonObject> StatsJson = MakeShareable(new FJsonObject);
+    StatsJson->SetNumberField(TEXT("total_actors"),        TotalActors);
+    StatsJson->SetNumberField(TEXT("labeled"),             LabeledActors);
+    StatsJson->SetNumberField(TEXT("not_hit"),             NotHitActors);
+    StatsJson->SetNumberField(TEXT("multi_class_conflict"),MultiClassConflicts);
+
+    RootJson->SetArrayField(TEXT("actors"), ActorResults);
+    RootJson->SetObjectField(TEXT("stats"),  StatsJson);
+
+    FString JsonStr;
+    TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&JsonStr);
+    FJsonSerializer::Serialize(RootJson.ToSharedRef(), Writer);
+
+    const FString OutPath = NanobananaOutputDir / TEXT("label_assignment.json");
+    FFileHelper::SaveStringToFile(JsonStr, *OutPath);
+    UE_LOG(LogTexEnhancerPanel, Log, TEXT("[Nanobanana] Saved → %s"), *OutPath);
+
+    NanobananaStatusText  = FString::Printf(
+        TEXT("Done: %d/%d labeled, %d not hit"), LabeledActors, TotalActors, NotHitActors);
+    bNanobananaInProgress = false;
+
+    FVCCSimUIHelpers::ShowNotification(
+        FString::Printf(TEXT("Nanobanana projection complete: %d/%d actors labeled."),
+            LabeledActors, TotalActors), false);
+}
+
+// ============================================================================
 // PATH PERSISTENCE
 // ============================================================================
 
@@ -1363,6 +1828,13 @@ void FVCCSimPanelTexEnhancer::SavePaths()
         if (Label.IsValid())
             Config.GTActorLabels.Add(*Label);
     }
+    Config.NanobananaResultDir    = NanobananaResultDir;
+    Config.NanobananaPosesFile    = NanobananaPosesFile;
+    Config.NanobananaManifestFile = NanobananaManifestFile;
+    Config.NanobananaHFOV         = NanobananaHFOV;
+    Config.NanobananaImageWidth   = NanobananaImageWidth;
+    Config.NanobananaImageHeight  = NanobananaImageHeight;
+    Config.NanobananaRaysPerClass = NanobananaRaysPerClass;
     FVCCSimConfigManager::Get().SetTexEnhancerConfig(Config);
 }
 
@@ -1379,5 +1851,18 @@ void FVCCSimPanelTexEnhancer::LoadPaths()
         GTActorListItems.Add(MakeShareable(new FString(Label)));
     if (GTActorListView.IsValid())
         GTActorListView->RequestListRefresh();
+
+    if (!Config.NanobananaResultDir.IsEmpty())    NanobananaResultDir    = Config.NanobananaResultDir;
+    if (!Config.NanobananaPosesFile.IsEmpty())    NanobananaPosesFile    = Config.NanobananaPosesFile;
+    if (!Config.NanobananaManifestFile.IsEmpty()) NanobananaManifestFile = Config.NanobananaManifestFile;
+    NanobananaHFOV         = Config.NanobananaHFOV;
+    NanobananaImageWidth   = Config.NanobananaImageWidth;
+    NanobananaImageHeight  = Config.NanobananaImageHeight;
+    NanobananaRaysPerClass = Config.NanobananaRaysPerClass;
+
+    NanobananaHFOVValue          = NanobananaHFOV;
+    NanobananaImageWidthValue    = NanobananaImageWidth;
+    NanobananaImageHeightValue   = NanobananaImageHeight;
+    NanobananaRaysPerClassValue  = NanobananaRaysPerClass;
 }
 

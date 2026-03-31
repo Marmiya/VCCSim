@@ -77,6 +77,14 @@ public:
         FString TexEnhancerScriptPath;
         FString EstimatedMaterialsDir;
         TArray<FString> GTActorLabels;
+
+        FString NanobananaResultDir;
+        FString NanobananaPosesFile;
+        FString NanobananaManifestFile;
+        float   NanobananaHFOV           = 90.f;
+        int32   NanobananaImageWidth     = 1920;
+        int32   NanobananaImageHeight    = 1080;
+        int32   NanobananaRaysPerClass   = 80;
     };
 
     // PathImageCapture configuration

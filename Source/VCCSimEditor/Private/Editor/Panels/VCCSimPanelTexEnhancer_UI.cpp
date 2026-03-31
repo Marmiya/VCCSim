@@ -56,6 +56,12 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateTexEnhancerPanel()
         [ FVCCSimUIHelpers::CreateSeparator() ]
 
         +SVerticalBox::Slot().AutoHeight()
+        [ CreateNanobananaSection() ]
+
+        +SVerticalBox::Slot().MaxHeight(1).Padding(FMargin(0, 4, 0, 4))
+        [ FVCCSimUIHelpers::CreateSeparator() ]
+
+        +SVerticalBox::Slot().AutoHeight()
         [ CreatePipelineSection() ]
 
         +SVerticalBox::Slot().MaxHeight(1).Padding(FMargin(0, 4, 0, 4))
@@ -712,6 +718,180 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateGTExportSection()
             })
             .IsEnabled_Lambda([this]() { return !bGTExportInProgress && !OutputDirectory.IsEmpty() && !GTActorListItems.IsEmpty(); })
             .OnClicked_Lambda([this]() { return OnExportGTMaterialsClicked(); })
+        ]
+    );
+}
+
+// ============================================================================
+// SECTION 5: NANOBANANA PROJECTION
+// ============================================================================
+
+TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateNanobananaSection()
+{
+    auto MakeBrowseRow = [this](
+        const FString& Label,
+        TSharedPtr<SEditableTextBox>& TextBoxPtr,
+        FString& Var,
+        TFunction<FReply()> BrowseFn) -> TSharedRef<SWidget>
+    {
+        return FVCCSimUIHelpers::CreatePropertyRow(*Label,
+            SNew(SHorizontalBox)
+            +SHorizontalBox::Slot().FillWidth(1.f)
+            [
+                SAssignNew(TextBoxPtr, SEditableTextBox)
+                .Text(FText::FromString(Var))
+                .OnTextCommitted_Lambda([this, &Var](const FText& T, ETextCommit::Type)
+                {
+                    Var = T.ToString();
+                    SavePaths();
+                })
+            ]
+            +SHorizontalBox::Slot().AutoWidth().Padding(FMargin(4, 0, 0, 0))
+            [
+                SNew(SButton)
+                .ButtonStyle(FAppStyle::Get(), "FlatButton")
+                .ContentPadding(FMargin(5, 2))
+                .Text(FText::FromString(TEXT("...")))
+                .OnClicked_Lambda([BrowseFn]() { return BrowseFn(); })
+            ]
+        );
+    };
+
+    return FVCCSimUIHelpers::CreateSectionContent(
+        SNew(SVerticalBox)
+
+        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
+        [
+            FVCCSimUIHelpers::CreateSectionHeader(TEXT("Nanobanana Projection"))
+        ]
+
+        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
+        [
+            MakeBrowseRow(TEXT("Result Dir"), NanobananaResultDirTextBox, NanobananaResultDir,
+                [this]() { return OnBrowseNanobananaResultDirClicked(); })
+        ]
+
+        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
+        [
+            MakeBrowseRow(TEXT("Poses File"), NanobananaPosesFileTextBox, NanobananaPosesFile,
+                [this]() { return OnBrowseNanobananaPosesFileClicked(); })
+        ]
+
+        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
+        [
+            MakeBrowseRow(TEXT("Manifest JSON"), NanobananaManifestFileTextBox, NanobananaManifestFile,
+                [this]() { return OnBrowseNanobananaManifestFileClicked(); })
+        ]
+
+        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
+        [
+            FVCCSimUIHelpers::CreatePropertyRow(TEXT("H-FOV (deg)"),
+                SNew(SBorder)
+                .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
+                .BorderBackgroundColor(FColor(5, 5, 5, 255))
+                .Padding(4, 0)
+                [
+                    SAssignNew(NanobananaHFOVSpinBox, SNumericEntryBox<float>)
+                    .Value_Lambda([this]() { return NanobananaHFOVValue; })
+                    .MinValue(10.f).MaxValue(170.f).Delta(1.f).AllowSpin(false)
+                    .OnValueChanged_Lambda([this](float V)
+                    {
+                        NanobananaHFOV = V; NanobananaHFOVValue = V; SavePaths();
+                    })
+                ]
+            )
+        ]
+
+        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
+        [
+            FVCCSimUIHelpers::CreatePropertyRow(TEXT("Image W / H"),
+                SNew(SHorizontalBox)
+                +SHorizontalBox::Slot().FillWidth(1.f).Padding(FMargin(0, 0, 2, 0))
+                [
+                    SNew(SBorder)
+                    .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
+                    .BorderBackgroundColor(FColor(5, 5, 5, 255))
+                    .Padding(4, 0)
+                    [
+                        SAssignNew(NanobananaImageWidthSpinBox, SNumericEntryBox<int32>)
+                        .Value_Lambda([this]() { return NanobananaImageWidthValue; })
+                        .MinValue(1).MaxValue(8192).Delta(1).AllowSpin(false)
+                        .OnValueChanged_Lambda([this](int32 V)
+                        {
+                            NanobananaImageWidth = V; NanobananaImageWidthValue = V; SavePaths();
+                        })
+                    ]
+                ]
+                +SHorizontalBox::Slot().FillWidth(1.f)
+                [
+                    SNew(SBorder)
+                    .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
+                    .BorderBackgroundColor(FColor(5, 5, 5, 255))
+                    .Padding(4, 0)
+                    [
+                        SAssignNew(NanobananaImageHeightSpinBox, SNumericEntryBox<int32>)
+                        .Value_Lambda([this]() { return NanobananaImageHeightValue; })
+                        .MinValue(1).MaxValue(8192).Delta(1).AllowSpin(false)
+                        .OnValueChanged_Lambda([this](int32 V)
+                        {
+                            NanobananaImageHeight = V; NanobananaImageHeightValue = V; SavePaths();
+                        })
+                    ]
+                ]
+            )
+        ]
+
+        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
+        [
+            FVCCSimUIHelpers::CreatePropertyRow(TEXT("Rays / Class"),
+                SNew(SBorder)
+                .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
+                .BorderBackgroundColor(FColor(5, 5, 5, 255))
+                .Padding(4, 0)
+                [
+                    SAssignNew(NanobananaRaysPerClassSpinBox, SNumericEntryBox<int32>)
+                    .Value_Lambda([this]() { return NanobananaRaysPerClassValue; })
+                    .MinValue(1).MaxValue(1000).Delta(10).AllowSpin(false)
+                    .OnValueChanged_Lambda([this](int32 V)
+                    {
+                        NanobananaRaysPerClass = V; NanobananaRaysPerClassValue = V; SavePaths();
+                    })
+                ]
+            )
+        ]
+
+        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
+        [
+            SNew(SHorizontalBox)
+            +SHorizontalBox::Slot().FillWidth(1.f)
+            [
+                SNew(SButton)
+                .ButtonStyle(FAppStyle::Get(), "FlatButton.Success")
+                .ContentPadding(FMargin(5, 2))
+                .Text_Lambda([this]()
+                {
+                    return bNanobananaInProgress
+                        ? FText::FromString(TEXT("Running projection..."))
+                        : FText::FromString(TEXT("Run Projection"));
+                })
+                .IsEnabled_Lambda([this]()
+                {
+                    return !bNanobananaInProgress
+                        && !NanobananaResultDir.IsEmpty()
+                        && !NanobananaPosesFile.IsEmpty()
+                        && !NanobananaManifestFile.IsEmpty();
+                })
+                .OnClicked_Lambda([this]() { return OnRunNanobananaProjectionClicked(); })
+            ]
+        ]
+
+        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
+        [
+            SAssignNew(NanobananaStatusTextBlock, STextBlock)
+            .Text_Lambda([this]() { return FText::FromString(NanobananaStatusText); })
+            .ColorAndOpacity(FLinearColor(0.6f, 0.85f, 0.6f))
+            .Font(FCoreStyle::GetDefaultFontStyle("Mono", 8))
+            .AutoWrapText(true)
         ]
     );
 }

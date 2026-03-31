@@ -108,9 +108,13 @@ private:
     FString TexEnhancerScriptPath;
     FString EstimatedMaterialsDir;
 
-    bool bPipelineInProgress  = false;
-    bool bEvalInProgress      = false;
-    bool bGTExportInProgress  = false;
+    bool bPipelineInProgress    = false;
+    bool bEvalInProgress        = false;
+    bool bGTExportInProgress    = false;
+    bool bNanobananaInProgress  = false;
+
+    FTimerHandle                    GTExportTimerHandle;
+    TSharedPtr<struct FGTExportCtx> GTExportCtx;
 
     int32 GTTextureResolution = 1024;
 
@@ -145,6 +149,48 @@ private:
     FProcHandle  PipelineProcHandle;
 
     TWeakPtr<FVCCSimPanelSelection> SelectionManager;
+
+    // ============================================================================
+    // NANOBANANA STATE
+    // ============================================================================
+
+    TSharedPtr<SEditableTextBox>          NanobananaResultDirTextBox;
+    TSharedPtr<SEditableTextBox>          NanobananaPosesFileTextBox;
+    TSharedPtr<SEditableTextBox>          NanobananaManifestFileTextBox;
+    TSharedPtr<SNumericEntryBox<float>>   NanobananaHFOVSpinBox;
+    TSharedPtr<SNumericEntryBox<int32>>   NanobananaImageWidthSpinBox;
+    TSharedPtr<SNumericEntryBox<int32>>   NanobananaImageHeightSpinBox;
+    TSharedPtr<SNumericEntryBox<int32>>   NanobananaRaysPerClassSpinBox;
+    TSharedPtr<STextBlock>                NanobananaStatusTextBlock;
+
+    FString NanobananaResultDir;
+    FString NanobananaPosesFile;
+    FString NanobananaManifestFile;
+    float   NanobananaHFOV         = 90.f;
+    int32   NanobananaImageWidth   = 1920;
+    int32   NanobananaImageHeight  = 1080;
+    int32   NanobananaRaysPerClass = 80;
+    FString NanobananaStatusText;
+    FString NanobananaOutputDir;
+
+    TOptional<float>  NanobananaHFOVValue;
+    TOptional<int32>  NanobananaImageWidthValue;
+    TOptional<int32>  NanobananaImageHeightValue;
+    TOptional<int32>  NanobananaRaysPerClassValue;
+
+    struct FNanobananaRay
+    {
+        FVector Origin;
+        FVector Direction;
+        FString ClassName;
+    };
+
+    TArray<FNanobananaRay>                        NanobananaPendingRays;
+    int32                                         NanobananaProcessedRayCount = 0;
+    int32                                         NanobananaTotalRayCount     = 0;
+    TMap<FString, TMap<FString, int32>>           NanobananaVotes;
+    TArray<FString>                               NanobananaManifestActors;
+    FTimerHandle                                  NanobananaTimerHandle;
 
     // ============================================================================
     // SECTION 1: DATASET CONFIGURATION
@@ -201,6 +247,19 @@ private:
     FReply OnBrowseEstimatedDirClicked();
     FReply OnRunEvaluationClicked();
     void RunBRDFEvaluation();
+
+    // ============================================================================
+    // SECTION 5: NANOBANANA PROJECTION
+    // ============================================================================
+
+    TSharedRef<SWidget> CreateNanobananaSection();
+    FReply OnBrowseNanobananaResultDirClicked();
+    FReply OnBrowseNanobananaPosesFileClicked();
+    FReply OnBrowseNanobananaManifestFileClicked();
+    FReply OnRunNanobananaProjectionClicked();
+    void RunNanobananaProjection();
+    void TickNanobananaRayCasting();
+    void FinalizeNanobananaProjection();
 
     // ============================================================================
     // UTILITIES

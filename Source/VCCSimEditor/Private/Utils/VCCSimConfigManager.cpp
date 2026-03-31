@@ -126,6 +126,13 @@ void FVCCSimConfigManager::SaveToJsonFile()
             GTLabelsJson.Add(MakeShareable(new FJsonValueString(Label)));
         TexEnhancerConfigJson->SetArrayField(TEXT("GTActorLabels"), GTLabelsJson);
     }
+    TexEnhancerConfigJson->SetStringField(TEXT("NanobananaResultDir"),    TexEnhancerConfig.NanobananaResultDir);
+    TexEnhancerConfigJson->SetStringField(TEXT("NanobananaPosesFile"),    TexEnhancerConfig.NanobananaPosesFile);
+    TexEnhancerConfigJson->SetStringField(TEXT("NanobananaManifestFile"), TexEnhancerConfig.NanobananaManifestFile);
+    TexEnhancerConfigJson->SetNumberField(TEXT("NanobananaHFOV"),         TexEnhancerConfig.NanobananaHFOV);
+    TexEnhancerConfigJson->SetNumberField(TEXT("NanobananaImageWidth"),   TexEnhancerConfig.NanobananaImageWidth);
+    TexEnhancerConfigJson->SetNumberField(TEXT("NanobananaImageHeight"),  TexEnhancerConfig.NanobananaImageHeight);
+    TexEnhancerConfigJson->SetNumberField(TEXT("NanobananaRaysPerClass"), TexEnhancerConfig.NanobananaRaysPerClass);
     RootObject->SetObjectField(TEXT("TexEnhancerConfig"), TexEnhancerConfigJson);
 
     // Save PathImageCapture configuration
@@ -239,6 +246,16 @@ bool FVCCSimConfigManager::LoadFromJsonFile()
                 if (Val->TryGetString(Label))
                     TexEnhancerConfig.GTActorLabels.Add(Label);
             }
+        }
+        (*TexEnhancerConfigJson)->TryGetStringField(TEXT("NanobananaResultDir"),    TexEnhancerConfig.NanobananaResultDir);
+        (*TexEnhancerConfigJson)->TryGetStringField(TEXT("NanobananaPosesFile"),    TexEnhancerConfig.NanobananaPosesFile);
+        (*TexEnhancerConfigJson)->TryGetStringField(TEXT("NanobananaManifestFile"), TexEnhancerConfig.NanobananaManifestFile);
+        {
+            double V = 0.0;
+            if ((*TexEnhancerConfigJson)->TryGetNumberField(TEXT("NanobananaHFOV"), V))        TexEnhancerConfig.NanobananaHFOV        = (float)V;
+            if ((*TexEnhancerConfigJson)->TryGetNumberField(TEXT("NanobananaImageWidth"), V))  TexEnhancerConfig.NanobananaImageWidth  = (int32)V;
+            if ((*TexEnhancerConfigJson)->TryGetNumberField(TEXT("NanobananaImageHeight"), V)) TexEnhancerConfig.NanobananaImageHeight = (int32)V;
+            if ((*TexEnhancerConfigJson)->TryGetNumberField(TEXT("NanobananaRaysPerClass"), V))TexEnhancerConfig.NanobananaRaysPerClass = (int32)V;
         }
     }
 
