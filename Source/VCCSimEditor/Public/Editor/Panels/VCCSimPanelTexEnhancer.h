@@ -123,7 +123,7 @@ private:
     bool bNanobananaInProgress  = false;
     bool bDayCycleActive        = false;
 
-    int32 GTTextureResolution = 1024;
+    int32 GTTextureResolution = 4096;
 
     float SunCalcLatitude  = 22.52933f;
     float SunCalcLongitude = 113.94092f;

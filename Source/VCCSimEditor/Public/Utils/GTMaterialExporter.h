@@ -62,6 +62,7 @@ private:
     
     // Background-thread helpers for processing and file I/O
     static TArray<FColor> BG_SampleFromRaw(const FGTRawTex& R, int32 TargetSize);
+    static TArray<FColor> BG_BuildORMTile(const FGTRawTex& Rough, const FGTRawTex& Metal, int32 TargetSize);
     static FString BG_BuildOBJContent(const TArray<FGTActorBuilt>& Built);
     static bool WriteAtlasPNG(const TArray<TArray<FColor>>& Tiles, int32 TileSize, int32 Cols, int32 Rows, const FString& PngPath);
     static bool WriteMTLFile(const FString& MtlPath);

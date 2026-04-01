@@ -280,8 +280,7 @@ void FGTMaterialExporter::ExportMaterials(
     MetaJson->SetNumberField(TEXT("atlas_cols"), AtlasCols);
     MetaJson->SetNumberField(TEXT("atlas_rows"), AtlasRows);
     MetaJson->SetStringField(TEXT("basecolor_atlas"), TEXT("basecolor_atlas.png"));
-    MetaJson->SetStringField(TEXT("roughness_atlas"), TEXT("roughness_atlas.png"));
-    MetaJson->SetStringField(TEXT("metallic_atlas"), TEXT("metallic_atlas.png"));
+    MetaJson->SetStringField(TEXT("orm_atlas"), TEXT("orm_atlas.png"));
     MetaJson->SetStringField(TEXT("mesh_file"), TEXT("merged_mesh.obj"));
     RootJson->SetObjectField(TEXT("metadata"), MetaJson);
     RootJson->SetArrayField(TEXT("actors"), ActorArray);
@@ -347,35 +346,32 @@ void FGTMaterialExporter::ExportMaterials(
         }
 
         // ── Step 2: Sample atlas tiles ─────────────────────────────────────
-        TArray<TArray<FColor>> RoughTiles, MetalTiles, ColorTiles;
-        RoughTiles.SetNum(TotalTiles); MetalTiles.SetNum(TotalTiles); ColorTiles.SetNum(TotalTiles);
+        TArray<TArray<FColor>> ORMTiles, ColorTiles;
+        ORMTiles.SetNum(TotalTiles); ColorTiles.SetNum(TotalTiles);
         for (const FGTMeshRaw& Raw : RawMeshes)
         {
             for (const FGTMeshRaw::FSlotRaw& S : Raw.Slots)
             {
-                RoughTiles[S.TileIdx] = BG_SampleFromRaw(S.Rough, TextureResolution);
-                MetalTiles[S.TileIdx] = BG_SampleFromRaw(S.Metal, TextureResolution);
+                ORMTiles[S.TileIdx]   = BG_BuildORMTile(S.Rough, S.Metal, TextureResolution);
                 ColorTiles[S.TileIdx] = BG_SampleFromRaw(S.Color, TextureResolution);
             }
         }
-            
+
         // ── Step 3: Write all output files ─────────────────────────────────
         const FString ObjContent = BG_BuildOBJContent(BuiltActors);
         const bool bObjOk   = FFileHelper::SaveStringToFile(ObjContent, *(BaseDir / TEXT("merged_mesh.obj")), FFileHelper::EEncodingOptions::AutoDetect, &IFileManager::Get(), FILEWRITE_EvenIfReadOnly);
         const bool bMtlOk   = WriteMTLFile(BaseDir / TEXT("merged_mesh.mtl"));
         const bool bColorOk = WriteAtlasPNG(ColorTiles, TextureResolution, AtlasCols, AtlasRows, BaseDir / TEXT("basecolor_atlas.png"));
-        const bool bRoughOk = WriteAtlasPNG(RoughTiles, TextureResolution, AtlasCols, AtlasRows, BaseDir / TEXT("roughness_atlas.png"));
-        const bool bMetalOk = WriteAtlasPNG(MetalTiles, TextureResolution, AtlasCols, AtlasRows, BaseDir / TEXT("metallic_atlas.png"));
+        const bool bORMOk   = WriteAtlasPNG(ORMTiles,   TextureResolution, AtlasCols, AtlasRows, BaseDir / TEXT("orm_atlas.png"));
         const bool bJsonOk  = FFileHelper::SaveStringToFile(JsonStr, *(BaseDir / TEXT("manifest.json")));
 
         if (!bObjOk)   UE_LOG(LogGTMaterialExporter, Warning, TEXT("GT Export: failed merged_mesh.obj"));
         if (!bMtlOk)   UE_LOG(LogGTMaterialExporter, Warning, TEXT("GT Export: failed merged_mesh.mtl"));
         if (!bColorOk) UE_LOG(LogGTMaterialExporter, Warning, TEXT("GT Export: failed basecolor_atlas.png"));
-        if (!bRoughOk) UE_LOG(LogGTMaterialExporter, Warning, TEXT("GT Export: failed roughness_atlas.png"));
-        if (!bMetalOk) UE_LOG(LogGTMaterialExporter, Warning, TEXT("GT Export: failed metallic_atlas.png"));
+        if (!bORMOk)   UE_LOG(LogGTMaterialExporter, Warning, TEXT("GT Export: failed orm_atlas.png"));
         if (!bJsonOk)  UE_LOG(LogGTMaterialExporter, Warning, TEXT("GT Export: failed manifest.json"));
 
-        const bool bSuccess = bObjOk && bMtlOk && bColorOk && bRoughOk && bMetalOk && bJsonOk;
+        const bool bSuccess = bObjOk && bMtlOk && bColorOk && bORMOk && bJsonOk;
         const FString Msg = bSuccess
             ? FString::Printf(TEXT("GT export done: %d actors, %d tiles (%dx%d atlas) -> %s"), RawMeshes.Num(), TotalTiles, AtlasCols, AtlasRows, *BaseDir)
             : FString::Printf(TEXT("GT export completed with errors -> %s"), *BaseDir);
@@ -495,6 +491,18 @@ TArray<FColor> FGTMaterialExporter::BG_SampleFromRaw(const FGTRawTex& R, int32 T
     return Out;
 }
 
+TArray<FColor> FGTMaterialExporter::BG_BuildORMTile(const FGTRawTex& Rough, const FGTRawTex& Metal, int32 TargetSize)
+{
+    const TArray<FColor> RoughSampled = BG_SampleFromRaw(Rough, TargetSize);
+    const TArray<FColor> MetalSampled = BG_SampleFromRaw(Metal, TargetSize);
+    const int32 N = TargetSize * TargetSize;
+    TArray<FColor> Out;
+    Out.SetNumUninitialized(N);
+    for (int32 i = 0; i < N; ++i)
+        Out[i] = FColor(0, RoughSampled[i].R, MetalSampled[i].R, 255);
+    return Out;
+}
+
 FString FGTMaterialExporter::BG_BuildOBJContent(const TArray<FGTActorBuilt>& Built)
 {
     FString V = TEXT("mtllib merged_mesh.mtl\nusemtl merged_material\n");
@@ -517,8 +525,7 @@ bool FGTMaterialExporter::WriteMTLFile(const FString& MtlPath)
     Mtl += TEXT("Kd 1.0 1.0 1.0\n");
     Mtl += TEXT("Ks 0.0 0.0 0.0\n");
     Mtl += TEXT("map_Kd basecolor_atlas.png\n");
-    Mtl += TEXT("map_Pr roughness_atlas.png\n");
-    Mtl += TEXT("map_Pm metallic_atlas.png\n");
+    Mtl += TEXT("map_ORM orm_atlas.png\n");
     return FFileHelper::SaveStringToFile(Mtl, *MtlPath);
 }
 
