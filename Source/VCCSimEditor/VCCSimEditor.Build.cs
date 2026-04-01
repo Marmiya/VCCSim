@@ -60,11 +60,11 @@ public class VCCSimEditor : ModuleRules
                 // Sun position ephemeris
                 "SunPosition",
 
-                // GT material export: mesh description read + PNG encoding + material baking
                 "MeshDescription",
-                "StaticMeshDescription",
                 "ImageWrapper",
-                "MaterialBaking"
+
+                // GT material export
+                "GLTFExporter"
             }
         );
         

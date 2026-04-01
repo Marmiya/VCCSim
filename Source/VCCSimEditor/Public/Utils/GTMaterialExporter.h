@@ -18,28 +18,14 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Dom/JsonObject.h"
 
 class AStaticMeshActor;
 
-/**
- * Handles the logic for exporting ground truth PBR materials and mesh data from selected actors.
- */
 class VCCSIMEDITOR_API FGTMaterialExporter
 {
 public:
     FGTMaterialExporter();
 
-    /**
-     * Asynchronously exports the materials and combined mesh for a list of specified actors.
-     *
-     * @param ActorsToExport The list of actor labels to export.
-     * @param World The world context to find actors in.
-     * @param BaseDir The root directory for the export.
-     * @param SceneName The name for the scene.
-     * @param TextureResolution The resolution for the exported texture atlases.
-     * @param OnComplete A delegate called on the game thread when the export is finished.
-     */
     void ExportMaterials(
         const TArray<FString>& ActorLabels,
         UWorld* World,
@@ -50,10 +36,11 @@ public:
     );
 
 private:
-    struct FGTMeshRaw;
-    struct FGTActorBuilt;
-
-    static FString BG_BuildOBJContent(const TArray<FGTActorBuilt>& Built);
-    static bool WriteAtlasPNG(const TArray<TArray<FColor>>& Tiles, int32 TileSize, int32 Cols, int32 Rows, const FString& PngPath);
-    static bool WriteMTLFile(const FString& MtlPath);
+    static bool WriteManifest(
+        AStaticMeshActor* Actor,
+        const FString& Label,
+        const FString& SceneName,
+        int32 TextureResolution,
+        const FString& ActorDir
+    );
 };
