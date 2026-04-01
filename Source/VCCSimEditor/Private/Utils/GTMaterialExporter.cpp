@@ -19,7 +19,6 @@
 #include "Utils/VCCSimUIHelpers.h"
 #include "Utils/VCCSimDataConverter.h"
 #include "Engine/StaticMeshActor.h"
-#include "Engine/Texture2D.h"
 #include "Materials/MaterialInterface.h"
 #include "MeshDescription.h"
 #include "StaticMeshAttributes.h"
@@ -32,19 +31,14 @@
 #include "IImageWrapperModule.h"
 #include "Modules/ModuleManager.h"
 #include "HAL/PlatformFileManager.h"
+#include "IMaterialBakingModule.h"
+#include "MaterialBakingStructures.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGTMaterialExporter, Log, All);
 
 // ============================================================================
 // INTERNAL POD STRUCTURES
 // ============================================================================
-
-struct FGTMaterialExporter::FGTRawTex
-{
-    TArray64<uint8> Bytes;
-    int32  W = 0, H = 0, Ch = -1;
-    float  Fallback = 0.f;
-};
 
 struct FGTMaterialExporter::FGTMeshRaw
 {
@@ -60,9 +54,11 @@ struct FGTMaterialExporter::FGTMeshRaw
 
     struct FSlotRaw
     {
-        FString   MatName;
-        FGTRawTex Rough, Metal, Color;
-        int32     TileIdx = 0;
+        FString        MatName;
+        TArray<FColor> BakedColor;
+        TArray<FColor> BakedRough;
+        TArray<FColor> BakedMetal;
+        int32          TileIdx = 0;
     };
     TArray<FSlotRaw> Slots;
 };
@@ -150,7 +146,9 @@ void FGTMaterialExporter::ExportMaterials(
     const int32 AtlasCols = FMath::Max(1, FMath::CeilToInt(FMath::Sqrt((float)TotalTiles)));
     const int32 AtlasRows = FMath::Max(1, FMath::CeilToInt((float)TotalTiles / AtlasCols));
 
-    // ── Game thread: minimal UObject access, copy to plain arrays ──────────
+    // ── Game thread: mesh extraction + material baking via MaterialBaking module ──
+
+    IMaterialBakingModule& BakingModule = FModuleManager::LoadModuleChecked<IMaterialBakingModule>("MaterialBaking");
 
     TArray<FGTMeshRaw> RawMeshes;
     RawMeshes.Reserve(Actors.Num());
@@ -201,7 +199,7 @@ void FGTMaterialExporter::ExportMaterials(
             Raw.InstVertIdx.Add(VIDToLocal[MD->GetVertexInstanceVertex(IID).GetValue()]);
             Raw.InstUV0.Add(UVs.Get(IID, 0));
         }
-        
+
         TMap<int32, int32> GroupToSlot;
         { int32 Idx = 0; for (const FPolygonGroupID GID : MD->PolygonGroups().GetElementIDs()) GroupToSlot.Add(GID.GetValue(), Idx++); }
 
@@ -218,7 +216,7 @@ void FGTMaterialExporter::ExportMaterials(
         TSharedPtr<FJsonObject> ActorJson = MakeShareable(new FJsonObject);
         ActorJson->SetStringField(TEXT("label"), Labels[ai]);
         ActorJson->SetStringField(TEXT("mesh_file"), TEXT("merged_mesh.obj"));
-        
+
         {
             auto MakeVec3Json = [](FVector V) -> TArray<TSharedPtr<FJsonValue>> {
                 return { MakeShareable(new FJsonValueNumber(V.X)), MakeShareable(new FJsonValueNumber(V.Y)), MakeShareable(new FJsonValueNumber(V.Z)) };
@@ -238,7 +236,9 @@ void FGTMaterialExporter::ExportMaterials(
             ActorJson->SetObjectField(TEXT("world_aabb"), AABBJson);
         }
 
+        const int32 TilePixels = TextureResolution * TextureResolution;
         TArray<TSharedPtr<FJsonValue>> SlotArray;
+
         for (int32 si = 0; si < SlotCounts[ai]; ++si)
         {
             UMaterialInterface* Mat = MC->GetMaterial(si);
@@ -247,9 +247,36 @@ void FGTMaterialExporter::ExportMaterials(
             FGTMeshRaw::FSlotRaw Slot;
             Slot.MatName = Mat ? Mat->GetName() : TEXT("");
             Slot.TileIdx = TileIdx;
-            GT_CollectMatChannel(Mat, true,  Slot.Rough);
-            GT_CollectMatChannel(Mat, false, Slot.Metal);
-            GT_CollectBaseColor (Mat, Slot.Color);
+
+            if (Mat)
+            {
+                FMaterialData MatData;
+                MatData.Material = Mat;
+                MatData.PropertySizes.Add(MP_BaseColor, FIntPoint(TextureResolution, TextureResolution));
+                MatData.PropertySizes.Add(MP_Roughness, FIntPoint(TextureResolution, TextureResolution));
+                MatData.PropertySizes.Add(MP_Metallic,  FIntPoint(TextureResolution, TextureResolution));
+
+                FMeshData MeshData;
+                MeshData.Mesh = SM;
+                MeshData.TextureCoordinateIndex = 0;
+                MeshData.MaterialIndices = { si };
+
+                TArray<FMaterialData*> MatDataArr = { &MatData };
+                TArray<FMeshData*>     MeshDataArr = { &MeshData };
+                TArray<FBakeOutput>    BakeOutputs;
+                BakingModule.BakeMaterials(MatDataArr, MeshDataArr, BakeOutputs);
+
+                if (BakeOutputs.Num() > 0)
+                {
+                    if (TArray<FColor>* P = BakeOutputs[0].PropertyData.Find(MP_BaseColor)) Slot.BakedColor = MoveTemp(*P);
+                    if (TArray<FColor>* P = BakeOutputs[0].PropertyData.Find(MP_Roughness)) Slot.BakedRough = MoveTemp(*P);
+                    if (TArray<FColor>* P = BakeOutputs[0].PropertyData.Find(MP_Metallic))  Slot.BakedMetal = MoveTemp(*P);
+                }
+            }
+
+            if (Slot.BakedColor.Num() != TilePixels) Slot.BakedColor.Init(FColor::White,                   TilePixels);
+            if (Slot.BakedRough.Num() != TilePixels) Slot.BakedRough.Init(FColor(255, 255, 255, 255),       TilePixels);
+            if (Slot.BakedMetal.Num() != TilePixels) Slot.BakedMetal.Init(FColor::Black,                    TilePixels);
 
             TSharedPtr<FJsonObject> SlotJson = MakeShareable(new FJsonObject);
             SlotJson->SetNumberField(TEXT("slot"), si);
@@ -289,7 +316,7 @@ void FGTMaterialExporter::ExportMaterials(
     TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&JsonStr);
     FJsonSerializer::Serialize(RootJson.ToSharedRef(), Writer);
 
-    // ── Dispatch ALL heavy computation and I/O to background thread ────────
+    // ── Dispatch geometry, atlas assembly and file I/O to background thread ──
     Async(EAsyncExecution::Thread,
         [RawMeshes = MoveTemp(RawMeshes), JsonStr = MoveTemp(JsonStr), BaseDir, OnComplete, TextureResolution, AtlasCols, AtlasRows, TotalTiles, SceneName]()
     {
@@ -311,7 +338,7 @@ void FGTMaterialExporter::ExportMaterials(
             for (int32 ti = 0; ti < NumTris; ++ti)
             {
                 const int32 TileIdx = Raw.ActorTileOffset + Raw.TriSlotFlat[ti];
-                for (int32 k=0; k<3; ++k)
+                for (int32 k = 0; k < 3; ++k)
                 {
                     const int32 IIdx = Raw.TriInstFlat[ti * 3 + k];
                     if (IIdx >= 0 && IIdx < NumInsts && InstTile[IIdx] < 0) InstTile[IIdx] = TileIdx;
@@ -328,7 +355,7 @@ void FGTMaterialExporter::ExportMaterials(
                 const float V = (1.f - SrcUV.Y) / AtlasRows + (float)(AtlasRows - Row - 1) / AtlasRows;
                 Built.AtlasUVs[ii] = FVector2f(U, V);
             }
-            
+
             Built.FaceVerts.SetNumUninitialized(NumTris * 3);
             Built.FaceUVs.SetNumUninitialized(NumTris * 3);
             for (int32 ti = 0; ti < NumTris; ++ti)
@@ -345,15 +372,21 @@ void FGTMaterialExporter::ExportMaterials(
             BuiltActors.Add(MoveTemp(Built));
         }
 
-        // ── Step 2: Sample atlas tiles ─────────────────────────────────────
+        // ── Step 2: Assemble atlas tiles from baked data ───────────────────
         TArray<TArray<FColor>> ORMTiles, ColorTiles;
         ORMTiles.SetNum(TotalTiles); ColorTiles.SetNum(TotalTiles);
         for (const FGTMeshRaw& Raw : RawMeshes)
         {
             for (const FGTMeshRaw::FSlotRaw& S : Raw.Slots)
             {
-                ORMTiles[S.TileIdx]   = BG_BuildORMTile(S.Rough, S.Metal, TextureResolution);
-                ColorTiles[S.TileIdx] = BG_SampleFromRaw(S.Color, TextureResolution);
+                ColorTiles[S.TileIdx] = S.BakedColor;
+
+                const int32 N = S.BakedRough.Num();
+                TArray<FColor> ORM;
+                ORM.SetNumUninitialized(N);
+                for (int32 i = 0; i < N; ++i)
+                    ORM[i] = FColor(0, S.BakedRough[i].R, S.BakedMetal[i].R, 255);
+                ORMTiles[S.TileIdx] = MoveTemp(ORM);
             }
         }
 
@@ -385,123 +418,8 @@ void FGTMaterialExporter::ExportMaterials(
 }
 
 // ============================================================================
-// GAME-THREAD HELPERS (UE OBJECT ACCESS)
-// ============================================================================
-
-void FGTMaterialExporter::GT_ExtractRawTex(UTexture2D* Tex, int32 Ch, FGTRawTex& Out)
-{
-    if (!Tex) return;
-    FTextureSource& S = Tex->Source;
-    if (!S.IsValid() || S.GetFormat() != TSF_BGRA8) return;
-    Out.W = S.GetSizeX(); Out.H = S.GetSizeY(); Out.Ch = Ch;
-    S.GetMipData(Out.Bytes, 0);
-}
-
-void FGTMaterialExporter::GT_CollectMatChannel(UMaterialInterface* Mat, bool bRough, FGTRawTex& Out)
-{
-    Out.Fallback = bRough ? 1.f : 0.f;
-    if (!Mat) return;
-
-    auto Get = [&](const FString& N) -> UTexture2D* {
-        UTexture* T = nullptr;
-        Mat->GetTextureParameterValue(FHashedMaterialParameterInfo(FName(*N)), T);
-        return T ? Cast<UTexture2D>(T) : nullptr;
-    };
-
-    if (UTexture2D* ORM = Get(TEXT("ORM")))
-    {
-        GT_ExtractRawTex(ORM, bRough ? 1 : 2, Out);
-        if (Out.Bytes.Num() > 0) return;
-    }
-    static const TArray<FString> RN = { TEXT("Roughness"), TEXT("RoughnessMap"), TEXT("T_Roughness"), TEXT("MetallicRoughnessTexture") };
-    static const TArray<FString> MN = { TEXT("Metallic"),  TEXT("MetallicMap"),  TEXT("T_Metallic"),  TEXT("MetallicRoughnessTexture") };
-    for (const FString& N : (bRough ? RN : MN))
-    {
-        if (UTexture2D* T = Get(N)) { GT_ExtractRawTex(T, -1, Out); if (Out.Bytes.Num() > 0) return; }
-    }
-    float V = Out.Fallback;
-    Mat->GetScalarParameterValue(FHashedMaterialParameterInfo(FName(bRough ? TEXT("Roughness") : TEXT("Metallic"))), V);
-    Out.Fallback = V;
-}
-
-void FGTMaterialExporter::GT_CollectBaseColor(UMaterialInterface* Mat, FGTRawTex& Out)
-{
-    Out.Fallback = 1.f;
-    if (!Mat) return;
-
-    auto Get = [&](const FString& N) -> UTexture2D* {
-        UTexture* T = nullptr;
-        Mat->GetTextureParameterValue(FHashedMaterialParameterInfo(FName(*N)), T);
-        return T ? Cast<UTexture2D>(T) : nullptr;
-    };
-    static const TArray<FString> TexNames = { TEXT("BaseColor"), TEXT("Base Color"), TEXT("BaseColorMap"), TEXT("Albedo"), TEXT("AlbedoMap"), TEXT("DiffuseColor"), TEXT("Diffuse"), TEXT("T_BaseColor"), TEXT("Color") };
-    for (const FString& N : TexNames)
-    {
-        if (UTexture2D* T = Get(N)) { GT_ExtractRawTex(T, -1, Out); if (Out.Bytes.Num() > 0) return; }
-    }
-
-    FLinearColor Vec = FLinearColor::White;
-    for (const FString& N : { FString(TEXT("BaseColor")), FString(TEXT("Base Color")), FString(TEXT("Color")) })
-    {
-        if (Mat->GetVectorParameterValue(FHashedMaterialParameterInfo(FName(*N)), Vec))
-        {
-            const FColor C = Vec.ToFColor(true);
-            Out.Bytes.SetNumUninitialized(4);
-            Out.Bytes[0] = C.B; Out.Bytes[1] = C.G; Out.Bytes[2] = C.R; Out.Bytes[3] = C.A;
-            Out.W = Out.H = 1; Out.Ch = -1;
-            return;
-        }
-    }
-}
-
-// ============================================================================
 // BACKGROUND-SAFE HELPERS
 // ============================================================================
-
-TArray<FColor> FGTMaterialExporter::BG_SampleFromRaw(const FGTRawTex& R, int32 TargetSize)
-{
-    TArray<FColor> Out;
-    if (R.Bytes.IsEmpty())
-    {
-        const uint8 V = (uint8)FMath::Clamp(FMath::RoundToInt(R.Fallback * 255.f), 0, 255);
-        Out.Init(FColor(V, V, V, 255), TargetSize * TargetSize);
-        return Out;
-    }
-    const int32 N = R.W * R.H;
-    TArray<FColor> Src;
-    Src.SetNumUninitialized(N);
-    for (int32 i = 0; i < N; ++i)
-    {
-        const uint8 B = R.Bytes[i*4], G = R.Bytes[i*4+1], Rv = R.Bytes[i*4+2], A = R.Bytes[i*4+3];
-        if      (R.Ch == 0) Src[i] = FColor(Rv, Rv, Rv, 255);
-        else if (R.Ch == 1) Src[i] = FColor(G,  G,  G,  255);
-        else if (R.Ch == 2) Src[i] = FColor(B,  B,  B,  255);
-        else                Src[i] = FColor(Rv, G,  B,  A);
-    }
-
-    if (R.W == TargetSize && R.H == TargetSize) return Src;
-    Out.SetNumUninitialized(TargetSize * TargetSize);
-    for (int32 Dy = 0; Dy < TargetSize; ++Dy)
-    for (int32 Dx = 0; Dx < TargetSize; ++Dx)
-    {
-        const int32 Sx = FMath::Clamp(Dx * R.W / TargetSize, 0, R.W - 1);
-        const int32 Sy = FMath::Clamp(Dy * R.H / TargetSize, 0, R.H - 1);
-        Out[Dy * TargetSize + Dx] = Src[Sy * R.W + Sx];
-    }
-    return Out;
-}
-
-TArray<FColor> FGTMaterialExporter::BG_BuildORMTile(const FGTRawTex& Rough, const FGTRawTex& Metal, int32 TargetSize)
-{
-    const TArray<FColor> RoughSampled = BG_SampleFromRaw(Rough, TargetSize);
-    const TArray<FColor> MetalSampled = BG_SampleFromRaw(Metal, TargetSize);
-    const int32 N = TargetSize * TargetSize;
-    TArray<FColor> Out;
-    Out.SetNumUninitialized(N);
-    for (int32 i = 0; i < N; ++i)
-        Out[i] = FColor(0, RoughSampled[i].R, MetalSampled[i].R, 255);
-    return Out;
-}
 
 FString FGTMaterialExporter::BG_BuildOBJContent(const TArray<FGTActorBuilt>& Built)
 {

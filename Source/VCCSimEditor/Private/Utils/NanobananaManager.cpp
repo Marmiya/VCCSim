@@ -33,13 +33,16 @@ DEFINE_LOG_CATEGORY_STATIC(LogNanobananaManager, Log, All);
 
 namespace
 {
-    // Color definitions for material classes
     struct FNBClassDef { const TCHAR* Name; uint8 R, G, B; };
     static const FNBClassDef NBClasses[] = {
-        { TEXT("concrete"),     128, 128, 128 }, { TEXT("brick"),        180,  80,  50 },
-        { TEXT("glass"),        100, 180, 220 }, { TEXT("metal"),        180, 180, 200 },
-        { TEXT("wood"),         140,  90,  40 }, { TEXT("vegetation"),    60, 140,  60 },
-        { TEXT("painted_wall"), 220, 210, 200 }, { TEXT("asphalt"),       60,  60,  70 },
+        { TEXT("glass"),            0, 200, 255 },
+        { TEXT("polished_metal"), 220, 220,   0 },
+        { TEXT("matte_metal"),    128, 128, 128 },
+        { TEXT("concrete"),       200, 140,  80 },
+        { TEXT("brick"),          200,  50,  30 },
+        { TEXT("painted_wall"),   240, 180, 240 },
+        { TEXT("asphalt"),         40,  40,  40 },
+        { TEXT("vegetation"),      30, 180,  50 },
     };
     static const int32 NBClassCount = UE_ARRAY_COUNT(NBClasses);
     static const int32 NBTolerance  = 40;
@@ -155,7 +158,7 @@ void FNanobananaManager::StartAsyncDataLoading()
         }
 
         TArray<FString> PngFiles;
-        IFileManager::Get().FindFilesRecursive(PngFiles, *Params.ResultDir, TEXT("*.png"), true, false);
+        IFileManager::Get().FindFilesRecursive(PngFiles, *Params.ResultDir, TEXT("*_nanobanana_mask.png"), true, false);
         PngFiles.Sort();
 
         const int32 NumImages = FMath::Min(Poses.Num(), PngFiles.Num());
@@ -252,7 +255,6 @@ void FNanobananaManager::TickRayCasting()
     if (!WorldPtr.IsValid())
     {
         UE_LOG(LogNanobananaManager, Error, TEXT("World became invalid during ray casting."));
-        WorldPtr->GetTimerManager().ClearTimer(TimerHandle);
         FinalizeProjection();
         return;
     }

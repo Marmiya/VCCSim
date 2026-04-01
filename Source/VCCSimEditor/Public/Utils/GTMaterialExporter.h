@@ -50,19 +50,9 @@ public:
     );
 
 private:
-    // Internal data structures for processing
-    struct FGTRawTex;
     struct FGTMeshRaw;
     struct FGTActorBuilt;
 
-    // Game-thread helpers to extract data from UObjects
-    static void GT_ExtractRawTex(class UTexture2D* Tex, int32 Ch, FGTRawTex& Out);
-    static void GT_CollectMatChannel(class UMaterialInterface* Mat, bool bRough, FGTRawTex& Out);
-    static void GT_CollectBaseColor(class UMaterialInterface* Mat, FGTRawTex& Out);
-    
-    // Background-thread helpers for processing and file I/O
-    static TArray<FColor> BG_SampleFromRaw(const FGTRawTex& R, int32 TargetSize);
-    static TArray<FColor> BG_BuildORMTile(const FGTRawTex& Rough, const FGTRawTex& Metal, int32 TargetSize);
     static FString BG_BuildOBJContent(const TArray<FGTActorBuilt>& Built);
     static bool WriteAtlasPNG(const TArray<TArray<FColor>>& Tiles, int32 TileSize, int32 Cols, int32 Rows, const FString& PngPath);
     static bool WriteMTLFile(const FString& MtlPath);
