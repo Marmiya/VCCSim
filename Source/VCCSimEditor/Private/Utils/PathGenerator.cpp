@@ -84,7 +84,7 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
 
             bool bFound = false;
             float HitDistFromCenter = 0.f;
-            FVector HitPoint;
+            FVector HitPoint = FVector::ZeroVector;
 
             // Main method: World-level raycast, penetrating non-target Actors until a target Actor is hit.
             // LineTraceMultiByChannel stops at the first blocking hit, so we iterate, ignoring non-target Actors, 

@@ -137,5 +137,4 @@ private:
     TSharedRef<SWidget> CreateCoverageButtons();
     TSharedRef<SWidget> CreateComplexityButtons();
     
-    // Style and layout helpers (now using FVCCSimUIHelpers)
 };

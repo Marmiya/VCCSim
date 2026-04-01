@@ -18,7 +18,6 @@
 DEFINE_LOG_CATEGORY_STATIC(LogSelection, Log, All);
 
 #include "Editor/Panels/VCCSimPanelSelection.h"
-#include "Utils/VCCSimUIHelpers.h"
 #include "Engine/World.h"
 #include "Engine/Engine.h"
 #include "EngineUtils.h"
@@ -32,10 +31,6 @@ DEFINE_LOG_CATEGORY_STATIC(LogSelection, Log, All);
 #include "Sensors/BaseColorCamera.h"
 #include "Sensors/MaterialPropertiesCamera.h"
 
-// ============================================================================
-// CONSTRUCTOR / DESTRUCTOR
-// ============================================================================
-
 FVCCSimPanelSelection::FVCCSimPanelSelection()
 {
 }
@@ -45,10 +40,6 @@ FVCCSimPanelSelection::~FVCCSimPanelSelection()
     Cleanup();
 }
 
-// ============================================================================
-// PUBLIC INTERFACE
-// ============================================================================
-
 void FVCCSimPanelSelection::Initialize()
 {
     UE_LOG(LogSelection, Log, TEXT("VCCSimPanelSelection initialized"));
@@ -56,81 +47,12 @@ void FVCCSimPanelSelection::Initialize()
 
 void FVCCSimPanelSelection::Cleanup()
 {
-    // Clear selections
     ClearSelections();
-    
-    // Clear UI references
+
     SelectedFlashPawnText.Reset();
     SelectFlashPawnToggle.Reset();
     SelectedLookAtText.Reset();
     SelectLookAtToggle.Reset();
-}
-
-TSharedRef<SWidget> FVCCSimPanelSelection::CreateSelectionPanel()
-{
-    return SNew(SExpandableArea)
-        .InitiallyCollapsed(!bFlashPawnSectionExpanded)
-        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryTop"))
-        .BorderBackgroundColor(FColor(48, 48, 48))
-        .OnAreaExpansionChanged_Lambda([this](bool bIsExpanded)
-        {
-            bFlashPawnSectionExpanded = bIsExpanded;
-        })
-        .HeaderContent()
-        [
-            SNew(STextBlock)
-            .Text(FText::FromString("Object Selection"))
-            .Font(FAppStyle::GetFontStyle("PropertyWindow.BoldFont"))
-            .ColorAndOpacity(FColor(233, 233, 233))
-            .TransformPolicy(ETextTransformPolicy::ToUpper)
-        ]
-        .BodyContent()
-        [
-            SNew(SBorder)
-            .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
-            .BorderBackgroundColor(FColor(5, 5, 5, 255))
-            .Padding(FMargin(15, 6))
-            [
-                SNew(SVerticalBox)
-                
-                // Flash Pawn Selection
-                +SVerticalBox::Slot()
-                .AutoHeight()
-                [
-                    CreatePawnSelectPanel()
-                ]
-                
-                // Visual Separator
-                +SVerticalBox::Slot()
-                .AutoHeight()
-                .Padding(FMargin(0, 6, 0, 6))
-                [
-                    FVCCSimUIHelpers::CreateSeparator()
-                ]
-                
-                // Camera Selection
-                +SVerticalBox::Slot()
-                .AutoHeight()
-                [
-                    CreateCameraSelectPanel()
-                ]
-
-                // Visual Separator
-                +SVerticalBox::Slot()
-                .AutoHeight()
-                .Padding(FMargin(0, 6, 0, 6))
-                [
-                    FVCCSimUIHelpers::CreateSeparator()
-                ]
-
-                // LookAt Path Selection
-                +SVerticalBox::Slot()
-                .AutoHeight()
-                [
-                    CreateLookAtSelectPanel()
-                ]
-            ]
-        ];
 }
 
 void FVCCSimPanelSelection::HandleActorSelection(AActor* Actor)
@@ -140,7 +62,6 @@ void FVCCSimPanelSelection::HandleActorSelection(AActor* Actor)
         return;
     }
 
-    // Handle FlashPawn selection
     if (bSelectingFlashPawn)
     {
         AFlashPawn* FlashPawn = Cast<AFlashPawn>(Actor);
@@ -151,22 +72,19 @@ void FVCCSimPanelSelection::HandleActorSelection(AActor* Actor)
             {
                 SelectedFlashPawnText->SetText(FText::FromString(FlashPawn->GetActorLabel()));
             }
-            
-            // Disable selection mode
+
             bSelectingFlashPawn = false;
             if (SelectFlashPawnToggle.IsValid())
             {
                 SelectFlashPawnToggle->SetIsChecked(ECheckBoxState::Unchecked);
             }
-            
-            // Update camera availability
+
             RefreshCameraAvailability();
             bIsWarmedUp = false;
 
             UE_LOG(LogSelection, Log, TEXT("Selected FlashPawn: %s"), *FlashPawn->GetActorLabel());
         }
     }
-    // Handle LookAtPath selection
     else if (bSelectingLookAtPath)
     {
         AVCCSimLookAtPath* LookAt = Cast<AVCCSimLookAtPath>(Actor);
@@ -203,7 +121,6 @@ void FVCCSimPanelSelection::AutoSelectFlashPawn()
 
     SelectedFlashPawn = nullptr;
 
-    // Search for FlashPawn actors in the world
     AFlashPawn* FirstFoundFlashPawn = nullptr;
     for (TActorIterator<AFlashPawn> ActorIterator(World); ActorIterator; ++ActorIterator)
     {
@@ -211,22 +128,19 @@ void FVCCSimPanelSelection::AutoSelectFlashPawn()
         if (FlashPawn && IsValid(FlashPawn))
         {
             FirstFoundFlashPawn = FlashPawn;
-            break; // Select the first valid FlashPawn found
+            break;
         }
     }
 
-    // If we found a FlashPawn, select it
     if (FirstFoundFlashPawn)
     {
         SelectedFlashPawn = FirstFoundFlashPawn;
-        
-        // Update the UI text to show the selected FlashPawn
+
         if (SelectedFlashPawnText.IsValid())
         {
             SelectedFlashPawnText->SetText(FText::FromString(FirstFoundFlashPawn->GetActorLabel()));
         }
-        
-        // Update camera availability
+
         RefreshCameraAvailability();
         bIsWarmedUp = false;
 
@@ -273,317 +187,6 @@ void FVCCSimPanelSelection::AutoSelectLookAtPath()
     }
     UE_LOG(LogSelection, Log, TEXT("No VCCSimLookAtPath found in the scene for auto-selection"));
 }
-
-// ============================================================================
-// UI CREATION
-// ============================================================================
-
-TSharedRef<SWidget> FVCCSimPanelSelection::CreatePawnSelectPanel()
-{
-    return SNew(SVerticalBox)
-    +SVerticalBox::Slot()
-    .AutoHeight()
-    .Padding(FMargin(0, 4, 0, 4))
-    [
-        SNew(SHorizontalBox)
-        +SHorizontalBox::Slot()
-        .AutoWidth()
-        .VAlign(VAlign_Center)
-        .Padding(FMargin(0, 0, 8, 0))
-        [
-            SNew(STextBlock)
-            .Text(FText::FromString("Current"))
-            .MinDesiredWidth(80)
-            .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
-            .ColorAndOpacity(FColor(233, 233, 233))
-        ]
-        +SHorizontalBox::Slot()
-        .FillWidth(1.0f)
-        [
-            SNew(SBorder)
-            .Padding(4)
-            [
-                SAssignNew(SelectedFlashPawnText, STextBlock)
-                .Text(FText::FromString("None selected"))
-                .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
-                .ColorAndOpacity(FColor(233, 233, 233))
-            ]
-        ]
-        +SHorizontalBox::Slot()
-        .AutoWidth()
-        .VAlign(VAlign_Center)
-        .Padding(FMargin(8, 0, 4, 0))
-        [
-            SAssignNew(SelectFlashPawnToggle, SCheckBox)
-            .IsChecked(bSelectingFlashPawn ? ECheckBoxState::Checked : ECheckBoxState::Unchecked)
-            .OnCheckStateChanged(this, &FVCCSimPanelSelection::OnSelectFlashPawnToggleChanged)
-        ]
-        +SHorizontalBox::Slot()
-        .AutoWidth()
-        .VAlign(VAlign_Center)
-        [
-            SNew(STextBlock)
-            .Text(FText::FromString("Click to select"))
-            .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
-            .ColorAndOpacity(FColor(233, 233, 233))
-        ]
-    ];
-}
-
-TSharedRef<SWidget> FVCCSimPanelSelection::CreateCameraSelectPanel()
-{
-    return SNew(SVerticalBox)
-    
-    // Camera Availability Section
-    +SVerticalBox::Slot()
-    .AutoHeight()
-    .Padding(FMargin(0, 0, 0, 8))
-    [
-        SNew(SVerticalBox)
-        +SVerticalBox::Slot()
-        .AutoHeight()
-        .Padding(FMargin(0, 4, 0, 4))
-        [
-            SNew(STextBlock)
-            .Text(FText::FromString("Available & Active Cameras:"))
-            .Font(FAppStyle::GetFontStyle("PropertyWindow.BoldFont"))
-            .ColorAndOpacity(FColor(233, 233, 233))
-        ]
-        +SVerticalBox::Slot()
-        .AutoHeight()
-        [
-            CreateCameraStatusRow()
-        ]
-    ]
-    
-    // Camera Parameters Section
-    +SVerticalBox::Slot()
-    .AutoHeight()
-    .Padding(FMargin(0, 8, 0, 8))
-    [
-        SNew(SHorizontalBox)
-        +SHorizontalBox::Slot()
-        .AutoWidth()
-        .VAlign(VAlign_Center)
-        .Padding(FMargin(16, 0, 4, 0))
-        [
-            SNew(STextBlock)
-            .Text(FText::FromString("RGB Camera:"))
-            .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
-            .ColorAndOpacity(FColor(233, 233, 233))
-        ]
-        +SHorizontalBox::Slot()
-        .AutoWidth()
-        .VAlign(VAlign_Center)
-        .Padding(FMargin(0, 0, 12, 0))
-        [
-            SNew(SCheckBox)
-            .IsChecked_Lambda([this]() { return bUseRGBCameraClass ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
-            .OnCheckStateChanged(this, &FVCCSimPanelSelection::OnUseRGBCameraClassCheckboxChanged)
-            .IsEnabled_Lambda([this]() { return bHasRGBCamera && bUseRGBCamera; })
-        ]
-        +SHorizontalBox::Slot()
-        .AutoWidth()
-        .VAlign(VAlign_Center)
-        [
-            SNew(SButton)
-            .Text_Lambda([this]()
-            {
-                return FText::FromString(bIsWarmedUp ? "Cams Ready" : "Warmup Cams");
-            })
-            .IsEnabled_Lambda([this]() { return SelectedFlashPawn.IsValid(); })
-            .OnClicked_Lambda([this]()
-            {
-                WarmupCameras();
-                return FReply::Handled();
-            })
-        ]
-    ];
-}
-
-TSharedRef<SWidget> FVCCSimPanelSelection::CreateLookAtSelectPanel()
-{
-    return SNew(SVerticalBox)
-    +SVerticalBox::Slot()
-    .AutoHeight()
-    .Padding(FMargin(0, 0, 0, 4))
-    [
-        SNew(STextBlock)
-        .Text(FText::FromString("LookAt Path:"))
-        .Font(FAppStyle::GetFontStyle("PropertyWindow.BoldFont"))
-        .ColorAndOpacity(FColor(233, 233, 233))
-    ]
-    +SVerticalBox::Slot()
-    .AutoHeight()
-    .Padding(FMargin(0, 4, 0, 4))
-    [
-        SNew(SHorizontalBox)
-        +SHorizontalBox::Slot()
-        .AutoWidth()
-        .VAlign(VAlign_Center)
-        .Padding(FMargin(0, 0, 8, 0))
-        [
-            SNew(STextBlock)
-            .Text(FText::FromString("Current"))
-            .MinDesiredWidth(80)
-            .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
-            .ColorAndOpacity(FColor(233, 233, 233))
-        ]
-        +SHorizontalBox::Slot()
-        .FillWidth(1.0f)
-        [
-            SNew(SBorder)
-            .Padding(4)
-            [
-                SAssignNew(SelectedLookAtText, STextBlock)
-                .Text(FText::FromString("None selected"))
-                .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
-                .ColorAndOpacity(FColor(233, 233, 233))
-            ]
-        ]
-        +SHorizontalBox::Slot()
-        .AutoWidth()
-        .VAlign(VAlign_Center)
-        .Padding(FMargin(8, 0, 4, 0))
-        [
-            SAssignNew(SelectLookAtToggle, SCheckBox)
-            .IsChecked(bSelectingLookAtPath ? ECheckBoxState::Checked : ECheckBoxState::Unchecked)
-            .OnCheckStateChanged(this, &FVCCSimPanelSelection::OnSelectLookAtToggleChanged)
-        ]
-        +SHorizontalBox::Slot()
-        .AutoWidth()
-        .VAlign(VAlign_Center)
-        [
-            SNew(STextBlock)
-            .Text(FText::FromString("Click to select"))
-            .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
-            .ColorAndOpacity(FColor(233, 233, 233))
-        ]
-    ];
-}
-
-TSharedRef<SWidget> FVCCSimPanelSelection::CreateCameraStatusRow()
-{
-    return SNew(SHorizontalBox)
-    
-    // RGB Camera
-    +SHorizontalBox::Slot()
-    .MaxWidth(100)
-    .HAlign(HAlign_Center)
-    .Padding(FMargin(0, 0, 2, 0))
-    [
-        CreateCameraStatusBox("RGB", 
-            [this]() { return bHasRGBCamera; },
-            [this]() { return bUseRGBCamera ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; },
-            [this](ECheckBoxState NewState) { OnRGBCameraCheckboxChanged(NewState); })
-    ]
-    
-    // Depth Camera
-    +SHorizontalBox::Slot()
-    .MaxWidth(100)
-    .HAlign(HAlign_Center)
-    .Padding(FMargin(2, 0, 2, 0))
-    [
-        CreateCameraStatusBox("Depth",
-            [this]() { return bHasDepthCamera; },
-            [this]() { return bUseDepthCamera ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; },
-            [this](ECheckBoxState NewState) { OnDepthCameraCheckboxChanged(NewState); })
-    ]
-    
-    // Segmentation Camera
-    +SHorizontalBox::Slot()
-    .MaxWidth(100)
-    .HAlign(HAlign_Center)
-    .Padding(FMargin(2, 0, 2, 0))
-    [
-        CreateCameraStatusBox("Segment",
-            [this]() { return bHasSegmentationCamera; },
-            [this]() { return bUseSegmentationCamera ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; },
-            [this](ECheckBoxState NewState) { OnSegmentationCameraCheckboxChanged(NewState); })
-    ]
-    
-    // Normal Camera
-    +SHorizontalBox::Slot()
-    .MaxWidth(100)
-    .HAlign(HAlign_Center)
-    .Padding(FMargin(2, 0, 2, 0))
-    [
-        CreateCameraStatusBox("Normal",
-            [this]() { return bHasNormalCamera; },
-            [this]() { return bUseNormalCamera ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; },
-            [this](ECheckBoxState NewState) { OnNormalCameraCheckboxChanged(NewState); })
-    ]
-
-    // Base Color Camera
-    +SHorizontalBox::Slot()
-    .MaxWidth(100)
-    .HAlign(HAlign_Center)
-    .Padding(FMargin(2, 0, 2, 0))
-    [
-        CreateCameraStatusBox("BaseColor",
-            [this]() { return bHasBaseColorCamera; },
-            [this]() { return bUseBaseColorCamera ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; },
-            [this](ECheckBoxState NewState) { OnBaseColorCameraCheckboxChanged(NewState); })
-    ]
-
-    // Material Properties Camera
-    +SHorizontalBox::Slot()
-    .MaxWidth(100)
-    .HAlign(HAlign_Center)
-    .Padding(FMargin(2, 0, 0, 0))
-    [
-        CreateCameraStatusBox("MatProps",
-            [this]() { return bHasMaterialPropertiesCamera; },
-            [this]() { return bUseMaterialPropertiesCamera ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; },
-            [this](ECheckBoxState NewState) { OnMaterialPropertiesCameraCheckboxChanged(NewState); })
-    ];
-}
-
-TSharedRef<SWidget> FVCCSimPanelSelection::CreateCameraStatusBox(
-    const FString& CameraName,
-    TFunction<bool()> HasCameraFunc,
-    TFunction<ECheckBoxState()> IsCheckedFunc,
-    TFunction<void(ECheckBoxState)> OnStateChangedFunc)
-{
-    return SNew(SBorder)
-        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
-        .BorderBackgroundColor(FColor(5, 5, 5, 255))
-        .Padding(FMargin(4, 2))
-        [
-            SNew(SVerticalBox)
-            +SVerticalBox::Slot()
-            .AutoHeight()
-            .HAlign(HAlign_Center)
-            [
-                SNew(STextBlock)
-                .Text(FText::FromString(CameraName))
-                .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
-                .ColorAndOpacity_Lambda([HasCameraFunc]() {
-                    return HasCameraFunc() ? FColor(233, 233, 233) : FColor(120, 120, 120);
-                })
-            ]
-            +SVerticalBox::Slot()
-            .AutoHeight()
-            .HAlign(HAlign_Center)
-            .Padding(FMargin(0, 2, 0, 0))
-            [
-                SNew(SCheckBox)
-                .IsEnabled_Lambda([HasCameraFunc]() { return HasCameraFunc(); })
-                .IsChecked_Lambda([IsCheckedFunc]() { return IsCheckedFunc(); })
-                .ForegroundColor_Lambda([HasCameraFunc]() {
-                    return HasCameraFunc() ? FSlateColor(FColor(0, 200, 0)) : FSlateColor(FColor(200, 0, 0));
-                })
-                .OnCheckStateChanged_Lambda([OnStateChangedFunc](ECheckBoxState NewState) {
-                    OnStateChangedFunc(NewState);
-                })
-            ]
-        ];
-}
-
-
-// ============================================================================
-// EVENT HANDLERS
-// ============================================================================
 
 void FVCCSimPanelSelection::OnSelectFlashPawnToggleChanged(ECheckBoxState NewState)
 {
@@ -647,10 +250,6 @@ void FVCCSimPanelSelection::OnUseRGBCameraClassCheckboxChanged(ECheckBoxState Ne
 {
     bUseRGBCameraClass = (NewState == ECheckBoxState::Checked);
 }
-
-// ============================================================================
-// SELECTION LOGIC
-// ============================================================================
 
 void FVCCSimPanelSelection::RefreshCameraAvailability()
 {
@@ -716,7 +315,7 @@ void FVCCSimPanelSelection::ClearSelections()
     SelectedLookAtPath.Reset();
     bSelectingFlashPawn = false;
     bSelectingLookAtPath = false;
-    
+
     bHasRGBCamera = false;
     bHasDepthCamera = false;
     bHasSegmentationCamera = false;
