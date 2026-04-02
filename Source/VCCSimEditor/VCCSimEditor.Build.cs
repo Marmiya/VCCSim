@@ -64,7 +64,10 @@ public class VCCSimEditor : ModuleRules
                 "ImageWrapper",
 
                 // GT material export
-                "GLTFExporter"
+                "GLTFExporter",
+
+                // Programmatic material / texture asset creation
+                "MaterialEditor"
             }
         );
         

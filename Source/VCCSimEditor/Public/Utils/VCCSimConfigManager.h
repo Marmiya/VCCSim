@@ -84,7 +84,7 @@ public:
         float   NanobananaHFOV           = 90.f;
         int32   NanobananaImageWidth     = 1920;
         int32   NanobananaImageHeight    = 1080;
-        int32   NanobananaRaysPerClass   = 80;
+        float   NanobananaOverlayAlpha   = 0.4f;
     };
 
     // PathImageCapture configuration

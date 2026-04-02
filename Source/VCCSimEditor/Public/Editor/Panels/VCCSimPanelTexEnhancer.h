@@ -166,7 +166,7 @@ private:
     TSharedPtr<SNumericEntryBox<float>>   NanobananaHFOVSpinBox;
     TSharedPtr<SNumericEntryBox<int32>>   NanobananaImageWidthSpinBox;
     TSharedPtr<SNumericEntryBox<int32>>   NanobananaImageHeightSpinBox;
-    TSharedPtr<SNumericEntryBox<int32>>   NanobananaRaysPerClassSpinBox;
+    TSharedPtr<SNumericEntryBox<float>>   NanobananaOverlayAlphaSpinBox;
 
     FString NanobananaResultDir;
     FString NanobananaPosesFile;
@@ -174,12 +174,12 @@ private:
     float   NanobananaHFOV         = 90.f;
     int32   NanobananaImageWidth   = 1920;
     int32   NanobananaImageHeight  = 1080;
-    int32   NanobananaRaysPerClass = 80;
-    
+    float   NanobananaOverlayAlpha = 0.5f;
+
     TOptional<float>  NanobananaHFOVValue;
     TOptional<int32>  NanobananaImageWidthValue;
     TOptional<int32>  NanobananaImageHeightValue;
-    TOptional<int32>  NanobananaRaysPerClassValue;
+    TOptional<float>  NanobananaOverlayAlphaValue;
 
     // ============================================================================
     // SECTION 1: DATASET CONFIGURATION

@@ -830,18 +830,18 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateNanobananaSection()
 
         +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
         [
-            FVCCSimUIHelpers::CreatePropertyRow(TEXT("Rays / Class"),
+            FVCCSimUIHelpers::CreatePropertyRow(TEXT("Overlay Alpha"),
                 SNew(SBorder)
                 .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
                 .BorderBackgroundColor(FColor(5, 5, 5, 255))
                 .Padding(4, 0)
                 [
-                    SAssignNew(NanobananaRaysPerClassSpinBox, SNumericEntryBox<int32>)
-                    .Value_Lambda([this]() { return NanobananaRaysPerClassValue; })
-                    .MinValue(1).MaxValue(1000).Delta(10).AllowSpin(false)
-                    .OnValueChanged_Lambda([this](int32 V)
+                    SAssignNew(NanobananaOverlayAlphaSpinBox, SNumericEntryBox<float>)
+                    .Value_Lambda([this]() { return NanobananaOverlayAlphaValue; })
+                    .MinValue(0.f).MaxValue(1.f).Delta(0.05f).AllowSpin(false)
+                    .OnValueChanged_Lambda([this](float V)
                     {
-                        NanobananaRaysPerClass = V; NanobananaRaysPerClassValue = V; SavePaths();
+                        NanobananaOverlayAlpha = V; NanobananaOverlayAlphaValue = V; SavePaths();
                     })
                 ]
             )
@@ -858,15 +858,15 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateNanobananaSection()
                 .Text_Lambda([this]()
                 {
                     return bNanobananaInProgress
-                        ? FText::FromString(TEXT("Running projection..."))
+                        ? FText::FromString(TEXT("Stop Projection"))
                         : FText::FromString(TEXT("Run Projection"));
                 })
                 .IsEnabled_Lambda([this]()
                 {
-                    return !bNanobananaInProgress
-                        && !NanobananaResultDir.IsEmpty()
-                        && !NanobananaPosesFile.IsEmpty()
-                        && !NanobananaManifestFile.IsEmpty();
+                    return bNanobananaInProgress
+                        || (!NanobananaResultDir.IsEmpty()
+                            && !NanobananaPosesFile.IsEmpty()
+                            && !NanobananaManifestFile.IsEmpty());
                 })
                 .OnClicked_Lambda([this]() { return OnRunNanobananaProjectionClicked(); })
             ]

@@ -1,5 +1,6 @@
 #include "Utils/GTMaterialExporter.h"
 #include "Utils/VCCSimUIHelpers.h"
+#include "IO/GLTFUtils.h"
 #include "Engine/StaticMeshActor.h"
 #include "Components/StaticMeshComponent.h"
 #include "EngineUtils.h"
@@ -23,74 +24,11 @@ bool FGTMaterialExporter::WriteManifest(
     int32 TextureResolution,
     const FString& ActorDir)
 {
-    FString GltfContent;
-    if (!FFileHelper::LoadFileToString(GltfContent, *(ActorDir / TEXT("mesh.gltf"))))
+    FGLTFMeshData GltfData;
+    if (!FGLTFUtils::LoadMeshData(ActorDir / TEXT("mesh.gltf"), GltfData))
     {
-        UE_LOG(LogGTMaterialExporter, Warning, TEXT("GT Manifest '%s': cannot read mesh.gltf"), *Label);
+        UE_LOG(LogGTMaterialExporter, Warning, TEXT("GT Manifest '%s': cannot read or parse mesh.gltf"), *Label);
         return false;
-    }
-
-    TSharedPtr<FJsonObject> GltfRoot;
-    TSharedRef<TJsonReader<>> GltfReader = TJsonReaderFactory<>::Create(GltfContent);
-    if (!FJsonSerializer::Deserialize(GltfReader, GltfRoot) || !GltfRoot.IsValid())
-    {
-        UE_LOG(LogGTMaterialExporter, Warning, TEXT("GT Manifest '%s': failed to parse mesh.gltf"), *Label);
-        return false;
-    }
-
-    TArray<FString> ImageUris;
-    const TArray<TSharedPtr<FJsonValue>>* ImagesArr = nullptr;
-    if (GltfRoot->TryGetArrayField(TEXT("images"), ImagesArr))
-    {
-        for (const TSharedPtr<FJsonValue>& Img : *ImagesArr)
-        {
-            FString Uri;
-            if (Img->AsObject().IsValid()) Img->AsObject()->TryGetStringField(TEXT("uri"), Uri);
-            ImageUris.Add(Uri);
-        }
-    }
-
-    TArray<int32> TextureSources;
-    const TArray<TSharedPtr<FJsonValue>>* TexturesArr = nullptr;
-    if (GltfRoot->TryGetArrayField(TEXT("textures"), TexturesArr))
-    {
-        for (const TSharedPtr<FJsonValue>& Tex : *TexturesArr)
-        {
-            int32 Source = -1;
-            if (Tex->AsObject().IsValid()) Tex->AsObject()->TryGetNumberField(TEXT("source"), Source);
-            TextureSources.Add(Source);
-        }
-    }
-
-    auto GetImageUri = [&](int32 TexIdx) -> FString
-    {
-        if (TexIdx < 0 || TexIdx >= TextureSources.Num()) return TEXT("");
-        const int32 SrcIdx = TextureSources[TexIdx];
-        if (SrcIdx < 0 || SrcIdx >= ImageUris.Num()) return TEXT("");
-        return ImageUris[SrcIdx];
-    };
-
-    TArray<TSharedPtr<FJsonObject>> GltfMaterials;
-    const TArray<TSharedPtr<FJsonValue>>* MaterialsArr = nullptr;
-    if (GltfRoot->TryGetArrayField(TEXT("materials"), MaterialsArr))
-        for (const TSharedPtr<FJsonValue>& M : *MaterialsArr)
-            if (M->AsObject().IsValid()) GltfMaterials.Add(M->AsObject());
-
-    TArray<int32> PrimToMaterial;
-    const TArray<TSharedPtr<FJsonValue>>* MeshesArr = nullptr;
-    if (GltfRoot->TryGetArrayField(TEXT("meshes"), MeshesArr) && MeshesArr->Num() > 0)
-    {
-        const TArray<TSharedPtr<FJsonValue>>* PrimsArr = nullptr;
-        if ((*MeshesArr)[0]->AsObject().IsValid() &&
-            (*MeshesArr)[0]->AsObject()->TryGetArrayField(TEXT("primitives"), PrimsArr))
-        {
-            for (const TSharedPtr<FJsonValue>& Prim : *PrimsArr)
-            {
-                int32 MatIdx = -1;
-                if (Prim->AsObject().IsValid()) Prim->AsObject()->TryGetNumberField(TEXT("material"), MatIdx);
-                PrimToMaterial.Add(MatIdx);
-            }
-        }
     }
 
     auto MakeVec3Json = [](FVector V) -> TArray<TSharedPtr<FJsonValue>>
@@ -134,9 +72,9 @@ bool FGTMaterialExporter::WriteManifest(
     UStaticMeshComponent* MC = Actor->GetStaticMeshComponent();
     TArray<TSharedPtr<FJsonValue>> SlotsArray;
 
-    for (int32 PrimIdx = 0; PrimIdx < PrimToMaterial.Num(); ++PrimIdx)
+    for (int32 PrimIdx = 0; PrimIdx < GltfData.PrimToMaterial.Num(); ++PrimIdx)
     {
-        const int32 MatIdx = PrimToMaterial[PrimIdx];
+        const int32 MatIdx = GltfData.PrimToMaterial[PrimIdx];
 
         TSharedPtr<FJsonObject> Slot = MakeShareable(new FJsonObject);
         Slot->SetNumberField(TEXT("slot"), PrimIdx);
@@ -149,45 +87,17 @@ bool FGTMaterialExporter::WriteManifest(
         }
         Slot->SetStringField(TEXT("material_name"), MatName);
 
-        if (MatIdx >= 0 && MatIdx < GltfMaterials.Num())
+        if (MatIdx >= 0 && MatIdx < GltfData.Materials.Num())
         {
-            const TSharedPtr<FJsonObject>& GltfMat = GltfMaterials[MatIdx];
-
-            const TSharedPtr<FJsonObject>* PBR = nullptr;
-            if (GltfMat->TryGetObjectField(TEXT("pbrMetallicRoughness"), PBR))
-            {
-                const TSharedPtr<FJsonObject>* BCTex = nullptr;
-                if ((*PBR)->TryGetObjectField(TEXT("baseColorTexture"), BCTex))
-                {
-                    int32 TexIdx = -1;
-                    (*BCTex)->TryGetNumberField(TEXT("index"), TexIdx);
-                    Slot->SetStringField(TEXT("basecolor"), GetImageUri(TexIdx));
-                }
-
-                const TSharedPtr<FJsonObject>* MRTex = nullptr;
-                if ((*PBR)->TryGetObjectField(TEXT("metallicRoughnessTexture"), MRTex))
-                {
-                    int32 TexIdx = -1;
-                    (*MRTex)->TryGetNumberField(TEXT("index"), TexIdx);
-                    Slot->SetStringField(TEXT("metallic_roughness"), GetImageUri(TexIdx));
-                }
-            }
-
-            const TSharedPtr<FJsonObject>* NTex = nullptr;
-            if (GltfMat->TryGetObjectField(TEXT("normalTexture"), NTex))
-            {
-                int32 TexIdx = -1;
-                (*NTex)->TryGetNumberField(TEXT("index"), TexIdx);
-                Slot->SetStringField(TEXT("normal"), GetImageUri(TexIdx));
-            }
-
-            const TSharedPtr<FJsonObject>* OTex = nullptr;
-            if (GltfMat->TryGetObjectField(TEXT("occlusionTexture"), OTex))
-            {
-                int32 TexIdx = -1;
-                (*OTex)->TryGetNumberField(TEXT("index"), TexIdx);
-                Slot->SetStringField(TEXT("occlusion"), GetImageUri(TexIdx));
-            }
+            const FGLTFMeshData::FMaterialTextures& MatTex = GltfData.Materials[MatIdx];
+            if (!MatTex.BaseColor.IsEmpty())
+                Slot->SetStringField(TEXT("basecolor"), MatTex.BaseColor);
+            if (!MatTex.MetallicRoughness.IsEmpty())
+                Slot->SetStringField(TEXT("metallic_roughness"), MatTex.MetallicRoughness);
+            if (!MatTex.Normal.IsEmpty())
+                Slot->SetStringField(TEXT("normal"), MatTex.Normal);
+            if (!MatTex.Occlusion.IsEmpty())
+                Slot->SetStringField(TEXT("occlusion"), MatTex.Occlusion);
         }
 
         SlotsArray.Add(MakeShareable(new FJsonValueObject(Slot)));
@@ -307,6 +217,24 @@ void FGTMaterialExporter::ExportMaterials(
         {
             ++SuccessCount;
         }
+    }
+
+    {
+        TSharedPtr<FJsonObject> SceneRoot = MakeShareable(new FJsonObject);
+        SceneRoot->SetStringField(TEXT("scene_name"), SceneName);
+        SceneRoot->SetStringField(TEXT("exported_at"), FDateTime::Now().ToString());
+        TArray<TSharedPtr<FJsonValue>> ActorsJson;
+        for (int32 i = 0; i < Actors.Num(); ++i)
+        {
+            TSharedPtr<FJsonObject> A = MakeShareable(new FJsonObject);
+            A->SetStringField(TEXT("label"), Labels[i]);
+            ActorsJson.Add(MakeShareable(new FJsonValueObject(A)));
+        }
+        SceneRoot->SetArrayField(TEXT("actors"), ActorsJson);
+        FString SceneJson;
+        TSharedRef<TJsonWriter<>> SceneWriter = TJsonWriterFactory<>::Create(&SceneJson);
+        FJsonSerializer::Serialize(SceneRoot.ToSharedRef(), SceneWriter);
+        FFileHelper::SaveStringToFile(SceneJson, *(BaseDir / TEXT("manifest.json")));
     }
 
     const int32 Total = Actors.Num();

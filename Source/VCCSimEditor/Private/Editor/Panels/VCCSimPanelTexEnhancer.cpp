@@ -53,11 +53,8 @@ DEFINE_LOG_CATEGORY_STATIC(LogTexEnhancerPanel, Log, All);
 FVCCSimPanelTexEnhancer::FVCCSimPanelTexEnhancer()
 {
     GTMaterialExporter = MakeShared<FGTMaterialExporter>();
-    if (GEditor && GEditor->GetEditorWorldContext().World())
-    {
-        NanobananaManager = MakeShared<FNanobananaManager>(GEditor->GetEditorWorldContext().World());
-    }
-    
+    NanobananaManager  = MakeShared<FNanobananaManager>();
+
     for (int32 i = 0; i < MaxLightingEntries; ++i)
     {
         SetAElevationValue[i] = SetAElevation[i];
@@ -80,7 +77,7 @@ FVCCSimPanelTexEnhancer::FVCCSimPanelTexEnhancer()
     NanobananaHFOVValue         = NanobananaHFOV;
     NanobananaImageWidthValue   = NanobananaImageWidth;
     NanobananaImageHeightValue  = NanobananaImageHeight;
-    NanobananaRaysPerClassValue = NanobananaRaysPerClass;
+    NanobananaOverlayAlphaValue = NanobananaOverlayAlpha;
 }
 
 FVCCSimPanelTexEnhancer::~FVCCSimPanelTexEnhancer()
@@ -190,11 +187,11 @@ void FVCCSimPanelTexEnhancer::LoadFromConfigManager()
     NanobananaHFOV         = Config.NanobananaHFOV;
     NanobananaImageWidth   = Config.NanobananaImageWidth;
     NanobananaImageHeight  = Config.NanobananaImageHeight;
-    NanobananaRaysPerClass = Config.NanobananaRaysPerClass;
+    NanobananaOverlayAlpha = Config.NanobananaOverlayAlpha;
     NanobananaHFOVValue         = NanobananaHFOV;
     NanobananaImageWidthValue   = NanobananaImageWidth;
     NanobananaImageHeightValue  = NanobananaImageHeight;
-    NanobananaRaysPerClassValue = NanobananaRaysPerClass;
+    NanobananaOverlayAlphaValue = NanobananaOverlayAlpha;
 }
 
 // ============================================================================
@@ -858,7 +855,7 @@ FReply FVCCSimPanelTexEnhancer::OnRunNanobananaProjectionClicked()
 {
     if (bNanobananaInProgress)
     {
-        FVCCSimUIHelpers::ShowNotification(TEXT("Nanobanana projection already running."), true);
+        UE_LOG(LogTexEnhancerPanel, Warning, TEXT("Nanobanana projection already in progress."));
         return FReply::Handled();
     }
     if (NanobananaResultDir.IsEmpty() || !FPaths::DirectoryExists(NanobananaResultDir))
@@ -877,27 +874,19 @@ FReply FVCCSimPanelTexEnhancer::OnRunNanobananaProjectionClicked()
         return FReply::Handled();
     }
 
-    if (!NanobananaManager.IsValid())
-    {
-        if (GEditor && GEditor->GetEditorWorldContext().World())
-        {
-            NanobananaManager = MakeShared<FNanobananaManager>(GEditor->GetEditorWorldContext().World());
-        }
-        else
-        {
-            FVCCSimUIHelpers::ShowNotification(TEXT("Nanobanana Manager could not be initialized."), true);
-            return FReply::Handled();
-        }
-    }
+    NanobananaManager = MakeShared<FNanobananaManager>();
 
     FNanobananaManager::FProjectionParams Params;
-    Params.ResultDir = NanobananaResultDir;
-    Params.PosesFile = NanobananaPosesFile; 
-    Params.ManifestFile = NanobananaManifestFile;
-    Params.HFOV = NanobananaHFOV;
-    Params.ImageWidth = NanobananaImageWidth;
-    Params.ImageHeight = NanobananaImageHeight;
-    Params.RaysPerClass = NanobananaRaysPerClass;
+    Params.ResultDir         = NanobananaResultDir;
+    Params.PosesFile         = NanobananaPosesFile;
+    Params.ManifestFile      = NanobananaManifestFile;
+    Params.HFOV              = NanobananaHFOV;
+    Params.ImageWidth        = NanobananaImageWidth;
+    Params.ImageHeight       = NanobananaImageHeight;
+    Params.OverlayAlpha      = NanobananaOverlayAlpha;
+    Params.World             = GEditor->GetEditorWorldContext().World();
+    Params.SceneName         = SceneName;
+    Params.TextureResolution = GTTextureResolution;
 
     FOnNanobananaProgress OnProgressDelegate = FOnNanobananaProgress::CreateLambda(
         [this](const FString& Status, int32 Processed, int32 Total)
@@ -920,11 +909,9 @@ FReply FVCCSimPanelTexEnhancer::OnRunNanobananaProjectionClicked()
         FVCCSimUIHelpers::ShowNotification(TEXT("Nanobanana projection complete!"), false);
     });
 
-    if (NanobananaManager->RunProjection(Params, OnProgressDelegate, OnCompleteDelegate))
-    {
-        bNanobananaInProgress = true;
-    }
-    
+    bNanobananaInProgress = true;
+    NanobananaManager->RunProjection(Params, OnProgressDelegate, OnCompleteDelegate);
+
     return FReply::Handled();
 }
 
@@ -950,7 +937,7 @@ void FVCCSimPanelTexEnhancer::SavePaths()
     Config.NanobananaHFOV         = NanobananaHFOV;
     Config.NanobananaImageWidth   = NanobananaImageWidth;
     Config.NanobananaImageHeight  = NanobananaImageHeight;
-    Config.NanobananaRaysPerClass = NanobananaRaysPerClass;
+    Config.NanobananaOverlayAlpha = NanobananaOverlayAlpha;
     FVCCSimConfigManager::Get().SetTexEnhancerConfig(Config);
 }
 
@@ -974,10 +961,10 @@ void FVCCSimPanelTexEnhancer::LoadPaths()
     NanobananaHFOV         = Config.NanobananaHFOV;
     NanobananaImageWidth   = Config.NanobananaImageWidth;
     NanobananaImageHeight  = Config.NanobananaImageHeight;
-    NanobananaRaysPerClass = Config.NanobananaRaysPerClass;
+    NanobananaOverlayAlpha = Config.NanobananaOverlayAlpha;
 
-    NanobananaHFOVValue          = NanobananaHFOV;
-    NanobananaImageWidthValue    = NanobananaImageWidth;
-    NanobananaImageHeightValue   = NanobananaImageHeight;
-    NanobananaRaysPerClassValue  = NanobananaRaysPerClass;
+    NanobananaHFOVValue         = NanobananaHFOV;
+    NanobananaImageWidthValue   = NanobananaImageWidth;
+    NanobananaImageHeightValue  = NanobananaImageHeight;
+    NanobananaOverlayAlphaValue = NanobananaOverlayAlpha;
 }

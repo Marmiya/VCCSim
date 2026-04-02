@@ -46,7 +46,8 @@ public class VCCSim : ModuleRules
                 "NiagaraCore",
                 "NiagaraShader",
                 "AssetRegistry",
-                "Projects"
+                "Projects",
+                "Json"
             }
         );
         

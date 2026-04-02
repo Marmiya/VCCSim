@@ -17,26 +17,26 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Engine/TimerHandle.h"
+#include "Dom/JsonObject.h"
 
 class UWorld;
+class UMaterial;
+class UMaterialInstanceConstant;
+class UTexture2D;
 
-// Delegate to report progress
 DECLARE_DELEGATE_ThreeParams(FOnNanobananaProgress, const FString& /* Status */, int32 /* Processed */, int32 /* Total */);
-// Delegate for completion
 DECLARE_DELEGATE_OneParam(FOnNanobananaComplete, const FString& /* FinalStatus */);
 
 /**
- * Manages the Nanobanana projection process, which involves:
- * - Reading pose and segmentation image data.
- * - Generating and casting rays into the scene.
- * - Voting for material classes based on ray hits.
- * - Writing out the final class assignments for each actor.
+ * Projects nanobanana segmentation masks onto a UStaticMeshActor via SceneCapture2D ID pass,
+ * votes per material slot across all frames, creates labeled UE materials, and exports
+ * mesh_labeled.gltf via GTMaterialExporter. Runs synchronously on the GameThread with
+ * FScopedSlowTask progress display.
  */
 class VCCSIMEDITOR_API FNanobananaManager : public TSharedFromThis<FNanobananaManager>
 {
 public:
-    explicit FNanobananaManager(UWorld* InWorld);
+    FNanobananaManager();
     ~FNanobananaManager();
 
     struct FProjectionParams
@@ -44,57 +44,53 @@ public:
         FString ResultDir;
         FString PosesFile;
         FString ManifestFile;
-        float   HFOV = 90.f;
-        int32   ImageWidth = 1920;
-        int32   ImageHeight = 1080;
-        int32   RaysPerClass = 80;
+        float   HFOV              = 90.f;
+        int32   ImageWidth        = 1920;
+        int32   ImageHeight       = 1080;
+        float   OverlayAlpha      = 0.4f;
+        UWorld* World             = nullptr;
+        FString SceneName;
+        int32   TextureResolution = 2048;
     };
 
-    /**
-     * Starts the asynchronous projection process.
-     * @param InParams The input parameters for the projection.
-     * @param InOnProgress Delegate called periodically with progress updates.
-     * @param InOnComplete Delegate called when the entire process is finished.
-     * @return True if the process started successfully, false otherwise.
-     */
     bool RunProjection(
         const FProjectionParams& InParams,
-        FOnNanobananaProgress InOnProgress,
-        FOnNanobananaComplete InOnComplete
-    );
+        FOnNanobananaProgress    InOnProgress,
+        FOnNanobananaComplete    InOnComplete);
 
+    void Cancel();
     bool IsInProgress() const { return bIsInProgress; }
 
 private:
-    struct FNanobananaRay
-    {
-        FVector Origin;
-        FVector Direction;
-        FString ClassName;
-    };
+    struct FSlotPngInfo { FString PngPath; FString PngUri; };
+    struct FActorData   { FString Label; FString Dir; TArray<FSlotPngInfo> Slots; };
 
-    // Main logic steps
-    void StartAsyncDataLoading();
-    void TickRayCasting();
-    void FinalizeProjection();
+    void RunOnGameThread();
 
-    // World context for ray casting
-    TWeakObjectPtr<UWorld> WorldPtr;
-    
-    // State variables
-    bool bIsInProgress = false;
+    static bool LoadSlotPngInfos(
+        const FString&          ActorDir,
+        TArray<FSlotPngInfo>&   OutSlots,
+        int32&                  OutGltfPrimCount,
+        int32&                  OutSkippedNoPng);
+
+    static UMaterial*                 GetOrCreateSlotIDMaterial();
+    static UMaterial*                 GetOrCreateLabeledOverlayMaterial();
+    static UTexture2D*                ImportPngAsTexture(
+        const FString& PngPath,
+        const FString& PackagePath,
+        const FString& AssetName);
+    static UMaterialInstanceConstant* CreateLabeledMIC(
+        UMaterial*     ParentMat,
+        UTexture2D*    BaseTex,
+        uint8 CR, uint8 CG, uint8 CB,
+        float          OverlayAlpha,
+        const FString& PackagePath,
+        const FString& AssetName);
+
+    bool              bIsInProgress = false;
     FProjectionParams Params;
-    FTimerHandle TimerHandle;
+    FString           OutputDir;
 
-    // Data for the projection process
-    TArray<FNanobananaRay>              PendingRays;
-    int32                               ProcessedRayCount = 0;
-    int32                               TotalRayCount = 0;
-    TMap<FString, TMap<FString, int32>> Votes;
-    TArray<FString>                     ManifestActors;
-    FString                             OutputDir;
-
-    // Delegates for callbacks
     FOnNanobananaProgress OnProgress;
     FOnNanobananaComplete OnComplete;
 };
