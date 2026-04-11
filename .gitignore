@@ -96,6 +96,8 @@ Client/ros_client/log/
 Client/ros_client/install/
 Client/ros_client/share/
 
+Content/TexEnhancer/*
+
 Source/.claude/*
 Source/grpc/*
 Source/Tools/DGE/data/*

@@ -260,7 +260,7 @@ UTexture2D* FNanobananaManager::ImportPngAsTexture(
     const FString FullPackageName = PackagePath / AssetName;
     const FString FullAssetPath   = FullPackageName + TEXT(".") + AssetName;
 
-    if (UTexture2D* Existing = LoadObject<UTexture2D>(nullptr, *FullAssetPath))
+    if (UTexture2D* Existing = FindObject<UTexture2D>(nullptr, *FullAssetPath))
     {
         if (!Existing->IsRooted())
             Existing->ConditionalBeginDestroy();
@@ -310,7 +310,7 @@ UMaterialInstanceConstant* FNanobananaManager::CreateLabeledMIC(
     const FString FullPackageName = PackagePath / AssetName;
     const FString FullAssetPath   = FullPackageName + TEXT(".") + AssetName;
 
-    if (UMaterialInstanceConstant* Existing = LoadObject<UMaterialInstanceConstant>(nullptr, *FullAssetPath))
+    if (UMaterialInstanceConstant* Existing = FindObject<UMaterialInstanceConstant>(nullptr, *FullAssetPath))
     {
         if (!Existing->IsRooted())
             Existing->ConditionalBeginDestroy();
@@ -769,7 +769,12 @@ void FNanobananaManager::RunOnGameThread()
 
         const FString SafeLabel     = Actor.Label.Replace(TEXT(" "), TEXT("_"));
         const FString AssetPkgBase  =
-            FString::Printf(TEXT("/Game/VCCSim/TexEnhancer/%s"), *SafeLabel);
+            FString::Printf(TEXT("/VCCSim/TexEnhancer/%s"), *SafeLabel);
+
+        const FString AssetDiskDir = FPackageName::LongPackageNameToFilename(AssetPkgBase);
+        if (IFileManager::Get().DirectoryExists(*AssetDiskDir))
+            IFileManager::Get().DeleteDirectory(*AssetDiskDir, false, true);
+        IFileManager::Get().MakeDirectory(*AssetDiskDir, true);
 
         TSharedPtr<FJsonObject> ActorJson = MakeShareable(new FJsonObject);
         ActorJson->SetStringField(TEXT("label"), Actor.Label);
@@ -884,7 +889,37 @@ void FNanobananaManager::RunOnGameThread()
             IFileManager::Get().DeleteDirectory(*LabeledDir, false, true);
         IFileManager::Get().MakeDirectory(*LabeledDir, true);
 
-        // Phase B: spawn labeled actor
+        // Save labeled StaticMesh asset
+        {
+            UStaticMesh* OrigMesh = TargetActor->GetStaticMeshComponent()->GetStaticMesh();
+            const FString MeshAssetName = FString::Printf(TEXT("%s_labeled"), *SafeLabel);
+            const FString MeshPkgName   = AssetPkgBase / MeshAssetName;
+
+            UPackage* MeshPackage = CreatePackage(*MeshPkgName);
+            UStaticMesh* LabeledMesh = DuplicateObject<UStaticMesh>(
+                OrigMesh, MeshPackage, *MeshAssetName);
+            LabeledMesh->SetFlags(RF_Public | RF_Standalone);
+
+            TArray<FStaticMaterial>& StaticMats = LabeledMesh->GetStaticMaterials();
+            for (int32 s = 0; s < NumSlots && s < StaticMats.Num(); ++s)
+                StaticMats[s].MaterialInterface = LabeledMaterials[s];
+
+            LabeledMesh->PostEditChange();
+            MeshPackage->MarkPackageDirty();
+            FAssetRegistryModule::AssetCreated(LabeledMesh);
+
+            const FString MeshFilePath = FPackageName::LongPackageNameToFilename(
+                MeshPkgName, FPackageName::GetAssetPackageExtension());
+            FSavePackageArgs MeshSaveArgs;
+            MeshSaveArgs.TopLevelFlags = RF_Public | RF_Standalone;
+            UPackage::SavePackage(MeshPackage, LabeledMesh, *MeshFilePath, MeshSaveArgs);
+
+            ActorJson->SetStringField(TEXT("labeled_mesh"), MeshPkgName);
+            UE_LOG(LogNanobananaManager, Log,
+                TEXT("Actor '%s' -> labeled mesh: %s"), *Actor.Label, *MeshPkgName);
+        }
+
+        // Spawn temporary actor for GLTF export, then destroy
         FActorSpawnParameters SpawnParams;
         SpawnParams.SpawnCollisionHandlingOverride =
             ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
@@ -893,7 +928,6 @@ void FNanobananaManager::RunOnGameThread()
         if (LabeledActor)
         {
             LabeledActor->SetActorScale3D(TargetActor->GetActorScale3D());
-            LabeledActor->SetActorLabel(TEXT("labeled"));
             LabeledActor->GetStaticMeshComponent()->SetStaticMesh(
                 TargetActor->GetStaticMeshComponent()->GetStaticMesh());
             for (int32 s = 0; s < NumSlots; ++s)
