@@ -27,6 +27,8 @@ DEFINE_LOG_CATEGORY_STATIC(LogPathImageCapture, Log, All);
 #include "Sensors/RGBCamera.h"
 #include "Sensors/DepthCamera.h"
 #include "Components/PrimitiveComponent.h"
+#include "Engine/DirectionalLight.h"
+#include "Components/DirectionalLightComponent.h"
 #include "Selection.h"
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SBox.h"
@@ -38,6 +40,10 @@ DEFINE_LOG_CATEGORY_STATIC(LogPathImageCapture, Log, All);
 #include "EngineUtils.h"
 #include "LevelEditorViewport.h"
 #include "Async/Async.h"
+#include "Serialization/JsonSerializer.h"
+#include "Serialization/JsonWriter.h"
+#include "Dom/JsonObject.h"
+#include "Dom/JsonValue.h"
 
 static bool EnsureGameView()
 {
@@ -66,6 +72,200 @@ static void RestoreGameView(bool bWasChangedByUs)
             Client->SetGameView(false);
             return;
         }
+    }
+}
+
+// ============================================================================
+// CAPTURE-TIME METADATA WRITERS (intrinsics.json + lighting.json)
+// ============================================================================
+//
+// These sit next to poses.txt so preprocess/ue_to_colmap.py can build the
+// COLMAP-style cameras.json without any Python-side intrinsics guessing.
+
+namespace
+{
+    bool WriteJsonObjectToFile(const TSharedRef<FJsonObject>& Obj, const FString& FilePath)
+    {
+        FString OutString;
+        TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&OutString);
+        if (!FJsonSerializer::Serialize(Obj, Writer))
+        {
+            return false;
+        }
+        return FFileHelper::SaveStringToFile(OutString, *FilePath);
+    }
+
+    void WriteIntrinsicsJsonFromFlashPawn(AFlashPawn* Pawn, const FString& OutDir)
+    {
+        if (!Pawn)
+        {
+            return;
+        }
+
+        TArray<URGBCameraComponent*> Cameras;
+        Pawn->GetComponents<URGBCameraComponent>(Cameras);
+        if (Cameras.Num() == 0)
+        {
+            UE_LOG(LogPathImageCapture, Warning,
+                TEXT("WriteIntrinsicsJson: no RGB camera on FlashPawn; skip"));
+            return;
+        }
+
+        URGBCameraComponent* Camera = Cameras[0];
+        const float FOV = Camera->FOV;
+        const std::pair<int32, int32> Size = Camera->GetImageSize();
+        const int32 Width  = Size.first;
+        const int32 Height = Size.second;
+
+        // UE FOVAngle is the horizontal FOV. Pinhole with square pixels → fx = fy.
+        const float FxFy = (static_cast<float>(Width) * 0.5f)
+                         / FMath::Tan(FMath::DegreesToRadians(FOV) * 0.5f);
+        const float Cx = static_cast<float>(Width)  * 0.5f;
+        const float Cy = static_cast<float>(Height) * 0.5f;
+
+        TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
+        Root->SetStringField(TEXT("model"),  TEXT("PINHOLE"));
+        Root->SetNumberField(TEXT("width"),  Width);
+        Root->SetNumberField(TEXT("height"), Height);
+        Root->SetNumberField(TEXT("fx"),     FxFy);
+        Root->SetNumberField(TEXT("fy"),     FxFy);
+        Root->SetNumberField(TEXT("cx"),     Cx);
+        Root->SetNumberField(TEXT("cy"),     Cy);
+        Root->SetNumberField(TEXT("fov_h_deg"), FOV);
+
+        if (Cameras.Num() > 1)
+        {
+            TArray<TSharedPtr<FJsonValue>> ExtraCams;
+            for (int32 i = 1; i < Cameras.Num(); ++i)
+            {
+                URGBCameraComponent* Extra = Cameras[i];
+                const std::pair<int32, int32> ESize = Extra->GetImageSize();
+                TSharedRef<FJsonObject> ECam = MakeShared<FJsonObject>();
+                ECam->SetNumberField(TEXT("index"),  Extra->GetSensorIndex());
+                ECam->SetNumberField(TEXT("fov_h_deg"), Extra->FOV);
+                ECam->SetNumberField(TEXT("width"),  ESize.first);
+                ECam->SetNumberField(TEXT("height"), ESize.second);
+                ExtraCams.Add(MakeShared<FJsonValueObject>(ECam));
+            }
+            Root->SetArrayField(TEXT("extra_cameras"), ExtraCams);
+        }
+
+        const FString OutPath = OutDir / TEXT("intrinsics.json");
+        if (!WriteJsonObjectToFile(Root, OutPath))
+        {
+            UE_LOG(LogPathImageCapture, Warning,
+                TEXT("Failed to save intrinsics to %s"), *OutPath);
+            return;
+        }
+        UE_LOG(LogPathImageCapture, Log,
+            TEXT("Wrote intrinsics.json (fx=fy=%.3f cx=%.1f cy=%.1f W=%d H=%d FOV=%.2f)"),
+            FxFy, Cx, Cy, Width, Height, FOV);
+    }
+
+    void WriteLightingJsonFromWorld(UWorld* World, const FString& OutDir)
+    {
+        if (!World)
+        {
+            return;
+        }
+
+        ADirectionalLight* Best = nullptr;
+        float BestIntensity = -1.0f;
+        for (TActorIterator<ADirectionalLight> It(World); It; ++It)
+        {
+            ADirectionalLight* Light = *It;
+            if (!Light) continue;
+            UDirectionalLightComponent* Comp = Cast<UDirectionalLightComponent>(
+                Light->GetLightComponent());
+            if (!Comp || !Comp->bAffectsWorld) continue;
+            const float Intensity = Comp->Intensity;
+            if (Intensity > BestIntensity)
+            {
+                Best = Light;
+                BestIntensity = Intensity;
+            }
+        }
+
+        if (!Best)
+        {
+            UE_LOG(LogPathImageCapture, Warning,
+                TEXT("WriteLightingJson: no ADirectionalLight in world; skip"));
+            return;
+        }
+
+        UDirectionalLightComponent* Comp = Cast<UDirectionalLightComponent>(
+            Best->GetLightComponent());
+        const FRotator UeRot = Best->GetActorRotation();
+        const FVector ForwardUe = UeRot.Vector();  // UE LH (+X fwd, +Y right, +Z up)
+
+        // UE → RH world (+X right, +Y fwd, +Z up): swap X↔Y.
+        // Sun direction points toward the sun, so negate the light forward.
+        const FVector ForwardRh(ForwardUe.Y, ForwardUe.X, ForwardUe.Z);
+        FVector SunDir = -ForwardRh;
+        if (!SunDir.Normalize())
+        {
+            SunDir = FVector(0.0f, 0.0f, 1.0f);
+        }
+
+        TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
+        Root->SetStringField(TEXT("coord_frame"),
+            TEXT("RH world, +X east/right, +Y north/fwd, +Z up"));
+
+        TArray<TSharedPtr<FJsonValue>> SunDirArr;
+        SunDirArr.Add(MakeShared<FJsonValueNumber>(SunDir.X));
+        SunDirArr.Add(MakeShared<FJsonValueNumber>(SunDir.Y));
+        SunDirArr.Add(MakeShared<FJsonValueNumber>(SunDir.Z));
+        Root->SetArrayField(TEXT("sun_dir_world"), SunDirArr);
+
+        TSharedRef<FJsonObject> UeRotJson = MakeShared<FJsonObject>();
+        UeRotJson->SetNumberField(TEXT("pitch"), UeRot.Pitch);
+        UeRotJson->SetNumberField(TEXT("yaw"),   UeRot.Yaw);
+        UeRotJson->SetNumberField(TEXT("roll"),  UeRot.Roll);
+        Root->SetObjectField(TEXT("ue_directional_light_rotation"), UeRotJson);
+
+        Root->SetStringField(TEXT("actor_label"), Best->GetActorLabel());
+        if (Comp)
+        {
+            Root->SetNumberField(TEXT("sun_intensity"), Comp->Intensity);
+            const FLinearColor Color = Comp->GetLightColor();
+            TArray<TSharedPtr<FJsonValue>> ColorArr;
+            ColorArr.Add(MakeShared<FJsonValueNumber>(Color.R));
+            ColorArr.Add(MakeShared<FJsonValueNumber>(Color.G));
+            ColorArr.Add(MakeShared<FJsonValueNumber>(Color.B));
+            Root->SetArrayField(TEXT("light_color_linear"), ColorArr);
+            Root->SetBoolField(TEXT("atmosphere_sun_light"), Comp->IsUsedAsAtmosphereSunLight());
+        }
+
+        Root->SetStringField(TEXT("utc_captured"), FDateTime::UtcNow().ToIso8601());
+
+        const FString OutPath = OutDir / TEXT("lighting.json");
+        if (!WriteJsonObjectToFile(Root, OutPath))
+        {
+            UE_LOG(LogPathImageCapture, Warning,
+                TEXT("Failed to save lighting to %s"), *OutPath);
+            return;
+        }
+        UE_LOG(LogPathImageCapture, Log,
+            TEXT("Wrote lighting.json (sun_dir_world=(%.3f, %.3f, %.3f) from '%s')"),
+            SunDir.X, SunDir.Y, SunDir.Z, *Best->GetActorLabel());
+    }
+}
+
+static void ApplyCameraLocalTransform(
+    AFlashPawn* Pawn,
+    TArray<FVector>& Positions,
+    TArray<FRotator>& Rotations)
+{
+    TArray<URGBCameraComponent*> Cameras;
+    Pawn->GetComponents<URGBCameraComponent>(Cameras);
+    if (Cameras.Num() == 0) return;
+    const FVector LocalPos = Cameras[0]->GetRelativeLocation();
+    const FQuat   LocalRot = Cameras[0]->GetRelativeRotation().Quaternion();
+    for (int32 i = 0; i < Positions.Num(); ++i)
+    {
+        const FQuat ActorRot = Rotations[i].Quaternion();
+        Positions[i] = Positions[i] + ActorRot.RotateVector(LocalPos);
+        Rotations[i] = (ActorRot * LocalRot).Rotator();
     }
 }
 
@@ -482,11 +682,17 @@ void FVCCSimPanelPathImageCapture::SaveGeneratedPose()
                 SelectedFile += TEXT(".txt");
             }
             
-            // Get positions and rotations from FlashPawn
             TArray<FVector> Positions;
             TArray<FRotator> Rotations;
             SelectedFlashPawn->GetCurrentPath(Positions, Rotations);
+            ApplyCameraLocalTransform(SelectedFlashPawn.Get(), Positions, Rotations);
             WritePosesToFile(Positions, Rotations, SelectedFile);
+
+            const FString OutDir = FPaths::GetPath(SelectedFile);
+            WriteIntrinsicsJsonFromFlashPawn(SelectedFlashPawn.Get(), OutDir);
+            WriteLightingJsonFromWorld(
+                GEditor ? GEditor->GetEditorWorldContext().World() : nullptr,
+                OutDir);
         }
     }
 }
@@ -697,7 +903,12 @@ void FVCCSimPanelPathImageCapture::StartAutoCapture()
     TArray<FVector> Positions;
     TArray<FRotator> Rotations;
     SelectedFlashPawn->GetCurrentPath(Positions, Rotations);
+    ApplyCameraLocalTransform(SelectedFlashPawn.Get(), Positions, Rotations);
     WritePosesToFile(Positions, Rotations, SaveDirectory / TEXT("poses.txt"));
+    WriteIntrinsicsJsonFromFlashPawn(SelectedFlashPawn.Get(), SaveDirectory);
+    WriteLightingJsonFromWorld(
+        GEditor ? GEditor->GetEditorWorldContext().World() : nullptr,
+        SaveDirectory);
 
     bGameViewChangedForCapture = EnsureGameView();
     bAutoCaptureInProgress = true;
