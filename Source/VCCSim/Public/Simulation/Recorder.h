@@ -71,6 +71,10 @@ public:
     UPROPERTY(EditAnywhere, Category = "Recording")
     float RecorderInterval = 1.f/120.f;
     bool RecordState = false;
+
+    // When true, depth is saved as a visualization-friendly 8-bit grayscale PNG
+    // and normals as RGB PNG instead of raw G16 PNG / EXR.
+    bool bBetterVisualsRecording = false;
     FSensorRegistry SensorRegistry;
     FActorRegistry ActorRegistry;
 

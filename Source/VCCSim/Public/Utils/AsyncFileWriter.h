@@ -45,9 +45,10 @@ public:
     FImageCompressionTask(
         const FSensorDataPacket& InDataPacket,
         const FString& InBasePath,
-        TQueue<TSharedPtr<FCompressedImageData>, EQueueMode::Mpsc>& InCompressedDataQueue)
+        TQueue<TSharedPtr<FCompressedImageData>, EQueueMode::Mpsc>& InCompressedDataQueue,
+        bool InBetterVisuals)
         : DataPacket(InDataPacket), BasePath(InBasePath),
-            CompressedDataQueue(InCompressedDataQueue){}
+            CompressedDataQueue(InCompressedDataQueue), bBetterVisuals(InBetterVisuals){}
 
     void DoWork();
 
@@ -60,6 +61,7 @@ private:
     FSensorDataPacket DataPacket;
     FString BasePath;
     TQueue<TSharedPtr<FCompressedImageData>, EQueueMode::Mpsc>& CompressedDataQueue;
+    bool bBetterVisuals;
 
     void CompressRGBData();
     void CompressDepthData();
@@ -77,7 +79,7 @@ private:
 class VCCSIM_API FAsyncFileWriter
 {
 public:
-    explicit FAsyncFileWriter(const FString& InBasePath);
+    explicit FAsyncFileWriter(const FString& InBasePath, bool InBetterVisuals = false);
     ~FAsyncFileWriter();
 
     void WriteData(FSensorDataPacket&& DataPacket);
@@ -88,6 +90,7 @@ private:
     void WriteCompressedDataToFile(const FCompressedImageData& CompressedData);
 
     FString BasePath;
+    bool bBetterVisuals;
     std::atomic<int32> PendingCompressionTasks{0};
     TQueue<TSharedPtr<FCompressedImageData>, EQueueMode::Mpsc> CompressedDataQueue;
     TUniquePtr<FRunnableThread> IOThread;

@@ -26,8 +26,8 @@
 
 DEFINE_LOG_CATEGORY(LogAsyncFileWriter);
 
-FAsyncFileWriter::FAsyncFileWriter(const FString& InBasePath)
-    : BasePath(InBasePath)
+FAsyncFileWriter::FAsyncFileWriter(const FString& InBasePath, bool InBetterVisuals)
+    : BasePath(InBasePath), bBetterVisuals(InBetterVisuals)
 {
     if (FPaths::IsRelative(BasePath))
     {
@@ -77,7 +77,7 @@ void FAsyncFileWriter::WriteData(FSensorDataPacket&& DataPacket)
     AsyncTask(ENamedThreads::AnyThread, [this, DataPacket]()
     {
         MakeUnique<FAsyncTask<FImageCompressionTask>>(DataPacket, BasePath,
-            CompressedDataQueue)->StartSynchronousTask();
+            CompressedDataQueue, bBetterVisuals)->StartSynchronousTask();
         PendingCompressionTasks.fetch_sub(1);
     });
 }
@@ -287,42 +287,107 @@ void FImageCompressionTask::CompressMaterialPropertiesData()
     }
 }
 
+// Google's Turbo colormap, polynomial approximation by Anton Mikhailov.
+// Input in [0,1], output is an sRGB display color (low=blue, mid=green/yellow, high=red).
+static FColor TurboColormap(float X)
+{
+    X = FMath::Clamp(X, 0.0f, 1.0f);
+    const float X2 = X * X;
+    const float X3 = X2 * X;
+    const float X4 = X2 * X2;
+    const float X5 = X2 * X3;
+
+    const float R = 0.13572138f + 4.61539260f * X - 42.66032258f * X2
+        + 132.13108234f * X3 - 152.94239396f * X4 + 59.28637943f * X5;
+    const float G = 0.09140261f + 2.19418839f * X + 4.84296658f * X2
+        - 14.18503333f * X3 + 4.27729857f * X4 + 2.82956604f * X5;
+    const float B = 0.10667330f + 12.64194608f * X - 60.58204836f * X2
+        + 110.36276771f * X3 - 89.90310912f * X4 + 27.34824973f * X5;
+
+    return FColor(
+        (uint8)FMath::Clamp(FMath::RoundToInt(R * 255.0f), 0, 255),
+        (uint8)FMath::Clamp(FMath::RoundToInt(G * 255.0f), 0, 255),
+        (uint8)FMath::Clamp(FMath::RoundToInt(B * 255.0f), 0, 255),
+        255);
+}
+
 void FImageCompressionTask::CompressDepthData()
 {
     const FDepthCameraData* DepthData = static_cast<const FDepthCameraData*>(DataPacket.Data.Get());
 
-    if (DepthData && DepthData->DepthData.Num() > 0)
+    if (!DepthData || DepthData->DepthData.Num() == 0)
     {
-        auto DepthResult =
-            CreateCompressedResult(TEXT("Depth"), TEXT("png"), DataPacket.Data->Timestamp);
-        
-        // Convert float depth to 16-bit depth
-        TArray<uint16> DepthData16;
-        DepthData16.Reserve(DepthData->DepthData.Num());
+        return;
+    }
 
-        for (const float& DepthPixel : DepthData->DepthData)
+    auto DepthResult =
+        CreateCompressedResult(TEXT("Depth"), TEXT("png"), DataPacket.Data->Timestamp);
+
+    if (bBetterVisuals)
+    {
+        // Turbo colormap over a dynamic range: near = blue, far = red.
+        // Range comes from 2nd/98th percentiles to ignore outliers.
+        TArray<float> SortedDepths = DepthData->DepthData;
+        SortedDepths.RemoveAll([](float Depth)
+            { return Depth < 0.0f || !FMath::IsFinite(Depth); });
+        SortedDepths.Sort();
+
+        float MinRange = 0.0f;
+        float MaxRange = 1.0f;
+        if (SortedDepths.Num() > 0)
         {
-            uint16 Depth16 = FMath::Clamp(FMath::RoundToInt(DepthPixel), 0, 65535);
-            DepthData16.Add(Depth16);
-        }
-
-        // Compress depth using modern API
-        IImageWrapperModule& ImageWrapperModule = FModuleManager::LoadModuleChecked<IImageWrapperModule>(FName("ImageWrapper"));
-
-        FImage DepthImage;
-        DepthImage.Init(DepthData->Width, DepthData->Height, ERawImageFormat::G16);
-        TArrayView64<uint16> DepthImageView = DepthImage.AsG16();
-
-        if (DepthImageView.Num() == DepthData16.Num())
-        {
-            for (int32 i = 0; i < DepthData16.Num(); ++i)
+            int32 LowIndex = FMath::Clamp(
+                FMath::FloorToInt(SortedDepths.Num() * 0.02f), 0, SortedDepths.Num() - 1);
+            int32 HighIndex = FMath::Clamp(
+                FMath::FloorToInt(SortedDepths.Num() * 0.98f), LowIndex, SortedDepths.Num() - 1);
+            MinRange = SortedDepths[LowIndex];
+            MaxRange = SortedDepths[HighIndex];
+            if (MaxRange <= MinRange)
             {
-                DepthImageView[i] = DepthData16[i];
+                MaxRange = MinRange + 1.0f;
             }
-            ImageWrapperModule.CompressImage(DepthResult->CompressedData,
-                EImageFormat::PNG, DepthImage, 100);
-            CompressedDataQueue.Enqueue(DepthResult);
         }
+
+        TArray<FColor> VisualPixels;
+        VisualPixels.Reserve(DepthData->DepthData.Num());
+        for (float Depth : DepthData->DepthData)
+        {
+            float Clamped = FMath::Clamp(Depth, MinRange, MaxRange);
+            float Normalized = (Clamped - MinRange) / (MaxRange - MinRange);
+            VisualPixels.Add(TurboColormap(Normalized));
+        }
+
+        CompressImageToPNG(VisualPixels, DepthData->Width, DepthData->Height,
+            DepthResult->CompressedData);
+        CompressedDataQueue.Enqueue(DepthResult);
+        return;
+    }
+
+    // Raw 16-bit depth (centimeters) as G16 PNG.
+    TArray<uint16> DepthData16;
+    DepthData16.Reserve(DepthData->DepthData.Num());
+
+    for (const float& DepthPixel : DepthData->DepthData)
+    {
+        uint16 Depth16 = FMath::Clamp(FMath::RoundToInt(DepthPixel), 0, 65535);
+        DepthData16.Add(Depth16);
+    }
+
+    IImageWrapperModule& ImageWrapperModule = FModuleManager::LoadModuleChecked<IImageWrapperModule>(FName("ImageWrapper"));
+
+    FImage DepthImage;
+    DepthImage.Init(DepthData->Width, DepthData->Height, ERawImageFormat::G16);
+    TArrayView64<uint16> DepthImageView = DepthImage.AsG16();
+
+    if (DepthImageView.Num() == DepthData16.Num())
+    {
+        for (int32 i = 0; i < DepthData16.Num(); ++i)
+        {
+            DepthImageView[i] = DepthData16[i];
+        }
+        ImageWrapperModule.CompressImage(DepthResult->CompressedData,
+            EImageFormat::PNG, DepthImage, 100);
+        CompressedDataQueue.Enqueue(DepthResult);
     }
 }
 
@@ -331,6 +396,41 @@ void FImageCompressionTask::CompressNormalData()
     const FNormalCameraData* NormalData = static_cast<const FNormalCameraData*>(DataPacket.Data.Get());
     if (NormalData && NormalData->Data.Num() > 0)
     {
+        if (bBetterVisuals)
+        {
+            // Map normal vectors from [-1,1] to [0,255] RGB and save as PNG.
+            auto Result =
+                CreateCompressedResult(TEXT("Normal"), TEXT("png"), DataPacket.Data->Timestamp);
+
+            constexpr float SaturationBoost = 1.5f;
+            TArray<FColor> VisualPixels;
+            VisualPixels.Reserve(NormalData->Data.Num());
+            for (const FFloat16Color& Pixel : NormalData->Data)
+            {
+                FVector NormalVec(Pixel.R.GetFloat(), Pixel.G.GetFloat(), Pixel.B.GetFloat());
+                NormalVec.Normalize();
+
+                // Map [-1,1] -> [0,1], then boost saturation in HSV for vividness.
+                FLinearColor Color(
+                    (NormalVec.X + 1.0f) * 0.5f,
+                    (NormalVec.Y + 1.0f) * 0.5f,
+                    (NormalVec.Z + 1.0f) * 0.5f);
+                FLinearColor HSV = Color.LinearRGBToHSV();
+                HSV.G = FMath::Min(HSV.G * SaturationBoost, 1.0f); // G = Saturation
+                FLinearColor Boosted = HSV.HSVToLinearRGB();
+
+                uint8 R = (uint8)FMath::Clamp(FMath::RoundToInt(Boosted.R * 255.0f), 0, 255);
+                uint8 G = (uint8)FMath::Clamp(FMath::RoundToInt(Boosted.G * 255.0f), 0, 255);
+                uint8 B = (uint8)FMath::Clamp(FMath::RoundToInt(Boosted.B * 255.0f), 0, 255);
+                VisualPixels.Add(FColor(R, G, B, 255));
+            }
+
+            CompressImageToPNG(VisualPixels, NormalData->Width, NormalData->Height,
+                Result->CompressedData);
+            CompressedDataQueue.Enqueue(Result);
+            return;
+        }
+
         auto Result =
             CreateCompressedResult(TEXT("Normal"), TEXT("exr"), DataPacket.Data->Timestamp);
         CompressImageToEXR(NormalData->Data, NormalData->Width,

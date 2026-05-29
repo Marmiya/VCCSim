@@ -200,6 +200,7 @@ void AVCCHUD::SetupRecorder(FVCCSimConfig& Config)
     }
 
     Recorder->RecordState = Config.VCCSim.StartWithRecording;
+    Recorder->bBetterVisualsRecording = Config.VCCSim.BetterVisualsRecording;
 }
 
 void AVCCHUD::SetupWidgetsAndLS(const FVCCSimConfig& Config)

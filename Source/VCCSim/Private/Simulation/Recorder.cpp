@@ -1039,7 +1039,7 @@ void ARecorder::InitializeAsyncWriter()
         return;
     }
 
-    FileWriter = MakeUnique<FAsyncFileWriter>(RecordingPath);
+    FileWriter = MakeUnique<FAsyncFileWriter>(RecordingPath, bBetterVisualsRecording);
     UE_LOG(LogRecorder, Log, TEXT("Async file writer initialized"));
 }
 
