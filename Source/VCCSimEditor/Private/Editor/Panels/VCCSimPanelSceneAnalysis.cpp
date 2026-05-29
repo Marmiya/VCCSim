@@ -18,6 +18,7 @@
 #include "Editor/Panels/VCCSimPanelSceneAnalysis.h"
 #include "Editor/Panels/VCCSimPanelSelection.h"
 #include "Simulation/SceneAnalysisManager.h"
+#include "Utils/ConfigParser.h"
 #include "Engine/World.h"
 #include "Editor.h"
 #include "EngineUtils.h"
@@ -60,7 +61,7 @@ void FVCCSimPanelSceneAnalysis::InitializeSceneAnalysisManager()
             if (SceneAnalysisManager.IsValid())
             {
                 SceneAnalysisManager->Initialize(World,
-                    FPaths::ProjectSavedDir() / TEXT("VCCSimCaptures"));
+                    GetVCCSimOutputRoot() / TEXT("VCCSimCaptures"));
                 SceneAnalysisManager->InterfaceInitializeSafeZoneVisualization();
                 SceneAnalysisManager->InterfaceInitializeCoverageVisualization();
                 SceneAnalysisManager->InterfaceInitializeComplexityVisualization();

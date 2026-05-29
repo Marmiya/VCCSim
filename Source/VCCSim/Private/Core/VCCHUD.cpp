@@ -201,6 +201,9 @@ void AVCCHUD::SetupRecorder(FVCCSimConfig& Config)
 
     Recorder->RecordState = Config.VCCSim.StartWithRecording;
     Recorder->bBetterVisualsRecording = Config.VCCSim.BetterVisualsRecording;
+    Recorder->RecordingPath = FPaths::Combine(
+        GetVCCSimOutputRoot(Config), TEXT("RuntimeLogs"),
+        FPaths::GetCleanFilename(Recorder->RecordingPath));
 }
 
 void AVCCHUD::SetupWidgetsAndLS(const FVCCSimConfig& Config)

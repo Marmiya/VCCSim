@@ -20,6 +20,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogPathImageCapture, Log, All);
 #include "Editor/Panels/VCCSimPanelPathImageCapture.h"
 #include "Editor/Panels/VCCSimPanelSelection.h"
 #include "Utils/VCCSimConfigManager.h"
+#include "Utils/ConfigParser.h"
 #include "Utils/PathGenerator.h"
 #include "Utils/ImageCaptureService.h"
 #include "Pawns/FlashPawn.h"
@@ -868,7 +869,7 @@ void FVCCSimPanelPathImageCapture::CaptureImageFromCurrentPose()
     // Create a directory for saving images if it doesn't exist yet
     if (SaveDirectory.IsEmpty())
     {
-        SaveDirectory = FPaths::ProjectSavedDir() / TEXT("VCCSimCaptures") / GetTimestampedFilename();
+        SaveDirectory = GetVCCSimOutputRoot() / TEXT("VCCSimCaptures") / GetTimestampedFilename();
         IFileManager::Get().MakeDirectory(*SaveDirectory, true);
     }
 
@@ -897,7 +898,7 @@ void FVCCSimPanelPathImageCapture::StartAutoCapture()
     }
     
     // Create a directory for saving images
-    SaveDirectory = FPaths::ProjectSavedDir() / TEXT("VCCSimCaptures") / GetTimestampedFilename();
+    SaveDirectory = GetVCCSimOutputRoot() / TEXT("VCCSimCaptures") / GetTimestampedFilename();
     IFileManager::Get().MakeDirectory(*SaveDirectory, true);
 
     TArray<FVector> Positions;

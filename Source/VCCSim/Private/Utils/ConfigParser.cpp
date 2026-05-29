@@ -229,6 +229,7 @@ FVCCSimConfig ParseConfig()
 		const int32 Port = Presets["Port"].value_or(50996);
 		Config.VCCSim.Server = FString::Printf(TEXT("%s:%d"), *TomlStringToFString(IP), Port);
 
+		Config.VCCSim.OutputRoot = TomlStringToFString(Presets["OutputRoot"].value_or(""));
 		Config.VCCSim.MainCharacter = TomlStringToFString(Presets["MainCharacter"].value_or(""));
 		Config.VCCSim.ManualControl = Presets["ManualControl"].value_or(true);
 		Config.VCCSim.LS_StartOffset = Presets["LS_StartOffset"].value_or(0);
@@ -288,4 +289,16 @@ FVCCSimConfig ParseConfig()
 	}
 
 	return Config;
+}
+
+FString GetVCCSimOutputRoot(const FVCCSimConfig& Config)
+{
+	return Config.VCCSim.OutputRoot.IsEmpty()
+		? FPaths::ProjectSavedDir()
+		: Config.VCCSim.OutputRoot;
+}
+
+FString GetVCCSimOutputRoot()
+{
+	return GetVCCSimOutputRoot(ParseConfig());
 }

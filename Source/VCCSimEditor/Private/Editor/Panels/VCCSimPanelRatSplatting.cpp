@@ -23,6 +23,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogRatSplatting, Log, All);
 #include "Utils/VCCSimUIHelpers.h"
 #include "Utils/VCCSimDataConverter.h"
 #include "Utils/VCCSimConfigManager.h"
+#include "Utils/ConfigParser.h"
 #include "IO/PLYUtils.h"
 #include "DesktopPlatformModule.h"
 #include "Framework/Application/SlateApplication.h"
@@ -117,7 +118,7 @@ BEGIN_SLATE_FUNCTION_BUILD_OPTIMIZATION
 FVCCSimPanelRatSplatting::FVCCSimPanelRatSplatting()
 {
     // Set default output directory
-    GSConfig.OutputDirectory = TEXT("C:/UEProjects/VCCSimDev/Saved/RatSplatting");
+    GSConfig.OutputDirectory = GetVCCSimOutputRoot() / TEXT("RatSplatting");
 
     // Initialize default values
     GSFOVValue = GSConfig.FOVDegrees;

@@ -19,6 +19,7 @@
 #include "Utils/VCCSimSunPositionHelper.h"
 #include "Utils/VCCSimUIHelpers.h"
 #include "Utils/VCCSimConfigManager.h"
+#include "Utils/ConfigParser.h"
 #include "Utils/LightingManager.h"
 #include "Utils/GTMaterialExporter.h"
 #include "Editor/Panels/VCCSimPanelSelection.h"
@@ -1438,6 +1439,7 @@ void FVCCSimPanelTexEnhancer::LoadPaths()
 {
     const auto& Config = FVCCSimConfigManager::Get().GetTexEnhancerConfig();
     if (!Config.OutputDirectory.IsEmpty())       OutputDirectory       = Config.OutputDirectory;
+    if (OutputDirectory.IsEmpty())               OutputDirectory       = GetVCCSimOutputRoot() / TEXT("TexEnhancer");
     if (!Config.SceneName.IsEmpty())             SceneName             = Config.SceneName;
     if (!Config.TexEnhancerScriptPath.IsEmpty()) TexEnhancerScriptPath = Config.TexEnhancerScriptPath;
     if (!Config.EstimatedMaterialsDir.IsEmpty()) EstimatedMaterialsDir = Config.EstimatedMaterialsDir;

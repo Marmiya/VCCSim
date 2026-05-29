@@ -33,6 +33,7 @@ struct FRobot
 struct FVCCSimPresets
 {
 	FString Server;
+	FString OutputRoot;
 	FString MainCharacter;
 	TArray<FString> StaticMeshActor;
 	bool ManualControl;
@@ -56,3 +57,6 @@ struct FVCCSimConfig
 };
 
 FVCCSimConfig ParseConfig();
+
+VCCSIM_API FString GetVCCSimOutputRoot(const FVCCSimConfig& Config);
+VCCSIM_API FString GetVCCSimOutputRoot();
