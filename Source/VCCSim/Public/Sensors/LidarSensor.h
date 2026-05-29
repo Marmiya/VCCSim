@@ -66,6 +66,7 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Lidar")
     void VisualizePointCloud();
 
+    UFUNCTION(BlueprintCallable, Category = "Lidar")
     TArray<FVector3f> GetPointCloudData();
     TPair<TArray<FVector3f>, FVCCSimOdom> GetPointCloudDataAndOdom();
 
@@ -98,7 +99,7 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "LiDAR|Performance")
     int32 ChunkSize = 256;
 
-    UPROPERTY()
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lidar|Config")
     UInsMeshHolder* MeshHolder;
 
 private:

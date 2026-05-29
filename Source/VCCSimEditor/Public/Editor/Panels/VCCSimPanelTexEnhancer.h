@@ -26,6 +26,8 @@
 #include "Engine/TimerHandle.h"
 #include "Dom/JsonObject.h"
 
+#include "Widgets/Input/SCheckBox.h"
+
 #include "Utils/LightingManager.h"
 #include "Utils/GTMaterialExporter.h"
 #include "Utils/NanobananaManager.h"
@@ -37,6 +39,7 @@ class UTexture2D;
 class FLightingManager;
 class FGTMaterialExporter;
 class FNanobananaManager;
+struct FGTFoliageExportEntry;
 
 class VCCSIMEDITOR_API FVCCSimPanelTexEnhancer : public TSharedFromThis<FVCCSimPanelTexEnhancer>
 {
@@ -82,6 +85,12 @@ private:
     TSharedPtr<SNumericEntryBox<int32>> GTTexResSpinBox;
     TOptional<int32> GTTexResValue;
 
+    TSharedPtr<SCheckBox>               IncludeNearbyCheckBox;
+    TSharedPtr<SCheckBox>               VisualizeExpansionCheckBox;
+    TSharedPtr<SCheckBox>               MergeNearbyCheckBox;
+    TSharedPtr<SNumericEntryBox<float>> NearbyRadiusSpinBox;
+    TOptional<float>                    NearbyRadiusValue;
+
     TSharedPtr<SNumericEntryBox<float>> SunCalcLatSpinBox;
     TSharedPtr<SNumericEntryBox<float>> SunCalcLonSpinBox;
     TSharedPtr<SNumericEntryBox<float>> SunCalcTZSpinBox;
@@ -125,6 +134,11 @@ private:
 
     int32 GTTextureResolution = 2048;
 
+    bool  bIncludeNearbyMeshes   = false;
+    bool  bVisualizeExpansion    = false;
+    bool  bMergeNearbyMeshes     = false;
+    float NearbyRadius           = 500.f;
+
     float SunCalcLatitude  = 22.52933f;
     float SunCalcLongitude = 113.94092f;
     float SunCalcTimeZone  = 8.0f;
@@ -149,6 +163,7 @@ private:
     TOptional<int32> SunCalcFillSlotValue;
 
     FTimerHandle StatusTimerHandle;
+    FTimerHandle ExpansionVizTimerHandle;
     FProcHandle  PipelineProcHandle;
 
     TWeakPtr<FVCCSimPanelSelection> SelectionManager;
@@ -211,6 +226,37 @@ private:
     FReply OnAddSelectedActorsClicked();
     FReply OnRemoveFromGTListClicked();
     FReply OnExportGTMaterialsClicked();
+
+    struct FSeedShape
+    {
+        TArray<FVector2D> Polygon;
+        double MinZ = 0.0;
+        double MaxZ = 0.0;
+        FVector VizCenter = FVector::ZeroVector;
+    };
+
+    void BuildSeedShapes(
+        UWorld* World,
+        const TArray<AStaticMeshActor*>& Seeds,
+        float ExpandCm,
+        int32 NumProbes,
+        TArray<FSeedShape>& OutShapes) const;
+
+    void CollectNearbyTargets(
+        UWorld* World,
+        const TArray<AStaticMeshActor*>& SeedActors,
+        float RadiusCm,
+        TArray<FString>& InOutActorLabels,
+        TArray<FGTFoliageExportEntry>& OutFoliageEntries) const;
+
+    bool BuildMergedNearbyEntry(
+        UWorld* World,
+        const TArray<FString>& NearbyStaticLabels,
+        const TArray<FGTFoliageExportEntry>& FoliageEntries,
+        FGTFoliageExportEntry& OutMergedEntry) const;
+
+    void SetExpansionVisualization(bool bEnabled);
+    void TickExpansionVisualization();
 
     // ============================================================================
     // SECTION 6: TEXENHANCER PIPELINE

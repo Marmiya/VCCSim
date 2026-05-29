@@ -20,6 +20,14 @@
 #include "CoreMinimal.h"
 
 class AStaticMeshActor;
+class UStaticMesh;
+
+struct FGTFoliageExportEntry
+{
+    TWeakObjectPtr<UStaticMesh> Mesh;
+    FTransform WorldTransform;
+    FString    Label;
+};
 
 class VCCSIMEDITOR_API FGTMaterialExporter
 {
@@ -28,6 +36,7 @@ public:
 
     void ExportMaterials(
         const TArray<FString>& ActorLabels,
+        const TArray<FGTFoliageExportEntry>& FoliageEntries,
         UWorld* World,
         const FString& BaseDir,
         const FString& SceneName,

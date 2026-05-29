@@ -66,6 +66,12 @@ public class VCCSimEditor : ModuleRules
                 // GT material export
                 "GLTFExporter",
 
+                // Foliage instance enumeration (AInstancedFoliageActor)
+                "Foliage",
+
+                // Merge nearby meshes into a single static mesh
+                "MeshMergeUtilities",
+
                 // Programmatic material / texture asset creation
                 "MaterialEditor"
             }

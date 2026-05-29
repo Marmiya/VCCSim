@@ -72,13 +72,13 @@ protected:
     virtual void BeginPlay() override;
     virtual void OnConstruction(const FTransform& Transform) override;
 
-    UPROPERTY(VisibleAnywhere)
+    UPROPERTY(VisibleAnywhere, BlueprintReadWrite)
     class UStaticMeshComponent* RotorMesh1;
-    UPROPERTY(VisibleAnywhere)
+    UPROPERTY(VisibleAnywhere, BlueprintReadWrite)
     class UStaticMeshComponent* RotorMesh2;
-    UPROPERTY(VisibleAnywhere)
+    UPROPERTY(VisibleAnywhere, BlueprintReadWrite)
     class UStaticMeshComponent* RotorMesh3;
-    UPROPERTY(VisibleAnywhere)
+    UPROPERTY(VisibleAnywhere, BlueprintReadWrite)
     class UStaticMeshComponent* RotorMesh4;
 
     UPROPERTY(EditAnywhere, Category = "VCCSim|Physics")

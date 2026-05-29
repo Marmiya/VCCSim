@@ -206,9 +206,12 @@ void AVCCHUD::SetupWidgetsAndLS(const FVCCSimConfig& Config)
 {
     if (!WidgetClass)
     {
-        static ConstructorHelpers::FClassFinder<UVCCSIMDisplayWidget>
-            HUDWidgetClass(TEXT("WidgetBlueprint'/VCCSim/HUD/BP_VCCSIMDisplayWidget_VF'"));
-        WidgetClass = HUDWidgetClass.Succeeded() ? HUDWidgetClass.Class : nullptr;
+        WidgetClass = LoadClass<UUserWidget>(nullptr,
+            TEXT("/VCCSim/HUD/BP_VCCSIMDisplayWidget_VF.BP_VCCSIMDisplayWidget_VF_C"));
+        if (!WidgetClass)
+        {
+            UE_LOG(LogVCCHUD, Error, TEXT("Failed to load HUD widget class"));
+        }
     }
 
     WidgetInstance = CreateWidget<UVCCSIMDisplayWidget>(GetWorld(), WidgetClass);
@@ -222,8 +225,11 @@ void AVCCHUD::SetupWidgetsAndLS(const FVCCSimConfig& Config)
     }
 
     SetupEnhancedInput();
-    
-    WidgetInstance->LogSavePath = Recorder->RecordingPath;
+
+    if (WidgetInstance && Recorder)
+    {
+        WidgetInstance->LogSavePath = Recorder->RecordingPath;
+    }
 
     TArray<AActor*> LevelSequenceActors;
     UGameplayStatics::GetAllActorsOfClass(GetWorld(), ALevelSequenceActor::StaticClass(), 
@@ -246,8 +252,17 @@ void AVCCHUD::SetupWidgetsAndLS(const FVCCSimConfig& Config)
     }
 
     Holder = GetWorld()->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity);
-    WidgetInstance->SetHolder(Holder);
-    WidgetInstance->InitFromConfig(Config);
+
+    UInsMeshHolder* PointCloudHolder = NewObject<UInsMeshHolder>(Holder);
+    PointCloudHolder->SetWorldTransform(FTransform::Identity);
+    PointCloudHolder->RegisterComponent();
+    PointCloudHolder->CreateStaticMeshes();
+
+    if (WidgetInstance)
+    {
+        WidgetInstance->SetHolder(Holder);
+        WidgetInstance->InitFromConfig(Config);
+    }
 }
 
 void AVCCHUD::SetupMainCharacter(const FVCCSimConfig& Config, TArray<AActor*> FoundPawns)
@@ -325,6 +340,11 @@ void AVCCHUD::SetupMainCharacter(const FVCCSimConfig& Config, TArray<AActor*> Fo
         UE_LOG(LogVCCHUD, Error, TEXT("Failed to possess MainCharacter!"));
     }
     
+    if (!WidgetInstance)
+    {
+        return;
+    }
+
     for (const auto& Component : MainRobotConfig.ComponentConfigs)
     {
         if (Component.Get<0>() == ESensorType::RGBCamera)
@@ -461,6 +481,11 @@ FRobotGrpcMaps AVCCHUD::SetupActors(const FVCCSimConfig& Config)
                 if (ULidarComponent* LidarComponent = RobotPawn->FindComponentByClass<ULidarComponent>())
                 {
                     LidarComponent->MeshHolder = Holder->FindComponentByClass<UInsMeshHolder>();
+                    if (!LidarComponent->MeshHolder)
+                    {
+                        UE_LOG(LogVCCHUD, Warning,
+                            TEXT("InsMeshHolder not found for LidarComponent on robot %s"), *Robot.UETag);
+                    }
                     LidarComponent->Configure(*SensorConfig);
                     RGrpcMaps.RCMaps.LiDARMap[RobotTagStd] = LidarComponent;
                     Objects.Add(LidarComponent);

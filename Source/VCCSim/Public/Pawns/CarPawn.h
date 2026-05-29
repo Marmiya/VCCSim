@@ -49,6 +49,8 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category="Default")
 	void AutoMove(double DeltaSec);
+	UFUNCTION(BlueprintCallable, Category="Default")
+	void Move();
 
 	double PerlinNoise(double TimeOffset, double Speed,
 		double Amount, double Multiplier);

@@ -398,6 +398,27 @@ void ACarPawn::AutoMove(double DeltaSec)
 	}
 }
 
+void ACarPawn::Move()
+{
+	SetTraceIgnores();
+	CalculateDistance();
+	FollowThePathAndSteer();
+	ActorGroundTrace();
+	InitialState();
+	if (TraceGround)
+	{
+		for (int32 i = 0; i < 2; i++)
+		{
+			WheelsGroundTrace();
+			ChassisRollandPitch();
+			ChassisRelocation();
+		}
+	}
+	WheelsDrive();
+	Vibrations();
+	CalculateSpeed();
+}
+
 double ACarPawn::PerlinNoise(double TimeOffset, double Speed, double Amount,
                              double Multiplier)
 {

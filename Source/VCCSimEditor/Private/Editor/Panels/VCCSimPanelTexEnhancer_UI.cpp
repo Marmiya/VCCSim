@@ -694,6 +694,74 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateGTExportSection()
                 GTTextureResolution, 64, 64)
         ]
 
+        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 0, 0, 2))
+        [
+            FVCCSimUIHelpers::CreatePropertyRow(TEXT("Include Nearby Meshes"),
+                SNew(SHorizontalBox)
+                +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+                [
+                    SAssignNew(IncludeNearbyCheckBox, SCheckBox)
+                    .ToolTipText(FText::FromString(TEXT(
+                        "Also export any StaticMeshActor or foliage instance whose bounds lie within the expanded XY bounds of a selected actor.")))
+                    .IsChecked_Lambda([this]()
+                    {
+                        return bIncludeNearbyMeshes ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
+                    })
+                    .OnCheckStateChanged_Lambda([this](ECheckBoxState NewState)
+                    {
+                        bIncludeNearbyMeshes = (NewState == ECheckBoxState::Checked);
+                        SavePaths();
+                    })
+                ]
+                +SHorizontalBox::Slot().AutoWidth().Padding(FMargin(16, 0, 0, 0)).VAlign(VAlign_Center)
+                [
+                    SAssignNew(VisualizeExpansionCheckBox, SCheckBox)
+                    .ToolTipText(FText::FromString(TEXT(
+                        "Draw the XY-expanded bounding boxes of the selected actors in the viewport.")))
+                    .IsChecked_Lambda([this]()
+                    {
+                        return bVisualizeExpansion ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
+                    })
+                    .OnCheckStateChanged_Lambda([this](ECheckBoxState NewState)
+                    {
+                        SetExpansionVisualization(NewState == ECheckBoxState::Checked);
+                    })
+                    [
+                        SNew(STextBlock)
+                        .Text(FText::FromString(TEXT("Show")))
+                        .ColorAndOpacity(FLinearColor(0.8f, 0.8f, 0.8f))
+                    ]
+                ]
+            )
+        ]
+
+        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 0, 0, 2))
+        [
+            FVCCSimUIHelpers::CreateNumericPropertyRowFloat(
+                TEXT("Expand"), NearbyRadiusSpinBox, NearbyRadiusValue,
+                NearbyRadius, 0.f, 10.f)
+        ]
+
+        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 0, 0, 2))
+        [
+            FVCCSimUIHelpers::CreatePropertyRow(TEXT("Merge Nearby"),
+                SAssignNew(MergeNearbyCheckBox, SCheckBox)
+                .ToolTipText(FText::FromString(TEXT(
+                    "Merge all nearby static meshes and foliage instances into a single baked static mesh "
+                    "(one GLTF + manifest). The original seed actors are still exported individually.")))
+                .IsEnabled_Lambda([this]() { return bIncludeNearbyMeshes; })
+                .IsChecked_Lambda([this]()
+                {
+                    return bMergeNearbyMeshes ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
+                })
+                .OnCheckStateChanged_Lambda([this](ECheckBoxState NewState)
+                {
+                    bMergeNearbyMeshes = (NewState == ECheckBoxState::Checked);
+                    SavePaths();
+                })
+            )
+        ]
+
         +SVerticalBox::Slot().AutoHeight()
         [
             SNew(SButton)

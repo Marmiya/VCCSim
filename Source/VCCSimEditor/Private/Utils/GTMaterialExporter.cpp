@@ -2,6 +2,7 @@
 #include "Utils/VCCSimUIHelpers.h"
 #include "IO/GLTFUtils.h"
 #include "Engine/StaticMeshActor.h"
+#include "Engine/StaticMesh.h"
 #include "Components/StaticMeshComponent.h"
 #include "EngineUtils.h"
 #include "Misc/FileHelper.h"
@@ -9,6 +10,7 @@
 #include "Serialization/JsonWriter.h"
 #include "HAL/PlatformFileManager.h"
 #include "Misc/ScopedSlowTask.h"
+#include "Misc/ScopeExit.h"
 #include "Exporters/GLTFExporter.h"
 #include "Options/GLTFExportOptions.h"
 #include "UserData/GLTFMaterialUserData.h"
@@ -113,6 +115,7 @@ bool FGTMaterialExporter::WriteManifest(
 
 void FGTMaterialExporter::ExportMaterials(
     const TArray<FString>& ActorLabels,
+    const TArray<FGTFoliageExportEntry>& FoliageEntries,
     UWorld* World,
     const FString& BaseDir,
     const FString& SceneName,
@@ -136,6 +139,8 @@ void FGTMaterialExporter::ExportMaterials(
 
     TArray<AStaticMeshActor*> Actors;
     TArray<FString> Labels;
+    TArray<AStaticMeshActor*> TempFoliageActors;
+
     for (const FString& Label : ActorLabels)
     {
         AStaticMeshActor** Found = LabelMap.Find(Label);
@@ -151,6 +156,61 @@ void FGTMaterialExporter::ExportMaterials(
             Labels.Add(Label);
         }
     }
+
+    for (const FGTFoliageExportEntry& Entry : FoliageEntries)
+    {
+        UStaticMesh* Mesh = Entry.Mesh.Get();
+        if (!Mesh)
+        {
+            UE_LOG(LogGTMaterialExporter, Warning, TEXT("GT Export: foliage '%s' mesh is null"), *Entry.Label);
+            continue;
+        }
+
+        FActorSpawnParameters SpawnParams;
+        SpawnParams.ObjectFlags |= RF_Transient;
+        SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+        AStaticMeshActor* TempActor = World->SpawnActor<AStaticMeshActor>(
+            AStaticMeshActor::StaticClass(),
+            Entry.WorldTransform,
+            SpawnParams);
+        if (!TempActor)
+        {
+            UE_LOG(LogGTMaterialExporter, Warning, TEXT("GT Export: failed to spawn temp actor for foliage '%s'"), *Entry.Label);
+            continue;
+        }
+
+        TempActor->SetMobility(EComponentMobility::Movable);
+        if (UStaticMeshComponent* MC = TempActor->GetStaticMeshComponent())
+        {
+            MC->SetStaticMesh(Mesh);
+        }
+        TempActor->SetActorEnableCollision(false);
+        TempActor->SetActorHiddenInGame(true);
+        TempActor->SetActorLabel(Entry.Label);
+
+        UStaticMeshComponent* MC = TempActor->GetStaticMeshComponent();
+        if (MC && MC->GetNumMaterials() > 0)
+        {
+            Actors.Add(TempActor);
+            Labels.Add(Entry.Label);
+            TempFoliageActors.Add(TempActor);
+        }
+        else
+        {
+            World->DestroyActor(TempActor);
+        }
+    }
+
+    ON_SCOPE_EXIT
+    {
+        for (AStaticMeshActor* TempActor : TempFoliageActors)
+        {
+            if (IsValid(TempActor))
+            {
+                World->DestroyActor(TempActor);
+            }
+        }
+    };
 
     if (Actors.IsEmpty())
     {

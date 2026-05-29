@@ -260,18 +260,14 @@ void UVCCSIMDisplayWidget::InitFromConfig(const struct FVCCSimConfig& Config)
         }
         else if (SubWindows[i] == "PointCloud")
         {
-            if (UInsMeshHolder* InstancedMeshHolder = NewObject<UInsMeshHolder>(Holder))
+            if (UInsMeshHolder* InstancedMeshHolder = Holder->FindComponentByClass<UInsMeshHolder>())
             {
-                InstancedMeshHolder->SetWorldTransform(FTransform::Identity);
-                InstancedMeshHolder->RegisterComponent();
-                InstancedMeshHolder->CreateStaticMeshes();
-
                 SetPCViewComponent(InstancedMeshHolder->GetInstancedMeshComponentColor(),
                     SubWindowsOpacities[i]);
             }
             else
             {
-                UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("Failed to create InstancedMeshHolder"));
+                UE_LOG(LogVCCSimDisplayWidget, Error, TEXT("InsMeshHolder not found on Holder"));
             }
         }
         else if (SubWindows[i] == "Unit")

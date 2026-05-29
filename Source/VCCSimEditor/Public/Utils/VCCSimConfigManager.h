@@ -77,6 +77,9 @@ public:
         FString TexEnhancerScriptPath;
         FString EstimatedMaterialsDir;
         TArray<FString> GTActorLabels;
+        bool    bIncludeNearbyMeshes = false;
+        bool    bMergeNearbyMeshes   = false;
+        float   NearbyRadius         = 500.f;
 
         FString NanobananaResultDir;
         FString NanobananaPosesFile;

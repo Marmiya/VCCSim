@@ -23,7 +23,7 @@
 #include "InsMeshHolder.generated.h"
 
 
-UCLASS()
+UCLASS(ClassGroup = (VCCSIM), meta = (BlueprintSpawnableComponent))
 class VCCSIM_API UInsMeshHolder : public USceneComponent
 {
 	GENERATED_BODY()

@@ -133,6 +133,9 @@ void FVCCSimConfigManager::SaveToJsonFile()
     TexEnhancerConfigJson->SetNumberField(TEXT("NanobananaImageWidth"),   TexEnhancerConfig.NanobananaImageWidth);
     TexEnhancerConfigJson->SetNumberField(TEXT("NanobananaImageHeight"),  TexEnhancerConfig.NanobananaImageHeight);
     TexEnhancerConfigJson->SetNumberField(TEXT("NanobananaOverlayAlpha"), TexEnhancerConfig.NanobananaOverlayAlpha);
+    TexEnhancerConfigJson->SetBoolField(TEXT("IncludeNearbyMeshes"),     TexEnhancerConfig.bIncludeNearbyMeshes);
+    TexEnhancerConfigJson->SetBoolField(TEXT("MergeNearbyMeshes"),       TexEnhancerConfig.bMergeNearbyMeshes);
+    TexEnhancerConfigJson->SetNumberField(TEXT("NearbyRadius"),          TexEnhancerConfig.NearbyRadius);
     RootObject->SetObjectField(TEXT("TexEnhancerConfig"), TexEnhancerConfigJson);
 
     // Save PathImageCapture configuration
@@ -256,7 +259,10 @@ bool FVCCSimConfigManager::LoadFromJsonFile()
             if ((*TexEnhancerConfigJson)->TryGetNumberField(TEXT("NanobananaImageWidth"), V))  TexEnhancerConfig.NanobananaImageWidth  = (int32)V;
             if ((*TexEnhancerConfigJson)->TryGetNumberField(TEXT("NanobananaImageHeight"), V)) TexEnhancerConfig.NanobananaImageHeight = (int32)V;
             if ((*TexEnhancerConfigJson)->TryGetNumberField(TEXT("NanobananaOverlayAlpha"), V)) TexEnhancerConfig.NanobananaOverlayAlpha = (float)V;
+            if ((*TexEnhancerConfigJson)->TryGetNumberField(TEXT("NearbyRadius"), V))          TexEnhancerConfig.NearbyRadius           = (float)V;
         }
+        (*TexEnhancerConfigJson)->TryGetBoolField(TEXT("IncludeNearbyMeshes"), TexEnhancerConfig.bIncludeNearbyMeshes);
+        (*TexEnhancerConfigJson)->TryGetBoolField(TEXT("MergeNearbyMeshes"),   TexEnhancerConfig.bMergeNearbyMeshes);
     }
 
     // Load PathImageCapture configuration

@@ -279,11 +279,6 @@ void ARecorder::CreateActorDirectories(const FString& ActorName, TSet<ESensorTyp
 
 void ARecorder::CollectData()
 {
-    if (CameraViewGroups.Num() == 0)
-    {
-        return;
-    }
-
     double CurrentTime = FPlatformTime::Seconds();
 
     CheckRPCTimeouts(CurrentTime);
