@@ -96,23 +96,8 @@ void FVCCSimConfigManager::SaveToJsonFile()
     PanelStatesJson->SetBoolField(TEXT("PathImageCaptureSection"), PanelStates.bPathImageCaptureSectionExpanded);
     PanelStatesJson->SetBoolField(TEXT("SceneAnalysisSection"), PanelStates.bSceneAnalysisSectionExpanded);
     PanelStatesJson->SetBoolField(TEXT("PointCloudSection"), PanelStates.bPointCloudSectionExpanded);
-    PanelStatesJson->SetBoolField(TEXT("RatSplattingSection"), PanelStates.bRatSplattingSectionExpanded);
     PanelStatesJson->SetBoolField(TEXT("TexEnhancerSection"), PanelStates.bTexEnhancerSectionExpanded);
     RootObject->SetObjectField(TEXT("PanelStates"), PanelStatesJson);
-
-    // Save RatSplatting configuration
-    TSharedPtr<FJsonObject> RatSplattingConfigJson = MakeShareable(new FJsonObject);
-    RatSplattingConfigJson->SetStringField(TEXT("ImageDirectory"), RatSplattingConfig.ImageDirectory);
-    RatSplattingConfigJson->SetStringField(TEXT("CameraIntrinsicsFilePath"), RatSplattingConfig.CameraIntrinsicsFilePath);
-    RatSplattingConfigJson->SetStringField(TEXT("PoseFilePath"), RatSplattingConfig.PoseFilePath);
-    RatSplattingConfigJson->SetStringField(TEXT("OutputDirectory"), RatSplattingConfig.OutputDirectory);
-    RatSplattingConfigJson->SetStringField(TEXT("ColmapDatasetPath"), RatSplattingConfig.ColmapDatasetPath);
-
-    const FString MeshPath = RatSplattingConfig.SelectedMesh.IsValid() ?
-        RatSplattingConfig.SelectedMesh->GetPathName() : TEXT("");
-    RatSplattingConfigJson->SetStringField(TEXT("SelectedMeshPath"), MeshPath);
-
-    RootObject->SetObjectField(TEXT("RatSplattingConfig"), RatSplattingConfigJson);
 
     // Save TexEnhancer configuration
     TSharedPtr<FJsonObject> TexEnhancerConfigJson = MakeShareable(new FJsonObject);
@@ -126,13 +111,6 @@ void FVCCSimConfigManager::SaveToJsonFile()
             GTLabelsJson.Add(MakeShareable(new FJsonValueString(Label)));
         TexEnhancerConfigJson->SetArrayField(TEXT("GTActorLabels"), GTLabelsJson);
     }
-    TexEnhancerConfigJson->SetStringField(TEXT("NanobananaResultDir"),    TexEnhancerConfig.NanobananaResultDir);
-    TexEnhancerConfigJson->SetStringField(TEXT("NanobananaPosesFile"),    TexEnhancerConfig.NanobananaPosesFile);
-    TexEnhancerConfigJson->SetStringField(TEXT("NanobananaManifestFile"), TexEnhancerConfig.NanobananaManifestFile);
-    TexEnhancerConfigJson->SetNumberField(TEXT("NanobananaHFOV"),         TexEnhancerConfig.NanobananaHFOV);
-    TexEnhancerConfigJson->SetNumberField(TEXT("NanobananaImageWidth"),   TexEnhancerConfig.NanobananaImageWidth);
-    TexEnhancerConfigJson->SetNumberField(TEXT("NanobananaImageHeight"),  TexEnhancerConfig.NanobananaImageHeight);
-    TexEnhancerConfigJson->SetNumberField(TEXT("NanobananaOverlayAlpha"), TexEnhancerConfig.NanobananaOverlayAlpha);
     TexEnhancerConfigJson->SetBoolField(TEXT("IncludeNearbyMeshes"),     TexEnhancerConfig.bIncludeNearbyMeshes);
     TexEnhancerConfigJson->SetBoolField(TEXT("MergeNearbyMeshes"),       TexEnhancerConfig.bMergeNearbyMeshes);
     TexEnhancerConfigJson->SetNumberField(TEXT("NearbyRadius"),          TexEnhancerConfig.NearbyRadius);
@@ -205,29 +183,7 @@ bool FVCCSimConfigManager::LoadFromJsonFile()
         (*PanelStatesJson)->TryGetBoolField(TEXT("PathImageCaptureSection"), PanelStates.bPathImageCaptureSectionExpanded);
         (*PanelStatesJson)->TryGetBoolField(TEXT("SceneAnalysisSection"), PanelStates.bSceneAnalysisSectionExpanded);
         (*PanelStatesJson)->TryGetBoolField(TEXT("PointCloudSection"), PanelStates.bPointCloudSectionExpanded);
-        (*PanelStatesJson)->TryGetBoolField(TEXT("RatSplattingSection"), PanelStates.bRatSplattingSectionExpanded);
         (*PanelStatesJson)->TryGetBoolField(TEXT("TexEnhancerSection"), PanelStates.bTexEnhancerSectionExpanded);
-    }
-
-    // Load RatSplatting configuration
-    const TSharedPtr<FJsonObject>* RatSplattingConfigJson = nullptr;
-    if (RootObject->TryGetObjectField(TEXT("RatSplattingConfig"), RatSplattingConfigJson))
-    {
-        (*RatSplattingConfigJson)->TryGetStringField(TEXT("ImageDirectory"), RatSplattingConfig.ImageDirectory);
-        (*RatSplattingConfigJson)->TryGetStringField(TEXT("CameraIntrinsicsFilePath"), RatSplattingConfig.CameraIntrinsicsFilePath);
-        (*RatSplattingConfigJson)->TryGetStringField(TEXT("PoseFilePath"), RatSplattingConfig.PoseFilePath);
-        (*RatSplattingConfigJson)->TryGetStringField(TEXT("OutputDirectory"), RatSplattingConfig.OutputDirectory);
-        (*RatSplattingConfigJson)->TryGetStringField(TEXT("ColmapDatasetPath"), RatSplattingConfig.ColmapDatasetPath);
-
-        FString SelectedMeshPath;
-        if ((*RatSplattingConfigJson)->TryGetStringField(TEXT("SelectedMeshPath"), SelectedMeshPath) &&
-            !SelectedMeshPath.IsEmpty())
-        {
-            if (UStaticMesh* LoadedMesh = LoadObject<UStaticMesh>(nullptr, *SelectedMeshPath))
-            {
-                RatSplattingConfig.SelectedMesh = LoadedMesh;
-            }
-        }
     }
 
     // Load TexEnhancer configuration
@@ -250,16 +206,10 @@ bool FVCCSimConfigManager::LoadFromJsonFile()
                     TexEnhancerConfig.GTActorLabels.Add(Label);
             }
         }
-        (*TexEnhancerConfigJson)->TryGetStringField(TEXT("NanobananaResultDir"),    TexEnhancerConfig.NanobananaResultDir);
-        (*TexEnhancerConfigJson)->TryGetStringField(TEXT("NanobananaPosesFile"),    TexEnhancerConfig.NanobananaPosesFile);
-        (*TexEnhancerConfigJson)->TryGetStringField(TEXT("NanobananaManifestFile"), TexEnhancerConfig.NanobananaManifestFile);
         {
             double V = 0.0;
-            if ((*TexEnhancerConfigJson)->TryGetNumberField(TEXT("NanobananaHFOV"), V))        TexEnhancerConfig.NanobananaHFOV        = (float)V;
-            if ((*TexEnhancerConfigJson)->TryGetNumberField(TEXT("NanobananaImageWidth"), V))  TexEnhancerConfig.NanobananaImageWidth  = (int32)V;
-            if ((*TexEnhancerConfigJson)->TryGetNumberField(TEXT("NanobananaImageHeight"), V)) TexEnhancerConfig.NanobananaImageHeight = (int32)V;
-            if ((*TexEnhancerConfigJson)->TryGetNumberField(TEXT("NanobananaOverlayAlpha"), V)) TexEnhancerConfig.NanobananaOverlayAlpha = (float)V;
-            if ((*TexEnhancerConfigJson)->TryGetNumberField(TEXT("NearbyRadius"), V))          TexEnhancerConfig.NearbyRadius           = (float)V;
+            if ((*TexEnhancerConfigJson)->TryGetNumberField(TEXT("NearbyRadius"), V))
+                TexEnhancerConfig.NearbyRadius = (float)V;
         }
         (*TexEnhancerConfigJson)->TryGetBoolField(TEXT("IncludeNearbyMeshes"), TexEnhancerConfig.bIncludeNearbyMeshes);
         (*TexEnhancerConfigJson)->TryGetBoolField(TEXT("MergeNearbyMeshes"),   TexEnhancerConfig.bMergeNearbyMeshes);

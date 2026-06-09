@@ -30,7 +30,6 @@
 
 #include "Utils/LightingManager.h"
 #include "Utils/GTMaterialExporter.h"
-#include "Utils/NanobananaManager.h"
 
 class FVCCSimPanelSelection;
 class AStaticMeshActor;
@@ -38,7 +37,6 @@ class UStaticMesh;
 class UTexture2D;
 class FLightingManager;
 class FGTMaterialExporter;
-class FNanobananaManager;
 struct FGTFoliageExportEntry;
 
 class VCCSIMEDITOR_API FVCCSimPanelTexEnhancer : public TSharedFromThis<FVCCSimPanelTexEnhancer>
@@ -109,7 +107,6 @@ private:
 
     bool bSectionExpanded             = false;
     bool bLightingScheduleExpanded    = false;
-    bool bNanobananaExpanded          = false;
 
     static constexpr int32 MaxLightingEntries = 4;
     int32 NumLightingSetA = 3;
@@ -129,7 +126,6 @@ private:
     bool bPipelineInProgress    = false;
     bool bEvalInProgress        = false;
     bool bGTExportInProgress    = false;
-    bool bNanobananaInProgress  = false;
     bool bDayCycleActive        = false;
 
     int32 GTTextureResolution = 2048;
@@ -169,32 +165,6 @@ private:
     TWeakPtr<FVCCSimPanelSelection> SelectionManager;
     TSharedPtr<FLightingManager>    LightingManager;
     TSharedPtr<FGTMaterialExporter> GTMaterialExporter;
-    TSharedPtr<FNanobananaManager>  NanobananaManager;
-
-    // ============================================================================
-    // NANOBANANA UI STATE
-    // ============================================================================
-    
-    TSharedPtr<SEditableTextBox>          NanobananaResultDirTextBox;
-    TSharedPtr<SEditableTextBox>          NanobananaPosesFileTextBox;
-    TSharedPtr<SEditableTextBox>          NanobananaManifestFileTextBox;
-    TSharedPtr<SNumericEntryBox<float>>   NanobananaHFOVSpinBox;
-    TSharedPtr<SNumericEntryBox<int32>>   NanobananaImageWidthSpinBox;
-    TSharedPtr<SNumericEntryBox<int32>>   NanobananaImageHeightSpinBox;
-    TSharedPtr<SNumericEntryBox<float>>   NanobananaOverlayAlphaSpinBox;
-
-    FString NanobananaResultDir;
-    FString NanobananaPosesFile;
-    FString NanobananaManifestFile;
-    float   NanobananaHFOV         = 90.f;
-    int32   NanobananaImageWidth   = 1920;
-    int32   NanobananaImageHeight  = 1080;
-    float   NanobananaOverlayAlpha = 0.5f;
-
-    TOptional<float>  NanobananaHFOVValue;
-    TOptional<int32>  NanobananaImageWidthValue;
-    TOptional<int32>  NanobananaImageHeightValue;
-    TOptional<float>  NanobananaOverlayAlphaValue;
 
     // ============================================================================
     // SECTION 1: DATASET CONFIGURATION
@@ -276,16 +246,6 @@ private:
     FReply OnBrowseEstimatedDirClicked();
     FReply OnRunEvaluationClicked();
     void RunBRDFEvaluation();
-
-    // ============================================================================
-    // SECTION 5: NANOBANANA PROJECTION
-    // ============================================================================
-
-    TSharedRef<SWidget> CreateNanobananaSection();
-    FReply OnBrowseNanobananaResultDirClicked();
-    FReply OnBrowseNanobananaPosesFileClicked();
-    FReply OnBrowseNanobananaManifestFileClicked();
-    FReply OnRunNanobananaProjectionClicked();
 
     // ============================================================================
     // UTILITIES

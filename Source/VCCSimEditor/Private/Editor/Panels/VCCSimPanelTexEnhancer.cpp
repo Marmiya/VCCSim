@@ -63,7 +63,6 @@ DEFINE_LOG_CATEGORY_STATIC(LogTexEnhancerPanel, Log, All);
 FVCCSimPanelTexEnhancer::FVCCSimPanelTexEnhancer()
 {
     GTMaterialExporter = MakeShared<FGTMaterialExporter>();
-    NanobananaManager  = MakeShared<FNanobananaManager>();
 
     for (int32 i = 0; i < MaxLightingEntries; ++i)
     {
@@ -84,11 +83,6 @@ FVCCSimPanelTexEnhancer::FVCCSimPanelTexEnhancer()
     GTTexResValue        = GTTextureResolution;
     NearbyRadiusValue    = NearbyRadius;
     DayCycleSpeedValue   = DayCycleSpeed;
-
-    NanobananaHFOVValue         = NanobananaHFOV;
-    NanobananaImageWidthValue   = NanobananaImageWidth;
-    NanobananaImageHeightValue  = NanobananaImageHeight;
-    NanobananaOverlayAlphaValue = NanobananaOverlayAlpha;
 }
 
 FVCCSimPanelTexEnhancer::~FVCCSimPanelTexEnhancer()
@@ -120,7 +114,6 @@ void FVCCSimPanelTexEnhancer::Cleanup()
         }
     }
     bVisualizeExpansion = false;
-    bNanobananaInProgress = false;
 
     if (PipelineProcHandle.IsValid())
     {
@@ -182,33 +175,6 @@ void FVCCSimPanelTexEnhancer::LoadFromConfigManager()
         if (GTActorListView.IsValid())
             GTActorListView->RequestListRefresh();
     }
-
-    if (!Config.NanobananaResultDir.IsEmpty())
-    {
-        NanobananaResultDir = Config.NanobananaResultDir;
-        if (NanobananaResultDirTextBox.IsValid())
-            NanobananaResultDirTextBox->SetText(FText::FromString(NanobananaResultDir));
-    }
-    if (!Config.NanobananaPosesFile.IsEmpty())
-    {
-        NanobananaPosesFile = Config.NanobananaPosesFile;
-        if (NanobananaPosesFileTextBox.IsValid())
-            NanobananaPosesFileTextBox->SetText(FText::FromString(NanobananaPosesFile));
-    }
-    if (!Config.NanobananaManifestFile.IsEmpty())
-    {
-        NanobananaManifestFile = Config.NanobananaManifestFile;
-        if (NanobananaManifestFileTextBox.IsValid())
-            NanobananaManifestFileTextBox->SetText(FText::FromString(NanobananaManifestFile));
-    }
-    NanobananaHFOV         = Config.NanobananaHFOV;
-    NanobananaImageWidth   = Config.NanobananaImageWidth;
-    NanobananaImageHeight  = Config.NanobananaImageHeight;
-    NanobananaOverlayAlpha = Config.NanobananaOverlayAlpha;
-    NanobananaHFOVValue         = NanobananaHFOV;
-    NanobananaImageWidthValue   = NanobananaImageWidth;
-    NanobananaImageHeightValue  = NanobananaImageHeight;
-    NanobananaOverlayAlphaValue = NanobananaOverlayAlpha;
 
     bIncludeNearbyMeshes = Config.bIncludeNearbyMeshes;
     bMergeNearbyMeshes   = Config.bMergeNearbyMeshes;
@@ -1289,124 +1255,6 @@ FString FVCCSimPanelTexEnhancer::GetEvaluationOutputDir() const
 }
 
 // ============================================================================
-// SECTION 5: NANOBANANA PROJECTION
-// ============================================================================
-
-FReply FVCCSimPanelTexEnhancer::OnBrowseNanobananaResultDirClicked()
-{
-    IDesktopPlatform* DP = FDesktopPlatformModule::Get();
-    if (!DP) return FReply::Handled();
-    FString Sel;
-    void* Handle = const_cast<void*>(FSlateApplication::Get().FindBestParentWindowHandleForDialogs(nullptr));
-    if (DP->OpenDirectoryDialog(Handle, TEXT("Select Nanobanana Result Directory"), NanobananaResultDir, Sel))
-    {
-        NanobananaResultDir = Sel;
-        if (NanobananaResultDirTextBox.IsValid())
-            NanobananaResultDirTextBox->SetText(FText::FromString(Sel));
-        SavePaths();
-    }
-    return FReply::Handled();
-}
-
-FReply FVCCSimPanelTexEnhancer::OnBrowseNanobananaPosesFileClicked()
-{
-    IDesktopPlatform* DP = FDesktopPlatformModule::Get();
-    if (!DP) return FReply::Handled();
-    TArray<FString> Files;
-    void* Handle = const_cast<void*>(FSlateApplication::Get().FindBestParentWindowHandleForDialogs(nullptr));
-    if (DP->OpenFileDialog(Handle, TEXT("Select Poses File"), FPaths::GetPath(NanobananaPosesFile),
-        TEXT(""), TEXT("Text Files (*.txt)|*.txt|All Files (*.*)|*.*"), EFileDialogFlags::None, Files) && Files.Num() > 0)
-    {
-        NanobananaPosesFile = Files[0];
-        if (NanobananaPosesFileTextBox.IsValid())
-            NanobananaPosesFileTextBox->SetText(FText::FromString(Files[0]));
-        SavePaths();
-    }
-    return FReply::Handled();
-}
-
-FReply FVCCSimPanelTexEnhancer::OnBrowseNanobananaManifestFileClicked()
-{
-    IDesktopPlatform* DP = FDesktopPlatformModule::Get();
-    if (!DP) return FReply::Handled();
-    TArray<FString> Files;
-    void* Handle = const_cast<void*>(FSlateApplication::Get().FindBestParentWindowHandleForDialogs(nullptr));
-    if (DP->OpenFileDialog(Handle, TEXT("Select manifest.json"), FPaths::GetPath(NanobananaManifestFile),
-        TEXT(""), TEXT("JSON Files (*.json)|*.json|All Files (*.*)|*.*"), EFileDialogFlags::None, Files) && Files.Num() > 0)
-    {
-        NanobananaManifestFile = Files[0];
-        if (NanobananaManifestFileTextBox.IsValid())
-            NanobananaManifestFileTextBox->SetText(FText::FromString(Files[0]));
-        SavePaths();
-    }
-    return FReply::Handled();
-}
-
-FReply FVCCSimPanelTexEnhancer::OnRunNanobananaProjectionClicked()
-{
-    if (bNanobananaInProgress)
-    {
-        UE_LOG(LogTexEnhancerPanel, Warning, TEXT("Nanobanana projection already in progress."));
-        return FReply::Handled();
-    }
-    if (NanobananaResultDir.IsEmpty() || !FPaths::DirectoryExists(NanobananaResultDir))
-    {
-        FVCCSimUIHelpers::ShowNotification(TEXT("Nanobanana result directory not set or missing."), true);
-        return FReply::Handled();
-    }
-    if (NanobananaPosesFile.IsEmpty() || !FPaths::FileExists(NanobananaPosesFile))
-    {
-        FVCCSimUIHelpers::ShowNotification(TEXT("Poses file not set or missing."), true);
-        return FReply::Handled();
-    }
-    if (NanobananaManifestFile.IsEmpty() || !FPaths::FileExists(NanobananaManifestFile))
-    {
-        FVCCSimUIHelpers::ShowNotification(TEXT("manifest.json not set or missing."), true);
-        return FReply::Handled();
-    }
-
-    NanobananaManager = MakeShared<FNanobananaManager>();
-
-    FNanobananaManager::FProjectionParams Params;
-    Params.ResultDir         = NanobananaResultDir;
-    Params.PosesFile         = NanobananaPosesFile;
-    Params.ManifestFile      = NanobananaManifestFile;
-    Params.HFOV              = NanobananaHFOV;
-    Params.ImageWidth        = NanobananaImageWidth;
-    Params.ImageHeight       = NanobananaImageHeight;
-    Params.OverlayAlpha      = NanobananaOverlayAlpha;
-    Params.World             = GEditor->GetEditorWorldContext().World();
-    Params.SceneName         = SceneName;
-    Params.TextureResolution = GTTextureResolution;
-
-    FOnNanobananaProgress OnProgressDelegate = FOnNanobananaProgress::CreateLambda(
-        [this](const FString& Status, int32 Processed, int32 Total)
-    {
-        if (Total > 0)
-        {
-            UE_LOG(LogTexEnhancerPanel, Log, TEXT("%s %d / %d"), *Status, Processed, Total);
-        }
-        else
-        {
-            UE_LOG(LogTexEnhancerPanel, Log, TEXT("%s"), *Status);
-        }
-    });
-
-    FOnNanobananaComplete OnCompleteDelegate = FOnNanobananaComplete::CreateLambda(
-        [this](const FString& FinalStatus)
-    {
-        bNanobananaInProgress = false;
-        UE_LOG(LogTexEnhancerPanel, Log, TEXT("%s"), *FinalStatus);
-        FVCCSimUIHelpers::ShowNotification(TEXT("Nanobanana projection complete!"), false);
-    });
-
-    bNanobananaInProgress = true;
-    NanobananaManager->RunProjection(Params, OnProgressDelegate, OnCompleteDelegate);
-
-    return FReply::Handled();
-}
-
-// ============================================================================
 // PATH PERSISTENCE
 // ============================================================================
 
@@ -1422,13 +1270,6 @@ void FVCCSimPanelTexEnhancer::SavePaths()
         if (Label.IsValid())
             Config.GTActorLabels.Add(*Label);
     }
-    Config.NanobananaResultDir    = NanobananaResultDir;
-    Config.NanobananaPosesFile    = NanobananaPosesFile;
-    Config.NanobananaManifestFile = NanobananaManifestFile;
-    Config.NanobananaHFOV         = NanobananaHFOV;
-    Config.NanobananaImageWidth   = NanobananaImageWidth;
-    Config.NanobananaImageHeight  = NanobananaImageHeight;
-    Config.NanobananaOverlayAlpha = NanobananaOverlayAlpha;
     Config.bIncludeNearbyMeshes   = bIncludeNearbyMeshes;
     Config.bMergeNearbyMeshes     = bMergeNearbyMeshes;
     Config.NearbyRadius           = NearbyRadius;
@@ -1449,19 +1290,6 @@ void FVCCSimPanelTexEnhancer::LoadPaths()
         GTActorListItems.Add(MakeShareable(new FString(Label)));
     if (GTActorListView.IsValid())
         GTActorListView->RequestListRefresh();
-
-    if (!Config.NanobananaResultDir.IsEmpty())    NanobananaResultDir    = Config.NanobananaResultDir;
-    if (!Config.NanobananaPosesFile.IsEmpty())    NanobananaPosesFile    = Config.NanobananaPosesFile;
-    if (!Config.NanobananaManifestFile.IsEmpty()) NanobananaManifestFile = Config.NanobananaManifestFile;
-    NanobananaHFOV         = Config.NanobananaHFOV;
-    NanobananaImageWidth   = Config.NanobananaImageWidth;
-    NanobananaImageHeight  = Config.NanobananaImageHeight;
-    NanobananaOverlayAlpha = Config.NanobananaOverlayAlpha;
-
-    NanobananaHFOVValue         = NanobananaHFOV;
-    NanobananaImageWidthValue   = NanobananaImageWidth;
-    NanobananaImageHeightValue  = NanobananaImageHeight;
-    NanobananaOverlayAlphaValue = NanobananaOverlayAlpha;
 
     bIncludeNearbyMeshes = Config.bIncludeNearbyMeshes;
     bMergeNearbyMeshes   = Config.bMergeNearbyMeshes;

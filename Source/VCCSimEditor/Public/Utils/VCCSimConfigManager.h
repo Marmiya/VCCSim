@@ -18,7 +18,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Engine/StaticMesh.h"
 
 /**
  * Centralized configuration manager for VCCSim panels
@@ -54,19 +53,7 @@ public:
         bool bPathImageCaptureSectionExpanded = false;
         bool bSceneAnalysisSectionExpanded = false;
         bool bPointCloudSectionExpanded = false;
-        bool bRatSplattingSectionExpanded = true;
         bool bTexEnhancerSectionExpanded = false;
-    };
-
-    // RatSplatting configuration
-    struct FRatSplattingConfig
-    {
-        FString ImageDirectory;
-        FString CameraIntrinsicsFilePath;
-        FString PoseFilePath;
-        FString OutputDirectory;
-        FString ColmapDatasetPath;
-        TWeakObjectPtr<UStaticMesh> SelectedMesh;
     };
 
     // TexEnhancer data generation & evaluation configuration
@@ -80,14 +67,6 @@ public:
         bool    bIncludeNearbyMeshes = false;
         bool    bMergeNearbyMeshes   = false;
         float   NearbyRadius         = 500.f;
-
-        FString NanobananaResultDir;
-        FString NanobananaPosesFile;
-        FString NanobananaManifestFile;
-        float   NanobananaHFOV           = 90.f;
-        int32   NanobananaImageWidth     = 1920;
-        int32   NanobananaImageHeight    = 1080;
-        float   NanobananaOverlayAlpha   = 0.4f;
     };
 
     // PathImageCapture configuration
@@ -99,10 +78,6 @@ public:
     // Getters and setters for panel states
     const FPanelStates& GetPanelStates() const { return PanelStates; }
     void SetPanelStates(const FPanelStates& InStates) { PanelStates = InStates; }
-
-    // Getters and setters for RatSplatting config
-    const FRatSplattingConfig& GetRatSplattingConfig() const { return RatSplattingConfig; }
-    void SetRatSplattingConfig(const FRatSplattingConfig& InConfig) { RatSplattingConfig = InConfig; }
 
     // Getters and setters for TexEnhancer config
     const FTexEnhancerConfig& GetTexEnhancerConfig() const { return TexEnhancerConfig; }
@@ -117,7 +92,6 @@ public:
     void SetPathImageCaptureSectionExpanded(bool bExpanded) { PanelStates.bPathImageCaptureSectionExpanded = bExpanded; }
     void SetSceneAnalysisSectionExpanded(bool bExpanded) { PanelStates.bSceneAnalysisSectionExpanded = bExpanded; }
     void SetPointCloudSectionExpanded(bool bExpanded) { PanelStates.bPointCloudSectionExpanded = bExpanded; }
-    void SetRatSplattingSectionExpanded(bool bExpanded) { PanelStates.bRatSplattingSectionExpanded = bExpanded; }
     void SetTexEnhancerSectionExpanded(bool bExpanded) { PanelStates.bTexEnhancerSectionExpanded = bExpanded; }
 
     // ============================================================================
@@ -138,7 +112,6 @@ private:
 
     // Configuration data
     FPanelStates PanelStates;
-    FRatSplattingConfig RatSplattingConfig;
     FTexEnhancerConfig TexEnhancerConfig;
     FPathImageCaptureConfig PathImageCaptureConfig;
 

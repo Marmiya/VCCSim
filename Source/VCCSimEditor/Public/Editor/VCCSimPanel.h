@@ -25,12 +25,10 @@
 #include "Misc/Paths.h"
 #include "AssetRegistry/AssetData.h"
 
-class FColmapManager;
 class FVCCSimPanelPointCloud;
 class FVCCSimPanelSelection;
 class FVCCSimPanelPathImageCapture;
 class FVCCSimPanelSceneAnalysis;
-class FVCCSimPanelRatSplatting;
 class FVCCSimPanelTexEnhancer;
 
 
@@ -67,16 +65,11 @@ private:
     // STATE VARIABLES
     // ============================================================================
     
-    // COLMAP pipeline state
-    bool bColmapPipelineInProgress = false;
-    TSharedPtr<FColmapManager> ColmapManager;
-    
     // Panel managers
     TSharedPtr<FVCCSimPanelPointCloud> PointCloudManager;
     TSharedPtr<FVCCSimPanelSelection> SelectionManager;
     TSharedPtr<FVCCSimPanelPathImageCapture> PathImageCaptureManager;
     TSharedPtr<FVCCSimPanelSceneAnalysis> SceneAnalysisManager;
-    TSharedPtr<FVCCSimPanelRatSplatting> RatSplattingManager;
     TSharedPtr<FVCCSimPanelTexEnhancer> TexEnhancerManager;
 
     // ============================================================================
@@ -94,7 +87,6 @@ private:
     TSharedRef<SWidget> CreateLogoPanel();
     TSharedRef<SWidget> CreateSceneAnalysisPanel();
     TSharedRef<SWidget> CreatePointCloudPanel();
-    TSharedRef<SWidget> CreateRatSplattingPanel();
     
     // Style and layout helpers (now using FVCCSimUIHelpers)
     

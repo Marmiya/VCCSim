@@ -21,7 +21,6 @@
 #include "Editor/Panels/VCCSimPanelSelection.h"
 #include "Editor/Panels/VCCSimPanelPathImageCapture.h"
 #include "Editor/Panels/VCCSimPanelSceneAnalysis.h"
-#include "Editor/Panels/VCCSimPanelRatSplatting.h"
 #include "Editor/Panels/VCCSimPanelTexEnhancer.h"
 #include "Editor/UnrealEd/Public/Selection.h"
 #include "Utils/VCCSimConfigManager.h"
@@ -55,13 +54,6 @@ SVCCSimPanel::~SVCCSimPanel()
     {
         SceneAnalysisManager->Cleanup();
         SceneAnalysisManager.Reset();
-    }
-
-    // Clean up RatSplatting manager
-    if (RatSplattingManager.IsValid())
-    {
-        RatSplattingManager->Cleanup();
-        RatSplattingManager.Reset();
     }
 
     // Clean up TexEnhancer manager
@@ -121,10 +113,6 @@ void SVCCSimPanel::Construct(const FArguments& InArgs)
     SceneAnalysisManager = MakeShared<FVCCSimPanelSceneAnalysis>();
     SceneAnalysisManager->Initialize(SelectionManager);
     
-    // Initialize RatSplatting manager
-    RatSplattingManager = MakeShared<FVCCSimPanelRatSplatting>();
-    RatSplattingManager->Initialize();
-
     // Initialize TexEnhancer manager
     TexEnhancerManager = MakeShared<FVCCSimPanelTexEnhancer>();
     TexEnhancerManager->Initialize();
@@ -255,13 +243,6 @@ void SVCCSimPanel::CreateMainLayout()
                     TexEnhancerManager.IsValid() ? TexEnhancerManager->CreateTexEnhancerPanel() :
                     SNew(STextBlock).Text(FText::FromString("TexEnhancer Manager not initialized"))
                 ]
-
-                // RatSplatting panel
-                +SVerticalBox::Slot()
-                .AutoHeight()
-                [
-                    CreateRatSplattingPanel()
-                ]
             ]
         ]
     ];
@@ -340,19 +321,6 @@ TSharedRef<SWidget> SVCCSimPanel::CreatePointCloudPanel()
     {
         return SNew(STextBlock)
             .Text(FText::FromString("Point Cloud Manager not initialized"));
-    }
-}
-
-TSharedRef<SWidget> SVCCSimPanel::CreateRatSplattingPanel()
-{
-    if (RatSplattingManager.IsValid())
-    {
-        return RatSplattingManager->CreateRatSplattingPanel();
-    }
-    else
-    {
-        return SNew(STextBlock)
-            .Text(FText::FromString("RatSplatting Manager not initialized"));
     }
 }
 
@@ -435,12 +403,6 @@ void SVCCSimPanel::UpdateSubPanelsFromState()
         PathImageCaptureManager->LoadFromConfigManager();
     }
 
-    if (RatSplattingManager.IsValid())
-    {
-        RatSplattingManager->SetRatSplattingSectionExpanded(States.bRatSplattingSectionExpanded);
-        RatSplattingManager->LoadFromConfigManager();
-    }
-
     if (TexEnhancerManager.IsValid())
     {
         TexEnhancerManager->SetTexEnhancerSectionExpanded(States.bTexEnhancerSectionExpanded);
@@ -472,11 +434,6 @@ void SVCCSimPanel::GatherSubPanelStates()
     if (PointCloudManager.IsValid())
     {
         States.bPointCloudSectionExpanded = PointCloudManager->IsPointCloudSectionExpanded();
-    }
-
-    if (RatSplattingManager.IsValid())
-    {
-        States.bRatSplattingSectionExpanded = RatSplattingManager->IsRatSplattingSectionExpanded();
     }
 
     if (TexEnhancerManager.IsValid())

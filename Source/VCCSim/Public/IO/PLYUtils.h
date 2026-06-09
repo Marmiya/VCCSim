@@ -20,7 +20,6 @@
 #include "CoreMinimal.h"
 #include "Math/Vector.h"
 #include "DataStructures/PointCloud.h"
-#include "DataStructures/CameraData.h"
 
 /**
  * PLY file loader utility class with enhanced normal support
@@ -173,18 +172,6 @@ public:
         const FPLYWriteConfig& Config = FPLYWriteConfig());
     
     /**
-     * Write camera positions to PLY file for visualization
-     * @param CameraInfos Array of camera information
-     * @param OutputFilePath Output PLY file path
-     * @param Config Export configuration options
-     * @return True if successful
-     */
-    static bool WriteCamerasToPLY(
-        const TArray<FCameraInfo>& CameraInfos,
-        const FString& OutputFilePath,
-        const FPLYWriteConfig& Config = FPLYWriteConfig());
-    
-    /**
      * Write custom point data to PLY file
      * @param Points Array of 3D positions
      * @param Colors Array of colors (optional, can be empty)
@@ -199,38 +186,6 @@ public:
         const TArray<FVector>& Normals,
         const FString& OutputFilePath,
         const FPLYWriteConfig& Config = FPLYWriteConfig());
-    
-    /**
-     * Write mesh triangle data to PLY file for Triangle Splatting training
-     * @param Vertices Array of triangle vertices (3 per triangle)
-     * @param Colors Array of per-vertex colors
-     * @param Normals Array of per-vertex normals
-     * @param OutputFilePath Output PLY file path
-     * @param Config Export configuration options
-     * @return True if successful
-     */
-    static bool WriteMeshTrianglesToPLY(
-        const TArray<FVector>& Vertices,
-        const TArray<FVector>& Colors,
-        const TArray<FVector>& Normals,
-        const FString& OutputFilePath,
-        const FPLYWriteConfig& Config = FPLYWriteConfig());
-
-    /**
-     * Write mesh triangles with face data to PLY file for Triangle Splatting training
-     * @param Vertices Array of triangle vertices (3 per triangle)
-     * @param Colors Array of per-vertex colors
-     * @param Normals Array of per-vertex normals
-     * @param OutputFilePath Output PLY file path
-     * @param Config Export configuration options
-     * @return True if successful
-     */
-    static bool WriteMeshTrianglesWithFacesToPLY(
-        const TArray<FVector>& Vertices,
-        const TArray<FVector>& Colors,
-        const TArray<FVector>& Normals,
-        const FString& OutputFilePath,
-        const FPLYWriteConfig& Config = FPLYWriteConfig());
 
 private:
     /**
@@ -241,17 +196,7 @@ private:
         bool bHasColors,
         bool bHasNormals,
         bool bBinaryFormat = false);
-    
-    /**
-     * Generate PLY header with face data for Triangle Splatting
-     */
-    static FString GeneratePLYHeaderWithFaces(
-        int32 VertexCount,
-        int32 FaceCount,
-        bool bHasColors,
-        bool bHasNormals,
-        bool bBinaryFormat = false);
-    
+
     /**
      * Write vertex data line for ASCII format
      */

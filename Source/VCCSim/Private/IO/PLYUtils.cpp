@@ -18,7 +18,6 @@
 DEFINE_LOG_CATEGORY_STATIC(LogPLYUtils, Log, All);
 
 #include "IO/PLYUtils.h"
-#include "DataStructures/CameraData.h"
 #include "Engine/Engine.h"
 #include "Misc/DateTime.h"
 #include "Misc/FileHelper.h"
@@ -639,61 +638,6 @@ bool FPLYWriter::WritePointCloudToPLY(
     return bSuccess;
 }
 
-bool FPLYWriter::WriteCamerasToPLY(
-    const TArray<FCameraInfo>& CameraInfos,
-    const FString& OutputFilePath,
-    const FPLYWriteConfig& Config)
-{
-    if (CameraInfos.Num() == 0)
-    {
-        UE_LOG(LogPLYUtils, Error, TEXT("FPLYWriter: No cameras to write to PLY file"));
-        return false;
-    }
-    
-    // Always include colors and normals for cameras
-    FString PlyContent = GeneratePLYHeader(
-        CameraInfos.Num(),
-        true,  // Always include colors for cameras
-        true,  // Always include normals (forward direction)
-        Config.bBinaryFormat
-    );
-    
-    // Write camera data
-    for (const FCameraInfo& CameraInfo : CameraInfos)
-    {
-        FVector CameraPosition = CameraInfo.Position;
-        
-        // Get camera forward direction using quaternion
-        FVector CameraForward = CameraInfo.Rotation.RotateVector(FVector(0, 0, 1));
-        
-        // Generate color based on camera UID for visualization
-        int32 ColorIndex = CameraInfo.UID % 6;
-        FLinearColor CameraColor(
-            (ColorIndex & 1) ? 1.0f : 0.0f,
-            (ColorIndex & 2) ? 1.0f : 0.0f,
-            (ColorIndex & 4) ? 1.0f : 0.5f,
-            1.0f
-        );
-        
-        PlyContent += FormatVertexLine(CameraPosition, &CameraColor, &CameraForward);
-    }
-    
-    // Save to file
-    bool bSuccess = FFileHelper::SaveStringToFile(PlyContent, *OutputFilePath);
-    if (bSuccess)
-    {
-        UE_LOG(LogPLYUtils, Log, TEXT("FPLYWriter: Successfully wrote %d cameras to %s"), 
-            CameraInfos.Num(), *OutputFilePath);
-    }
-    else
-    {
-        UE_LOG(LogPLYUtils, Error, TEXT("FPLYWriter: Failed to write camera"
-                                    " PLY file: %s"), *OutputFilePath);
-    }
-    
-    return bSuccess;
-}
-
 bool FPLYWriter::WritePointArrayToPLY(
     const TArray<FVector>& Points,
     const TArray<FLinearColor>& Colors,
@@ -782,51 +726,6 @@ FString FPLYWriter::GeneratePLYHeader(
     return Header;
 }
 
-FString FPLYWriter::GeneratePLYHeaderWithFaces(
-    int32 VertexCount,
-    int32 FaceCount,
-    bool bHasColors,
-    bool bHasNormals,
-    bool bBinaryFormat)
-{
-    FString Header;
-    
-    Header += TEXT("ply\n");
-    Header += bBinaryFormat ? TEXT("format binary_little_endian 1.0\n") : TEXT("format ascii 1.0\n");
-    
-    // Vertex element
-    Header += FString::Printf(TEXT("element vertex %d\n"), VertexCount);
-    
-    // Position properties (always present)
-    Header += TEXT("property float x\n");
-    Header += TEXT("property float y\n");
-    Header += TEXT("property float z\n");
-    
-    // Normal properties
-    if (bHasNormals)
-    {
-        Header += TEXT("property float nx\n");
-        Header += TEXT("property float ny\n");
-        Header += TEXT("property float nz\n");
-    }
-    
-    // Color properties
-    if (bHasColors)
-    {
-        Header += TEXT("property uchar red\n");
-        Header += TEXT("property uchar green\n");
-        Header += TEXT("property uchar blue\n");
-    }
-    
-    // Face element
-    Header += FString::Printf(TEXT("element face %d\n"), FaceCount);
-    Header += TEXT("property list uchar int vertex_indices\n");
-    
-    Header += TEXT("end_header\n");
-    
-    return Header;
-}
-
 FString FPLYWriter::FormatVertexLine(
     const FVector& Position,
     const FLinearColor* Color,
@@ -855,115 +754,4 @@ FString FPLYWriter::FormatVertexLine(
     
     Line += TEXT("\n");
     return Line;
-}
-
-bool FPLYWriter::WriteMeshTrianglesToPLY(
-    const TArray<FVector>& Vertices,
-    const TArray<FVector>& Colors,
-    const TArray<FVector>& Normals,
-    const FString& OutputFilePath,
-    const FPLYWriteConfig& Config)
-{
-    if (Vertices.Num() == 0 || Vertices.Num() % 3 != 0)
-    {
-        UE_LOG(LogPLYUtils, Error, TEXT("Invalid mesh triangle data - vertex count must be multiple of 3"));
-        return false;
-    }
-    
-    bool bHasColors = Config.bIncludeColors && Colors.Num() == Vertices.Num();
-    bool bHasNormals = Config.bIncludeNormals && Normals.Num() == Vertices.Num();
-    
-    // Generate PLY header
-    FString PLYContent = GeneratePLYHeader(Vertices.Num(), bHasColors, bHasNormals, Config.bBinaryFormat);
-    
-    // Write vertex data
-    for (int32 i = 0; i < Vertices.Num(); ++i)
-    {
-        const FVector& Vertex = Vertices[i];
-        const FVector* Normal = bHasNormals ? &Normals[i] : nullptr;
-        
-        // Convert FVector color to FLinearColor for compatibility
-        FLinearColor LinearColor = FLinearColor::White;
-        if (bHasColors)
-        {
-            const FVector& ColorVec = Colors[i];
-            LinearColor = FLinearColor(ColorVec.X, ColorVec.Y, ColorVec.Z, 1.0f);
-        }
-        const FLinearColor* Color = bHasColors ? &LinearColor : nullptr;
-        
-        PLYContent += FormatVertexLine(Vertex, Color, Normal);
-    }
-    
-    // Write to file
-    if (!FFileHelper::SaveStringToFile(PLYContent, *OutputFilePath))
-    {
-        UE_LOG(LogPLYUtils, Error, TEXT("Failed to save mesh triangles to PLY file: %s"), *OutputFilePath);
-        return false;
-    }
-    
-    UE_LOG(LogPLYUtils, Log, TEXT("Successfully saved %d triangle vertices to PLY: %s"), 
-        Vertices.Num(), *OutputFilePath);
-    
-    return true;
-}
-
-bool FPLYWriter::WriteMeshTrianglesWithFacesToPLY(
-    const TArray<FVector>& Vertices,
-    const TArray<FVector>& Colors,
-    const TArray<FVector>& Normals,
-    const FString& OutputFilePath,
-    const FPLYWriteConfig& Config)
-{
-    if (Vertices.Num() == 0 || Vertices.Num() % 3 != 0)
-    {
-        UE_LOG(LogPLYUtils, Error, TEXT("Invalid mesh triangle data - vertex count must be multiple of 3"));
-        return false;
-    }
-    
-    bool bHasColors = Config.bIncludeColors && Colors.Num() == Vertices.Num();
-    bool bHasNormals = Config.bIncludeNormals && Normals.Num() == Vertices.Num();
-    
-    int32 FaceCount = Vertices.Num() / 3;
-    
-    // Generate PLY header with face data
-    FString PLYContent = GeneratePLYHeaderWithFaces(Vertices.Num(), FaceCount, bHasColors, bHasNormals, Config.bBinaryFormat);
-    
-    // Write vertex data
-    for (int32 i = 0; i < Vertices.Num(); ++i)
-    {
-        const FVector& Vertex = Vertices[i];
-        const FVector* Normal = bHasNormals ? &Normals[i] : nullptr;
-        
-        // Convert FVector color to FLinearColor for compatibility
-        FLinearColor LinearColor = FLinearColor::White;
-        if (bHasColors)
-        {
-            const FVector& ColorVec = Colors[i];
-            LinearColor = FLinearColor(ColorVec.X, ColorVec.Y, ColorVec.Z, 1.0f);
-        }
-        const FLinearColor* Color = bHasColors ? &LinearColor : nullptr;
-        
-        PLYContent += FormatVertexLine(Vertex, Color, Normal);
-    }
-    
-    // Write face data
-    for (int32 FaceIdx = 0; FaceIdx < FaceCount; ++FaceIdx)
-    {
-        int32 V0 = FaceIdx * 3 + 0;
-        int32 V1 = FaceIdx * 3 + 1;
-        int32 V2 = FaceIdx * 3 + 2;
-        PLYContent += FString::Printf(TEXT("3 %d %d %d\n"), V0, V1, V2);
-    }
-    
-    // Write to file
-    if (!FFileHelper::SaveStringToFile(PLYContent, *OutputFilePath))
-    {
-        UE_LOG(LogPLYUtils, Error, TEXT("Failed to save mesh triangles with faces to PLY file: %s"), *OutputFilePath);
-        return false;
-    }
-    
-    UE_LOG(LogPLYUtils, Log, TEXT("Successfully saved %d triangle vertices and %d faces to PLY: %s"), 
-        Vertices.Num(), FaceCount, *OutputFilePath);
-    
-    return true;
 }

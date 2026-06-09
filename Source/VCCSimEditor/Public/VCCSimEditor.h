@@ -27,7 +27,6 @@ DECLARE_LOG_CATEGORY_EXTERN(LogVCCSimEditor, Log, All);
  * VCCSimEditor Module - Editor functionality for VCCSim plugin
  * This module contains all editor-specific functionality including:
  * - VCCSim panel UI
- * - Triangle Splatting editor integration
  * - Editor tools and utilities
  */
 class FVCCSimEditorModule : public IModuleInterface
