@@ -102,6 +102,68 @@ void FAsyncDepthSaveTask::DoWork()
     }
 }
 
+void FAsyncMatProps16SaveTask::DoWork()
+{
+    if (Pixels.IsEmpty()) return;
+
+    TArray<uint8> RawData;
+    RawData.Reserve(Pixels.Num() * 4 * 2);
+
+    auto AppendChannel16 = [&RawData](float Value)
+    {
+        const uint16 V = static_cast<uint16>(FMath::Clamp(
+            FMath::RoundToInt(Value * 65535.0f), 0, 65535));
+        RawData.Add(V & 0xFF);
+        RawData.Add((V >> 8) & 0xFF);
+    };
+
+    for (const FFloat16Color& Pixel : Pixels)
+    {
+        const float Metallic  = Pixel.R.GetFloat();
+        const float Specular  = Pixel.G.GetFloat();
+        const float Roughness = Pixel.B.GetFloat();
+
+        AppendChannel16(Specular);
+        AppendChannel16(Roughness);
+        AppendChannel16(Metallic);
+        AppendChannel16(1.0f);
+    }
+
+    IImageWrapperModule& ImageWrapperModule =
+        FModuleManager::LoadModuleChecked<IImageWrapperModule>(FName("ImageWrapper"));
+    TSharedPtr<IImageWrapper> ImageWrapper =
+        ImageWrapperModule.CreateImageWrapper(EImageFormat::PNG);
+
+    if (!ImageWrapper.IsValid())
+    {
+        UE_LOG(LogImageProcesser, Error, TEXT("Failed to create PNG image wrapper "
+                                    "for 16-bit material properties saving"));
+        return;
+    }
+
+    if (ImageWrapper->SetRaw(
+        RawData.GetData(),
+        RawData.Num(),
+        Size.X,
+        Size.Y,
+        ERGBFormat::RGBA,
+        16
+    ))
+    {
+        TArray64<uint8> CompressedData = ImageWrapper->GetCompressed();
+        if (!FFileHelper::SaveArrayToFile(CompressedData, *FilePath))
+        {
+            UE_LOG(LogImageProcesser, Error, TEXT("Failed to save 16-bit material "
+                                        "properties image to file: %s"), *FilePath);
+        }
+    }
+    else
+    {
+        UE_LOG(LogImageProcesser, Error, TEXT("Failed to set raw data for 16-bit "
+                                    "material properties image: %s"), *FilePath);
+    }
+}
+
 void FAsyncPLYSaveTask::DoWork()
 {
     if (PointCloud.Num() == 0)

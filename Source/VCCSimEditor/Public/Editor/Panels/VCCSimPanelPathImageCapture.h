@@ -33,6 +33,8 @@ class FPathGenerator;
 class FImageCaptureService;
 class FVCCSimPanelSelection;
 
+DECLARE_DELEGATE_OneParam(FOnCaptureSessionComplete, bool /*bSuccess*/);
+
 /**
  * Dedicated panel for Path Configuration and Image Capture functionality
  * Combines path generation, pose configuration, and image capture operations
@@ -42,18 +44,36 @@ class VCCSIMEDITOR_API FVCCSimPanelPathImageCapture
 public:
     FVCCSimPanelPathImageCapture();
     ~FVCCSimPanelPathImageCapture();
-    
+
     void Initialize();
     void Cleanup();
     TSharedRef<SWidget> CreatePathImageCapturePanel();
-    
+
     // Integration with selection manager
     void SetSelectionManager(TSharedPtr<FVCCSimPanelSelection> InSelectionManager);
-    
+
     // External access for main panel
     bool IsAutoCaptureInProgress() const { return bAutoCaptureInProgress; }
     bool IsPathVisualized() const { return bPathVisualized; }
     void UpdatePathNeedsUpdate(bool bNeedsUpdate) { bPathNeedsUpdate = bNeedsUpdate; }
+
+    /**
+     * Runs the full FlashPawn path capture into TargetDirectory.
+     * Writes poses.txt + intrinsics.json + lighting.json, captures every pose,
+     * waits for all async readbacks, then fires OnComplete on the game thread.
+     *
+     * @param TargetDirectory Capture output directory (created if missing).
+     * @param bDatasetChannelsOnly Force the dataset channel set (RGB/Normal/BaseColor/MatProps).
+     * @param OnComplete Fired with true on success, false on cancel/failure.
+     * @return false if a session is already running or prerequisites are missing.
+     */
+    bool StartCaptureSession(
+        const FString& TargetDirectory,
+        bool bDatasetChannelsOnly,
+        FOnCaptureSessionComplete OnComplete);
+
+    /** True when the selected FlashPawn has a path and the dataset cameras are present. */
+    bool CanRunDatasetCapture(FString& OutReason) const;
 
     // UI state access for persistence
     bool IsPathImageCaptureSectionExpanded() const { return bPathImageCaptureSectionExpanded; }
@@ -96,6 +116,7 @@ private:
     void CaptureImageFromCurrentPose();
     void StartAutoCapture();
     void StopAutoCapture();
+    void FinishCaptureSession(bool bSuccess);
     
     // Utility
     void SaveOrbitActorList();
@@ -141,6 +162,9 @@ private:
     bool bAutoCaptureInProgress = false;
     bool bGenerationInProgress = false;
     bool bGameViewChangedForCapture = false;
+    bool bSessionDatasetChannelsOnly = false;
+    bool bDrainingCaptureJobs = false;
+    FOnCaptureSessionComplete SessionCompleteDelegate;
     FTimerHandle AutoCaptureTimerHandle;
     FString SaveDirectory;
     

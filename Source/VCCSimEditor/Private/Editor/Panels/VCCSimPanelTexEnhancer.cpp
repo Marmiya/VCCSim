@@ -23,6 +23,8 @@
 #include "Utils/LightingManager.h"
 #include "Utils/GTMaterialExporter.h"
 #include "Editor/Panels/VCCSimPanelSelection.h"
+#include "Editor/Panels/VCCSimPanelPathImageCapture.h"
+#include "HAL/FileManager.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/Texture.h"
@@ -128,6 +130,12 @@ void FVCCSimPanelTexEnhancer::Cleanup()
 void FVCCSimPanelTexEnhancer::SetSelectionManager(TSharedPtr<FVCCSimPanelSelection> InSelectionManager)
 {
     SelectionManager = InSelectionManager;
+}
+
+void FVCCSimPanelTexEnhancer::SetPathImageCaptureManager(
+    TSharedPtr<FVCCSimPanelPathImageCapture> InPathImageCaptureManager)
+{
+    PathImageCaptureManager = InPathImageCaptureManager;
 }
 
 void FVCCSimPanelTexEnhancer::LoadFromConfigManager()
@@ -796,26 +804,32 @@ void FVCCSimPanelTexEnhancer::TickExpansionVisualization()
 
 FReply FVCCSimPanelTexEnhancer::OnExportGTMaterialsClicked()
 {
+    StartGTMaterialExport();
+    return FReply::Handled();
+}
+
+bool FVCCSimPanelTexEnhancer::StartGTMaterialExport()
+{
     if (bGTExportInProgress)
     {
         FVCCSimUIHelpers::ShowNotification(TEXT("GT material export already in progress."), true);
-        return FReply::Handled();
+        return false;
     }
     if (OutputDirectory.IsEmpty())
     {
         FVCCSimUIHelpers::ShowNotification(TEXT("Output directory is not set."), true);
-        return FReply::Handled();
+        return false;
     }
     if (GTActorListItems.IsEmpty())
     {
         FVCCSimUIHelpers::ShowNotification(TEXT("GT actor list is empty. Select actors in viewport and click '+ Add Selected'."), true);
-        return FReply::Handled();
+        return false;
     }
     UWorld* World = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
     if (!World)
     {
         FVCCSimUIHelpers::ShowNotification(TEXT("No editor world available."), true);
-        return FReply::Handled();
+        return false;
     }
 
     bGTExportInProgress = true;
@@ -894,7 +908,139 @@ FReply FVCCSimPanelTexEnhancer::OnExportGTMaterialsClicked()
         OnComplete
     );
 
+    return true;
+}
+
+// ============================================================================
+// SECTION 3: DATASET CAPTURE
+// ============================================================================
+
+FString FVCCSimPanelTexEnhancer::GetDatasetCapturesRoot() const
+{
+    return FPaths::Combine(OutputDirectory, SceneName, TEXT("captures"));
+}
+
+FString FVCCSimPanelTexEnhancer::MakeNextCaptureDirectory() const
+{
+    const FString Root = GetDatasetCapturesRoot();
+    IFileManager& FileManager = IFileManager::Get();
+    for (int32 Index = 0; Index < 10000; ++Index)
+    {
+        const FString Candidate = Root / FString::Printf(TEXT("capture_%03d"), Index);
+        if (!FileManager.DirectoryExists(*Candidate))
+        {
+            return Candidate;
+        }
+    }
+    return FString();
+}
+
+void FVCCSimPanelTexEnhancer::SetDatasetCaptureStatus(const FString& Status)
+{
+    if (DatasetCaptureStatusTextBlock.IsValid())
+    {
+        DatasetCaptureStatusTextBlock->SetText(FText::FromString(Status));
+    }
+}
+
+FReply FVCCSimPanelTexEnhancer::OnCaptureDatasetClicked()
+{
+    if (bDatasetCaptureInProgress)
+    {
+        return FReply::Handled();
+    }
+    if (OutputDirectory.IsEmpty())
+    {
+        FVCCSimUIHelpers::ShowNotification(TEXT("Output directory is not set."), true);
+        return FReply::Handled();
+    }
+
+    TSharedPtr<FVCCSimPanelPathImageCapture> PathCapture = PathImageCaptureManager.Pin();
+    if (!PathCapture.IsValid())
+    {
+        FVCCSimUIHelpers::ShowNotification(TEXT("PathImageCapture panel is not available."), true);
+        return FReply::Handled();
+    }
+
+    FString Reason;
+    if (!PathCapture->CanRunDatasetCapture(Reason))
+    {
+        FVCCSimUIHelpers::ShowNotification(Reason, true);
+        return FReply::Handled();
+    }
+
+    const FString CaptureDir = MakeNextCaptureDirectory();
+    if (CaptureDir.IsEmpty())
+    {
+        FVCCSimUIHelpers::ShowNotification(TEXT("Could not allocate a capture directory."), true);
+        return FReply::Handled();
+    }
+
+    TWeakPtr<FVCCSimPanelTexEnhancer> WeakSelf = AsShared();
+    const bool bStarted = PathCapture->StartCaptureSession(
+        CaptureDir,
+        true,
+        FOnCaptureSessionComplete::CreateLambda(
+            [WeakSelf, CaptureDir](bool bSuccess)
+            {
+                if (TSharedPtr<FVCCSimPanelTexEnhancer> Pinned = WeakSelf.Pin())
+                {
+                    Pinned->OnDatasetCaptureFinished(bSuccess, CaptureDir);
+                }
+            }));
+
+    if (!bStarted)
+    {
+        FVCCSimUIHelpers::ShowNotification(TEXT("Failed to start dataset capture."), true);
+        return FReply::Handled();
+    }
+
+    bDatasetCaptureInProgress = true;
+    SetDatasetCaptureStatus(FString::Printf(TEXT("Capturing to %s ..."), *CaptureDir));
+    UE_LOG(LogTexEnhancerPanel, Log, TEXT("Dataset capture started: %s"), *CaptureDir);
     return FReply::Handled();
+}
+
+void FVCCSimPanelTexEnhancer::OnDatasetCaptureFinished(bool bSuccess, FString CaptureDirectory)
+{
+    bDatasetCaptureInProgress = false;
+
+    if (!bSuccess)
+    {
+        SetDatasetCaptureStatus(TEXT("Capture cancelled or failed."));
+        FVCCSimUIHelpers::ShowNotification(TEXT("Dataset capture did not complete."), true);
+        return;
+    }
+
+    UE_LOG(LogTexEnhancerPanel, Log, TEXT("Dataset capture complete: %s"), *CaptureDirectory);
+    FVCCSimUIHelpers::ShowNotification(
+        FString::Printf(TEXT("Dataset capture complete: %s"), *CaptureDirectory), false);
+
+    const FString GTMaterialsDir = FPaths::Combine(OutputDirectory, TEXT("gt_materials"));
+    if (IFileManager::Get().DirectoryExists(*GTMaterialsDir))
+    {
+        SetDatasetCaptureStatus(FString::Printf(
+            TEXT("Done: %s | gt_materials already exported, skipped"), *CaptureDirectory));
+        return;
+    }
+
+    if (GTActorListItems.IsEmpty())
+    {
+        SetDatasetCaptureStatus(FString::Printf(
+            TEXT("Done: %s | GT actor list empty, gt_materials skipped"), *CaptureDirectory));
+        return;
+    }
+
+    if (StartGTMaterialExport())
+    {
+        SetDatasetCaptureStatus(FString::Printf(
+            TEXT("Done: %s | gt_materials export started"), *CaptureDirectory));
+    }
+    else
+    {
+        SetDatasetCaptureStatus(FString::Printf(
+            TEXT("Done: %s | gt_materials export could not start"), *CaptureDirectory));
+    }
 }
 
 // ============================================================================

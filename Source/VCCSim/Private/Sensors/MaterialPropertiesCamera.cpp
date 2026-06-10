@@ -73,10 +73,10 @@ void UMaterialPropertiesCameraComponent::SetCaptureComponent() const
 void UMaterialPropertiesCameraComponent::InitializeRenderTargets()
 {
     RenderTarget = NewObject<UTextureRenderTarget2D>(this);
-    RenderTarget->InitCustomFormat(Width, Height, PF_B8G8R8A8, false);
+    RenderTarget->InitCustomFormat(Width, Height, PF_FloatRGBA, true);
     RenderTarget->bForceLinearGamma = true;
     RenderTarget->SRGB = false;
-    RenderTarget->RenderTargetFormat = RTF_RGBA8;
+    RenderTarget->RenderTargetFormat = RTF_RGBA16f;
     RenderTarget->bGPUSharedFlag = true;
     RenderTarget->bAutoGenerateMips = false;
     RenderTarget->UpdateResource();
@@ -111,13 +111,13 @@ void UMaterialPropertiesCameraComponent::ProcessMaterialPropertiesTexture(TFunct
 }
 
 void UMaterialPropertiesCameraComponent::ProcessMaterialPropertiesTextureParam(
-    TFunction<void(const TArray<FColor>&)> OnComplete)
+    TFunction<void(const TArray<FFloat16Color>&)> OnComplete)
 {
     ProcessMaterialPropertiesTextureTemplate(std::move(OnComplete));
 }
 
 void UMaterialPropertiesCameraComponent::AsyncGetMaterialPropertiesImageData(
-    TFunction<void(const TArray<FColor>&)> Callback)
+    TFunction<void(const TArray<FFloat16Color>&)> Callback)
 {
     AsyncTask(ENamedThreads::GameThread,
         [this, Callback = MoveTemp(Callback)]()

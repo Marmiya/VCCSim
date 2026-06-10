@@ -117,6 +117,7 @@ void SVCCSimPanel::Construct(const FArguments& InArgs)
     TexEnhancerManager = MakeShared<FVCCSimPanelTexEnhancer>();
     TexEnhancerManager->Initialize();
     TexEnhancerManager->SetSelectionManager(SelectionManager);
+    TexEnhancerManager->SetPathImageCaptureManager(PathImageCaptureManager);
 
     // Load panel state BEFORE creating UI widgets
     LoadPanelState();

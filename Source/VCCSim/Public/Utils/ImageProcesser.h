@@ -121,6 +121,32 @@ private:
     FString FilePath;
 };
 
+class VCCSIM_API FAsyncMatProps16SaveTask : public FNonAbandonableTask
+{
+public:
+    FAsyncMatProps16SaveTask(
+        const TArray<FFloat16Color>& InPixels,
+        FIntPoint InSize,
+        const FString& InFilePath)
+        : Pixels(InPixels)
+        , Size(InSize)
+        , FilePath(InFilePath)
+    {}
+
+    void DoWork();
+
+    FORCEINLINE TStatId GetStatId() const
+    {
+        RETURN_QUICK_DECLARE_CYCLE_STAT(FAsyncMatProps16SaveTask,
+           STATGROUP_ThreadPoolAsyncTasks);
+    }
+
+private:
+    TArray<FFloat16Color> Pixels;
+    FIntPoint Size;
+    FString FilePath;
+};
+
 class VCCSIM_API FAsyncDepthVisualSaveTask : public FNonAbandonableTask
 {
 public:

@@ -37,7 +37,11 @@ FImageCaptureService::FImageCaptureService(TSharedPtr<FVCCSimPanelSelection> InS
     JobNum = MakeShared<std::atomic<int32>>(0);
 }
 
-void FImageCaptureService::CaptureImageFromCurrentPose(int32 PoseIndex, const FString& InSaveDirectory, bool& bAnyCaptured)
+void FImageCaptureService::CaptureImageFromCurrentPose(
+    int32 PoseIndex,
+    const FString& InSaveDirectory,
+    bool& bAnyCaptured,
+    bool bDatasetChannelsOnly)
 {
     TSharedPtr<FVCCSimPanelSelection> SelectionManagerPin = SelectionManager.Pin();
     if (!SelectionManagerPin.IsValid())
@@ -45,7 +49,7 @@ void FImageCaptureService::CaptureImageFromCurrentPose(int32 PoseIndex, const FS
         UE_LOG(LogImageCaptureService, Warning, TEXT("SelectionManager is not valid."));
         return;
     }
-    
+
     AFlashPawn* SelectedFlashPawn = SelectionManagerPin->GetSelectedFlashPawn().Get();
     if (!SelectedFlashPawn)
     {
@@ -55,29 +59,51 @@ void FImageCaptureService::CaptureImageFromCurrentPose(int32 PoseIndex, const FS
 
     if (SelectedFlashPawn->IsReady())
     {
-        if (SelectionManagerPin->IsUsingRGBCamera() && SelectionManagerPin->HasRGBCamera())
+        if (bDatasetChannelsOnly)
         {
-            SaveRGB(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
+            if (SelectionManagerPin->HasRGBCamera())
+            {
+                SaveRGB(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
+            }
+            if (SelectionManagerPin->HasNormalCamera())
+            {
+                SaveNormal(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
+            }
+            if (SelectionManagerPin->HasBaseColorCamera())
+            {
+                SaveBaseColor(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
+            }
+            if (SelectionManagerPin->HasMaterialPropertiesCamera())
+            {
+                SaveMaterialProperties(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
+            }
         }
-        if (SelectionManagerPin->IsUsingDepthCamera() && SelectionManagerPin->HasDepthCamera())
+        else
         {
-            SaveDepth(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
-        }
-        if (SelectionManagerPin->IsUsingSegmentationCamera() && SelectionManagerPin->HasSegmentationCamera())
-        {
-            SaveSeg(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
-        }
-        if (SelectionManagerPin->IsUsingNormalCamera() && SelectionManagerPin->HasNormalCamera())
-        {
-            SaveNormal(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
-        }
-        if (SelectionManagerPin->IsUsingBaseColorCamera() && SelectionManagerPin->HasBaseColorCamera())
-        {
-            SaveBaseColor(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
-        }
-        if (SelectionManagerPin->IsUsingMaterialPropertiesCamera() && SelectionManagerPin->HasMaterialPropertiesCamera())
-        {
-            SaveMaterialProperties(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
+            if (SelectionManagerPin->IsUsingRGBCamera() && SelectionManagerPin->HasRGBCamera())
+            {
+                SaveRGB(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
+            }
+            if (SelectionManagerPin->IsUsingDepthCamera() && SelectionManagerPin->HasDepthCamera())
+            {
+                SaveDepth(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
+            }
+            if (SelectionManagerPin->IsUsingSegmentationCamera() && SelectionManagerPin->HasSegmentationCamera())
+            {
+                SaveSeg(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
+            }
+            if (SelectionManagerPin->IsUsingNormalCamera() && SelectionManagerPin->HasNormalCamera())
+            {
+                SaveNormal(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
+            }
+            if (SelectionManagerPin->IsUsingBaseColorCamera() && SelectionManagerPin->HasBaseColorCamera())
+            {
+                SaveBaseColor(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
+            }
+            if (SelectionManagerPin->IsUsingMaterialPropertiesCamera() && SelectionManagerPin->HasMaterialPropertiesCamera())
+            {
+                SaveMaterialProperties(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
+            }
         }
 
         if (!bAnyCaptured)
@@ -342,11 +368,9 @@ void FImageCaptureService::SaveMaterialProperties(AFlashPawn* SelectedFlashPawn,
             FIntPoint Size = {Camera->GetImageSize().first, Camera->GetImageSize().second};
 
             Camera->AsyncGetMaterialPropertiesImageData(
-                [Filename, Size, JobNum = this->JobNum](const TArray<FColor>& ImageData)
+                [Filename, Size, JobNum = this->JobNum](const TArray<FFloat16Color>& ImageData)
                 {
-                    TArray<FColor> DataCopy = ImageData;
-                    for (FColor& Pixel : DataCopy) Pixel.A = 255;
-                    (new FAutoDeleteAsyncTask<FAsyncImageSaveTask>(DataCopy, Size, Filename))->StartBackgroundTask();
+                    (new FAutoDeleteAsyncTask<FAsyncMatProps16SaveTask>(ImageData, Size, Filename))->StartBackgroundTask();
                     *JobNum -= 1;
                 });
             bAnyCaptured = true;

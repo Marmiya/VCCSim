@@ -50,6 +50,12 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateTexEnhancerPanel()
         [ FVCCSimUIHelpers::CreateSeparator() ]
 
         +SVerticalBox::Slot().AutoHeight()
+        [ CreateDatasetCaptureSection() ]
+
+        +SVerticalBox::Slot().MaxHeight(1).Padding(FMargin(0, 4, 0, 4))
+        [ FVCCSimUIHelpers::CreateSeparator() ]
+
+        +SVerticalBox::Slot().AutoHeight()
         [ CreateGTExportSection() ]
 
         +SVerticalBox::Slot().MaxHeight(1).Padding(FMargin(0, 4, 0, 4))
@@ -772,6 +778,71 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateGTExportSection()
             })
             .IsEnabled_Lambda([this]() { return !bGTExportInProgress && !OutputDirectory.IsEmpty() && !GTActorListItems.IsEmpty(); })
             .OnClicked_Lambda([this]() { return OnExportGTMaterialsClicked(); })
+        ]
+    );
+}
+
+// ============================================================================
+// SECTION 3: DATASET CAPTURE
+// ============================================================================
+
+TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateDatasetCaptureSection()
+{
+    return FVCCSimUIHelpers::CreateSectionContent(
+        SNew(SVerticalBox)
+
+        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
+        [
+            FVCCSimUIHelpers::CreateSectionHeader(TEXT("Dataset Capture"))
+        ]
+
+        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
+        [
+            FVCCSimUIHelpers::CreatePropertyRow(TEXT("Captures Dir"),
+                SNew(STextBlock)
+                .Text_Lambda([this]()
+                {
+                    return FText::FromString(GetDatasetCapturesRoot());
+                })
+                .ToolTipText(FText::FromString(
+                    TEXT("Each click captures the full FlashPawn path under the current "
+                         "scene lighting into the next capture_NNN directory.")))
+            )
+        ]
+
+        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
+        [
+            SNew(SHorizontalBox)
+            +SHorizontalBox::Slot().FillWidth(1.f)
+            [
+                SNew(SButton)
+                .ButtonStyle(FAppStyle::Get(), "FlatButton.Success")
+                .ContentPadding(FMargin(5, 2))
+                .Text_Lambda([this]()
+                {
+                    return bDatasetCaptureInProgress
+                        ? FText::FromString(TEXT("Capturing..."))
+                        : FText::FromString(TEXT("Capture Dataset (Current Lighting)"));
+                })
+                .ToolTipText(FText::FromString(
+                    TEXT("Writes poses.txt + intrinsics.json + lighting.json and captures "
+                         "RGB / BaseColor / MatProps / Normal for every pose on the FlashPawn "
+                         "path. Apply the desired lighting first; click again after changing "
+                         "lighting to add another capture window. Exports gt_materials once "
+                         "after the first capture.")))
+                .IsEnabled_Lambda([this]()
+                {
+                    return !bDatasetCaptureInProgress && !OutputDirectory.IsEmpty();
+                })
+                .OnClicked_Lambda([this]() { return OnCaptureDatasetClicked(); })
+            ]
+        ]
+
+        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
+        [
+            SAssignNew(DatasetCaptureStatusTextBlock, STextBlock)
+            .Text(FText::FromString(TEXT("Idle")))
+            .AutoWrapText(true)
         ]
     );
 }

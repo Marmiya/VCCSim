@@ -32,6 +32,7 @@
 #include "Utils/GTMaterialExporter.h"
 
 class FVCCSimPanelSelection;
+class FVCCSimPanelPathImageCapture;
 class AStaticMeshActor;
 class UStaticMesh;
 class UTexture2D;
@@ -50,6 +51,7 @@ public:
     TSharedRef<SWidget> CreateTexEnhancerPanel();
 
     void SetSelectionManager(TSharedPtr<FVCCSimPanelSelection> InSelectionManager);
+    void SetPathImageCaptureManager(TSharedPtr<FVCCSimPanelPathImageCapture> InPathImageCaptureManager);
 
     bool IsTexEnhancerSectionExpanded() const { return bSectionExpanded; }
     void SetTexEnhancerSectionExpanded(bool bExpanded) { bSectionExpanded = bExpanded; }
@@ -126,6 +128,7 @@ private:
     bool bPipelineInProgress    = false;
     bool bEvalInProgress        = false;
     bool bGTExportInProgress    = false;
+    bool bDatasetCaptureInProgress = false;
     bool bDayCycleActive        = false;
 
     int32 GTTextureResolution = 2048;
@@ -163,6 +166,7 @@ private:
     FProcHandle  PipelineProcHandle;
 
     TWeakPtr<FVCCSimPanelSelection> SelectionManager;
+    TWeakPtr<FVCCSimPanelPathImageCapture> PathImageCaptureManager;
     TSharedPtr<FLightingManager>    LightingManager;
     TSharedPtr<FGTMaterialExporter> GTMaterialExporter;
 
@@ -189,6 +193,19 @@ private:
     FReply OnToggleDayCycleClicked();
 
     // ============================================================================
+    // SECTION 3: DATASET CAPTURE
+    // ============================================================================
+
+    TSharedRef<SWidget> CreateDatasetCaptureSection();
+    FReply OnCaptureDatasetClicked();
+    void OnDatasetCaptureFinished(bool bSuccess, FString CaptureDirectory);
+    FString GetDatasetCapturesRoot() const;
+    FString MakeNextCaptureDirectory() const;
+    void SetDatasetCaptureStatus(const FString& Status);
+
+    TSharedPtr<STextBlock> DatasetCaptureStatusTextBlock;
+
+    // ============================================================================
     // SECTION 4: GT MATERIAL EXPORT
     // ============================================================================
 
@@ -196,6 +213,7 @@ private:
     FReply OnAddSelectedActorsClicked();
     FReply OnRemoveFromGTListClicked();
     FReply OnExportGTMaterialsClicked();
+    bool StartGTMaterialExport();
 
     struct FSeedShape
     {

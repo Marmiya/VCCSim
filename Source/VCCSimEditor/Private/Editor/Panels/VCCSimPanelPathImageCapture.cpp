@@ -865,7 +865,7 @@ void FVCCSimPanelPathImageCapture::CaptureImageFromCurrentPose()
         UE_LOG(LogPathImageCapture, Error, TEXT("ImageCaptureService is not valid."));
         return;
     }
-    
+
     // Create a directory for saving images if it doesn't exist yet
     if (SaveDirectory.IsEmpty())
     {
@@ -879,26 +879,87 @@ void FVCCSimPanelPathImageCapture::CaptureImageFromCurrentPose()
     {
         PoseIndex = SelectionManager.Pin()->GetSelectedFlashPawn()->GetCurrentIndex();
     }
-    
-    ImageCaptureService->CaptureImageFromCurrentPose(PoseIndex, SaveDirectory, bAnyCaptured);
+
+    ImageCaptureService->CaptureImageFromCurrentPose(
+        PoseIndex, SaveDirectory, bAnyCaptured, bSessionDatasetChannelsOnly);
 }
 
-void FVCCSimPanelPathImageCapture::StartAutoCapture()
+bool FVCCSimPanelPathImageCapture::CanRunDatasetCapture(FString& OutReason) const
 {
+    if (bAutoCaptureInProgress)
+    {
+        OutReason = TEXT("A capture is already in progress.");
+        return false;
+    }
+
+    TSharedPtr<FVCCSimPanelSelection> Sel = SelectionManager.Pin();
+    if (!Sel.IsValid() || !Sel->GetSelectedFlashPawn().IsValid())
+    {
+        OutReason = TEXT("No FlashPawn selected.");
+        return false;
+    }
+    if (Sel->GetSelectedFlashPawn()->GetPoseCount() <= 0)
+    {
+        OutReason = TEXT("FlashPawn has no path. Generate or load poses first.");
+        return false;
+    }
+    if (!Sel->HasRGBCamera())
+    {
+        OutReason = TEXT("FlashPawn has no RGB camera component.");
+        return false;
+    }
+    if (!Sel->HasNormalCamera())
+    {
+        OutReason = TEXT("FlashPawn has no Normal camera component.");
+        return false;
+    }
+    if (!Sel->HasBaseColorCamera())
+    {
+        OutReason = TEXT("FlashPawn has no BaseColor camera component.");
+        return false;
+    }
+    if (!Sel->HasMaterialPropertiesCamera())
+    {
+        OutReason = TEXT("FlashPawn has no MaterialProperties camera component.");
+        return false;
+    }
+    return true;
+}
+
+bool FVCCSimPanelPathImageCapture::StartCaptureSession(
+    const FString& TargetDirectory,
+    bool bDatasetChannelsOnly,
+    FOnCaptureSessionComplete OnComplete)
+{
+    if (bAutoCaptureInProgress)
+    {
+        UE_LOG(LogPathImageCapture, Warning, TEXT("Capture session already in progress"));
+        return false;
+    }
+
     TWeakObjectPtr<AFlashPawn> SelectedFlashPawn;
     if (SelectionManager.IsValid())
     {
         SelectedFlashPawn = SelectionManager.Pin()->GetSelectedFlashPawn();
     }
-    
+
     if (!SelectedFlashPawn.IsValid())
     {
         UE_LOG(LogPathImageCapture, Warning, TEXT("No FlashPawn selected"));
-        return;
+        return false;
     }
-    
-    // Create a directory for saving images
-    SaveDirectory = GetVCCSimOutputRoot() / TEXT("VCCSimCaptures") / GetTimestampedFilename();
+    if (SelectedFlashPawn->GetPoseCount() <= 0)
+    {
+        UE_LOG(LogPathImageCapture, Warning, TEXT("FlashPawn has no path to capture"));
+        return false;
+    }
+    if (!ImageCaptureService.IsValid())
+    {
+        UE_LOG(LogPathImageCapture, Error, TEXT("ImageCaptureService is not valid."));
+        return false;
+    }
+
+    SaveDirectory = TargetDirectory;
     IFileManager::Get().MakeDirectory(*SaveDirectory, true);
 
     TArray<FVector> Positions;
@@ -911,11 +972,14 @@ void FVCCSimPanelPathImageCapture::StartAutoCapture()
         GEditor ? GEditor->GetEditorWorldContext().World() : nullptr,
         SaveDirectory);
 
+    bSessionDatasetChannelsOnly = bDatasetChannelsOnly;
+    SessionCompleteDelegate = MoveTemp(OnComplete);
+    bDrainingCaptureJobs = false;
     bGameViewChangedForCapture = EnsureGameView();
     bAutoCaptureInProgress = true;
 
     SelectedFlashPawn->MoveTo(0);
-    
+
     // Set up a timer to check if the FlashPawn is ready for capture
     GEditor->GetTimerManager()->SetTimer(
         AutoCaptureTimerHandle,
@@ -926,41 +990,34 @@ void FVCCSimPanelPathImageCapture::StartAutoCapture()
             {
                 SelectedFlashPawn = SelectionManager.Pin()->GetSelectedFlashPawn();
             }
-            
+
             if (!bAutoCaptureInProgress || !SelectedFlashPawn.IsValid())
             {
-                GEditor->GetTimerManager()->ClearTimer(AutoCaptureTimerHandle);
-                bAutoCaptureInProgress = false;
-                RestoreGameView(bGameViewChangedForCapture);
-                bGameViewChangedForCapture = false;
-                if (AutoCaptureButton.IsValid())
+                FinishCaptureSession(false);
+                return;
+            }
+
+            if (bDrainingCaptureJobs)
+            {
+                if (ImageCaptureService->GetPendingJobCount() == 0)
                 {
-                    AutoCaptureButton->SetButtonStyle(&FAppStyle::Get().
-                        GetWidgetStyle<FButtonStyle>("FlatButton.Primary"));
+                    FinishCaptureSession(true);
                 }
                 return;
             }
-            
+
             // Check if the FlashPawn is ready to capture
             if (SelectedFlashPawn->IsReady())
             {
                 CaptureImageFromCurrentPose();
+
+                const bool bWasLastPose =
+                    SelectedFlashPawn->GetCurrentIndex() == SelectedFlashPawn->GetPoseCount() - 1;
                 SelectedFlashPawn->MoveToNext();
-                
-                TArray<FVector> PathPos; TArray<FRotator> PathRot;
-                SelectedFlashPawn->GetCurrentPath(PathPos, PathRot);
-                if (SelectedFlashPawn->GetCurrentIndex() == PathPos.Num() - 1)
+
+                if (bWasLastPose)
                 {
-                    SaveDirectory.Empty();
-                    bAutoCaptureInProgress = false;
-                    GEditor->GetTimerManager()->ClearTimer(AutoCaptureTimerHandle);
-                    RestoreGameView(bGameViewChangedForCapture);
-                    bGameViewChangedForCapture = false;
-                    if (AutoCaptureButton.IsValid())
-                    {
-                        AutoCaptureButton->SetButtonStyle(&FAppStyle::Get().
-                            GetWidgetStyle<FButtonStyle>("FlatButton.Primary"));
-                    }
+                    bDrainingCaptureJobs = true;
                 }
             }
             else
@@ -971,18 +1028,46 @@ void FVCCSimPanelPathImageCapture::StartAutoCapture()
         0.2f,
         true
     );
+
+    return true;
+}
+
+void FVCCSimPanelPathImageCapture::FinishCaptureSession(bool bSuccess)
+{
+    if (GEditor)
+    {
+        GEditor->GetTimerManager()->ClearTimer(AutoCaptureTimerHandle);
+    }
+    bAutoCaptureInProgress = false;
+    bDrainingCaptureJobs = false;
+    bSessionDatasetChannelsOnly = false;
+    SaveDirectory.Empty();
+    RestoreGameView(bGameViewChangedForCapture);
+    bGameViewChangedForCapture = false;
+
+    if (AutoCaptureButton.IsValid())
+    {
+        AutoCaptureButton->SetButtonStyle(&FAppStyle::Get().
+            GetWidgetStyle<FButtonStyle>("FlatButton.Primary"));
+    }
+
+    FOnCaptureSessionComplete Delegate = MoveTemp(SessionCompleteDelegate);
+    SessionCompleteDelegate.Unbind();
+    Delegate.ExecuteIfBound(bSuccess);
+}
+
+void FVCCSimPanelPathImageCapture::StartAutoCapture()
+{
+    const FString TargetDirectory =
+        GetVCCSimOutputRoot() / TEXT("VCCSimCaptures") / GetTimestampedFilename();
+    StartCaptureSession(TargetDirectory, false, FOnCaptureSessionComplete());
 }
 
 void FVCCSimPanelPathImageCapture::StopAutoCapture()
 {
     if (bAutoCaptureInProgress)
     {
-        bAutoCaptureInProgress = false;
-        if (GEditor)
-            GEditor->GetTimerManager()->ClearTimer(AutoCaptureTimerHandle);
-        RestoreGameView(bGameViewChangedForCapture);
-        bGameViewChangedForCapture = false;
-        SaveDirectory.Empty();
+        FinishCaptureSession(false);
         UE_LOG(LogPathImageCapture, Log, TEXT("Auto-capture stopped by user"));
     }
 }

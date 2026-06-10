@@ -18,6 +18,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include <atomic>
 
 class AFlashPawn;
 class FVCCSimPanelSelection;
@@ -36,8 +37,17 @@ public:
      * @param PoseIndex The index of the current pose, used for filenames.
      * @param InSaveDirectory The directory where images will be saved.
      * @param bAnyCaptured Output parameter, set to true if at least one image was captured.
+     * @param bDatasetChannelsOnly When true, capture the fixed dataset channel set
+     *        (RGB, Normal, BaseColor, MaterialProperties) regardless of panel camera toggles.
      */
-    void CaptureImageFromCurrentPose(int32 PoseIndex, const FString& InSaveDirectory, bool& bAnyCaptured);
+    void CaptureImageFromCurrentPose(
+        int32 PoseIndex,
+        const FString& InSaveDirectory,
+        bool& bAnyCaptured,
+        bool bDatasetChannelsOnly = false);
+
+    /** Number of capture readbacks still in flight (async save tasks not yet dispatched). */
+    int32 GetPendingJobCount() const { return JobNum.IsValid() ? JobNum->load() : 0; }
 
 private:
     /** Reference to the selection manager to get the selected pawn and camera states. */

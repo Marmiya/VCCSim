@@ -55,22 +55,22 @@ public:
     UFUNCTION(BlueprintCallable, Category = "MaterialPropertiesCamera")
     void CaptureMaterialPropertiesScene();
 
-    void AsyncGetMaterialPropertiesImageData(TFunction<void(const TArray<FColor>&)> Callback);
+    void AsyncGetMaterialPropertiesImageData(TFunction<void(const TArray<FFloat16Color>&)> Callback);
 
     virtual UTextureRenderTarget2D* GetRenderTarget() const override { return RenderTarget; }
     virtual ESensorType GetSensorType() const override { return ESensorType::MaterialPropertiesCamera; }
 
-    const TArray<FColor>& GetCombinedData() const { return MaterialPropertiesData; }
+    const TArray<FFloat16Color>& GetCombinedData() const { return MaterialPropertiesData; }
 
 protected:
     virtual void InitializeRenderTargets() override;
     virtual void SetCaptureComponent() const override;
 
     void ProcessMaterialPropertiesTexture(TFunction<void()> OnComplete);
-    void ProcessMaterialPropertiesTextureParam(TFunction<void(const TArray<FColor>&)> OnComplete);
+    void ProcessMaterialPropertiesTextureParam(TFunction<void(const TArray<FFloat16Color>&)> OnComplete);
 
 private:
-    TArray<FColor> MaterialPropertiesData;
+    TArray<FFloat16Color> MaterialPropertiesData;
 
     template<typename CallbackType>
     void ProcessMaterialPropertiesTextureTemplate(CallbackType&& Callback);
@@ -90,45 +90,35 @@ void UMaterialPropertiesCameraComponent::ProcessMaterialPropertiesTextureTemplat
         MaterialPropertiesData.SetNumUninitialized(Width * Height);
     }
 
+    struct FReadSurfaceContext
+    {
+        TArray<FFloat16Color>* OutData;
+        FIntRect Rect;
+    } Context { &MaterialPropertiesData, FIntRect(0, 0, Width, Height) };
+
     auto SharedCallback = MakeShared<std::decay_t<CallbackType>>(std::forward<CallbackType>(Callback));
 
     UTextureRenderTarget2D* RT = RenderTarget;
 
     ENQUEUE_RENDER_COMMAND(ReadMaterialPropertiesSurfaceCommand)(
-        [RT, DataPtr = &MaterialPropertiesData, CaptureWidth = Width, CaptureHeight = Height,
-         SharedCallback](FRHICommandListImmediate& RHICmdList)
+        [RT, Context, SharedCallback](FRHICommandListImmediate& RHICmdList)
         {
             if (!RT) return;
 
             FTextureRenderTargetResource* RTRes = RT->GetRenderTargetResource();
             if (!RTRes) return;
 
-            FRHITexture* TextureRHI = RTRes->GetRenderTargetTexture();
-            if (!TextureRHI) return;
-
-            FRHIGPUTextureReadback Readback(TEXT("MaterialPropertiesCameraReadback"));
-            Readback.EnqueueCopy(RHICmdList, TextureRHI);
-            RHICmdList.BlockUntilGPUIdle();
-
-            int32 RowPitchInPixels;
-            void* MappedData = Readback.Lock(RowPitchInPixels);
-            if (MappedData)
-            {
-                const int32 SrcRowBytes = RowPitchInPixels * sizeof(FColor);
-                const int32 DstRowBytes = CaptureWidth * sizeof(FColor);
-                const uint8* Src = static_cast<const uint8*>(MappedData);
-                uint8* Dst = reinterpret_cast<uint8*>(DataPtr->GetData());
-                for (int32 Row = 0; Row < CaptureHeight; ++Row)
-                {
-                    FMemory::Memcpy(Dst + Row * DstRowBytes, Src + Row * SrcRowBytes, DstRowBytes);
-                }
-                Readback.Unlock();
-            }
+            RHICmdList.ReadSurfaceFloatData(
+                RTRes->GetRenderTargetTexture(),
+                Context.Rect,
+                *Context.OutData,
+                FReadSurfaceDataFlags()
+            );
 
             if constexpr (std::is_invocable_v<std::decay_t<CallbackType>>)
             { (*SharedCallback)(); }
-            else if constexpr (std::is_invocable_v<std::decay_t<CallbackType>, const TArray<FColor>&>)
-            { (*SharedCallback)(*DataPtr); }
+            else if constexpr (std::is_invocable_v<std::decay_t<CallbackType>, const TArray<FFloat16Color>&>)
+            { (*SharedCallback)(*Context.OutData); }
         }
     );
 }
