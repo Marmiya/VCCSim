@@ -80,8 +80,6 @@ private:
     TSharedPtr<STextBlock> LightingStatusTextBlock;
     TSharedPtr<STextBlock> EvalResultsTextBlock;
 
-    TSharedPtr<SListView<TSharedPtr<FString>>> GTActorListView;
-    TArray<TSharedPtr<FString>> GTActorListItems;
     TSharedPtr<SNumericEntryBox<int32>> GTTexResSpinBox;
     TOptional<int32> GTTexResValue;
 
@@ -210,8 +208,6 @@ private:
     // ============================================================================
 
     TSharedRef<SWidget> CreateGTExportSection();
-    FReply OnAddSelectedActorsClicked();
-    FReply OnRemoveFromGTListClicked();
     FReply OnExportGTMaterialsClicked();
     bool StartGTMaterialExport();
 

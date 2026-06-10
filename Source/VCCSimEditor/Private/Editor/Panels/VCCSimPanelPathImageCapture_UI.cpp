@@ -21,9 +21,6 @@
 #include "Pawns/FlashPawn.h"
 #include "Styling/AppStyle.h"
 #include "Styling/CoreStyle.h"
-#include "Widgets/Layout/SBorder.h"
-#include "Widgets/Layout/SBox.h"
-#include "Widgets/Views/STableRow.h"
 
 // ============================================================================
 // UI CONSTRUCTION
@@ -64,101 +61,7 @@ TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreatePathConfigSection()
 {
     return SNew(SVerticalBox)
 
-    // Target actor list
-    +SVerticalBox::Slot()
-    .AutoHeight()
-    .Padding(FMargin(0, 0, 0, 2))
-    [
-        SNew(SHorizontalBox)
-        +SHorizontalBox::Slot().FillWidth(1.f)
-        [
-            SNew(SButton)
-            .ButtonStyle(FAppStyle::Get(), "FlatButton.Success")
-            .ContentPadding(FMargin(5, 2))
-            .Text(FText::FromString(TEXT("+ Add Selected Actors")))
-            .ToolTipText(FText::FromString(TEXT("Add selected viewport actors to the orbit target list")))
-            .OnClicked_Lambda([this]() { return OnAddOrbitActorsClicked(); })
-        ]
-        +SHorizontalBox::Slot().AutoWidth().Padding(FMargin(4, 0, 0, 0))
-        [
-            SNew(SButton)
-            .ButtonStyle(FAppStyle::Get(), "FlatButton.Danger")
-            .ContentPadding(FMargin(5, 2))
-            .Text(FText::FromString(TEXT("Clear All")))
-            .OnClicked_Lambda([this]() -> FReply
-            {
-                OrbitActorListItems.Empty();
-                if (OrbitActorListView.IsValid())
-                    OrbitActorListView->RequestListRefresh();
-                SaveOrbitActorList();
-                return FReply::Handled();
-            })
-        ]
-    ]
-
-    +SVerticalBox::Slot()
-    .AutoHeight()
-    .Padding(FMargin(0, 0, 0, 4))
-    [
-        SNew(SBox)
-        .HeightOverride(80.f)
-        [
-            SNew(SBorder)
-            .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
-            .BorderBackgroundColor(FColor(10, 10, 10, 255))
-            .Padding(2)
-            [
-                SAssignNew(OrbitActorListView, SListView<TSharedPtr<FString>>)
-                .ListItemsSource(&OrbitActorListItems)
-                .SelectionMode(ESelectionMode::None)
-                .OnGenerateRow_Lambda([this](TSharedPtr<FString> Item,
-                    const TSharedRef<STableViewBase>& Owner) -> TSharedRef<ITableRow>
-                {
-                    return SNew(STableRow<TSharedPtr<FString>>, Owner)
-                    [
-                        SNew(SHorizontalBox)
-                        +SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center).Padding(FMargin(2, 0))
-                        [
-                            SNew(STextBlock)
-                            .Text(FText::FromString(*Item))
-                            .ColorAndOpacity(FLinearColor(0.8f, 0.9f, 0.8f))
-                            .Font(FCoreStyle::GetDefaultFontStyle("Mono", 8))
-                        ]
-                        +SHorizontalBox::Slot().AutoWidth()
-                        [
-                            SNew(SButton)
-                            .ButtonStyle(FAppStyle::Get(), "FlatButton.Danger")
-                            .ContentPadding(FMargin(4, 1))
-                            .Text(FText::FromString(TEXT("×")))
-                            .OnClicked_Lambda([this, Item]() -> FReply
-                            {
-                                if (Item.IsValid())
-                                {
-                                    const FString S = *Item;
-                                    OrbitActorListItems.RemoveAll([&S](const TSharedPtr<FString>& P)
-                                    {
-                                        return P.IsValid() && *P == S;
-                                    });
-                                    if (OrbitActorListView.IsValid())
-                                        OrbitActorListView->RequestListRefresh();
-                                    SaveOrbitActorList();
-                                }
-                                return FReply::Handled();
-                            })
-                        ]
-                    ];
-                })
-            ]
-        ]
-    ]
-
-    +SVerticalBox::Slot()
-    .MaxHeight(1)
-    [
-        FVCCSimUIHelpers::CreateSeparator()
-    ]
-
-    // Orbit parameters
+    // Orbit parameters (targets come from the shared list in the Object Selection panel)
     +SVerticalBox::Slot()
     .AutoHeight()
     .Padding(FMargin(0, 4, 0, 4))
@@ -328,11 +231,12 @@ TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreatePoseActionButtons()
         .ContentPadding(FMargin(5, 2))
         .Text(FText::FromString("Generate Poses"))
         .HAlign(HAlign_Center)
+        .ToolTipText(FText::FromString(TEXT("Orbit targets come from the Target Actors list in the Object Selection panel")))
         .OnClicked_Lambda([this]() { return OnGeneratePosesClicked(); })
         .IsEnabled_Lambda([this]() {
             return SelectionManager.IsValid() &&
                 SelectionManager.Pin()->GetSelectedFlashPawn().IsValid() &&
-                !OrbitActorListItems.IsEmpty();
+                SelectionManager.Pin()->HasEnabledTargetActors();
         })
     ]
     +SHorizontalBox::Slot()

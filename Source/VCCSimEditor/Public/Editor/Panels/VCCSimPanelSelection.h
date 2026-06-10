@@ -20,6 +20,7 @@
 #include "CoreMinimal.h"
 #include "Widgets/SCompoundWidget.h"
 #include "Widgets/SWidget.h"
+#include "Widgets/Views/SListView.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
 
@@ -30,6 +31,13 @@ class USegCameraComponent;
 class UNormalCameraComponent;
 class UBaseColorCameraComponent;
 class UMaterialPropertiesCameraComponent;
+
+/** One entry of the shared target actor list; disabled entries stay in the list but are skipped by tasks. */
+struct FVCCSimTargetActorItem
+{
+    FString Label;
+    bool bEnabled = true;
+};
 
 /**
  * Selection panel functionality manager
@@ -66,6 +74,19 @@ public:
 
     /** Auto-select first available LookAtPath in the scene */
     void AutoSelectLookAtPath();
+
+    // ============================================================================
+    // SHARED TARGET ACTOR LIST
+    // ============================================================================
+
+    /** Labels of list entries whose checkbox is enabled (consumed by path generation and GT export). */
+    TArray<FString> GetEnabledTargetActorLabels() const;
+
+    /** True if at least one list entry is enabled. */
+    bool HasEnabledTargetActors() const;
+
+    /** Reload the target actor list from the centralized config manager. */
+    void LoadFromConfigManager();
 
     // ============================================================================
     // GETTERS
@@ -124,7 +145,10 @@ private:
 
     /** Create LookAtPath selection panel */
     TSharedRef<SWidget> CreateLookAtSelectPanel();
-    
+
+    /** Create the shared target actor list panel */
+    TSharedRef<SWidget> CreateTargetActorListPanel();
+
     /** Create camera status row showing available cameras */
     TSharedRef<SWidget> CreateCameraStatusRow();
     
@@ -147,6 +171,10 @@ private:
     /** Handle LookAtPath selection toggle */
     void OnSelectLookAtToggleChanged(ECheckBoxState NewState);
     
+    /** Target actor list handlers */
+    FReply OnAddTargetActorsClicked();
+    void SaveTargetActorsToConfig() const;
+
     /** Handle camera checkbox changes */
     void OnRGBCameraCheckboxChanged(ECheckBoxState NewState);
     void OnDepthCameraCheckboxChanged(ECheckBoxState NewState);
@@ -178,6 +206,10 @@ private:
     // LookAtPath Selection UI
     TSharedPtr<STextBlock> SelectedLookAtText;
     TSharedPtr<SCheckBox> SelectLookAtToggle;
+
+    // Shared target actor list UI
+    TSharedPtr<SListView<TSharedPtr<FVCCSimTargetActorItem>>> TargetActorListView;
+    TArray<TSharedPtr<FVCCSimTargetActorItem>> TargetActorItems;
     
     // ============================================================================
     // SELECTION STATE

@@ -18,9 +18,11 @@
 DEFINE_LOG_CATEGORY_STATIC(LogSelection, Log, All);
 
 #include "Editor/Panels/VCCSimPanelSelection.h"
+#include "Utils/VCCSimConfigManager.h"
 #include "Engine/World.h"
 #include "Engine/Engine.h"
 #include "EngineUtils.h"
+#include "Selection.h"
 #include "Pawns/FlashPawn.h"
 #include "Pawns/SimLookAtPath.h"
 #include "Sensors/SensorBase.h"
@@ -53,6 +55,7 @@ void FVCCSimPanelSelection::Cleanup()
     SelectFlashPawnToggle.Reset();
     SelectedLookAtText.Reset();
     SelectLookAtToggle.Reset();
+    TargetActorListView.Reset();
 }
 
 void FVCCSimPanelSelection::HandleActorSelection(AActor* Actor)
@@ -186,6 +189,101 @@ void FVCCSimPanelSelection::AutoSelectLookAtPath()
         SelectedLookAtText->SetText(FText::FromString("None selected"));
     }
     UE_LOG(LogSelection, Log, TEXT("No VCCSimLookAtPath found in the scene for auto-selection"));
+}
+
+TArray<FString> FVCCSimPanelSelection::GetEnabledTargetActorLabels() const
+{
+    TArray<FString> Labels;
+    for (const TSharedPtr<FVCCSimTargetActorItem>& Item : TargetActorItems)
+    {
+        if (Item.IsValid() && Item->bEnabled)
+        {
+            Labels.Add(Item->Label);
+        }
+    }
+    return Labels;
+}
+
+bool FVCCSimPanelSelection::HasEnabledTargetActors() const
+{
+    for (const TSharedPtr<FVCCSimTargetActorItem>& Item : TargetActorItems)
+    {
+        if (Item.IsValid() && Item->bEnabled)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+void FVCCSimPanelSelection::LoadFromConfigManager()
+{
+    const auto& Config = FVCCSimConfigManager::Get().GetTargetActorsConfig();
+
+    TargetActorItems.Empty();
+    for (int32 i = 0; i < Config.Labels.Num(); ++i)
+    {
+        TSharedPtr<FVCCSimTargetActorItem> Item = MakeShared<FVCCSimTargetActorItem>();
+        Item->Label = Config.Labels[i];
+        Item->bEnabled = Config.EnabledFlags.IsValidIndex(i) ? Config.EnabledFlags[i] : true;
+        TargetActorItems.Add(Item);
+    }
+
+    if (TargetActorListView.IsValid())
+    {
+        TargetActorListView->RequestListRefresh();
+    }
+}
+
+void FVCCSimPanelSelection::SaveTargetActorsToConfig() const
+{
+    FVCCSimConfigManager::FTargetActorsConfig Config;
+    for (const TSharedPtr<FVCCSimTargetActorItem>& Item : TargetActorItems)
+    {
+        if (!Item.IsValid()) continue;
+        Config.Labels.Add(Item->Label);
+        Config.EnabledFlags.Add(Item->bEnabled);
+    }
+    FVCCSimConfigManager::Get().SetTargetActorsConfig(Config);
+}
+
+FReply FVCCSimPanelSelection::OnAddTargetActorsClicked()
+{
+    USelection* Sel = GEditor ? GEditor->GetSelectedActors() : nullptr;
+    if (!Sel) return FReply::Handled();
+
+    bool bAdded = false;
+    for (int32 i = 0; i < Sel->Num(); ++i)
+    {
+        AActor* Actor = Cast<AActor>(Sel->GetSelectedObject(i));
+        if (!Actor) continue;
+
+        const FString Label = Actor->GetActorLabel();
+        const bool bDuplicate = TargetActorItems.ContainsByPredicate(
+            [&Label](const TSharedPtr<FVCCSimTargetActorItem>& Item)
+            {
+                return Item.IsValid() && Item->Label == Label;
+            });
+
+        if (!bDuplicate)
+        {
+            TSharedPtr<FVCCSimTargetActorItem> Item = MakeShared<FVCCSimTargetActorItem>();
+            Item->Label = Label;
+            TargetActorItems.Add(Item);
+            bAdded = true;
+        }
+    }
+
+    if (bAdded)
+    {
+        if (TargetActorListView.IsValid())
+        {
+            TargetActorListView->RequestListRefresh();
+        }
+        SaveTargetActorsToConfig();
+    }
+
+    return FReply::Handled();
 }
 
 void FVCCSimPanelSelection::OnSelectFlashPawnToggleChanged(ECheckBoxState NewState)

@@ -63,16 +63,16 @@ public:
         FString SceneName = TEXT("Scene_A");
         FString TexEnhancerScriptPath;
         FString EstimatedMaterialsDir;
-        TArray<FString> GTActorLabels;
         bool    bIncludeNearbyMeshes = false;
         bool    bMergeNearbyMeshes   = false;
         float   NearbyRadius         = 500.f;
     };
 
-    // PathImageCapture configuration
-    struct FPathImageCaptureConfig
+    // Shared target actor list (path generation + GT material export)
+    struct FTargetActorsConfig
     {
-        TArray<FString> OrbitActorLabels;
+        TArray<FString> Labels;
+        TArray<bool>    EnabledFlags;
     };
 
     // Getters and setters for panel states
@@ -83,9 +83,9 @@ public:
     const FTexEnhancerConfig& GetTexEnhancerConfig() const { return TexEnhancerConfig; }
     void SetTexEnhancerConfig(const FTexEnhancerConfig& InConfig) { TexEnhancerConfig = InConfig; }
 
-    // Getters and setters for PathImageCapture config
-    const FPathImageCaptureConfig& GetPathImageCaptureConfig() const { return PathImageCaptureConfig; }
-    void SetPathImageCaptureConfig(const FPathImageCaptureConfig& InConfig) { PathImageCaptureConfig = InConfig; }
+    // Getters and setters for the shared target actor list
+    const FTargetActorsConfig& GetTargetActorsConfig() const { return TargetActorsConfig; }
+    void SetTargetActorsConfig(const FTargetActorsConfig& InConfig) { TargetActorsConfig = InConfig; }
 
     // Individual state setters
     void SetFlashPawnSectionExpanded(bool bExpanded) { PanelStates.bFlashPawnSectionExpanded = bExpanded; }
@@ -113,7 +113,7 @@ private:
     // Configuration data
     FPanelStates PanelStates;
     FTexEnhancerConfig TexEnhancerConfig;
-    FPathImageCaptureConfig PathImageCaptureConfig;
+    FTargetActorsConfig TargetActorsConfig;
 
     // ============================================================================
     // INTERNAL JSON OPERATIONS

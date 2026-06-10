@@ -16,6 +16,7 @@
 */
 
 #include "Utils/PathGenerator.h"
+#include "Algo/Sort.h"
 #include "Async/Async.h"
 #include "Components/PrimitiveComponent.h"
 #include "Engine/World.h"
@@ -54,8 +55,10 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
 
     // Phase 1 (game thread): For each ring and each direction, cast a ray to get an orbit point (hit surface + Margin).
     TArray<TArray<FVector>> AllRingOrbitPoints;   // Camera orbit positions, in angular order, 360 per ring.
+    TArray<TArray<FVector>> AllRingSurfacePoints; // Radial surface points at ring height, same ordering.
     TArray<float> AllRingZs;
     AllRingOrbitPoints.Reserve(NumRings);
+    AllRingSurfacePoints.Reserve(NumRings);
     AllRingZs.Reserve(NumRings);
 
     // Build a fast lookup set of Actors; if the list is empty, fall back to bounding box filtering.
@@ -73,8 +76,8 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
         const float Z = BoxMinZ + T * BuildingH;
         const FVector CenterAtZ(BoxCenter.X, BoxCenter.Y, Z);
 
-        TArray<FVector> OrbitPoints;
-        OrbitPoints.Reserve(NumProbes);
+        TArray<float> SurfaceDistances;
+        SurfaceDistances.Reserve(NumProbes);
 
         for (int32 a = 0; a < NumProbes; ++a)
         {
@@ -87,7 +90,7 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
             FVector HitPoint = FVector::ZeroVector;
 
             // Main method: World-level raycast, penetrating non-target Actors until a target Actor is hit.
-            // LineTraceMultiByChannel stops at the first blocking hit, so we iterate, ignoring non-target Actors, 
+            // LineTraceMultiByChannel stops at the first blocking hit, so we iterate, ignoring non-target Actors,
             // and tracing multiple times until a target is hit or there are no more hits.
             {
                 FCollisionQueryParams ProbeParams = QueryParams;
@@ -142,50 +145,86 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
 
             if (bFound)
             {
-                // Orbit point = hit point moved outwards by Margin in the same direction.
-                OrbitPoints.Add(FVector(
-                    CenterAtZ.X + Dir.X * (HitDistFromCenter + Params.Margin),
-                    CenterAtZ.Y + Dir.Y * (HitDistFromCenter + Params.Margin),
-                    Z));
+                SurfaceDistances.Add(HitDistFromCenter);
             }
             else
             {
                 // Bounding box fallback based on angle: find the distance to the intersection of the ray and the AABB boundary.
                 const float tX = FMath::Abs(Dir.X) > KINDA_SMALL_NUMBER ? BoxExtent.X / FMath::Abs(Dir.X) : FLT_MAX;
                 const float tY = FMath::Abs(Dir.Y) > KINDA_SMALL_NUMBER ? BoxExtent.Y / FMath::Abs(Dir.Y) : FLT_MAX;
-                const float FallbackDist = FMath::Min(tX, tY);
-                OrbitPoints.Add(FVector(
-                    CenterAtZ.X + Dir.X * (FallbackDist + Params.Margin),
-                    CenterAtZ.Y + Dir.Y * (FallbackDist + Params.Margin),
-                    Z));
+                SurfaceDistances.Add(FMath::Min(tX, tY));
             }
+        }
+
+        // Circular median filter (window 5) over the radial distances: kills single-probe
+        // outliers from railings/protrusions before the orbit polygon is built.
+        TArray<float> FilteredDistances;
+        FilteredDistances.Reserve(NumProbes);
+        for (int32 a = 0; a < NumProbes; ++a)
+        {
+            float Window[5];
+            for (int32 k = -2; k <= 2; ++k)
+            {
+                Window[k + 2] = SurfaceDistances[(a + k + NumProbes) % NumProbes];
+            }
+            Algo::Sort(MakeArrayView(Window, 5));
+            FilteredDistances.Add(Window[2]);
+        }
+
+        TArray<FVector> OrbitPoints;
+        TArray<FVector> SurfacePoints;
+        OrbitPoints.Reserve(NumProbes);
+        SurfacePoints.Reserve(NumProbes);
+        for (int32 a = 0; a < NumProbes; ++a)
+        {
+            const float AngleRad = (2.f * PI * a) / NumProbes;
+            const FVector Dir(FMath::Cos(AngleRad), FMath::Sin(AngleRad), 0.f);
+            const float D = FilteredDistances[a];
+            SurfacePoints.Add(FVector(
+                CenterAtZ.X + Dir.X * D,
+                CenterAtZ.Y + Dir.Y * D,
+                Z));
+            OrbitPoints.Add(FVector(
+                CenterAtZ.X + Dir.X * (D + Params.Margin),
+                CenterAtZ.Y + Dir.Y * (D + Params.Margin),
+                Z));
         }
 
         AllRingZs.Add(Z);
         AllRingOrbitPoints.Add(MoveTemp(OrbitPoints));
+        AllRingSurfacePoints.Add(MoveTemp(SurfacePoints));
     }
 
     // Phase 2 (background): Sample along the orbital polygon; Phase 3 (game thread): Callback.
     Async(EAsyncExecution::LargeThreadPool,
         [Params, OnComplete,
          AllRingOrbitPoints = MoveTemp(AllRingOrbitPoints),
+         AllRingSurfacePoints = MoveTemp(AllRingSurfacePoints),
          AllRingZs = MoveTemp(AllRingZs),
          BoxCenter, StepH, HFovRad, VFovRad]() mutable
         {
             FGeneratedPath GeneratedPath;
 
+            const float MaxYawStep = FMath::Max(Params.CornerYawStepDeg, 1.f);
+
             const int32 NumRings = AllRingZs.Num();
             for (int32 r = 0; r < NumRings; ++r)
             {
                 const TArray<FVector>& OrbitPoints = AllRingOrbitPoints[r];
+                const TArray<FVector>& SurfacePoints = AllRingSurfacePoints[r];
                 const int32 M = OrbitPoints.Num();
                 if (M < 4) continue;
+
+                TArray<FVector> RingPositions;
+                TArray<FRotator> RingRotations;
 
                 float DistUntilNext = 0.f;
                 for (int32 i = 0; i < M; ++i)
                 {
                     const FVector& A = OrbitPoints[i];
                     const FVector& B = OrbitPoints[(i + 1) % M];
+                    const FVector& SurfA = SurfacePoints[i];
+                    const FVector& SurfB = SurfacePoints[(i + 1) % M];
                     const float SegLen = FMath::Sqrt(FMath::Square(B.X - A.X) + FMath::Square(B.Y - A.Y));
                     if (SegLen < KINDA_SMALL_NUMBER) continue;
 
@@ -195,11 +234,43 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
                     while (DistUntilNext <= SegLen)
                     {
                         const float t = DistUntilNext / SegLen;
-                        GeneratedPath.Positions.Add(FMath::Lerp(A, B, t));
-                        GeneratedPath.Rotations.Add(SegRot);
+                        const FVector Pos = FMath::Lerp(A, B, t);
+                        const FVector LookTarget = FMath::Lerp(SurfA, SurfB, t);
+                        const FVector LookDir = LookTarget - Pos;
+
+                        RingPositions.Add(Pos);
+                        RingRotations.Add(
+                            LookDir.SizeSquared2D() > KINDA_SMALL_NUMBER
+                                ? LookDir.Rotation()
+                                : SegRot);
                         DistUntilNext += StepH;
                     }
                     DistUntilNext -= SegLen;
+                }
+
+                // Corner smoothing: where the view yaw turns faster than MaxYawStep between
+                // consecutive poses, insert interpolated poses so the sweep stays gradual.
+                for (int32 s = 0; s < RingPositions.Num(); ++s)
+                {
+                    GeneratedPath.Positions.Add(RingPositions[s]);
+                    GeneratedPath.Rotations.Add(RingRotations[s]);
+
+                    if (s + 1 >= RingPositions.Num()) break;
+
+                    const float YawDelta = FMath::Abs(FMath::FindDeltaAngleDegrees(
+                        RingRotations[s].Yaw, RingRotations[s + 1].Yaw));
+                    const int32 NumInserts = FMath::FloorToInt(YawDelta / MaxYawStep);
+                    if (NumInserts <= 0) continue;
+
+                    const FQuat QA = RingRotations[s].Quaternion();
+                    const FQuat QB = RingRotations[s + 1].Quaternion();
+                    for (int32 k = 1; k <= NumInserts; ++k)
+                    {
+                        const float t = (float)k / (NumInserts + 1);
+                        GeneratedPath.Positions.Add(
+                            FMath::Lerp(RingPositions[s], RingPositions[s + 1], t));
+                        GeneratedPath.Rotations.Add(FQuat::Slerp(QA, QB, t).Rotator());
+                    }
                 }
             }
 

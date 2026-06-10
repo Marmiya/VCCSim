@@ -18,6 +18,10 @@
 #include "Editor/Panels/VCCSimPanelSelection.h"
 #include "Utils/VCCSimUIHelpers.h"
 #include "Styling/AppStyle.h"
+#include "Styling/CoreStyle.h"
+#include "Widgets/Layout/SBorder.h"
+#include "Widgets/Layout/SBox.h"
+#include "Widgets/Views/STableRow.h"
 
 TSharedRef<SWidget> FVCCSimPanelSelection::CreateSelectionPanel()
 {
@@ -77,8 +81,144 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateSelectionPanel()
                 [
                     CreateLookAtSelectPanel()
                 ]
+
+                +SVerticalBox::Slot()
+                .AutoHeight()
+                .Padding(FMargin(0, 6, 0, 6))
+                [
+                    FVCCSimUIHelpers::CreateSeparator()
+                ]
+
+                +SVerticalBox::Slot()
+                .AutoHeight()
+                [
+                    CreateTargetActorListPanel()
+                ]
             ]
         ];
+}
+
+TSharedRef<SWidget> FVCCSimPanelSelection::CreateTargetActorListPanel()
+{
+    return SNew(SVerticalBox)
+
+    +SVerticalBox::Slot()
+    .AutoHeight()
+    .Padding(FMargin(0, 0, 0, 4))
+    [
+        SNew(STextBlock)
+        .Text(FText::FromString("Target Actors:"))
+        .ToolTipText(FText::FromString(
+            "Shared target list used by path generation and GT material export. "
+            "Uncheck an entry to keep it in the list but skip it for the next task."))
+        .Font(FAppStyle::GetFontStyle("PropertyWindow.BoldFont"))
+        .ColorAndOpacity(FColor(233, 233, 233))
+    ]
+
+    +SVerticalBox::Slot()
+    .AutoHeight()
+    .Padding(FMargin(0, 0, 0, 2))
+    [
+        SNew(SHorizontalBox)
+        +SHorizontalBox::Slot().FillWidth(1.f)
+        [
+            SNew(SButton)
+            .ButtonStyle(FAppStyle::Get(), "FlatButton.Success")
+            .ContentPadding(FMargin(5, 2))
+            .Text(FText::FromString(TEXT("+ Add Selected Actors")))
+            .ToolTipText(FText::FromString(TEXT("Add the actors currently selected in the viewport")))
+            .OnClicked_Lambda([this]() { return OnAddTargetActorsClicked(); })
+        ]
+        +SHorizontalBox::Slot().AutoWidth().Padding(FMargin(4, 0, 0, 0))
+        [
+            SNew(SButton)
+            .ButtonStyle(FAppStyle::Get(), "FlatButton.Danger")
+            .ContentPadding(FMargin(5, 2))
+            .Text(FText::FromString(TEXT("Clear All")))
+            .OnClicked_Lambda([this]() -> FReply
+            {
+                TargetActorItems.Empty();
+                if (TargetActorListView.IsValid())
+                    TargetActorListView->RequestListRefresh();
+                SaveTargetActorsToConfig();
+                return FReply::Handled();
+            })
+        ]
+    ]
+
+    +SVerticalBox::Slot()
+    .AutoHeight()
+    [
+        SNew(SBox)
+        .HeightOverride(90.f)
+        [
+            SNew(SBorder)
+            .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
+            .BorderBackgroundColor(FColor(10, 10, 10, 255))
+            .Padding(2)
+            [
+                SAssignNew(TargetActorListView, SListView<TSharedPtr<FVCCSimTargetActorItem>>)
+                .ListItemsSource(&TargetActorItems)
+                .SelectionMode(ESelectionMode::None)
+                .OnGenerateRow_Lambda([this](TSharedPtr<FVCCSimTargetActorItem> Item,
+                    const TSharedRef<STableViewBase>& Owner) -> TSharedRef<ITableRow>
+                {
+                    return SNew(STableRow<TSharedPtr<FVCCSimTargetActorItem>>, Owner)
+                    [
+                        SNew(SHorizontalBox)
+                        +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(2, 0, 4, 0))
+                        [
+                            SNew(SCheckBox)
+                            .ToolTipText(FText::FromString(TEXT("Process this actor in the next task")))
+                            .IsChecked_Lambda([Item]()
+                            {
+                                return (Item.IsValid() && Item->bEnabled)
+                                    ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
+                            })
+                            .OnCheckStateChanged_Lambda([this, Item](ECheckBoxState NewState)
+                            {
+                                if (Item.IsValid())
+                                {
+                                    Item->bEnabled = (NewState == ECheckBoxState::Checked);
+                                    SaveTargetActorsToConfig();
+                                }
+                            })
+                        ]
+                        +SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center).Padding(FMargin(2, 0))
+                        [
+                            SNew(STextBlock)
+                            .Text(FText::FromString(Item.IsValid() ? Item->Label : FString()))
+                            .ColorAndOpacity_Lambda([Item]()
+                            {
+                                return (Item.IsValid() && Item->bEnabled)
+                                    ? FLinearColor(0.8f, 0.9f, 0.8f)
+                                    : FLinearColor(0.45f, 0.45f, 0.45f);
+                            })
+                            .Font(FCoreStyle::GetDefaultFontStyle("Mono", 8))
+                        ]
+                        +SHorizontalBox::Slot().AutoWidth()
+                        [
+                            SNew(SButton)
+                            .ButtonStyle(FAppStyle::Get(), "FlatButton.Danger")
+                            .ContentPadding(FMargin(4, 1))
+                            .Text(FText::FromString(TEXT("×")))
+                            .OnClicked_Lambda([this, Item]() -> FReply
+                            {
+                                if (Item.IsValid())
+                                {
+                                    TargetActorItems.Remove(Item);
+                                    if (TargetActorListView.IsValid())
+                                        TargetActorListView->RequestListRefresh();
+                                    SaveTargetActorsToConfig();
+                                }
+                                return FReply::Handled();
+                            })
+                        ]
+                    ];
+                })
+            ]
+        ]
+    ];
 }
 
 TSharedRef<SWidget> FVCCSimPanelSelection::CreatePawnSelectPanel()

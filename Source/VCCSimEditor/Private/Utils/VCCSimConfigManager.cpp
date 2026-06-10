@@ -105,26 +105,24 @@ void FVCCSimConfigManager::SaveToJsonFile()
     TexEnhancerConfigJson->SetStringField(TEXT("SceneName"), TexEnhancerConfig.SceneName);
     TexEnhancerConfigJson->SetStringField(TEXT("TexEnhancerScriptPath"), TexEnhancerConfig.TexEnhancerScriptPath);
     TexEnhancerConfigJson->SetStringField(TEXT("EstimatedMaterialsDir"), TexEnhancerConfig.EstimatedMaterialsDir);
-    {
-        TArray<TSharedPtr<FJsonValue>> GTLabelsJson;
-        for (const FString& Label : TexEnhancerConfig.GTActorLabels)
-            GTLabelsJson.Add(MakeShareable(new FJsonValueString(Label)));
-        TexEnhancerConfigJson->SetArrayField(TEXT("GTActorLabels"), GTLabelsJson);
-    }
     TexEnhancerConfigJson->SetBoolField(TEXT("IncludeNearbyMeshes"),     TexEnhancerConfig.bIncludeNearbyMeshes);
     TexEnhancerConfigJson->SetBoolField(TEXT("MergeNearbyMeshes"),       TexEnhancerConfig.bMergeNearbyMeshes);
     TexEnhancerConfigJson->SetNumberField(TEXT("NearbyRadius"),          TexEnhancerConfig.NearbyRadius);
     RootObject->SetObjectField(TEXT("TexEnhancerConfig"), TexEnhancerConfigJson);
 
-    // Save PathImageCapture configuration
-    TSharedPtr<FJsonObject> PathImageCaptureConfigJson = MakeShareable(new FJsonObject);
+    // Save shared target actor list
     {
-        TArray<TSharedPtr<FJsonValue>> OrbitLabelsJson;
-        for (const FString& Label : PathImageCaptureConfig.OrbitActorLabels)
-            OrbitLabelsJson.Add(MakeShareable(new FJsonValueString(Label)));
-        PathImageCaptureConfigJson->SetArrayField(TEXT("OrbitActorLabels"), OrbitLabelsJson);
+        TArray<TSharedPtr<FJsonValue>> TargetActorsJson;
+        for (int32 i = 0; i < TargetActorsConfig.Labels.Num(); ++i)
+        {
+            TSharedPtr<FJsonObject> EntryJson = MakeShareable(new FJsonObject);
+            EntryJson->SetStringField(TEXT("Label"), TargetActorsConfig.Labels[i]);
+            EntryJson->SetBoolField(TEXT("Enabled"),
+                TargetActorsConfig.EnabledFlags.IsValidIndex(i) ? TargetActorsConfig.EnabledFlags[i] : true);
+            TargetActorsJson.Add(MakeShareable(new FJsonValueObject(EntryJson)));
+        }
+        RootObject->SetArrayField(TEXT("TargetActors"), TargetActorsJson);
     }
-    RootObject->SetObjectField(TEXT("PathImageCaptureConfig"), PathImageCaptureConfigJson);
 
     // Add metadata
     TSharedPtr<FJsonObject> Metadata = MakeShareable(new FJsonObject);
@@ -194,18 +192,6 @@ bool FVCCSimConfigManager::LoadFromJsonFile()
         (*TexEnhancerConfigJson)->TryGetStringField(TEXT("SceneName"), TexEnhancerConfig.SceneName);
         (*TexEnhancerConfigJson)->TryGetStringField(TEXT("TexEnhancerScriptPath"), TexEnhancerConfig.TexEnhancerScriptPath);
         (*TexEnhancerConfigJson)->TryGetStringField(TEXT("EstimatedMaterialsDir"), TexEnhancerConfig.EstimatedMaterialsDir);
-
-        TexEnhancerConfig.GTActorLabels.Empty();
-        const TArray<TSharedPtr<FJsonValue>>* GTLabelsArr = nullptr;
-        if ((*TexEnhancerConfigJson)->TryGetArrayField(TEXT("GTActorLabels"), GTLabelsArr))
-        {
-            for (const TSharedPtr<FJsonValue>& Val : *GTLabelsArr)
-            {
-                FString Label;
-                if (Val->TryGetString(Label))
-                    TexEnhancerConfig.GTActorLabels.Add(Label);
-            }
-        }
         {
             double V = 0.0;
             if ((*TexEnhancerConfigJson)->TryGetNumberField(TEXT("NearbyRadius"), V))
@@ -215,19 +201,27 @@ bool FVCCSimConfigManager::LoadFromJsonFile()
         (*TexEnhancerConfigJson)->TryGetBoolField(TEXT("MergeNearbyMeshes"),   TexEnhancerConfig.bMergeNearbyMeshes);
     }
 
-    // Load PathImageCapture configuration
-    const TSharedPtr<FJsonObject>* PathImageCaptureConfigJson = nullptr;
-    if (RootObject->TryGetObjectField(TEXT("PathImageCaptureConfig"), PathImageCaptureConfigJson))
+    // Load shared target actor list
     {
-        PathImageCaptureConfig.OrbitActorLabels.Empty();
-        const TArray<TSharedPtr<FJsonValue>>* OrbitLabelsArr = nullptr;
-        if ((*PathImageCaptureConfigJson)->TryGetArrayField(TEXT("OrbitActorLabels"), OrbitLabelsArr))
+        TargetActorsConfig.Labels.Empty();
+        TargetActorsConfig.EnabledFlags.Empty();
+        const TArray<TSharedPtr<FJsonValue>>* TargetActorsArr = nullptr;
+        if (RootObject->TryGetArrayField(TEXT("TargetActors"), TargetActorsArr))
         {
-            for (const TSharedPtr<FJsonValue>& Val : *OrbitLabelsArr)
+            for (const TSharedPtr<FJsonValue>& Val : *TargetActorsArr)
             {
+                const TSharedPtr<FJsonObject>* EntryJson = nullptr;
+                if (!Val->TryGetObject(EntryJson)) continue;
+
                 FString Label;
-                if (Val->TryGetString(Label))
-                    PathImageCaptureConfig.OrbitActorLabels.Add(Label);
+                if (!(*EntryJson)->TryGetStringField(TEXT("Label"), Label) || Label.IsEmpty())
+                    continue;
+
+                bool bEnabled = true;
+                (*EntryJson)->TryGetBoolField(TEXT("Enabled"), bEnabled);
+
+                TargetActorsConfig.Labels.Add(Label);
+                TargetActorsConfig.EnabledFlags.Add(bEnabled);
             }
         }
     }

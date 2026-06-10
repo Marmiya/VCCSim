@@ -126,8 +126,8 @@ void SVCCSimPanel::Construct(const FArguments& InArgs)
     CreateMainLayout();
 
     // Refresh actor list views now that widgets exist (LoadPanelState ran before widget creation)
-    if (PathImageCaptureManager.IsValid())
-        PathImageCaptureManager->LoadFromConfigManager();
+    if (SelectionManager.IsValid())
+        SelectionManager->LoadFromConfigManager();
     if (TexEnhancerManager.IsValid())
         TexEnhancerManager->LoadFromConfigManager();
 
@@ -399,9 +399,9 @@ void SVCCSimPanel::UpdateSubPanelsFromState()
         PointCloudManager->SetPointCloudSectionExpanded(States.bPointCloudSectionExpanded);
     }
 
-    if (PathImageCaptureManager.IsValid())
+    if (SelectionManager.IsValid())
     {
-        PathImageCaptureManager->LoadFromConfigManager();
+        SelectionManager->LoadFromConfigManager();
     }
 
     if (TexEnhancerManager.IsValid())

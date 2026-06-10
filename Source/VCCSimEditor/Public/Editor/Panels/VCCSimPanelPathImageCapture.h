@@ -23,7 +23,6 @@
 #include "Widgets/Input/SNumericEntryBox.h"
 #include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Text/STextBlock.h"
-#include "Widgets/Views/SListView.h"
 #include "Engine/TimerHandle.h"
 #include <atomic>
 
@@ -79,8 +78,6 @@ public:
     bool IsPathImageCaptureSectionExpanded() const { return bPathImageCaptureSectionExpanded; }
     void SetPathImageCaptureSectionExpanded(bool bExpanded) { bPathImageCaptureSectionExpanded = bExpanded; }
 
-    void LoadFromConfigManager();
-    
     // UI Construction (public for _UI.cpp)
     TSharedRef<SWidget> CreatePathConfigSection();
     TSharedRef<SWidget> CreateImageCaptureSection();
@@ -91,7 +88,6 @@ public:
 
 private:
     // UI Callbacks
-    FReply OnAddOrbitActorsClicked();
     FReply OnGeneratePosesClicked();
     FReply OnLoadPoseClicked();
     FReply OnSavePoseClicked();
@@ -119,12 +115,9 @@ private:
     void FinishCaptureSession(bool bSuccess);
     
     // Utility
-    void SaveOrbitActorList();
-    void LoadOrbitActorList();
     static FString GetTimestampedFilename();
 
     // UI Widgets
-    TSharedPtr<SListView<TSharedPtr<FString>>> OrbitActorListView;
     TSharedPtr<SNumericEntryBox<float>> OrbitMarginSpinBox;
     TSharedPtr<SNumericEntryBox<float>> OrbitStartHeightSpinBox;
     TSharedPtr<SNumericEntryBox<float>> OrbitCameraHFOVSpinBox;
@@ -136,8 +129,6 @@ private:
     TSharedPtr<SButton> AutoCaptureButton;
     
     // State Variables
-    TArray<TSharedPtr<FString>> OrbitActorListItems;
-    
     float OrbitMargin = 500.0f;
     float OrbitStartHeight = 200.0f;
     float OrbitCameraHFOV = 90.0f;

@@ -16,6 +16,7 @@
 */
 
 #include "Editor/Panels/VCCSimPanelTexEnhancer.h"
+#include "Editor/Panels/VCCSimPanelSelection.h"
 #include "Utils/VCCSimUIHelpers.h"
 
 #include "Widgets/Layout/SBorder.h"
@@ -604,87 +605,12 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateGTExportSection()
             FVCCSimUIHelpers::CreateSectionHeader(TEXT("GT Material Export"))
         ]
 
-        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
-        [
-            SNew(SHorizontalBox)
-            +SHorizontalBox::Slot().FillWidth(1.f)
-            [
-                SNew(SButton)
-                .ButtonStyle(FAppStyle::Get(), "FlatButton.Success")
-                .ContentPadding(FMargin(5, 2))
-                .Text(FText::FromString(TEXT("+ Add Selected Actors")))
-                .ToolTipText(FText::FromString(TEXT("Add currently selected StaticMeshActors from the viewport")))
-                .OnClicked_Lambda([this]() { return OnAddSelectedActorsClicked(); })
-            ]
-            +SHorizontalBox::Slot().AutoWidth().Padding(FMargin(4, 0, 0, 0))
-            [
-                SNew(SButton)
-                .ButtonStyle(FAppStyle::Get(), "FlatButton.Danger")
-                .ContentPadding(FMargin(5, 2))
-                .Text(FText::FromString(TEXT("Clear All")))
-                .OnClicked_Lambda([this]() -> FReply
-                {
-                    GTActorListItems.Empty();
-                    if (GTActorListView.IsValid())
-                        GTActorListView->RequestListRefresh();
-                    SavePaths();
-                    return FReply::Handled();
-                })
-            ]
-        ]
-
         +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 0, 0, 2))
         [
-            SNew(SBox)
-            .HeightOverride(90.f)
-            [
-                SNew(SBorder)
-                .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
-                .BorderBackgroundColor(FColor(10, 10, 10, 255))
-                .Padding(2)
-                [
-                    SAssignNew(GTActorListView, SListView<TSharedPtr<FString>>)
-                    .ListItemsSource(&GTActorListItems)
-                    .SelectionMode(ESelectionMode::None)
-                    .OnGenerateRow_Lambda([this](TSharedPtr<FString> Item,
-                        const TSharedRef<STableViewBase>& Owner) -> TSharedRef<ITableRow>
-                    {
-                        return SNew(STableRow<TSharedPtr<FString>>, Owner)
-                        [
-                            SNew(SHorizontalBox)
-                            +SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center).Padding(FMargin(2, 0))
-                            [
-                                SNew(STextBlock)
-                                .Text(FText::FromString(*Item))
-                                .ColorAndOpacity(FLinearColor(0.8f, 0.9f, 0.8f))
-                                .Font(FCoreStyle::GetDefaultFontStyle("Mono", 8))
-                            ]
-                            +SHorizontalBox::Slot().AutoWidth()
-                            [
-                                SNew(SButton)
-                                .ButtonStyle(FAppStyle::Get(), "FlatButton.Danger")
-                                .ContentPadding(FMargin(4, 1))
-                                .Text(FText::FromString(TEXT("×")))
-                                .OnClicked_Lambda([this, Item]() -> FReply
-                                {
-                                    if (Item.IsValid())
-                                    {
-                                        const FString S = *Item;
-                                        GTActorListItems.RemoveAll([&S](const TSharedPtr<FString>& P)
-                                        {
-                                            return P.IsValid() && *P == S;
-                                        });
-                                        if (GTActorListView.IsValid())
-                                            GTActorListView->RequestListRefresh();
-                                        SavePaths();
-                                    }
-                                    return FReply::Handled();
-                                })
-                            ]
-                        ];
-                    })
-                ]
-            ]
+            SNew(STextBlock)
+            .Text(FText::FromString(TEXT("Exports the enabled entries of the Target Actors list (Object Selection panel).")))
+            .ColorAndOpacity(FLinearColor(0.6f, 0.6f, 0.6f))
+            .AutoWrapText(true)
         ]
 
         +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 0, 0, 2))
@@ -772,11 +698,18 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateGTExportSection()
             })
             .ToolTipText_Lambda([this]()
             {
+                const int32 NumTargets = SelectionManager.IsValid()
+                    ? SelectionManager.Pin()->GetEnabledTargetActorLabels().Num() : 0;
                 return FText::FromString(FString::Printf(
-                    TEXT("Export mesh OBJ + PBR textures for %d actor(s) -> %s/gt_materials/"),
-                    GTActorListItems.Num(), *OutputDirectory));
+                    TEXT("Export mesh GLTF + PBR textures for %d enabled target actor(s) -> %s/gt_materials/"),
+                    NumTargets, *OutputDirectory));
             })
-            .IsEnabled_Lambda([this]() { return !bGTExportInProgress && !OutputDirectory.IsEmpty() && !GTActorListItems.IsEmpty(); })
+            .IsEnabled_Lambda([this]()
+            {
+                return !bGTExportInProgress && !OutputDirectory.IsEmpty()
+                    && SelectionManager.IsValid()
+                    && SelectionManager.Pin()->HasEnabledTargetActors();
+            })
             .OnClicked_Lambda([this]() { return OnExportGTMaterialsClicked(); })
         ]
     );

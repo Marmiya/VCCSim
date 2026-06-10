@@ -39,7 +39,6 @@
 #include "MeshMergeModule.h"
 #include "Engine/MeshMerging.h"
 #include "Misc/ScopeExit.h"
-#include "Selection.h"
 #include "MeshDescription.h"
 #include "Modules/ModuleManager.h"
 
@@ -173,15 +172,6 @@ void FVCCSimPanelTexEnhancer::LoadFromConfigManager()
         {
             EstimatedMaterialsDirTextBox->SetText(FText::FromString(EstimatedMaterialsDir));
         }
-    }
-
-    if (!Config.GTActorLabels.IsEmpty())
-    {
-        GTActorListItems.Empty();
-        for (const FString& Label : Config.GTActorLabels)
-            GTActorListItems.Add(MakeShareable(new FString(Label)));
-        if (GTActorListView.IsValid())
-            GTActorListView->RequestListRefresh();
     }
 
     bIncludeNearbyMeshes = Config.bIncludeNearbyMeshes;
@@ -331,58 +321,6 @@ FReply FVCCSimPanelTexEnhancer::OnToggleDayCycleClicked()
 // ============================================================================
 // SECTION 4: GT MATERIAL EXPORT
 // ============================================================================
-
-FReply FVCCSimPanelTexEnhancer::OnAddSelectedActorsClicked()
-{
-    USelection* Sel = GEditor ? GEditor->GetSelectedActors() : nullptr;
-    if (!Sel) return FReply::Handled();
-
-    bool bAdded = false;
-    for (int32 i = 0; i < Sel->Num(); ++i)
-    {
-        AStaticMeshActor* SMA = Cast<AStaticMeshActor>(Sel->GetSelectedObject(i));
-        if (!SMA) continue;
-
-        const FString Label = SMA->GetActorLabel();
-        bool bDuplicate = GTActorListItems.ContainsByPredicate(
-            [&Label](const TSharedPtr<FString>& P) { return P.IsValid() && *P == Label; });
-
-        if (!bDuplicate)
-        {
-            GTActorListItems.Add(MakeShareable(new FString(Label)));
-            bAdded = true;
-        }
-    }
-
-    if (bAdded && GTActorListView.IsValid())
-        GTActorListView->RequestListRefresh();
-    if (bAdded)
-        SavePaths();
-
-    return FReply::Handled();
-}
-
-FReply FVCCSimPanelTexEnhancer::OnRemoveFromGTListClicked()
-{
-    if (!GTActorListView.IsValid()) return FReply::Handled();
-
-    TArray<TSharedPtr<FString>> Selected = GTActorListView->GetSelectedItems();
-    if (Selected.IsEmpty()) return FReply::Handled();
-
-    for (const TSharedPtr<FString>& Item : Selected)
-    {
-        if (!Item.IsValid()) continue;
-        const FString ItemStr = *Item;
-        GTActorListItems.RemoveAll([&ItemStr](const TSharedPtr<FString>& P)
-        {
-            return P.IsValid() && *P == ItemStr;
-        });
-    }
-
-    GTActorListView->ClearSelection();
-    GTActorListView->RequestListRefresh();
-    return FReply::Handled();
-}
 
 void FVCCSimPanelTexEnhancer::BuildSeedShapes(
     UWorld* World,
@@ -761,15 +699,17 @@ void FVCCSimPanelTexEnhancer::TickExpansionVisualization()
     UWorld* World = GEditor->GetEditorWorldContext().World();
     if (!World) return;
 
+    TSharedPtr<FVCCSimPanelSelection> Sel = SelectionManager.Pin();
+    if (!Sel.IsValid()) return;
+
     TMap<FString, AStaticMeshActor*> LabelMap;
     for (TActorIterator<AStaticMeshActor> It(World); It; ++It)
         if (AStaticMeshActor* A = *It) LabelMap.Add(A->GetActorLabel(), A);
 
     TArray<AStaticMeshActor*> Seeds;
-    for (const TSharedPtr<FString>& Item : GTActorListItems)
+    for (const FString& Label : Sel->GetEnabledTargetActorLabels())
     {
-        if (!Item.IsValid()) continue;
-        if (AStaticMeshActor** Found = LabelMap.Find(*Item))
+        if (AStaticMeshActor** Found = LabelMap.Find(Label))
             if (IsValid(*Found)) Seeds.Add(*Found);
     }
     if (Seeds.IsEmpty()) return;
@@ -820,9 +760,11 @@ bool FVCCSimPanelTexEnhancer::StartGTMaterialExport()
         FVCCSimUIHelpers::ShowNotification(TEXT("Output directory is not set."), true);
         return false;
     }
-    if (GTActorListItems.IsEmpty())
+    TSharedPtr<FVCCSimPanelSelection> Sel = SelectionManager.Pin();
+    TArray<FString> ActorLabels = Sel.IsValid() ? Sel->GetEnabledTargetActorLabels() : TArray<FString>();
+    if (ActorLabels.IsEmpty())
     {
-        FVCCSimUIHelpers::ShowNotification(TEXT("GT actor list is empty. Select actors in viewport and click '+ Add Selected'."), true);
+        FVCCSimUIHelpers::ShowNotification(TEXT("No enabled target actors. Add and check actors in the Object Selection panel."), true);
         return false;
     }
     UWorld* World = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
@@ -839,12 +781,6 @@ bool FVCCSimPanelTexEnhancer::StartGTMaterialExport()
     {
         bGTExportInProgress = false;
     });
-
-    TArray<FString> ActorLabels;
-    for (const auto& Item : GTActorListItems)
-    {
-        if (Item.IsValid()) ActorLabels.Add(*Item);
-    }
 
     TArray<FGTFoliageExportEntry> FoliageEntries;
 
@@ -1024,10 +960,11 @@ void FVCCSimPanelTexEnhancer::OnDatasetCaptureFinished(bool bSuccess, FString Ca
         return;
     }
 
-    if (GTActorListItems.IsEmpty())
+    TSharedPtr<FVCCSimPanelSelection> Sel = SelectionManager.Pin();
+    if (!Sel.IsValid() || !Sel->HasEnabledTargetActors())
     {
         SetDatasetCaptureStatus(FString::Printf(
-            TEXT("Done: %s | GT actor list empty, gt_materials skipped"), *CaptureDirectory));
+            TEXT("Done: %s | no enabled target actors, gt_materials skipped"), *CaptureDirectory));
         return;
     }
 
@@ -1411,11 +1348,6 @@ void FVCCSimPanelTexEnhancer::SavePaths()
     Config.SceneName             = SceneName;
     Config.TexEnhancerScriptPath = TexEnhancerScriptPath;
     Config.EstimatedMaterialsDir = EstimatedMaterialsDir;
-    for (const TSharedPtr<FString>& Label : GTActorListItems)
-    {
-        if (Label.IsValid())
-            Config.GTActorLabels.Add(*Label);
-    }
     Config.bIncludeNearbyMeshes   = bIncludeNearbyMeshes;
     Config.bMergeNearbyMeshes     = bMergeNearbyMeshes;
     Config.NearbyRadius           = NearbyRadius;
@@ -1430,12 +1362,6 @@ void FVCCSimPanelTexEnhancer::LoadPaths()
     if (!Config.SceneName.IsEmpty())             SceneName             = Config.SceneName;
     if (!Config.TexEnhancerScriptPath.IsEmpty()) TexEnhancerScriptPath = Config.TexEnhancerScriptPath;
     if (!Config.EstimatedMaterialsDir.IsEmpty()) EstimatedMaterialsDir = Config.EstimatedMaterialsDir;
-
-    GTActorListItems.Empty();
-    for (const FString& Label : Config.GTActorLabels)
-        GTActorListItems.Add(MakeShareable(new FString(Label)));
-    if (GTActorListView.IsValid())
-        GTActorListView->RequestListRefresh();
 
     bIncludeNearbyMeshes = Config.bIncludeNearbyMeshes;
     bMergeNearbyMeshes   = Config.bMergeNearbyMeshes;

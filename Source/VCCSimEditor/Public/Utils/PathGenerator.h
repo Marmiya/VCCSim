@@ -43,6 +43,9 @@ public:
         float HOverlap = 0.6f;
         float VOverlap = 0.6f;
 
+        /** Max yaw change between consecutive ring poses; larger turns get interpolated poses inserted. */
+        float CornerYawStepDeg = 15.0f;
+
         bool bIncludeNadir = true;
         float NadirAltitude = 500.0f;
         float NadirTiltAngle = 45.0f;

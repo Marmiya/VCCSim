@@ -19,7 +19,6 @@ DEFINE_LOG_CATEGORY_STATIC(LogPathImageCapture, Log, All);
 
 #include "Editor/Panels/VCCSimPanelPathImageCapture.h"
 #include "Editor/Panels/VCCSimPanelSelection.h"
-#include "Utils/VCCSimConfigManager.h"
 #include "Utils/ConfigParser.h"
 #include "Utils/PathGenerator.h"
 #include "Utils/ImageCaptureService.h"
@@ -30,10 +29,6 @@ DEFINE_LOG_CATEGORY_STATIC(LogPathImageCapture, Log, All);
 #include "Components/PrimitiveComponent.h"
 #include "Engine/DirectionalLight.h"
 #include "Components/DirectionalLightComponent.h"
-#include "Selection.h"
-#include "Widgets/Layout/SBorder.h"
-#include "Widgets/Layout/SBox.h"
-#include "Widgets/Views/STableRow.h"
 #include "Styling/AppStyle.h"
 #include "Styling/CoreStyle.h"
 #include "Utils/TrajectoryViewer.h"
@@ -299,7 +294,6 @@ FVCCSimPanelPathImageCapture::~FVCCSimPanelPathImageCapture()
 
 void FVCCSimPanelPathImageCapture::Initialize()
 {
-    LoadOrbitActorList();
 }
 
 void FVCCSimPanelPathImageCapture::Cleanup()
@@ -361,40 +355,10 @@ FReply FVCCSimPanelPathImageCapture::OnGeneratePosesClicked()
     return FReply::Handled();
 }
 
-FReply FVCCSimPanelPathImageCapture::OnAddOrbitActorsClicked()
-{
-    USelection* Sel = GEditor ? GEditor->GetSelectedActors() : nullptr;
-    if (!Sel) return FReply::Handled();
-
-    bool bAdded = false;
-    for (int32 i = 0; i < Sel->Num(); ++i)
-    {
-        AActor* Actor = Cast<AActor>(Sel->GetSelectedObject(i));
-        if (!Actor) continue;
-
-        const FString Label = Actor->GetActorLabel();
-        bool bDuplicate = OrbitActorListItems.ContainsByPredicate(
-            [&Label](const TSharedPtr<FString>& P) { return P.IsValid() && *P == Label; });
-
-        if (!bDuplicate)
-        {
-            OrbitActorListItems.Add(MakeShareable(new FString(Label)));
-            bAdded = true;
-        }
-    }
-
-    if (bAdded && OrbitActorListView.IsValid())
-        OrbitActorListView->RequestListRefresh();
-    if (bAdded)
-        SaveOrbitActorList();
-
-    return FReply::Handled();
-}
-
 FBox FVCCSimPanelPathImageCapture::ComputeCombinedBounds() const
 {
     UWorld* World = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
-    if (!World) return FBox(ForceInit);
+    if (!World || !SelectionManager.IsValid()) return FBox(ForceInit);
 
     TMap<FString, AActor*> LabelMap;
     for (TActorIterator<AActor> It(World); It; ++It)
@@ -404,10 +368,9 @@ FBox FVCCSimPanelPathImageCapture::ComputeCombinedBounds() const
     }
 
     FBox Combined(ForceInit);
-    for (const TSharedPtr<FString>& LabelPtr : OrbitActorListItems)
+    for (const FString& Label : SelectionManager.Pin()->GetEnabledTargetActorLabels())
     {
-        if (!LabelPtr.IsValid()) continue;
-        AActor** Found = LabelMap.Find(*LabelPtr);
+        AActor** Found = LabelMap.Find(Label);
         if (!Found || !*Found) continue;
 
         TArray<UPrimitiveComponent*> Prims;
@@ -431,10 +394,11 @@ void FVCCSimPanelPathImageCapture::GeneratePosesAroundTarget()
 
     if (!SelectionManager.IsValid() || !SelectionManager.Pin()->GetSelectedFlashPawn().IsValid())
         return FailCleanup(TEXT("No FlashPawn selected"));
-    
-    if (OrbitActorListItems.IsEmpty())
-        return FailCleanup(TEXT("No target actors in orbit list"));
-    
+
+    const TArray<FString> TargetLabels = SelectionManager.Pin()->GetEnabledTargetActorLabels();
+    if (TargetLabels.IsEmpty())
+        return FailCleanup(TEXT("No enabled target actors in the Object Selection list"));
+
     UWorld* World = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
     if (!World)
         return FailCleanup(TEXT("Editor world is not available"));
@@ -444,12 +408,11 @@ void FVCCSimPanelPathImageCapture::GeneratePosesAroundTarget()
     if (!Params.TargetBounds.IsValid)
         return FailCleanup(TEXT("Could not compute valid bounds from selected actors"));
 
-    for (const TSharedPtr<FString>& Label : OrbitActorListItems)
+    for (const FString& Label : TargetLabels)
     {
-        if (!Label.IsValid()) continue;
         for (TActorIterator<AActor> It(World); It; ++It)
         {
-            if (It->GetActorLabel() == *Label)
+            if (It->GetActorLabel() == Label)
             {
                 Params.TargetActors.Add(*It);
                 It->GetComponents<UPrimitiveComponent>(Params.TargetPrimitives);
@@ -1084,29 +1047,3 @@ FString FVCCSimPanelPathImageCapture::GetTimestampedFilename()
         Now.GetHour(), Now.GetMinute(), Now.GetSecond());
 }
 
-void FVCCSimPanelPathImageCapture::SaveOrbitActorList()
-{
-    FVCCSimConfigManager::FPathImageCaptureConfig Config = FVCCSimConfigManager::Get().GetPathImageCaptureConfig();
-    Config.OrbitActorLabels.Empty();
-    for (const TSharedPtr<FString>& Label : OrbitActorListItems)
-    {
-        if (Label.IsValid())
-            Config.OrbitActorLabels.Add(*Label);
-    }
-    FVCCSimConfigManager::Get().SetPathImageCaptureConfig(Config);
-}
-
-void FVCCSimPanelPathImageCapture::LoadOrbitActorList()
-{
-    const auto& Config = FVCCSimConfigManager::Get().GetPathImageCaptureConfig();
-    OrbitActorListItems.Empty();
-    for (const FString& Label : Config.OrbitActorLabels)
-        OrbitActorListItems.Add(MakeShareable(new FString(Label)));
-    if (OrbitActorListView.IsValid())
-        OrbitActorListView->RequestListRefresh();
-}
-
-void FVCCSimPanelPathImageCapture::LoadFromConfigManager()
-{
-    LoadOrbitActorList();
-}
