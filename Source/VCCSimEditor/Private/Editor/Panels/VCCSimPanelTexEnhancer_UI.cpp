@@ -685,8 +685,8 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateGTExportSection()
                 const int32 NumTargets = SelectionManager.IsValid()
                     ? SelectionManager.Pin()->GetEnabledTargetActorLabels().Num() : 0;
                 return FText::FromString(FString::Printf(
-                    TEXT("Export mesh GLTF + PBR textures for %d enabled target actor(s) -> %s/gt_materials/"),
-                    NumTargets, *OutputDirectory));
+                    TEXT("Export mesh GLTF + PBR textures for %d enabled target actor(s) -> %s/%s/gt_materials/"),
+                    NumTargets, *OutputDirectory, *SceneName));
             })
             .IsEnabled_Lambda([this]()
             {
@@ -730,10 +730,11 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateDatasetCaptureSection()
                 .ToolTipText(FText::FromString(
                     TEXT("Writes poses.txt + intrinsics.json + lighting.json and captures "
                          "RGB / BaseColor / MatProps / Normal for every pose on the FlashPawn "
-                         "path into the next <Output>/<Scene>/captures/capture_NNN directory. "
+                         "path into a new <Output>/<Scene>/captures/capture_<timestamp> directory. "
                          "Apply the desired lighting first; click again after changing "
                          "lighting to add another capture window. Exports gt_materials once "
-                         "after the first capture. Click again while running to cancel.")))
+                         "after the first capture. Click again while running to cancel "
+                         "(the partial directory is deleted).")))
                 .IsEnabled_Lambda([this]()
                 {
                     return bDatasetCaptureInProgress || !OutputDirectory.IsEmpty();

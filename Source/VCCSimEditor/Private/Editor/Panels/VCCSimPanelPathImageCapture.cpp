@@ -35,6 +35,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogPathImageCapture, Log, All);
 #include "Utils/TrajectoryViewer.h"
 #include "DesktopPlatformModule.h"
 #include "EngineUtils.h"
+#include "Framework/Notifications/NotificationManager.h"
 #include "LevelEditorViewport.h"
 #include "Async/Async.h"
 #include "Serialization/JsonSerializer.h"
@@ -305,6 +306,7 @@ void FVCCSimPanelPathImageCapture::Cleanup()
     {
         GEditor->GetTimerManager()->ClearTimer(AutoCaptureTimerHandle);
         bAutoCaptureInProgress = false;
+        FSlateNotificationManager::Get().SetAllowNotifications(bNotificationsWereAllowed);
     }
 
     // Clean up path visualization
@@ -979,9 +981,16 @@ bool FVCCSimPanelPathImageCapture::StartCaptureSession(
     bSessionDatasetChannelsOnly = bDatasetChannelsOnly;
     SessionCompleteDelegate = MoveTemp(OnComplete);
     bDrainingCaptureJobs = false;
+    bSessionCancelled = false;
     bWarmupCaptureDone = false;
     bGameViewChangedForCapture = EnsureGameView();
     bAutoCaptureInProgress = true;
+
+    // Suppress the engine's per-shot "High resolution screenshot saved as" toasts,
+    // which otherwise stack up once per captured pose. Known cosmetic side effect:
+    // each suppressed toast still leaves an empty transparent notification window.
+    bNotificationsWereAllowed = FSlateNotificationManager::Get().AreNotificationsAllowed();
+    FSlateNotificationManager::Get().SetAllowNotifications(false);
 
     SelectedFlashPawn->MoveTo(0);
 
@@ -1006,6 +1015,8 @@ void FVCCSimPanelPathImageCapture::TickCaptureSession()
 
     if (!bAutoCaptureInProgress || !SelectedFlashPawn.IsValid())
     {
+        UE_LOG(LogPathImageCapture, Warning,
+            TEXT("Capture session aborted: FlashPawn is no longer valid"));
         FinishCaptureSession(false);
         return;
     }
@@ -1014,7 +1025,7 @@ void FVCCSimPanelPathImageCapture::TickCaptureSession()
     {
         if (ImageCaptureService->GetPendingJobCount() == 0)
         {
-            FinishCaptureSession(true);
+            FinishCaptureSession(!bSessionCancelled);
         }
         return;
     }
@@ -1058,12 +1069,24 @@ void FVCCSimPanelPathImageCapture::TickCaptureSession()
 
 void FVCCSimPanelPathImageCapture::FinishCaptureSession(bool bSuccess)
 {
+    FSlateNotificationManager::Get().SetAllowNotifications(bNotificationsWereAllowed);
+
+    if (bSuccess)
+    {
+        UE_LOG(LogPathImageCapture, Log, TEXT("Capture session complete: %s"), *SaveDirectory);
+    }
+    else
+    {
+        UE_LOG(LogPathImageCapture, Warning, TEXT("Capture session ended early: %s"), *SaveDirectory);
+    }
+
     if (GEditor)
     {
         GEditor->GetTimerManager()->ClearTimer(AutoCaptureTimerHandle);
     }
     bAutoCaptureInProgress = false;
     bDrainingCaptureJobs = false;
+    bSessionCancelled = false;
     bWarmupCaptureDone = false;
     bSessionDatasetChannelsOnly = false;
     SaveDirectory.Empty();
@@ -1090,11 +1113,15 @@ void FVCCSimPanelPathImageCapture::StartAutoCapture()
 
 void FVCCSimPanelPathImageCapture::StopAutoCapture()
 {
-    if (bAutoCaptureInProgress)
+    if (!bAutoCaptureInProgress || bSessionCancelled)
     {
-        FinishCaptureSession(false);
-        UE_LOG(LogPathImageCapture, Log, TEXT("Auto-capture stopped by user"));
+        return;
     }
+
+    bSessionCancelled = true;
+    bDrainingCaptureJobs = true;
+    UE_LOG(LogPathImageCapture, Log,
+        TEXT("Auto-capture stop requested; waiting for pending writes"));
 }
 
 // ============================================================================

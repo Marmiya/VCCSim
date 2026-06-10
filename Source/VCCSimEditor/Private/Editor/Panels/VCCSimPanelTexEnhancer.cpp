@@ -885,7 +885,7 @@ bool FVCCSimPanelTexEnhancer::StartGTMaterialExport()
     }
 
     const FString Timestamp = FDateTime::Now().ToString(TEXT("%Y%m%d_%H%M%S"));
-    const FString BaseDir = OutputDirectory / TEXT("gt_materials") / Timestamp;
+    const FString BaseDir = FPaths::Combine(OutputDirectory, SceneName, TEXT("gt_materials"), Timestamp);
 
     GTMaterialExporter->ExportMaterials(
         ActorLabels,
@@ -912,16 +912,15 @@ FString FVCCSimPanelTexEnhancer::GetDatasetCapturesRoot() const
 FString FVCCSimPanelTexEnhancer::MakeNextCaptureDirectory() const
 {
     const FString Root = GetDatasetCapturesRoot();
+    const FString Timestamp = FDateTime::Now().ToString(TEXT("%Y%m%d_%H%M%S"));
     IFileManager& FileManager = IFileManager::Get();
-    for (int32 Index = 0; Index < 10000; ++Index)
+
+    FString Candidate = Root / FString::Printf(TEXT("capture_%s"), *Timestamp);
+    for (int32 Suffix = 2; FileManager.DirectoryExists(*Candidate) && Suffix < 100; ++Suffix)
     {
-        const FString Candidate = Root / FString::Printf(TEXT("capture_%03d"), Index);
-        if (!FileManager.DirectoryExists(*Candidate))
-        {
-            return Candidate;
-        }
+        Candidate = Root / FString::Printf(TEXT("capture_%s_%d"), *Timestamp, Suffix);
     }
-    return FString();
+    return FileManager.DirectoryExists(*Candidate) ? FString() : Candidate;
 }
 
 FReply FVCCSimPanelTexEnhancer::OnCaptureDatasetClicked()
@@ -991,7 +990,16 @@ void FVCCSimPanelTexEnhancer::OnDatasetCaptureFinished(bool bSuccess, FString Ca
 
     if (!bSuccess)
     {
-        UE_LOG(LogTexEnhancerPanel, Warning, TEXT("Dataset capture cancelled or failed: %s"), *CaptureDirectory);
+        if (IFileManager::Get().DeleteDirectory(*CaptureDirectory, false, true))
+        {
+            UE_LOG(LogTexEnhancerPanel, Warning,
+                TEXT("Dataset capture cancelled or failed; partial directory removed: %s"), *CaptureDirectory);
+        }
+        else
+        {
+            UE_LOG(LogTexEnhancerPanel, Warning,
+                TEXT("Dataset capture cancelled or failed; could not remove partial directory: %s"), *CaptureDirectory);
+        }
         FVCCSimUIHelpers::ShowNotification(TEXT("Dataset capture did not complete."), true);
         return;
     }
@@ -1000,7 +1008,7 @@ void FVCCSimPanelTexEnhancer::OnDatasetCaptureFinished(bool bSuccess, FString Ca
     FVCCSimUIHelpers::ShowNotification(
         FString::Printf(TEXT("Dataset capture complete: %s"), *CaptureDirectory), false);
 
-    const FString GTMaterialsDir = FPaths::Combine(OutputDirectory, TEXT("gt_materials"));
+    const FString GTMaterialsDir = FPaths::Combine(OutputDirectory, SceneName, TEXT("gt_materials"));
     if (IFileManager::Get().DirectoryExists(*GTMaterialsDir))
     {
         UE_LOG(LogTexEnhancerPanel, Log, TEXT("gt_materials already exported, skipped"));
@@ -1365,7 +1373,7 @@ FString FVCCSimPanelTexEnhancer::GetSetBCaptureDir() const
 
 FString FVCCSimPanelTexEnhancer::GetGTMaterialsPath() const
 {
-    return FPaths::Combine(OutputDirectory, TEXT("gt_materials"), TEXT("manifest.json"));
+    return FPaths::Combine(OutputDirectory, SceneName, TEXT("gt_materials"), TEXT("manifest.json"));
 }
 
 FString FVCCSimPanelTexEnhancer::GetEvaluationOutputDir() const
