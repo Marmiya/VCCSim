@@ -33,7 +33,7 @@
 
 class FVCCSimPanelSelection;
 class FVCCSimPanelPathImageCapture;
-class AStaticMeshActor;
+class AActor;
 class UStaticMesh;
 class UTexture2D;
 class FLightingManager;
@@ -57,6 +57,7 @@ public:
     void SetTexEnhancerSectionExpanded(bool bExpanded) { bSectionExpanded = bExpanded; }
 
     void LoadFromConfigManager();
+    void SaveToConfigManager();
 
 private:
     // ============================================================================
@@ -77,8 +78,6 @@ private:
 
     TSharedPtr<SEditableTextBox> TexEnhancerScriptTextBox;
     TSharedPtr<SEditableTextBox> EstimatedMaterialsDirTextBox;
-    TSharedPtr<STextBlock> LightingStatusTextBlock;
-    TSharedPtr<STextBlock> EvalResultsTextBlock;
 
     TSharedPtr<SNumericEntryBox<int32>> GTTexResSpinBox;
     TOptional<int32> GTTexResValue;
@@ -199,9 +198,6 @@ private:
     void OnDatasetCaptureFinished(bool bSuccess, FString CaptureDirectory);
     FString GetDatasetCapturesRoot() const;
     FString MakeNextCaptureDirectory() const;
-    void SetDatasetCaptureStatus(const FString& Status);
-
-    TSharedPtr<STextBlock> DatasetCaptureStatusTextBlock;
 
     // ============================================================================
     // SECTION 4: GT MATERIAL EXPORT
@@ -221,14 +217,14 @@ private:
 
     void BuildSeedShapes(
         UWorld* World,
-        const TArray<AStaticMeshActor*>& Seeds,
+        const TArray<AActor*>& Seeds,
         float ExpandCm,
         int32 NumProbes,
         TArray<FSeedShape>& OutShapes) const;
 
     void CollectNearbyTargets(
         UWorld* World,
-        const TArray<AStaticMeshActor*>& SeedActors,
+        const TArray<AActor*>& SeedActors,
         float RadiusCm,
         TArray<FString>& InOutActorLabels,
         TArray<FGTFoliageExportEntry>& OutFoliageEntries) const;
@@ -272,5 +268,6 @@ private:
 
     void SavePaths();
     void LoadPaths();
+    void LoadParamsFromConfig();
 };
 

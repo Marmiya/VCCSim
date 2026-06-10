@@ -387,6 +387,7 @@ void SVCCSimPanel::UpdateSubPanelsFromState()
     if (PathImageCaptureManager.IsValid())
     {
         PathImageCaptureManager->SetPathImageCaptureSectionExpanded(States.bPathImageCaptureSectionExpanded);
+        PathImageCaptureManager->LoadFromConfigManager();
     }
 
     if (SceneAnalysisManager.IsValid())
@@ -425,6 +426,7 @@ void SVCCSimPanel::GatherSubPanelStates()
     if (PathImageCaptureManager.IsValid())
     {
         States.bPathImageCaptureSectionExpanded = PathImageCaptureManager->IsPathImageCaptureSectionExpanded();
+        PathImageCaptureManager->SaveToConfigManager();
     }
 
     if (SceneAnalysisManager.IsValid())
@@ -440,6 +442,7 @@ void SVCCSimPanel::GatherSubPanelStates()
     if (TexEnhancerManager.IsValid())
     {
         States.bTexEnhancerSectionExpanded = TexEnhancerManager->IsTexEnhancerSectionExpanded();
+        TexEnhancerManager->SaveToConfigManager();
     }
 
     FVCCSimConfigManager::Get().SetPanelStates(States);

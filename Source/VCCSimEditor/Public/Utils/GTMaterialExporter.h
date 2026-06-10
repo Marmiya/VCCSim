@@ -19,7 +19,7 @@
 
 #include "CoreMinimal.h"
 
-class AStaticMeshActor;
+class AActor;
 class UStaticMesh;
 
 struct FGTFoliageExportEntry
@@ -44,9 +44,13 @@ public:
         FSimpleDelegate OnComplete
     );
 
+public:
+    /** True if the actor owns at least one StaticMeshComponent (incl. ISM/HISM) with a mesh and materials. */
+    static bool HasExportableMeshMaterials(const AActor* Actor);
+
 private:
     static bool WriteManifest(
-        AStaticMeshActor* Actor,
+        AActor* Actor,
         const FString& Label,
         const FString& SceneName,
         int32 TextureResolution,

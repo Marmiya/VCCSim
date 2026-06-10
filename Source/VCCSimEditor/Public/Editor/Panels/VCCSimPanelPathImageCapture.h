@@ -74,9 +74,15 @@ public:
     /** True when the selected FlashPawn has a path and the dataset cameras are present. */
     bool CanRunDatasetCapture(FString& OutReason) const;
 
+    /** Cancels the running capture session; fires the session delegate with false. */
+    void StopAutoCapture();
+
     // UI state access for persistence
     bool IsPathImageCaptureSectionExpanded() const { return bPathImageCaptureSectionExpanded; }
     void SetPathImageCaptureSectionExpanded(bool bExpanded) { bPathImageCaptureSectionExpanded = bExpanded; }
+
+    void LoadFromConfigManager();
+    void SaveToConfigManager() const;
 
     // UI Construction (public for _UI.cpp)
     TSharedRef<SWidget> CreatePathConfigSection();
@@ -111,7 +117,7 @@ private:
     // Image Capture
     void CaptureImageFromCurrentPose();
     void StartAutoCapture();
-    void StopAutoCapture();
+    void TickCaptureSession();
     void FinishCaptureSession(bool bSuccess);
     
     // Utility
@@ -125,6 +131,7 @@ private:
     TSharedPtr<SNumericEntryBox<float>> OrbitVOverlapSpinBox;
     TSharedPtr<SNumericEntryBox<float>> OrbitNadirAltSpinBox;
     TSharedPtr<SNumericEntryBox<float>> OrbitNadirTiltSpinBox;
+    TSharedPtr<SNumericEntryBox<float>> CaptureTickIntervalSpinBox;
     TSharedPtr<SButton> VisualizePathButton;
     TSharedPtr<SButton> AutoCaptureButton;
     
@@ -137,6 +144,7 @@ private:
     float OrbitNadirAlt = 500.0f;
     float OrbitNadirTiltAngle = 45.0f;
     bool bOrbitIncludeNadir = true;
+    float CaptureTickInterval = 0.2f;
 
     TOptional<float> OrbitMarginValue;
     TOptional<float> OrbitStartHeightValue;
@@ -145,6 +153,7 @@ private:
     TOptional<float> OrbitVOverlapValue;
     TOptional<float> OrbitNadirAltValue;
     TOptional<float> OrbitNadirTiltValue;
+    TOptional<float> CaptureTickIntervalValue;
     
     bool bPathVisualized = false;
     bool bPathNeedsUpdate = true;
@@ -155,6 +164,7 @@ private:
     bool bGameViewChangedForCapture = false;
     bool bSessionDatasetChannelsOnly = false;
     bool bDrainingCaptureJobs = false;
+    bool bWarmupCaptureDone = false;
     FOnCaptureSessionComplete SessionCompleteDelegate;
     FTimerHandle AutoCaptureTimerHandle;
     FString SaveDirectory;

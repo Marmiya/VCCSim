@@ -178,6 +178,56 @@ void FVCCSimPanelTexEnhancer::LoadFromConfigManager()
     bMergeNearbyMeshes   = Config.bMergeNearbyMeshes;
     NearbyRadius         = Config.NearbyRadius;
     NearbyRadiusValue    = NearbyRadius;
+
+    LoadParamsFromConfig();
+}
+
+void FVCCSimPanelTexEnhancer::SaveToConfigManager()
+{
+    SavePaths();
+}
+
+void FVCCSimPanelTexEnhancer::LoadParamsFromConfig()
+{
+    const auto& Config = FVCCSimConfigManager::Get().GetTexEnhancerConfig();
+
+    GTTextureResolution = Config.GTTextureResolution;
+    DayCycleSpeed       = Config.DayCycleSpeed;
+
+    for (int32 i = 0; i < MaxLightingEntries; ++i)
+    {
+        if (Config.SetAElevation.IsValidIndex(i)) SetAElevation[i] = Config.SetAElevation[i];
+        if (Config.SetAAzimuth.IsValidIndex(i))   SetAAzimuth[i]   = Config.SetAAzimuth[i];
+        if (Config.SetBElevation.IsValidIndex(i)) SetBElevation[i] = Config.SetBElevation[i];
+        if (Config.SetBAzimuth.IsValidIndex(i))   SetBAzimuth[i]   = Config.SetBAzimuth[i];
+
+        SetAElevationValue[i] = SetAElevation[i];
+        SetAAzimuthValue[i]   = SetAAzimuth[i];
+        SetBElevationValue[i] = SetBElevation[i];
+        SetBAzimuthValue[i]   = SetBAzimuth[i];
+    }
+
+    SunCalcLatitude  = Config.SunCalcLatitude;
+    SunCalcLongitude = Config.SunCalcLongitude;
+    SunCalcTimeZone  = Config.SunCalcTimeZone;
+    SunCalcYear      = Config.SunCalcYear;
+    SunCalcMonth     = Config.SunCalcMonth;
+    SunCalcDay       = Config.SunCalcDay;
+    SunCalcHour      = Config.SunCalcHour;
+    SunCalcMinute    = Config.SunCalcMinute;
+    SunCalcFillSlot  = Config.SunCalcFillSlot;
+
+    GTTexResValue        = GTTextureResolution;
+    DayCycleSpeedValue   = DayCycleSpeed;
+    SunCalcLatValue      = SunCalcLatitude;
+    SunCalcLonValue      = SunCalcLongitude;
+    SunCalcTZValue       = SunCalcTimeZone;
+    SunCalcYearValue     = SunCalcYear;
+    SunCalcMonthValue    = SunCalcMonth;
+    SunCalcDayValue      = SunCalcDay;
+    SunCalcHourValue     = SunCalcHour;
+    SunCalcMinuteValue   = SunCalcMinute;
+    SunCalcFillSlotValue = SunCalcFillSlot;
 }
 
 // ============================================================================
@@ -213,8 +263,8 @@ FReply FVCCSimPanelTexEnhancer::OnApplySetALightingClicked(int32 Index)
 {
     if (Index < 0 || Index >= NumLightingSetA || !LightingManager.IsValid()) return FReply::Handled();
     LightingManager->ApplyLightingCondition(SetAElevation[Index], SetAAzimuth[Index]);
-    if (LightingStatusTextBlock.IsValid())
-        LightingStatusTextBlock->SetText(FText::FromString(FString::Printf(TEXT("Set-A%d Applied: Elev=%.1f\u00B0 Az=%.1f\u00B0"), Index + 1, SetAElevation[Index], SetAAzimuth[Index])));
+    UE_LOG(LogTexEnhancerPanel, Log, TEXT("Set-A%d applied: Elev=%.1f Az=%.1f"),
+        Index + 1, SetAElevation[Index], SetAAzimuth[Index]);
     return FReply::Handled();
 }
 
@@ -222,8 +272,8 @@ FReply FVCCSimPanelTexEnhancer::OnApplySetBLightingClicked(int32 Index)
 {
     if (Index < 0 || Index >= NumLightingSetB || !LightingManager.IsValid()) return FReply::Handled();
     LightingManager->ApplyLightingCondition(SetBElevation[Index], SetBAzimuth[Index]);
-    if (LightingStatusTextBlock.IsValid())
-        LightingStatusTextBlock->SetText(FText::FromString(FString::Printf(TEXT("Set-B%d Applied: Elev=%.1f\u00B0 Az=%.1f\u00B0"), Index + 1, SetBElevation[Index], SetBAzimuth[Index])));
+    UE_LOG(LogTexEnhancerPanel, Log, TEXT("Set-B%d applied: Elev=%.1f Az=%.1f"),
+        Index + 1, SetBElevation[Index], SetBAzimuth[Index]);
     return FReply::Handled();
 }
 
@@ -244,9 +294,9 @@ FReply FVCCSimPanelTexEnhancer::OnCalculateSunPositionClicked()
     TPair<float, float> SunPos = LightingManager->CalculateAndApplySunPosition(Params);
     SunCalcElevation = SunPos.Key;
     SunCalcAzimuth = SunPos.Value;
-    
-    if (LightingStatusTextBlock.IsValid())
-        LightingStatusTextBlock->SetText(FText::FromString(FString::Printf(TEXT("Calculated & Applied: Elev=%.1f\u00B0 Az=%.1f\u00B0"), SunCalcElevation, SunCalcAzimuth)));
+
+    UE_LOG(LogTexEnhancerPanel, Log, TEXT("Sun position calculated & applied: Elev=%.1f Az=%.1f"),
+        SunCalcElevation, SunCalcAzimuth);
 
     return FReply::Handled();
 }
@@ -324,7 +374,7 @@ FReply FVCCSimPanelTexEnhancer::OnToggleDayCycleClicked()
 
 void FVCCSimPanelTexEnhancer::BuildSeedShapes(
     UWorld* World,
-    const TArray<AStaticMeshActor*>& Seeds,
+    const TArray<AActor*>& Seeds,
     float ExpandCm,
     int32 NumProbes,
     TArray<FSeedShape>& OutShapes) const
@@ -333,7 +383,7 @@ void FVCCSimPanelTexEnhancer::BuildSeedShapes(
     if (!World || Seeds.IsEmpty() || NumProbes < 8) return;
 
     TSet<AActor*> SeedSet;
-    for (AStaticMeshActor* S : Seeds) if (IsValid(S)) SeedSet.Add(S);
+    for (AActor* S : Seeds) if (IsValid(S)) SeedSet.Add(S);
 
     const int32 NumSlices = 3;
     const float SliceT[NumSlices] = { 0.15f, 0.5f, 0.85f };
@@ -341,7 +391,7 @@ void FVCCSimPanelTexEnhancer::BuildSeedShapes(
     FCollisionQueryParams BaseQueryParams;
     BaseQueryParams.bTraceComplex = true;
 
-    for (AStaticMeshActor* Seed : Seeds)
+    for (AActor* Seed : Seeds)
     {
         if (!IsValid(Seed)) continue;
 
@@ -439,7 +489,7 @@ static bool PointInPoly2D(const FVector2D& P, const TArray<FVector2D>& Poly)
 
 void FVCCSimPanelTexEnhancer::CollectNearbyTargets(
     UWorld* World,
-    const TArray<AStaticMeshActor*>& SeedActors,
+    const TArray<AActor*>& SeedActors,
     float RadiusCm,
     TArray<FString>& InOutActorLabels,
     TArray<FGTFoliageExportEntry>& OutFoliageEntries) const
@@ -447,7 +497,7 @@ void FVCCSimPanelTexEnhancer::CollectNearbyTargets(
     if (!World || SeedActors.IsEmpty() || RadiusCm < 0.f) return;
 
     TSet<AActor*> SeedSet;
-    for (AStaticMeshActor* Seed : SeedActors)
+    for (AActor* Seed : SeedActors)
         if (IsValid(Seed)) SeedSet.Add(Seed);
 
     TArray<FSeedShape> Shapes;
@@ -483,13 +533,13 @@ void FVCCSimPanelTexEnhancer::CollectNearbyTargets(
     TSet<FString> ExistingLabels;
     for (const FString& L : InOutActorLabels) ExistingLabels.Add(L);
 
-    for (TActorIterator<AStaticMeshActor> It(World); It; ++It)
+    for (TActorIterator<AActor> It(World); It; ++It)
     {
-        AStaticMeshActor* Cand = *It;
+        AActor* Cand = *It;
         if (!IsValid(Cand) || SeedSet.Contains(Cand)) continue;
-
-        UStaticMeshComponent* MC = Cand->GetStaticMeshComponent();
-        if (!MC || MC->GetNumMaterials() == 0) continue;
+        if (Cand->IsA<AInstancedFoliageActor>()) continue;
+        if (Cand->Tags.Contains(FName("NotSMActor")) || Cand->Tags.Contains(FName("VCCSimPathViz"))) continue;
+        if (!FGTMaterialExporter::HasExportableMeshMaterials(Cand)) continue;
 
         FVector Origin, Extent;
         Cand->GetActorBounds(false, Origin, Extent);
@@ -563,20 +613,23 @@ bool FVCCSimPanelTexEnhancer::BuildMergedNearbyEntry(
     if (!World) return false;
     if (NearbyStaticLabels.IsEmpty() && FoliageEntries.IsEmpty()) return false;
 
-    TMap<FString, AStaticMeshActor*> LabelMap;
-    for (TActorIterator<AStaticMeshActor> It(World); It; ++It)
-        if (AStaticMeshActor* A = *It) LabelMap.Add(A->GetActorLabel(), A);
+    TMap<FString, AActor*> LabelMap;
+    for (TActorIterator<AActor> It(World); It; ++It)
+        if (AActor* A = *It) LabelMap.Add(A->GetActorLabel(), A);
 
     TArray<UPrimitiveComponent*> Comps;
     TArray<AStaticMeshActor*> IntermediateActors;
 
     for (const FString& L : NearbyStaticLabels)
     {
-        AStaticMeshActor** Found = LabelMap.Find(L);
+        AActor** Found = LabelMap.Find(L);
         if (!Found || !IsValid(*Found)) continue;
-        if (UStaticMeshComponent* MC = (*Found)->GetStaticMeshComponent())
+
+        TArray<UStaticMeshComponent*> MeshComps;
+        (*Found)->GetComponents<UStaticMeshComponent>(MeshComps);
+        for (UStaticMeshComponent* MC : MeshComps)
         {
-            if (MC->GetStaticMesh()) Comps.Add(MC);
+            if (MC && MC->GetStaticMesh()) Comps.Add(MC);
         }
     }
 
@@ -702,14 +755,14 @@ void FVCCSimPanelTexEnhancer::TickExpansionVisualization()
     TSharedPtr<FVCCSimPanelSelection> Sel = SelectionManager.Pin();
     if (!Sel.IsValid()) return;
 
-    TMap<FString, AStaticMeshActor*> LabelMap;
-    for (TActorIterator<AStaticMeshActor> It(World); It; ++It)
-        if (AStaticMeshActor* A = *It) LabelMap.Add(A->GetActorLabel(), A);
+    TMap<FString, AActor*> LabelMap;
+    for (TActorIterator<AActor> It(World); It; ++It)
+        if (AActor* A = *It) LabelMap.Add(A->GetActorLabel(), A);
 
-    TArray<AStaticMeshActor*> Seeds;
+    TArray<AActor*> Seeds;
     for (const FString& Label : Sel->GetEnabledTargetActorLabels())
     {
-        if (AStaticMeshActor** Found = LabelMap.Find(Label))
+        if (AActor** Found = LabelMap.Find(Label))
             if (IsValid(*Found)) Seeds.Add(*Found);
     }
     if (Seeds.IsEmpty()) return;
@@ -786,14 +839,14 @@ bool FVCCSimPanelTexEnhancer::StartGTMaterialExport()
 
     if (bIncludeNearbyMeshes && NearbyRadius >= 0.f)
     {
-        TMap<FString, AStaticMeshActor*> LabelMap;
-        for (TActorIterator<AStaticMeshActor> It(World); It; ++It)
-            if (AStaticMeshActor* A = *It) LabelMap.Add(A->GetActorLabel(), A);
+        TMap<FString, AActor*> LabelMap;
+        for (TActorIterator<AActor> It(World); It; ++It)
+            if (AActor* A = *It) LabelMap.Add(A->GetActorLabel(), A);
 
-        TArray<AStaticMeshActor*> SeedActors;
+        TArray<AActor*> SeedActors;
         for (const FString& Label : ActorLabels)
         {
-            if (AStaticMeshActor** Found = LabelMap.Find(Label))
+            if (AActor** Found = LabelMap.Find(Label))
                 SeedActors.Add(*Found);
         }
 
@@ -871,18 +924,14 @@ FString FVCCSimPanelTexEnhancer::MakeNextCaptureDirectory() const
     return FString();
 }
 
-void FVCCSimPanelTexEnhancer::SetDatasetCaptureStatus(const FString& Status)
-{
-    if (DatasetCaptureStatusTextBlock.IsValid())
-    {
-        DatasetCaptureStatusTextBlock->SetText(FText::FromString(Status));
-    }
-}
-
 FReply FVCCSimPanelTexEnhancer::OnCaptureDatasetClicked()
 {
     if (bDatasetCaptureInProgress)
     {
+        if (TSharedPtr<FVCCSimPanelPathImageCapture> PathCapture = PathImageCaptureManager.Pin())
+        {
+            PathCapture->StopAutoCapture();
+        }
         return FReply::Handled();
     }
     if (OutputDirectory.IsEmpty())
@@ -932,7 +981,6 @@ FReply FVCCSimPanelTexEnhancer::OnCaptureDatasetClicked()
     }
 
     bDatasetCaptureInProgress = true;
-    SetDatasetCaptureStatus(FString::Printf(TEXT("Capturing to %s ..."), *CaptureDir));
     UE_LOG(LogTexEnhancerPanel, Log, TEXT("Dataset capture started: %s"), *CaptureDir);
     return FReply::Handled();
 }
@@ -943,7 +991,7 @@ void FVCCSimPanelTexEnhancer::OnDatasetCaptureFinished(bool bSuccess, FString Ca
 
     if (!bSuccess)
     {
-        SetDatasetCaptureStatus(TEXT("Capture cancelled or failed."));
+        UE_LOG(LogTexEnhancerPanel, Warning, TEXT("Dataset capture cancelled or failed: %s"), *CaptureDirectory);
         FVCCSimUIHelpers::ShowNotification(TEXT("Dataset capture did not complete."), true);
         return;
     }
@@ -955,28 +1003,20 @@ void FVCCSimPanelTexEnhancer::OnDatasetCaptureFinished(bool bSuccess, FString Ca
     const FString GTMaterialsDir = FPaths::Combine(OutputDirectory, TEXT("gt_materials"));
     if (IFileManager::Get().DirectoryExists(*GTMaterialsDir))
     {
-        SetDatasetCaptureStatus(FString::Printf(
-            TEXT("Done: %s | gt_materials already exported, skipped"), *CaptureDirectory));
+        UE_LOG(LogTexEnhancerPanel, Log, TEXT("gt_materials already exported, skipped"));
         return;
     }
 
     TSharedPtr<FVCCSimPanelSelection> Sel = SelectionManager.Pin();
     if (!Sel.IsValid() || !Sel->HasEnabledTargetActors())
     {
-        SetDatasetCaptureStatus(FString::Printf(
-            TEXT("Done: %s | no enabled target actors, gt_materials skipped"), *CaptureDirectory));
+        UE_LOG(LogTexEnhancerPanel, Log, TEXT("No enabled target actors, gt_materials export skipped"));
         return;
     }
 
-    if (StartGTMaterialExport())
+    if (!StartGTMaterialExport())
     {
-        SetDatasetCaptureStatus(FString::Printf(
-            TEXT("Done: %s | gt_materials export started"), *CaptureDirectory));
-    }
-    else
-    {
-        SetDatasetCaptureStatus(FString::Printf(
-            TEXT("Done: %s | gt_materials export could not start"), *CaptureDirectory));
+        UE_LOG(LogTexEnhancerPanel, Warning, TEXT("gt_materials export could not start"));
     }
 }
 
@@ -1286,11 +1326,7 @@ void FVCCSimPanelTexEnhancer::RunBRDFEvaluation()
         Results = TEXT("No matching actors found between GT and estimated materials.");
     }
 
-    if (EvalResultsTextBlock.IsValid())
-    {
-        EvalResultsTextBlock->SetText(FText::FromString(Results));
-    }
-    UE_LOG(LogTexEnhancerPanel, Log, TEXT("BRDF evaluation complete."));
+    UE_LOG(LogTexEnhancerPanel, Log, TEXT("%s"), *Results);
 
     FString EvalDir = GetEvaluationOutputDir();
     IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
@@ -1351,6 +1387,25 @@ void FVCCSimPanelTexEnhancer::SavePaths()
     Config.bIncludeNearbyMeshes   = bIncludeNearbyMeshes;
     Config.bMergeNearbyMeshes     = bMergeNearbyMeshes;
     Config.NearbyRadius           = NearbyRadius;
+
+    Config.GTTextureResolution = GTTextureResolution;
+    Config.DayCycleSpeed       = DayCycleSpeed;
+
+    Config.SetAElevation.Append(SetAElevation, MaxLightingEntries);
+    Config.SetAAzimuth.Append(SetAAzimuth, MaxLightingEntries);
+    Config.SetBElevation.Append(SetBElevation, MaxLightingEntries);
+    Config.SetBAzimuth.Append(SetBAzimuth, MaxLightingEntries);
+
+    Config.SunCalcLatitude  = SunCalcLatitude;
+    Config.SunCalcLongitude = SunCalcLongitude;
+    Config.SunCalcTimeZone  = SunCalcTimeZone;
+    Config.SunCalcYear      = SunCalcYear;
+    Config.SunCalcMonth     = SunCalcMonth;
+    Config.SunCalcDay       = SunCalcDay;
+    Config.SunCalcHour      = SunCalcHour;
+    Config.SunCalcMinute    = SunCalcMinute;
+    Config.SunCalcFillSlot  = SunCalcFillSlot;
+
     FVCCSimConfigManager::Get().SetTexEnhancerConfig(Config);
 }
 
@@ -1367,4 +1422,6 @@ void FVCCSimPanelTexEnhancer::LoadPaths()
     bMergeNearbyMeshes   = Config.bMergeNearbyMeshes;
     NearbyRadius         = Config.NearbyRadius;
     NearbyRadiusValue    = NearbyRadius;
+
+    LoadParamsFromConfig();
 }

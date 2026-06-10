@@ -66,6 +66,24 @@ public:
         bool    bIncludeNearbyMeshes = false;
         bool    bMergeNearbyMeshes   = false;
         float   NearbyRadius         = 500.f;
+
+        int32   GTTextureResolution  = 2048;
+        float   DayCycleSpeed        = 10.f;
+
+        TArray<float> SetAElevation;
+        TArray<float> SetAAzimuth;
+        TArray<float> SetBElevation;
+        TArray<float> SetBAzimuth;
+
+        float SunCalcLatitude  = 22.52933f;
+        float SunCalcLongitude = 113.94092f;
+        float SunCalcTimeZone  = 8.0f;
+        int32 SunCalcYear      = 2026;
+        int32 SunCalcMonth     = 3;
+        int32 SunCalcDay       = 20;
+        int32 SunCalcHour      = 10;
+        int32 SunCalcMinute    = 0;
+        int32 SunCalcFillSlot  = 1;
     };
 
     // Shared target actor list (path generation + GT material export)
@@ -73,6 +91,20 @@ public:
     {
         TArray<FString> Labels;
         TArray<bool>    EnabledFlags;
+    };
+
+    // PathImageCapture orbit & capture parameters
+    struct FPathImageCaptureConfig
+    {
+        float Margin              = 500.f;
+        float StartHeight         = 200.f;
+        float CameraHFOV          = 90.f;
+        float HOverlap            = 0.6f;
+        float VOverlap            = 0.6f;
+        float NadirAltitude       = 500.f;
+        float NadirTiltAngle      = 45.f;
+        bool  bIncludeNadir       = true;
+        float CaptureTickInterval = 0.2f;
     };
 
     // Getters and setters for panel states
@@ -86,6 +118,10 @@ public:
     // Getters and setters for the shared target actor list
     const FTargetActorsConfig& GetTargetActorsConfig() const { return TargetActorsConfig; }
     void SetTargetActorsConfig(const FTargetActorsConfig& InConfig) { TargetActorsConfig = InConfig; }
+
+    // Getters and setters for PathImageCapture parameters
+    const FPathImageCaptureConfig& GetPathImageCaptureConfig() const { return PathImageCaptureConfig; }
+    void SetPathImageCaptureConfig(const FPathImageCaptureConfig& InConfig) { PathImageCaptureConfig = InConfig; }
 
     // Individual state setters
     void SetFlashPawnSectionExpanded(bool bExpanded) { PanelStates.bFlashPawnSectionExpanded = bExpanded; }
@@ -114,6 +150,7 @@ private:
     FPanelStates PanelStates;
     FTexEnhancerConfig TexEnhancerConfig;
     FTargetActorsConfig TargetActorsConfig;
+    FPathImageCaptureConfig PathImageCaptureConfig;
 
     // ============================================================================
     // INTERNAL JSON OPERATIONS

@@ -21,6 +21,7 @@
 #include "Pawns/FlashPawn.h"
 #include "Styling/AppStyle.h"
 #include "Styling/CoreStyle.h"
+#include "Widgets/Layout/SBorder.h"
 
 // ============================================================================
 // UI CONSTRUCTION
@@ -159,7 +160,40 @@ TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreatePathConfigSection()
 TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreateImageCaptureSection()
 {
     return SNew(SVerticalBox)
-    
+
+    +SVerticalBox::Slot()
+    .AutoHeight()
+    .Padding(0, 0, 0, 4)
+    [
+        FVCCSimUIHelpers::CreatePropertyRow(TEXT("Tick (s)"),
+            SNew(SBorder)
+            .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
+            .BorderBackgroundColor(FColor(5, 5, 5, 255))
+            .Padding(4, 0)
+            [
+                SAssignNew(CaptureTickIntervalSpinBox, SNumericEntryBox<float>)
+                .Value_Lambda([this]() { return CaptureTickIntervalValue; })
+                .MinValue(0.05f).MaxValue(5.f).Delta(0.05f).AllowSpin(true)
+                .ToolTipText(FText::FromString(TEXT(
+                    "Interval between capture ticks during auto/dataset capture. "
+                    "Takes effect immediately, even while a capture is running.")))
+                .OnValueChanged_Lambda([this](float Val)
+                {
+                    CaptureTickInterval = FMath::Clamp(Val, 0.05f, 5.f);
+                    CaptureTickIntervalValue = CaptureTickInterval;
+                    if (bAutoCaptureInProgress && GEditor)
+                    {
+                        GEditor->GetTimerManager()->SetTimer(
+                            AutoCaptureTimerHandle,
+                            FTimerDelegate::CreateLambda([this]() { TickCaptureSession(); }),
+                            CaptureTickInterval,
+                            true);
+                    }
+                })
+            ]
+        )
+    ]
+
     +SVerticalBox::Slot()
     .AutoHeight()
     .Padding(0, 0, 0, 4)

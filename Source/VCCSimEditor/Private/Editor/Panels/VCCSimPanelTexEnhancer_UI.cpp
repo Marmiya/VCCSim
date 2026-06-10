@@ -161,14 +161,6 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateLightingScheduleSection()
 
         +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
         [
-            SAssignNew(LightingStatusTextBlock, STextBlock)
-            .Text(FText::GetEmpty())
-            .ColorAndOpacity(FLinearColor(0.6f, 0.9f, 0.6f))
-            .Font(FCoreStyle::GetDefaultFontStyle("Mono", 8))
-        ]
-
-        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
-        [
             SNew(SBorder)
             .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
             .BorderBackgroundColor(FColor(20, 40, 80, 255))
@@ -607,14 +599,6 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateGTExportSection()
 
         +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 0, 0, 2))
         [
-            SNew(STextBlock)
-            .Text(FText::FromString(TEXT("Exports the enabled entries of the Target Actors list (Object Selection panel).")))
-            .ColorAndOpacity(FLinearColor(0.6f, 0.6f, 0.6f))
-            .AutoWrapText(true)
-        ]
-
-        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 0, 0, 2))
-        [
             FVCCSimUIHelpers::CreateNumericPropertyRowInt32(
                 TEXT("Tex Res (px)"), GTTexResSpinBox, GTTexResValue,
                 GTTextureResolution, 64, 64)
@@ -731,20 +715,6 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateDatasetCaptureSection()
 
         +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
         [
-            FVCCSimUIHelpers::CreatePropertyRow(TEXT("Captures Dir"),
-                SNew(STextBlock)
-                .Text_Lambda([this]()
-                {
-                    return FText::FromString(GetDatasetCapturesRoot());
-                })
-                .ToolTipText(FText::FromString(
-                    TEXT("Each click captures the full FlashPawn path under the current "
-                         "scene lighting into the next capture_NNN directory.")))
-            )
-        ]
-
-        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
-        [
             SNew(SHorizontalBox)
             +SHorizontalBox::Slot().FillWidth(1.f)
             [
@@ -754,28 +724,22 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateDatasetCaptureSection()
                 .Text_Lambda([this]()
                 {
                     return bDatasetCaptureInProgress
-                        ? FText::FromString(TEXT("Capturing..."))
+                        ? FText::FromString(TEXT("Stop Capture"))
                         : FText::FromString(TEXT("Capture Dataset (Current Lighting)"));
                 })
                 .ToolTipText(FText::FromString(
                     TEXT("Writes poses.txt + intrinsics.json + lighting.json and captures "
                          "RGB / BaseColor / MatProps / Normal for every pose on the FlashPawn "
-                         "path. Apply the desired lighting first; click again after changing "
+                         "path into the next <Output>/<Scene>/captures/capture_NNN directory. "
+                         "Apply the desired lighting first; click again after changing "
                          "lighting to add another capture window. Exports gt_materials once "
-                         "after the first capture.")))
+                         "after the first capture. Click again while running to cancel.")))
                 .IsEnabled_Lambda([this]()
                 {
-                    return !bDatasetCaptureInProgress && !OutputDirectory.IsEmpty();
+                    return bDatasetCaptureInProgress || !OutputDirectory.IsEmpty();
                 })
                 .OnClicked_Lambda([this]() { return OnCaptureDatasetClicked(); })
             ]
-        ]
-
-        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
-        [
-            SAssignNew(DatasetCaptureStatusTextBlock, STextBlock)
-            .Text(FText::FromString(TEXT("Idle")))
-            .AutoWrapText(true)
         ]
     );
 }
@@ -899,21 +863,6 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateEvaluationSection()
                     return !bEvalInProgress && !EstimatedMaterialsDir.IsEmpty() && !OutputDirectory.IsEmpty();
                 })
                 .OnClicked_Lambda([this]() { return OnRunEvaluationClicked(); })
-            ]
-        ]
-
-        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
-        [
-            SNew(SBorder)
-            .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
-            .BorderBackgroundColor(FColor(5, 5, 5, 200))
-            .Padding(FMargin(6, 4))
-            [
-                SAssignNew(EvalResultsTextBlock, STextBlock)
-                .Text(FText::FromString(TEXT("No evaluation results yet.")))
-                .ColorAndOpacity(FLinearColor(0.7f, 0.7f, 0.7f))
-                .AutoWrapText(true)
-                .Font(FCoreStyle::GetDefaultFontStyle("Mono", 8))
             ]
         ]
     );

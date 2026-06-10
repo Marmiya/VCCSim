@@ -19,8 +19,24 @@ DEFINE_LOG_CATEGORY_STATIC(LogGTMaterialExporter, Log, All);
 
 FGTMaterialExporter::FGTMaterialExporter() {}
 
+bool FGTMaterialExporter::HasExportableMeshMaterials(const AActor* Actor)
+{
+    if (!Actor) return false;
+
+    TArray<UStaticMeshComponent*> MeshComps;
+    Actor->GetComponents<UStaticMeshComponent>(MeshComps);
+    for (UStaticMeshComponent* MC : MeshComps)
+    {
+        if (MC && MC->GetStaticMesh() && MC->GetNumMaterials() > 0)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool FGTMaterialExporter::WriteManifest(
-    AStaticMeshActor* Actor,
+    AActor* Actor,
     const FString& Label,
     const FString& SceneName,
     int32 TextureResolution,
@@ -71,7 +87,20 @@ bool FGTMaterialExporter::WriteManifest(
         Root->SetObjectField(TEXT("world_aabb_ue"), AABB);
     }
 
-    UStaticMeshComponent* MC = Actor->GetStaticMeshComponent();
+    TArray<UMaterialInterface*> Materials;
+    {
+        TArray<UStaticMeshComponent*> MeshComps;
+        Actor->GetComponents<UStaticMeshComponent>(MeshComps);
+        for (UStaticMeshComponent* MC : MeshComps)
+        {
+            if (!MC || !MC->GetStaticMesh()) continue;
+            for (int32 m = 0; m < MC->GetNumMaterials(); ++m)
+            {
+                Materials.Add(MC->GetMaterial(m));
+            }
+        }
+    }
+
     TArray<TSharedPtr<FJsonValue>> SlotsArray;
 
     for (int32 PrimIdx = 0; PrimIdx < GltfData.PrimToMaterial.Num(); ++PrimIdx)
@@ -82,10 +111,9 @@ bool FGTMaterialExporter::WriteManifest(
         Slot->SetNumberField(TEXT("slot"), PrimIdx);
 
         FString MatName;
-        if (MC && PrimIdx < MC->GetNumMaterials())
+        if (Materials.IsValidIndex(PrimIdx) && Materials[PrimIdx])
         {
-            UMaterialInterface* Mat = MC->GetMaterial(PrimIdx);
-            MatName = Mat ? Mat->GetName() : TEXT("");
+            MatName = Materials[PrimIdx]->GetName();
         }
         Slot->SetStringField(TEXT("material_name"), MatName);
 
@@ -133,27 +161,31 @@ void FGTMaterialExporter::ExportMaterials(
 
     FPlatformFileManager::Get().GetPlatformFile().CreateDirectoryTree(*BaseDir);
 
-    TMap<FString, AStaticMeshActor*> LabelMap;
-    for (TActorIterator<AStaticMeshActor> It(World); It; ++It)
-        if (AStaticMeshActor* A = *It) LabelMap.Add(A->GetActorLabel(), A);
+    TMap<FString, AActor*> LabelMap;
+    for (TActorIterator<AActor> It(World); It; ++It)
+        if (AActor* A = *It) LabelMap.Add(A->GetActorLabel(), A);
 
-    TArray<AStaticMeshActor*> Actors;
+    TArray<AActor*> Actors;
     TArray<FString> Labels;
-    TArray<AStaticMeshActor*> TempFoliageActors;
+    TArray<AActor*> TempFoliageActors;
 
     for (const FString& Label : ActorLabels)
     {
-        AStaticMeshActor** Found = LabelMap.Find(Label);
+        AActor** Found = LabelMap.Find(Label);
         if (!Found)
         {
             UE_LOG(LogGTMaterialExporter, Warning, TEXT("GT Export: actor '%s' not found"), *Label);
             continue;
         }
-        UStaticMeshComponent* MC = (*Found)->GetStaticMeshComponent();
-        if (MC && MC->GetNumMaterials() > 0)
+        if (HasExportableMeshMaterials(*Found))
         {
             Actors.Add(*Found);
             Labels.Add(Label);
+        }
+        else
+        {
+            UE_LOG(LogGTMaterialExporter, Warning,
+                TEXT("GT Export: actor '%s' has no StaticMeshComponent with materials, skipped"), *Label);
         }
     }
 
@@ -188,8 +220,7 @@ void FGTMaterialExporter::ExportMaterials(
         TempActor->SetActorHiddenInGame(true);
         TempActor->SetActorLabel(Entry.Label);
 
-        UStaticMeshComponent* MC = TempActor->GetStaticMeshComponent();
-        if (MC && MC->GetNumMaterials() > 0)
+        if (HasExportableMeshMaterials(TempActor))
         {
             Actors.Add(TempActor);
             Labels.Add(Entry.Label);
@@ -203,7 +234,7 @@ void FGTMaterialExporter::ExportMaterials(
 
     ON_SCOPE_EXIT
     {
-        for (AStaticMeshActor* TempActor : TempFoliageActors)
+        for (AActor* TempActor : TempFoliageActors)
         {
             if (IsValid(TempActor))
             {
@@ -240,7 +271,7 @@ void FGTMaterialExporter::ExportMaterials(
     for (int32 i = 0; i < Actors.Num(); ++i)
     {
         const FString& Label = Labels[i];
-        AStaticMeshActor* Actor = Actors[i];
+        AActor* Actor = Actors[i];
 
         SlowTask.EnterProgressFrame(1.0f, FText::FromString(FString::Printf(TEXT("Exporting: %s (%d/%d)"), *Label, i + 1, Actors.Num())));
         if (SlowTask.ShouldCancel())

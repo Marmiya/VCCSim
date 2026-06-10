@@ -19,6 +19,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogPathImageCapture, Log, All);
 
 #include "Editor/Panels/VCCSimPanelPathImageCapture.h"
 #include "Editor/Panels/VCCSimPanelSelection.h"
+#include "Utils/VCCSimConfigManager.h"
 #include "Utils/ConfigParser.h"
 #include "Utils/PathGenerator.h"
 #include "Utils/ImageCaptureService.h"
@@ -281,6 +282,7 @@ FVCCSimPanelPathImageCapture::FVCCSimPanelPathImageCapture()
     OrbitVOverlapValue    = OrbitVOverlap;
     OrbitNadirAltValue    = OrbitNadirAlt;
     OrbitNadirTiltValue   = OrbitNadirTiltAngle;
+    CaptureTickIntervalValue = CaptureTickInterval;
 }
 
 FVCCSimPanelPathImageCapture::~FVCCSimPanelPathImageCapture()
@@ -336,6 +338,45 @@ void FVCCSimPanelPathImageCapture::SetSelectionManager(TSharedPtr<FVCCSimPanelSe
 {
     SelectionManager = InSelectionManager;
     ImageCaptureService = MakeShared<FImageCaptureService>(InSelectionManager);
+}
+
+void FVCCSimPanelPathImageCapture::LoadFromConfigManager()
+{
+    const auto& Config = FVCCSimConfigManager::Get().GetPathImageCaptureConfig();
+
+    OrbitMargin         = Config.Margin;
+    OrbitStartHeight    = Config.StartHeight;
+    OrbitCameraHFOV     = Config.CameraHFOV;
+    OrbitHOverlap       = Config.HOverlap;
+    OrbitVOverlap       = Config.VOverlap;
+    OrbitNadirAlt       = Config.NadirAltitude;
+    OrbitNadirTiltAngle = Config.NadirTiltAngle;
+    bOrbitIncludeNadir  = Config.bIncludeNadir;
+    CaptureTickInterval = Config.CaptureTickInterval;
+
+    OrbitMarginValue         = OrbitMargin;
+    OrbitStartHeightValue    = OrbitStartHeight;
+    OrbitCameraHFOVValue     = OrbitCameraHFOV;
+    OrbitHOverlapValue       = OrbitHOverlap;
+    OrbitVOverlapValue       = OrbitVOverlap;
+    OrbitNadirAltValue       = OrbitNadirAlt;
+    OrbitNadirTiltValue      = OrbitNadirTiltAngle;
+    CaptureTickIntervalValue = CaptureTickInterval;
+}
+
+void FVCCSimPanelPathImageCapture::SaveToConfigManager() const
+{
+    FVCCSimConfigManager::FPathImageCaptureConfig Config;
+    Config.Margin              = OrbitMargin;
+    Config.StartHeight         = OrbitStartHeight;
+    Config.CameraHFOV          = OrbitCameraHFOV;
+    Config.HOverlap            = OrbitHOverlap;
+    Config.VOverlap            = OrbitVOverlap;
+    Config.NadirAltitude       = OrbitNadirAlt;
+    Config.NadirTiltAngle      = OrbitNadirTiltAngle;
+    Config.bIncludeNadir       = bOrbitIncludeNadir;
+    Config.CaptureTickInterval = CaptureTickInterval;
+    FVCCSimConfigManager::Get().SetPathImageCaptureConfig(Config);
 }
 
 // ============================================================================
@@ -938,6 +979,7 @@ bool FVCCSimPanelPathImageCapture::StartCaptureSession(
     bSessionDatasetChannelsOnly = bDatasetChannelsOnly;
     SessionCompleteDelegate = MoveTemp(OnComplete);
     bDrainingCaptureJobs = false;
+    bWarmupCaptureDone = false;
     bGameViewChangedForCapture = EnsureGameView();
     bAutoCaptureInProgress = true;
 
@@ -946,53 +988,72 @@ bool FVCCSimPanelPathImageCapture::StartCaptureSession(
     // Set up a timer to check if the FlashPawn is ready for capture
     GEditor->GetTimerManager()->SetTimer(
         AutoCaptureTimerHandle,
-        [this]()
-        {
-            TWeakObjectPtr<AFlashPawn> SelectedFlashPawn;
-            if (SelectionManager.IsValid())
-            {
-                SelectedFlashPawn = SelectionManager.Pin()->GetSelectedFlashPawn();
-            }
-
-            if (!bAutoCaptureInProgress || !SelectedFlashPawn.IsValid())
-            {
-                FinishCaptureSession(false);
-                return;
-            }
-
-            if (bDrainingCaptureJobs)
-            {
-                if (ImageCaptureService->GetPendingJobCount() == 0)
-                {
-                    FinishCaptureSession(true);
-                }
-                return;
-            }
-
-            // Check if the FlashPawn is ready to capture
-            if (SelectedFlashPawn->IsReady())
-            {
-                CaptureImageFromCurrentPose();
-
-                const bool bWasLastPose =
-                    SelectedFlashPawn->GetCurrentIndex() == SelectedFlashPawn->GetPoseCount() - 1;
-                SelectedFlashPawn->MoveToNext();
-
-                if (bWasLastPose)
-                {
-                    bDrainingCaptureJobs = true;
-                }
-            }
-            else
-            {
-                SelectedFlashPawn->MoveForward();
-            }
-        },
-        0.2f,
+        FTimerDelegate::CreateLambda([this]() { TickCaptureSession(); }),
+        CaptureTickInterval,
         true
     );
 
     return true;
+}
+
+void FVCCSimPanelPathImageCapture::TickCaptureSession()
+{
+    TWeakObjectPtr<AFlashPawn> SelectedFlashPawn;
+    if (SelectionManager.IsValid())
+    {
+        SelectedFlashPawn = SelectionManager.Pin()->GetSelectedFlashPawn();
+    }
+
+    if (!bAutoCaptureInProgress || !SelectedFlashPawn.IsValid())
+    {
+        FinishCaptureSession(false);
+        return;
+    }
+
+    if (bDrainingCaptureJobs)
+    {
+        if (ImageCaptureService->GetPendingJobCount() == 0)
+        {
+            FinishCaptureSession(true);
+        }
+        return;
+    }
+
+    // Check if the FlashPawn is ready to capture
+    if (SelectedFlashPawn->IsReady())
+    {
+        // Discarded warm-up render at the first pose: the very first capture
+        // after a cold start produces stale frames (TAA/exposure/Lumen history).
+        if (!bWarmupCaptureDone)
+        {
+            TArray<UCameraBaseComponent*> Cameras;
+            SelectedFlashPawn->GetComponents<UCameraBaseComponent>(Cameras);
+            for (UCameraBaseComponent* Camera : Cameras)
+            {
+                if (Camera)
+                {
+                    Camera->WarmupCapture();
+                }
+            }
+            bWarmupCaptureDone = true;
+            return;
+        }
+
+        CaptureImageFromCurrentPose();
+
+        const bool bWasLastPose =
+            SelectedFlashPawn->GetCurrentIndex() == SelectedFlashPawn->GetPoseCount() - 1;
+        SelectedFlashPawn->MoveToNext();
+
+        if (bWasLastPose)
+        {
+            bDrainingCaptureJobs = true;
+        }
+    }
+    else
+    {
+        SelectedFlashPawn->MoveForward();
+    }
 }
 
 void FVCCSimPanelPathImageCapture::FinishCaptureSession(bool bSuccess)
@@ -1003,6 +1064,7 @@ void FVCCSimPanelPathImageCapture::FinishCaptureSession(bool bSuccess)
     }
     bAutoCaptureInProgress = false;
     bDrainingCaptureJobs = false;
+    bWarmupCaptureDone = false;
     bSessionDatasetChannelsOnly = false;
     SaveDirectory.Empty();
     RestoreGameView(bGameViewChangedForCapture);
