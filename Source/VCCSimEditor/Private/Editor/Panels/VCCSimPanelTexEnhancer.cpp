@@ -795,13 +795,33 @@ void FVCCSimPanelTexEnhancer::TickExpansionVisualization()
     }
 }
 
+FString FVCCSimPanelTexEnhancer::FindLatestCaptureDirectory() const
+{
+    const FString Root = GetDatasetCapturesRoot();
+    TArray<FString> CaptureDirs;
+    IFileManager::Get().FindFiles(CaptureDirs, *(Root / TEXT("capture_*")), false, true);
+    if (CaptureDirs.IsEmpty())
+    {
+        return FString();
+    }
+    CaptureDirs.Sort();
+    return Root / CaptureDirs.Last();
+}
+
 FReply FVCCSimPanelTexEnhancer::OnExportGTMaterialsClicked()
 {
-    StartGTMaterialExport();
+    const FString CaptureDir = FindLatestCaptureDirectory();
+    if (CaptureDir.IsEmpty())
+    {
+        FVCCSimUIHelpers::ShowNotification(
+            TEXT("No capture found. Run 'Capture Dataset' first; GT materials are stored inside the capture directory."), true);
+        return FReply::Handled();
+    }
+    StartGTMaterialExport(CaptureDir / TEXT("gt_materials"));
     return FReply::Handled();
 }
 
-bool FVCCSimPanelTexEnhancer::StartGTMaterialExport()
+bool FVCCSimPanelTexEnhancer::StartGTMaterialExport(const FString& BaseDir)
 {
     if (bGTExportInProgress)
     {
@@ -883,9 +903,6 @@ bool FVCCSimPanelTexEnhancer::StartGTMaterialExport()
             }
         }
     }
-
-    const FString Timestamp = FDateTime::Now().ToString(TEXT("%Y%m%d_%H%M%S"));
-    const FString BaseDir = FPaths::Combine(OutputDirectory, SceneName, TEXT("gt_materials"), Timestamp);
 
     GTMaterialExporter->ExportMaterials(
         ActorLabels,
@@ -1008,13 +1025,6 @@ void FVCCSimPanelTexEnhancer::OnDatasetCaptureFinished(bool bSuccess, FString Ca
     FVCCSimUIHelpers::ShowNotification(
         FString::Printf(TEXT("Dataset capture complete: %s"), *CaptureDirectory), false);
 
-    const FString GTMaterialsDir = FPaths::Combine(OutputDirectory, SceneName, TEXT("gt_materials"));
-    if (IFileManager::Get().DirectoryExists(*GTMaterialsDir))
-    {
-        UE_LOG(LogTexEnhancerPanel, Log, TEXT("gt_materials already exported, skipped"));
-        return;
-    }
-
     TSharedPtr<FVCCSimPanelSelection> Sel = SelectionManager.Pin();
     if (!Sel.IsValid() || !Sel->HasEnabledTargetActors())
     {
@@ -1022,7 +1032,7 @@ void FVCCSimPanelTexEnhancer::OnDatasetCaptureFinished(bool bSuccess, FString Ca
         return;
     }
 
-    if (!StartGTMaterialExport())
+    if (!StartGTMaterialExport(CaptureDirectory / TEXT("gt_materials")))
     {
         UE_LOG(LogTexEnhancerPanel, Warning, TEXT("gt_materials export could not start"));
     }
@@ -1373,7 +1383,10 @@ FString FVCCSimPanelTexEnhancer::GetSetBCaptureDir() const
 
 FString FVCCSimPanelTexEnhancer::GetGTMaterialsPath() const
 {
-    return FPaths::Combine(OutputDirectory, SceneName, TEXT("gt_materials"), TEXT("manifest.json"));
+    const FString CaptureDir = FindLatestCaptureDirectory();
+    return CaptureDir.IsEmpty()
+        ? FString()
+        : CaptureDir / TEXT("gt_materials") / TEXT("manifest.json");
 }
 
 FString FVCCSimPanelTexEnhancer::GetEvaluationOutputDir() const

@@ -205,7 +205,8 @@ private:
 
     TSharedRef<SWidget> CreateGTExportSection();
     FReply OnExportGTMaterialsClicked();
-    bool StartGTMaterialExport();
+    bool StartGTMaterialExport(const FString& BaseDir);
+    FString FindLatestCaptureDirectory() const;
 
     struct FSeedShape
     {

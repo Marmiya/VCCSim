@@ -685,8 +685,9 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateGTExportSection()
                 const int32 NumTargets = SelectionManager.IsValid()
                     ? SelectionManager.Pin()->GetEnabledTargetActorLabels().Num() : 0;
                 return FText::FromString(FString::Printf(
-                    TEXT("Export mesh GLTF + PBR textures for %d enabled target actor(s) -> %s/%s/gt_materials/"),
-                    NumTargets, *OutputDirectory, *SceneName));
+                    TEXT("Export mesh GLTF + PBR textures for %d enabled target actor(s) "
+                         "into the latest capture's gt_materials/ (run Capture Dataset first)"),
+                    NumTargets));
             })
             .IsEnabled_Lambda([this]()
             {
