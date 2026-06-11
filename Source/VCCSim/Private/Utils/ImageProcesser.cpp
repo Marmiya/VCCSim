@@ -117,15 +117,13 @@ void FAsyncMatProps16SaveTask::DoWork()
         RawData.Add((V >> 8) & 0xFF);
     };
 
+    // M_MatPropsCapture renders standard glTF ORM (R=occlusion, G=roughness,
+    // B=metallic); stored verbatim.
     for (const FFloat16Color& Pixel : Pixels)
     {
-        const float Metallic  = Pixel.R.GetFloat();
-        const float Specular  = Pixel.G.GetFloat();
-        const float Roughness = Pixel.B.GetFloat();
-
-        AppendChannel16(Specular);
-        AppendChannel16(Roughness);
-        AppendChannel16(Metallic);
+        AppendChannel16(Pixel.R.GetFloat());
+        AppendChannel16(Pixel.G.GetFloat());
+        AppendChannel16(Pixel.B.GetFloat());
         AppendChannel16(1.0f);
     }
 

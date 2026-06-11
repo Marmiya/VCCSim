@@ -499,6 +499,7 @@ void FVCCSimPanelPathImageCapture::GeneratePosesAroundTarget()
                 return;
             }
 
+            FlashPawnWeak->Modify();
             FlashPawnWeak->SetPathPanel(Path.Positions, Path.Rotations);
             FlashPawnWeak->MoveTo(0);
 
@@ -506,6 +507,8 @@ void FVCCSimPanelPathImageCapture::GeneratePosesAroundTarget()
             {
                 if (LookAt->Spline)
                 {
+                    LookAt->Modify();
+                    LookAt->Spline->Modify();
                     LookAt->Spline->ClearSplinePoints(false);
                     for (int32 i = 0; i < Path.Positions.Num(); ++i)
                     {
@@ -619,6 +622,7 @@ void FVCCSimPanelPathImageCapture::LoadPredefinedPose()
                 if (Positions.Num() > 0 && Positions.Num() == Rotations.Num())
                 {
                     // Set the path on the FlashPawn
+                    SelectedFlashPawn->Modify();
                     SelectedFlashPawn->SetPathPanel(Positions, Rotations);
                     
                     // Clean up any existing visualization

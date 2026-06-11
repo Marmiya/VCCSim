@@ -113,6 +113,7 @@ public:
     BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
         SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View)
         SHADER_PARAMETER_RDG_TEXTURE(Texture2D, InputTexture)
+        SHADER_PARAMETER_RDG_TEXTURE(Texture2D, InputTextureC)
         RENDER_TARGET_BINDING_SLOTS()
     END_SHADER_PARAMETER_STRUCT()
 };
@@ -509,6 +510,7 @@ void ARecorder::RenderViewGroupsRDG(const double& CaptureTime)
                         auto* PassParameters = GraphBuilder.AllocParameters<FMaterialPropertiesPS::FParameters>();
                         PassParameters->View = Inputs.Renderer->Views[0].ViewUniformBuffer;
                         PassParameters->InputTexture = SceneTextures.GBufferB;
+                        PassParameters->InputTextureC = SceneTextures.GBufferC;
                         PassParameters->RenderTargets[0] = FRenderTargetBinding(OutputTexture, ERenderTargetLoadAction::EClear);
 
                         TShaderMapRef<FMaterialPropertiesPS> PixelShader(GetGlobalShaderMap(FeatureLevel));
