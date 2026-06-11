@@ -129,6 +129,14 @@ TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreatePathConfigSection()
     ]
 
     +SVerticalBox::Slot()
+    .AutoHeight()
+    .Padding(FMargin(0, 0, 0, 4))
+    [
+        FVCCSimUIHelpers::CreateNumericPropertyRowInt32(
+            TEXT("Oblique Rings"), OrbitObliqueRingsSpinBox, OrbitObliqueRingsValue, OrbitObliqueRings, 0, 1)
+    ]
+
+    +SVerticalBox::Slot()
     .MaxHeight(1)
     [
         FVCCSimUIHelpers::CreateSeparator()

@@ -56,10 +56,8 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
     // Phase 1 (game thread): For each ring and each direction, cast a ray to get an orbit point (hit surface + Margin).
     TArray<TArray<FVector>> AllRingOrbitPoints;   // Camera orbit positions, in angular order, 360 per ring.
     TArray<TArray<FVector>> AllRingSurfacePoints; // Radial surface points at ring height, same ordering.
-    TArray<float> AllRingZs;
     AllRingOrbitPoints.Reserve(NumRings);
     AllRingSurfacePoints.Reserve(NumRings);
-    AllRingZs.Reserve(NumRings);
 
     // Build a fast lookup set of Actors; if the list is empty, fall back to bounding box filtering.
     TSet<AActor*> TargetActorSet;
@@ -190,7 +188,6 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
                 Z));
         }
 
-        AllRingZs.Add(Z);
         AllRingOrbitPoints.Add(MoveTemp(OrbitPoints));
         AllRingSurfacePoints.Add(MoveTemp(SurfacePoints));
     }
@@ -200,14 +197,41 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
         [Params, OnComplete,
          AllRingOrbitPoints = MoveTemp(AllRingOrbitPoints),
          AllRingSurfacePoints = MoveTemp(AllRingSurfacePoints),
-         AllRingZs = MoveTemp(AllRingZs),
          BoxCenter, StepH, HFovRad, VFovRad]() mutable
         {
             FGeneratedPath GeneratedPath;
 
             const float MaxYawStep = FMath::Max(Params.CornerYawStepDeg, 1.f);
 
-            const int32 NumRings = AllRingZs.Num();
+            const TArray<FVector> TopRingPolygon = AllRingOrbitPoints.Last();
+            const TArray<FVector> TopSurfacePolygon = AllRingSurfacePoints.Last();
+
+            // Oblique rings: copies of the top ring raised so the look-at to the
+            // top-ring surface points lands between the horizontal rings (pitch 0)
+            // and the nadir grid pitch, closing the stereo coverage gap on roof
+            // slopes and upper facades.
+            const int32 NumOblique = FMath::Clamp(Params.NumObliqueRings, 0, 8);
+            if (NumOblique > 0)
+            {
+                const TArray<FVector>& TopSurface = TopSurfacePolygon;
+                const float MaxPitchDeg = 90.f - FMath::Clamp(Params.NadirTiltAngle, 10.f, 70.f);
+                for (int32 i = 0; i < NumOblique; ++i)
+                {
+                    const float Blend = (float)(i + 1) / (NumOblique + 1);
+                    const float PitchDeg = FMath::Lerp(20.f, FMath::Max(MaxPitchDeg, 25.f), Blend);
+                    const float Raise = Params.Margin * FMath::Tan(FMath::DegreesToRadians(PitchDeg));
+
+                    TArray<FVector> Orbit = TopRingPolygon;
+                    for (FVector& P : Orbit)
+                    {
+                        P.Z += Raise;
+                    }
+                    AllRingOrbitPoints.Add(MoveTemp(Orbit));
+                    AllRingSurfacePoints.Add(TopSurface);
+                }
+            }
+
+            const int32 NumRings = AllRingOrbitPoints.Num();
             for (int32 r = 0; r < NumRings; ++r)
             {
                 const TArray<FVector>& OrbitPoints = AllRingOrbitPoints[r];
@@ -286,7 +310,7 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
                 const float CamPitch = -(90.f - Params.NadirTiltAngle);
                 const float NadirZ = Params.TargetBounds.Max.Z + Params.NadirAltitude;
 
-                const TArray<FVector>& TopRingPoints = AllRingOrbitPoints.Last();
+                const TArray<FVector>& TopRingPoints = TopRingPolygon;
                 float NadirMinX = FLT_MAX, NadirMaxX = -FLT_MAX;
                 float NadirMinY = FLT_MAX, NadirMaxY = -FLT_MAX;
                 for (const FVector& P : TopRingPoints)
@@ -326,7 +350,24 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
                 struct FGridPoint { FVector Pos; FRotator Rot; };
                 TArray<FGridPoint> GridPoints;
 
-                if (bStripsAlongY)
+                // A grid pose is kept iff its view-centre ground point — the camera
+                // position pushed FootprintAhead along the view direction — lands on
+                // the building outline, so strip-end frames never frame empty ground.
+                const float FootprintAhead = Params.NadirAltitude * FMath::Tan(TiltRad);
+                auto FootprintOnTarget = [&](const FVector& CamPt, const FVector2D& ViewDir2D)
+                {
+                    const FVector Probe(
+                        CamPt.X + ViewDir2D.X * FootprintAhead,
+                        CamPt.Y + ViewDir2D.Y * FootprintAhead,
+                        CamPt.Z);
+                    return IsPointInPolygon(Probe, TopSurfacePolygon);
+                };
+
+                // Cross-hatch: one pass of serpentine strips per axis, so roof
+                // surfaces get two view sweeps with orthogonal baselines.
+                auto AppendStrips = [&](bool bAlongY)
+                {
+                if (bAlongY)
                 {
                     bool bStartXMax = (DistToXMax < DistToXMin);
                     float XStart = bStartXMax ? NadirMaxX : NadirMinX;
@@ -342,12 +383,14 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
                     {
                         const bool bGoNegY = (StripIdx % 2 == 0) ? bFirstStripGoesNegY : !bFirstStripGoesNegY;
                         const float Yaw = bGoNegY ? -90.f : 90.f;
-                        
+                        const FVector2D ViewDir(0.f, bGoNegY ? -1.f : 1.f);
+
                         TArray<FGridPoint> StripPoints;
-                        for (float Y = NadirMinY; Y <= NadirMaxY + KINDA_SMALL_NUMBER; Y += AlongStep)
+                        for (float Y = NadirMinY - FootprintAhead;
+                             Y <= NadirMaxY + FootprintAhead + KINDA_SMALL_NUMBER; Y += AlongStep)
                         {
                             FVector Pt(X, Y, NadirZ);
-                            if (IsPointInPolygon(Pt, TopRingPoints))
+                            if (FootprintOnTarget(Pt, ViewDir))
                             {
                                 StripPoints.Add({Pt, FRotator(CamPitch, Yaw, 0.f)});
                             }
@@ -382,12 +425,14 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
                     {
                         const bool bGoNegX = (StripIdx % 2 == 0) ? bFirstStripGoesNegX : !bFirstStripGoesNegX;
                         const float Yaw = bGoNegX ? 180.f : 0.f;
-                        
+                        const FVector2D ViewDir(bGoNegX ? -1.f : 1.f, 0.f);
+
                         TArray<FGridPoint> StripPoints;
-                        for (float X = NadirMinX; X <= NadirMaxX + KINDA_SMALL_NUMBER; X += AlongStep)
+                        for (float X = NadirMinX - FootprintAhead;
+                             X <= NadirMaxX + FootprintAhead + KINDA_SMALL_NUMBER; X += AlongStep)
                         {
                             FVector Pt(X, Y, NadirZ);
-                            if (IsPointInPolygon(Pt, TopRingPoints))
+                            if (FootprintOnTarget(Pt, ViewDir))
                             {
                                 StripPoints.Add({Pt, FRotator(CamPitch, Yaw, 0.f)});
                             }
@@ -406,6 +451,10 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
                         }
                     }
                 }
+                };
+
+                AppendStrips(bStripsAlongY);
+                AppendStrips(!bStripsAlongY);
 
                 for (const FGridPoint& GP : GridPoints)
                 {

@@ -147,6 +147,7 @@ void FVCCSimConfigManager::SaveToJsonFile()
         PathCaptureJson->SetNumberField(TEXT("NadirAltitude"),       PathImageCaptureConfig.NadirAltitude);
         PathCaptureJson->SetNumberField(TEXT("NadirTiltAngle"),      PathImageCaptureConfig.NadirTiltAngle);
         PathCaptureJson->SetBoolField(TEXT("IncludeNadir"),          PathImageCaptureConfig.bIncludeNadir);
+        PathCaptureJson->SetNumberField(TEXT("NumObliqueRings"),     PathImageCaptureConfig.NumObliqueRings);
         PathCaptureJson->SetNumberField(TEXT("CaptureTickInterval"), PathImageCaptureConfig.CaptureTickInterval);
         RootObject->SetObjectField(TEXT("PathImageCaptureConfig"), PathCaptureJson);
     }
@@ -163,6 +164,18 @@ void FVCCSimConfigManager::SaveToJsonFile()
             TargetActorsJson.Add(MakeShareable(new FJsonValueObject(EntryJson)));
         }
         RootObject->SetArrayField(TEXT("TargetActors"), TargetActorsJson);
+    }
+
+    // Skip the disk write when nothing changed (the panel autosave timer calls
+    // this periodically); compare BEFORE the SavedAt timestamp is added.
+    FString ContentString;
+    {
+        TSharedRef<TJsonWriter<>> ContentWriter = TJsonWriterFactory<>::Create(&ContentString);
+        FJsonSerializer::Serialize(RootObject.ToSharedRef(), ContentWriter);
+    }
+    if (ContentString == LastSavedContent)
+    {
+        return;
     }
 
     // Add metadata
@@ -186,7 +199,8 @@ void FVCCSimConfigManager::SaveToJsonFile()
 
     if (FFileHelper::SaveStringToFile(OutputString, *ConfigPath))
     {
-        UE_LOG(LogVCCSimConfigManager, Log, TEXT("Panel configuration saved to: %s"), *ConfigPath);
+        LastSavedContent = MoveTemp(ContentString);
+        UE_LOG(LogVCCSimConfigManager, Verbose, TEXT("Panel configuration saved to: %s"), *ConfigPath);
     }
     else
     {
@@ -283,6 +297,7 @@ bool FVCCSimConfigManager::LoadFromJsonFile()
         if ((*PathCaptureJson)->TryGetNumberField(TEXT("VOverlap"), V))            PathImageCaptureConfig.VOverlap            = (float)V;
         if ((*PathCaptureJson)->TryGetNumberField(TEXT("NadirAltitude"), V))       PathImageCaptureConfig.NadirAltitude       = (float)V;
         if ((*PathCaptureJson)->TryGetNumberField(TEXT("NadirTiltAngle"), V))      PathImageCaptureConfig.NadirTiltAngle      = (float)V;
+        if ((*PathCaptureJson)->TryGetNumberField(TEXT("NumObliqueRings"), V))     PathImageCaptureConfig.NumObliqueRings     = (int32)V;
         if ((*PathCaptureJson)->TryGetNumberField(TEXT("CaptureTickInterval"), V)) PathImageCaptureConfig.CaptureTickInterval = (float)V;
         (*PathCaptureJson)->TryGetBoolField(TEXT("IncludeNadir"), PathImageCaptureConfig.bIncludeNadir);
     }

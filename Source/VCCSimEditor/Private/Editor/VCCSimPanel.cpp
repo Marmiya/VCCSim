@@ -137,6 +137,17 @@ void SVCCSimPanel::Construct(const FArguments& InArgs)
         SelectionManager->AutoSelectFlashPawn();
         SelectionManager->AutoSelectLookAtPath();
     }
+
+    // Autosave: persist panel parameters shortly after any change instead of
+    // only on panel teardown (the config manager skips writes when unchanged).
+    RegisterActiveTimer(5.f, FWidgetActiveTimerDelegate::CreateSP(
+        this, &SVCCSimPanel::AutoSavePanelState));
+}
+
+EActiveTimerReturnType SVCCSimPanel::AutoSavePanelState(double, float)
+{
+    SavePanelState();
+    return EActiveTimerReturnType::Continue;
 }
 
 

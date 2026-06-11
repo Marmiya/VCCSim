@@ -53,6 +53,8 @@ public:
     void LoadPanelState();
 
 private:
+    EActiveTimerReturnType AutoSavePanelState(double InCurrentTime, float InDeltaTime);
+
     // ============================================================================
     // UI ELEMENTS
     // ============================================================================

@@ -131,6 +131,7 @@ private:
     TSharedPtr<SNumericEntryBox<float>> OrbitVOverlapSpinBox;
     TSharedPtr<SNumericEntryBox<float>> OrbitNadirAltSpinBox;
     TSharedPtr<SNumericEntryBox<float>> OrbitNadirTiltSpinBox;
+    TSharedPtr<SNumericEntryBox<int32>> OrbitObliqueRingsSpinBox;
     TSharedPtr<SNumericEntryBox<float>> CaptureTickIntervalSpinBox;
     TSharedPtr<SButton> VisualizePathButton;
     TSharedPtr<SButton> AutoCaptureButton;
@@ -144,6 +145,7 @@ private:
     float OrbitNadirAlt = 500.0f;
     float OrbitNadirTiltAngle = 45.0f;
     bool bOrbitIncludeNadir = true;
+    int32 OrbitObliqueRings = 2;
     float CaptureTickInterval = 0.2f;
 
     TOptional<float> OrbitMarginValue;
@@ -153,6 +155,7 @@ private:
     TOptional<float> OrbitVOverlapValue;
     TOptional<float> OrbitNadirAltValue;
     TOptional<float> OrbitNadirTiltValue;
+    TOptional<int32> OrbitObliqueRingsValue;
     TOptional<float> CaptureTickIntervalValue;
     
     bool bPathVisualized = false;

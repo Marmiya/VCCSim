@@ -104,6 +104,7 @@ public:
         float NadirAltitude       = 500.f;
         float NadirTiltAngle      = 45.f;
         bool  bIncludeNadir       = true;
+        int32 NumObliqueRings     = 2;
         float CaptureTickInterval = 0.2f;
     };
 
@@ -151,6 +152,10 @@ private:
     FTexEnhancerConfig TexEnhancerConfig;
     FTargetActorsConfig TargetActorsConfig;
     FPathImageCaptureConfig PathImageCaptureConfig;
+
+    // Serialized content (without metadata) of the last successful save,
+    // used to skip redundant autosave disk writes.
+    FString LastSavedContent;
 
     // ============================================================================
     // INTERNAL JSON OPERATIONS

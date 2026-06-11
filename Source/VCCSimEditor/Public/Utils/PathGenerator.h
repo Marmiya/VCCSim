@@ -46,6 +46,10 @@ public:
         /** Max yaw change between consecutive ring poses; larger turns get interpolated poses inserted. */
         float CornerYawStepDeg = 15.0f;
 
+        /** Extra downward-pitched rings above the top ring, filling the pitch gap
+         *  between the horizontal orbit rings and the nadir grid. */
+        int32 NumObliqueRings = 2;
+
         bool bIncludeNadir = true;
         float NadirAltitude = 500.0f;
         float NadirTiltAngle = 45.0f;
