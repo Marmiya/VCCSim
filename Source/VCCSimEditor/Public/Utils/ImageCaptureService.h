@@ -49,12 +49,24 @@ public:
     /** Number of capture readbacks still in flight (async save tasks not yet dispatched). */
     int32 GetPendingJobCount() const { return JobNum.IsValid() ? JobNum->load() : 0; }
 
+    /** Readbacks in flight plus save tasks still encoding/writing — the total unfinished
+     *  work used for capture backpressure and end-of-session draining. */
+    int32 GetInFlightCount() const
+    {
+        return (JobNum.IsValid()     ? JobNum->load()     : 0)
+             + (SaveJobNum.IsValid() ? SaveJobNum->load() : 0);
+    }
+
 private:
     /** Reference to the selection manager to get the selected pawn and camera states. */
     TWeakPtr<FVCCSimPanelSelection> SelectionManager;
 
     /** A shared counter for all asynchronous save operations. */
     TSharedPtr<std::atomic<int32>> JobNum;
+
+    /** Save tasks (PNG/EXR encode + disk write) still running; separate from the
+     *  readback counter so backpressure can bound queued full-res image copies. */
+    TSharedPtr<std::atomic<int32>> SaveJobNum;
 
     /**
      * Saves RGB image data.

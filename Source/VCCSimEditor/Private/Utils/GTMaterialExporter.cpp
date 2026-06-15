@@ -6,8 +6,12 @@
 #include "Components/StaticMeshComponent.h"
 #include "EngineUtils.h"
 #include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
+#include "Misc/SecureHash.h"
 #include "Serialization/JsonSerializer.h"
+#include "Serialization/JsonReader.h"
 #include "Serialization/JsonWriter.h"
+#include "Materials/MaterialInterface.h"
 #include "HAL/PlatformFileManager.h"
 #include "Misc/ScopedSlowTask.h"
 #include "Misc/ScopeExit.h"
@@ -148,6 +152,7 @@ void FGTMaterialExporter::ExportMaterials(
     const FString& BaseDir,
     const FString& SceneName,
     int32 TextureResolution,
+    const FString& Signature,
     FSimpleDelegate OnComplete)
 {
     if (!World)
@@ -314,6 +319,7 @@ void FGTMaterialExporter::ExportMaterials(
         TSharedPtr<FJsonObject> SceneRoot = MakeShareable(new FJsonObject);
         SceneRoot->SetStringField(TEXT("scene_name"), SceneName);
         SceneRoot->SetStringField(TEXT("exported_at"), FDateTime::Now().ToString());
+        SceneRoot->SetStringField(TEXT("signature"), Signature);
         TArray<TSharedPtr<FJsonValue>> ActorsJson;
         for (int32 i = 0; i < Actors.Num(); ++i)
         {
@@ -335,4 +341,121 @@ void FGTMaterialExporter::ExportMaterials(
     UE_LOG(LogGTMaterialExporter, Log, TEXT("%s"), *Msg);
     FVCCSimUIHelpers::ShowNotification(Msg, SuccessCount < Total);
     OnComplete.ExecuteIfBound();
+}
+
+FString FGTMaterialExporter::ComputeSignature(
+    UWorld* World,
+    const TArray<FString>& SeedLabels,
+    const FString& SceneName,
+    int32 TextureResolution,
+    bool bIncludeNearby,
+    float NearbyRadius,
+    bool bMergeNearby)
+{
+    if (!World)
+    {
+        return FString();
+    }
+
+    TMap<FString, AActor*> LabelMap;
+    for (TActorIterator<AActor> It(World); It; ++It)
+        if (AActor* A = *It) LabelMap.Add(A->GetActorLabel(), A);
+
+    TArray<FString> Sorted = SeedLabels;
+    Sorted.Sort();
+
+    FString Canon = FString::Printf(
+        TEXT("scene=%s;res=%d;nearby=%d;radius=%.1f;merge=%d"),
+        *SceneName, TextureResolution, bIncludeNearby ? 1 : 0, NearbyRadius, bMergeNearby ? 1 : 0);
+
+    for (const FString& Label : Sorted)
+    {
+        Canon += TEXT(";A=") + Label;
+        AActor** Found = LabelMap.Find(Label);
+        if (!Found || !*Found)
+        {
+            Canon += TEXT("|missing");
+            continue;
+        }
+        AActor* Actor = *Found;
+        Canon += TEXT("|loc=") + Actor->GetActorLocation().ToString();
+        Canon += TEXT("|rot=") + Actor->GetActorRotation().ToString();
+        Canon += TEXT("|scl=") + Actor->GetActorScale3D().ToString();
+
+        TArray<UStaticMeshComponent*> MeshComps;
+        Actor->GetComponents<UStaticMeshComponent>(MeshComps);
+        for (UStaticMeshComponent* MC : MeshComps)
+        {
+            if (!MC) continue;
+            UStaticMesh* SM = MC->GetStaticMesh();
+            Canon += TEXT("|m=") + (SM ? SM->GetPathName() : FString(TEXT("none")));
+            for (int32 m = 0; m < MC->GetNumMaterials(); ++m)
+            {
+                UMaterialInterface* Mat = MC->GetMaterial(m);
+                Canon += TEXT("|mat=") + (Mat ? Mat->GetPathName() : FString(TEXT("none")));
+            }
+        }
+    }
+
+    return FMD5::HashAnsiString(*Canon);
+}
+
+FString FGTMaterialExporter::FindReusableExport(
+    const FString& CapturesRoot,
+    const FString& ExcludeCaptureDirName,
+    const FString& Signature)
+{
+    if (Signature.IsEmpty())
+    {
+        return FString();
+    }
+
+    IFileManager& FileManager = IFileManager::Get();
+    TArray<FString> CaptureDirs;
+    FileManager.FindFiles(CaptureDirs, *(CapturesRoot / TEXT("capture_*")), false, true);
+    CaptureDirs.Sort();
+
+    for (const FString& Dir : CaptureDirs)
+    {
+        if (Dir == ExcludeCaptureDirName) continue;
+
+        const FString GTDir = CapturesRoot / Dir / TEXT("gt_materials");
+        FString JsonStr;
+        if (!FFileHelper::LoadFileToString(JsonStr, *(GTDir / TEXT("manifest.json"))))
+            continue;
+
+        TSharedPtr<FJsonObject> Root;
+        TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonStr);
+        if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+            continue;
+
+        FString ExistingSig;
+        if (!Root->TryGetStringField(TEXT("signature"), ExistingSig) || ExistingSig != Signature)
+            continue;
+
+        // Only reuse a complete export: every listed actor must still have its mesh.gltf.
+        const TArray<TSharedPtr<FJsonValue>>* Actors = nullptr;
+        if (!Root->TryGetArrayField(TEXT("actors"), Actors) || !Actors || Actors->Num() == 0)
+            continue;
+
+        bool bComplete = true;
+        for (const TSharedPtr<FJsonValue>& Value : *Actors)
+        {
+            const TSharedPtr<FJsonObject> AObj = Value.IsValid() ? Value->AsObject() : nullptr;
+            FString Label;
+            if (!AObj.IsValid() || !AObj->TryGetStringField(TEXT("label"), Label)
+                || !FPaths::FileExists(GTDir / Label / TEXT("mesh.gltf")))
+            {
+                bComplete = false;
+                break;
+            }
+        }
+
+        if (bComplete)
+        {
+            return GTDir;
+        }
+    }
+
+    return FString();
 }

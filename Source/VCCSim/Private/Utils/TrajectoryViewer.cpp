@@ -17,7 +17,9 @@
 
 #include "Utils/TrajectoryViewer.h"
 #include "Materials/MaterialInstanceDynamic.h"
-#include "DrawDebugHelpers.h"
+#include "Components/InstancedStaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
+#include "Engine/Engine.h"
 #include "Engine/World.h"
 
 UTrajectoryViewer::UTrajectoryViewer()
@@ -81,51 +83,113 @@ AActor* UTrajectoryViewer::GenerateVisibleElements(
     {
         return nullptr;
     }
-    
-    // Create a container actor for tracking
+
+    // Container actor that OWNS all visualization geometry, so destroying it
+    // removes the whole preview. Geometry is drawn with instanced static meshes
+    // (one draw call per role) instead of persistent debug lines, which the
+    // engine's line batcher re-renders every frame — a heavy cost that scales
+    // with pose count and tanks the editor framerate on large multi-building paths.
     FActorSpawnParameters SpawnParams;
     SpawnParams.ObjectFlags = RF_Transient;
     SpawnParams.bNoFail = true;
     AActor* VisualizationActor = World->SpawnActor<AActor>(AActor::StaticClass(),
         FTransform::Identity, SpawnParams);
+    if (!VisualizationActor)
+    {
+        return nullptr;
+    }
     #if WITH_EDITOR
         VisualizationActor->SetActorLabel(TEXT("PathVisualization"));
-        // Make sure it's marked as deletable and transient
         VisualizationActor->SetFlags(RF_Transient);
         VisualizationActor->Tags.Add(FName("VCCSimPathViz"));
     #endif
-    
-    // Draw path lines
-    for (int32 i = 0; i < InPositions.Num() - 1; ++i)
+
+    USceneComponent* Root = NewObject<USceneComponent>(VisualizationActor);
+    Root->SetMobility(EComponentMobility::Movable);
+    VisualizationActor->SetRootComponent(Root);
+    Root->RegisterComponent();
+
+    UStaticMesh* SphereMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere"));
+    UStaticMesh* ConeMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cone"));
+    UStaticMesh* CylinderMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder"));
+
+    // GEngine->ArrowMaterial is an unlit gizmo material reliably present in the
+    // editor; both candidate colour params are set so the colour applies whichever
+    // one the material exposes (a missing param is a silent no-op).
+    UMaterialInterface* BaseMat = GEngine ? GEngine->ArrowMaterial : nullptr;
+
+    auto MakeISM = [&](UStaticMesh* Mesh, const FLinearColor& Color) -> UInstancedStaticMeshComponent*
     {
-        FVector Start = InPositions[i];
-        FVector End = InPositions[i + 1];
-        
-        if (FVector::Dist(Start, End) > 1.0f)
+        UInstancedStaticMeshComponent* ISM = NewObject<UInstancedStaticMeshComponent>(VisualizationActor);
+        ISM->SetStaticMesh(Mesh);
+        ISM->SetMobility(EComponentMobility::Movable);
+        ISM->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        ISM->SetCastShadow(false);
+        // Preview-only: hidden in game view, which is what dataset capture runs in,
+        // so the path geometry never bleeds into captured images.
+        ISM->SetHiddenInGame(true);
+        ISM->SetupAttachment(Root);
+        ISM->RegisterComponent();
+        if (BaseMat)
         {
-            DrawDebugLine(World, Start, End, FColor::Cyan, true, -1.0f, 0, PathWidth);
+            UMaterialInstanceDynamic* MID = UMaterialInstanceDynamic::Create(BaseMat, ISM);
+            MID->SetVectorParameterValue(TEXT("GizmoColor"), Color);
+            MID->SetVectorParameterValue(TEXT("Color"), Color);
+            ISM->SetMaterial(0, MID);
+        }
+        return ISM;
+    };
+
+    // Path line: a thin cylinder per segment (basic-shape cylinder is Z-aligned,
+    // 100cm tall, radius 50, centred — so place at the midpoint, align +Z to the
+    // segment, and scale length to the segment distance).
+    if (CylinderMesh && InPositions.Num() > 1)
+    {
+        UInstancedStaticMeshComponent* LineISM = MakeISM(CylinderMesh, FLinearColor(0.f, 1.f, 1.f));
+        const float Radius = FMath::Max(PathWidth, 1.f);
+        for (int32 i = 0; i < InPositions.Num() - 1; ++i)
+        {
+            const FVector Delta = InPositions[i + 1] - InPositions[i];
+            const float Len = Delta.Size();
+            if (Len < 1.0f) continue;
+            const FQuat Rot = FRotationMatrix::MakeFromZ(Delta / Len).ToQuat();
+            const FVector Scale(Radius / 50.f, Radius / 50.f, Len / 100.f);
+            LineISM->AddInstance(FTransform(Rot, (InPositions[i] + InPositions[i + 1]) * 0.5f, Scale));
         }
     }
-    
-    // Draw position markers and direction arrows
-    for (int32 i = 0; i < InPositions.Num(); ++i)
+
+    // Direction arrows: a cone per pose, +Z aligned to the view forward, base at
+    // the pose and tip ConeLength ahead.
+    if (ConeMesh)
     {
-        FVector Position = InPositions[i];
-        FRotator Rotation = InRotations[i];
-        
-        // Choose color based on position
-        FColor SphereColor = FColor::Yellow;
-        if (i == 0) SphereColor = FColor::Green;
-        else if (i == InPositions.Num() - 1) SphereColor = FColor::Blue;
-        
-        DrawDebugSphere(World, Position, ConeSize, 12, SphereColor, true, -1.0f, 0, 3.0f);
-        
-        // Draw direction arrow
-        FVector ForwardVector = Rotation.RotateVector(FVector(1.f, .0f, .0f));
-        FVector ArrowEnd = Position + ForwardVector * ConeLength;
-        DrawDebugDirectionalArrow(World, Position, ArrowEnd, ConeSize * 0.6f, FColor::Red, true, -1.0f, 0, 4.0f);
+        UInstancedStaticMeshComponent* ArrowISM = MakeISM(ConeMesh, FLinearColor(1.f, 0.f, 0.f));
+        const FVector Scale(ConeSize / 50.f, ConeSize / 50.f, ConeLength / 100.f);
+        for (int32 i = 0; i < InPositions.Num(); ++i)
+        {
+            const FVector Forward = InRotations[i].Vector();
+            const FQuat Rot = FRotationMatrix::MakeFromZ(Forward).ToQuat();
+            ArrowISM->AddInstance(FTransform(Rot, InPositions[i] + Forward * (ConeLength * 0.5f), Scale));
+        }
     }
-    
+
+    // Pose markers: yellow spheres at every pose, green at the start, blue at the end.
+    if (SphereMesh)
+    {
+        const float MScale = FMath::Max(ConeSize * 0.5f, 5.f) / 50.f;
+        UInstancedStaticMeshComponent* MarkerISM = MakeISM(SphereMesh, FLinearColor(1.f, 1.f, 0.f));
+        for (int32 i = 1; i < InPositions.Num() - 1; ++i)
+        {
+            MarkerISM->AddInstance(FTransform(FQuat::Identity, InPositions[i], FVector(MScale)));
+        }
+        UInstancedStaticMeshComponent* StartISM = MakeISM(SphereMesh, FLinearColor(0.f, 1.f, 0.f));
+        StartISM->AddInstance(FTransform(FQuat::Identity, InPositions[0], FVector(MScale * 1.5f)));
+        if (InPositions.Num() > 1)
+        {
+            UInstancedStaticMeshComponent* EndISM = MakeISM(SphereMesh, FLinearColor(0.f, 0.f, 1.f));
+            EndISM->AddInstance(FTransform(FQuat::Identity, InPositions.Last(), FVector(MScale * 1.5f)));
+        }
+    }
+
     return VisualizationActor;
 }
 

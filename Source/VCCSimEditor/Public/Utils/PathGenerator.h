@@ -19,7 +19,6 @@
 
 #include "CoreMinimal.h"
 
-class UPrimitiveComponent;
 class AActor;
 
 /**
@@ -28,12 +27,18 @@ class AActor;
 class VCCSIMEDITOR_API FPathGenerator
 {
 public:
+    /** One building to orbit: its own world-space bounds and source actor.
+     *  Actor is only dereferenced on the game thread during ray-casting. */
+    struct FOrbitTarget
+    {
+        FBox Bounds;
+        TWeakObjectPtr<AActor> Actor;
+    };
+
     /** Parameters for generating a conformal orbit path. */
     struct FConformalOrbitParams
     {
-        FBox TargetBounds;
-        TArray<AActor*> TargetActors;
-        TArray<UPrimitiveComponent*> TargetPrimitives;
+        TArray<FOrbitTarget> Buildings;
         UWorld* World;
 
         float Margin = 500.0f;

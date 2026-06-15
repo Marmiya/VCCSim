@@ -35,7 +35,6 @@ DEFINE_LOG_CATEGORY_STATIC(LogPathImageCapture, Log, All);
 #include "Utils/TrajectoryViewer.h"
 #include "DesktopPlatformModule.h"
 #include "EngineUtils.h"
-#include "Framework/Notifications/NotificationManager.h"
 #include "LevelEditorViewport.h"
 #include "Async/Async.h"
 #include "Serialization/JsonSerializer.h"
@@ -307,7 +306,6 @@ void FVCCSimPanelPathImageCapture::Cleanup()
     {
         GEditor->GetTimerManager()->ClearTimer(AutoCaptureTimerHandle);
         bAutoCaptureInProgress = false;
-        FSlateNotificationManager::Get().SetAllowNotifications(bNotificationsWereAllowed);
     }
 
     // Clean up path visualization
@@ -451,23 +449,34 @@ void FVCCSimPanelPathImageCapture::GeneratePosesAroundTarget()
         return FailCleanup(TEXT("Editor world is not available"));
 
     FPathGenerator::FConformalOrbitParams Params;
-    Params.TargetBounds = ComputeCombinedBounds();
-    if (!Params.TargetBounds.IsValid)
-        return FailCleanup(TEXT("Could not compute valid bounds from selected actors"));
+
+    TMap<FString, AActor*> LabelMap;
+    for (TActorIterator<AActor> It(World); It; ++It)
+    {
+        if (AActor* A = *It)
+            LabelMap.Add(A->GetActorLabel(), A);
+    }
 
     for (const FString& Label : TargetLabels)
     {
-        for (TActorIterator<AActor> It(World); It; ++It)
+        AActor** Found = LabelMap.Find(Label);
+        if (!Found || !*Found) continue;
+
+        TArray<UPrimitiveComponent*> Prims;
+        (*Found)->GetComponents<UPrimitiveComponent>(Prims);
+        FBox Box(ForceInit);
+        for (UPrimitiveComponent* Prim : Prims)
         {
-            if (It->GetActorLabel() == Label)
-            {
-                Params.TargetActors.Add(*It);
-                It->GetComponents<UPrimitiveComponent>(Params.TargetPrimitives);
-                break;
-            }
+            if (!Prim || !Prim->IsRegistered()) continue;
+            Box += Prim->CalcBounds(Prim->GetComponentTransform()).GetBox();
         }
+        if (Box.IsValid)
+            Params.Buildings.Add({ Box, *Found });
     }
-    
+
+    if (Params.Buildings.Num() == 0)
+        return FailCleanup(TEXT("Could not compute valid bounds from selected actors"));
+
     Params.World = World;
     Params.Margin = OrbitMargin;
     Params.StartHeight = OrbitStartHeight;
@@ -483,7 +492,8 @@ void FVCCSimPanelPathImageCapture::GeneratePosesAroundTarget()
     SelectionManager.Pin()->GetSelectedFlashPawn()->GetComponents<URGBCameraComponent>(RGBCameras);
     if (RGBCameras.Num() > 0)
     {
-        Params.CameraResolution = RGBCameras[0]->FOV;
+        const std::pair<int32, int32> Size = RGBCameras[0]->GetImageSize();
+        Params.CameraResolution = FIntPoint(Size.first, Size.second);
     }
 
     TWeakObjectPtr<AFlashPawn> FlashPawnWeak = SelectionManager.Pin()->GetSelectedFlashPawn();
@@ -995,12 +1005,6 @@ bool FVCCSimPanelPathImageCapture::StartCaptureSession(
     bGameViewChangedForCapture = EnsureGameView();
     bAutoCaptureInProgress = true;
 
-    // Suppress the engine's per-shot "High resolution screenshot saved as" toasts,
-    // which otherwise stack up once per captured pose. Known cosmetic side effect:
-    // each suppressed toast still leaves an empty transparent notification window.
-    bNotificationsWereAllowed = FSlateNotificationManager::Get().AreNotificationsAllowed();
-    FSlateNotificationManager::Get().SetAllowNotifications(false);
-
     SelectedFlashPawn->MoveTo(0);
 
     // Set up a timer to check if the FlashPawn is ready for capture
@@ -1032,7 +1036,7 @@ void FVCCSimPanelPathImageCapture::TickCaptureSession()
 
     if (bDrainingCaptureJobs)
     {
-        if (ImageCaptureService->GetPendingJobCount() == 0)
+        if (ImageCaptureService->GetInFlightCount() == 0)
         {
             FinishCaptureSession(!bSessionCancelled);
         }
@@ -1078,8 +1082,6 @@ void FVCCSimPanelPathImageCapture::TickCaptureSession()
 
 void FVCCSimPanelPathImageCapture::FinishCaptureSession(bool bSuccess)
 {
-    FSlateNotificationManager::Get().SetAllowNotifications(bNotificationsWereAllowed);
-
     if (bSuccess)
     {
         UE_LOG(LogPathImageCapture, Log, TEXT("Capture session complete: %s"), *SaveDirectory);

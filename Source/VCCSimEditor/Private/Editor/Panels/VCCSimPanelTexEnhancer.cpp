@@ -48,6 +48,7 @@
 #include "HAL/PlatformProcess.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "HAL/PlatformFileManager.h"
 #include "DesktopPlatformModule.h"
 #include "IDesktopPlatform.h"
 #include "Framework/Application/SlateApplication.h"
@@ -97,7 +98,7 @@ FVCCSimPanelTexEnhancer::~FVCCSimPanelTexEnhancer()
 
 void FVCCSimPanelTexEnhancer::Initialize()
 {
-    LightingManager = MakeShared<FLightingManager>(GEditor->GetEditorWorldContext().World());
+    LightingManager = MakeShared<FLightingManager>();
     LoadPaths();
     UE_LOG(LogTexEnhancerPanel, Log, TEXT("TexEnhancer panel initialized"));
 }
@@ -847,6 +848,33 @@ bool FVCCSimPanelTexEnhancer::StartGTMaterialExport(const FString& BaseDir)
         return false;
     }
 
+    // GT materials are lighting-independent: if a previous capture of this scene exported
+    // the same target set / transforms / materials / resolution, copy it instead of
+    // re-running the (slow) glTF + texture export.
+    const FString Signature = FGTMaterialExporter::ComputeSignature(
+        World, ActorLabels, SceneName, GTTextureResolution,
+        bIncludeNearbyMeshes, NearbyRadius, bMergeNearbyMeshes);
+
+    {
+        const FString CapturesRoot = GetDatasetCapturesRoot();
+        const FString CurrentCaptureDir = FPaths::GetCleanFilename(FPaths::GetPath(BaseDir));
+        const FString Reusable = FGTMaterialExporter::FindReusableExport(
+            CapturesRoot, CurrentCaptureDir, Signature);
+        if (!Reusable.IsEmpty())
+        {
+            if (FPlatformFileManager::Get().GetPlatformFile().CopyDirectoryTree(*BaseDir, *Reusable, true))
+            {
+                UE_LOG(LogTexEnhancerPanel, Log,
+                    TEXT("Reused GT materials from %s (signature match); skipped export"), *Reusable);
+                FVCCSimUIHelpers::ShowNotification(
+                    TEXT("GT materials reused from a previous capture (unchanged)."));
+                return true;
+            }
+            UE_LOG(LogTexEnhancerPanel, Warning,
+                TEXT("Failed to copy reusable GT materials from %s; exporting fresh"), *Reusable);
+        }
+    }
+
     bGTExportInProgress = true;
     FVCCSimUIHelpers::ShowNotification(TEXT("Starting GT material export..."));
 
@@ -911,6 +939,7 @@ bool FVCCSimPanelTexEnhancer::StartGTMaterialExport(const FString& BaseDir)
         BaseDir,
         SceneName,
         GTTextureResolution,
+        Signature,
         OnComplete
     );
 

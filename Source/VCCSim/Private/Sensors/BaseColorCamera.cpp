@@ -106,7 +106,7 @@ void UBaseColorCameraComponent::AsyncGetBaseColorImageData(
     TFunction<void(const TArray<FColor>&)> Callback)
 {
     AsyncTask(ENamedThreads::GameThread,
-        [this, Callback = MoveTemp(Callback)]()
+        [this, Callback = MoveTemp(Callback)]() mutable
         {
             if (!CheckComponentAndRenderTarget())
             {
@@ -117,6 +117,23 @@ void UBaseColorCameraComponent::AsyncGetBaseColorImageData(
             }
 
             CaptureComponent->CaptureScene();
-            ProcessBaseColorTextureParam(Callback);
+
+            const int32 W = Width;
+            const int32 H = Height;
+            EnqueueReadback(
+                [W, H, Callback = MoveTemp(Callback)](const void* Mapped, int32 RowPitchInPixels)
+                {
+                    TArray<FColor> Data;
+                    Data.SetNumUninitialized(W * H);
+                    const uint8* Src = static_cast<const uint8*>(Mapped);
+                    uint8* Dst = reinterpret_cast<uint8*>(Data.GetData());
+                    const int32 SrcRowBytes = RowPitchInPixels * sizeof(FColor);
+                    const int32 DstRowBytes = W * sizeof(FColor);
+                    for (int32 Row = 0; Row < H; ++Row)
+                    {
+                        FMemory::Memcpy(Dst + Row * DstRowBytes, Src + Row * SrcRowBytes, DstRowBytes);
+                    }
+                    Callback(Data);
+                });
         });
 }

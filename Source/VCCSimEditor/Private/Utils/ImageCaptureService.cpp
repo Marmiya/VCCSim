@@ -28,6 +28,7 @@
 #include "HighResScreenshot.h"
 #include "LevelEditorViewport.h"
 #include "Editor.h"
+#include "Async/Async.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogImageCaptureService, Log, All);
 
@@ -35,6 +36,7 @@ FImageCaptureService::FImageCaptureService(TSharedPtr<FVCCSimPanelSelection> InS
     : SelectionManager(InSelectionManager)
 {
     JobNum = MakeShared<std::atomic<int32>>(0);
+    SaveJobNum = MakeShared<std::atomic<int32>>(0);
 }
 
 void FImageCaptureService::CaptureImageFromCurrentPose(
@@ -140,10 +142,17 @@ void FImageCaptureService::SaveRGB(AFlashPawn* SelectedFlashPawn, int32 PoseInde
                 FIntPoint Size = {Camera->GetImageSize().first, Camera->GetImageSize().second};
 
                 Camera->AsyncGetRGBImageData(
-                    [Filename, Size, JobNum = this->JobNum](const TArray<FColor>& ImageData)
+                    [Filename, Size, JobNum = this->JobNum, SaveJobNum = this->SaveJobNum](const TArray<FColor>& ImageData)
                     {
-                        (new FAutoDeleteAsyncTask<FAsyncImageSaveTask>(ImageData, Size, Filename))->StartBackgroundTask();
+                        TArray<FColor> DataCopy = ImageData;
                         *JobNum -= 1;
+                        (*SaveJobNum)++;
+                        Async(EAsyncExecution::ThreadPool,
+                            [DataCopy = MoveTemp(DataCopy), Size, Filename, SaveJobNum]()
+                            {
+                                FAsyncImageSaveTask(DataCopy, Size, Filename).DoWork();
+                                (*SaveJobNum)--;
+                            });
                     });
                 bAnyCaptured = true;
             }
@@ -231,7 +240,7 @@ void FImageCaptureService::SaveDepth(AFlashPawn* SelectedFlashPawn, int32 PoseIn
             FIntPoint Size = {Camera->GetImageSize().first, Camera->GetImageSize().second};
 
             Camera->AsyncGetDepthImageData(
-                [DepthFilename, Size, JobNum = this->JobNum](const TArray<FFloat16Color>& ImageData)
+                [DepthFilename, Size, JobNum = this->JobNum, SaveJobNum = this->SaveJobNum](const TArray<FFloat16Color>& ImageData)
                 {
                     TArray<float> DepthValues;
                     DepthValues.SetNum(ImageData.Num());
@@ -240,8 +249,14 @@ void FImageCaptureService::SaveDepth(AFlashPawn* SelectedFlashPawn, int32 PoseIn
                         DepthValues[idx] = ImageData[idx].A;
                     }
 
-                    (new FAutoDeleteAsyncTask<FAsyncDepthSaveTask>(DepthValues, Size, DepthFilename))->StartBackgroundTask();
                     *JobNum -= 1;
+                    (*SaveJobNum)++;
+                    Async(EAsyncExecution::ThreadPool,
+                        [DepthValues = MoveTemp(DepthValues), Size, DepthFilename, SaveJobNum]()
+                        {
+                            FAsyncDepthSaveTask(DepthValues, Size, DepthFilename).DoWork();
+                            (*SaveJobNum)--;
+                        });
                 });
             bAnyCaptured = true;
         }
@@ -270,10 +285,16 @@ void FImageCaptureService::SaveSeg(AFlashPawn* SelectedFlashPawn, int32 PoseInde
             FIntPoint Size = {Camera->GetImageSize().first, Camera->GetImageSize().second};
 
             Camera->AsyncGetSegmentationImageData(
-                [Filename, Size, JobNum = this->JobNum](TArray<FColor> ImageData)
+                [Filename, Size, JobNum = this->JobNum, SaveJobNum = this->SaveJobNum](TArray<FColor> ImageData)
                 {
-                    (new FAutoDeleteAsyncTask<FAsyncImageSaveTask>(ImageData, Size, Filename))->StartBackgroundTask();
                     *JobNum -= 1;
+                    (*SaveJobNum)++;
+                    Async(EAsyncExecution::ThreadPool,
+                        [ImageData = MoveTemp(ImageData), Size, Filename, SaveJobNum]()
+                        {
+                            FAsyncImageSaveTask(ImageData, Size, Filename).DoWork();
+                            (*SaveJobNum)--;
+                        });
                 });
             bAnyCaptured = true;
         }
@@ -302,10 +323,17 @@ void FImageCaptureService::SaveNormal(AFlashPawn* SelectedFlashPawn, int32 PoseI
             FIntPoint Size = {Camera->GetImageSize().first, Camera->GetImageSize().second};
             
             Camera->AsyncGetNormalImageData(
-                [NormalEXRFilename, Size, JobNum = this->JobNum](const TArray<FFloat16Color>& NormalData)
+                [NormalEXRFilename, Size, JobNum = this->JobNum, SaveJobNum = this->SaveJobNum](const TArray<FFloat16Color>& NormalData)
                 {
-                    (new FAutoDeleteAsyncTask<FAsyncNormalEXRSaveTask>(NormalData, Size, NormalEXRFilename))->StartBackgroundTask();
+                    TArray<FFloat16Color> DataCopy = NormalData;
                     *JobNum -= 1;
+                    (*SaveJobNum)++;
+                    Async(EAsyncExecution::ThreadPool,
+                        [DataCopy = MoveTemp(DataCopy), Size, NormalEXRFilename, SaveJobNum]()
+                        {
+                            FAsyncNormalEXRSaveTask(DataCopy, Size, NormalEXRFilename).DoWork();
+                            (*SaveJobNum)--;
+                        });
                 });
             bAnyCaptured = true;
         }
@@ -334,12 +362,18 @@ void FImageCaptureService::SaveBaseColor(AFlashPawn* SelectedFlashPawn, int32 Po
             FIntPoint Size = {Camera->GetImageSize().first, Camera->GetImageSize().second};
 
             Camera->AsyncGetBaseColorImageData(
-                [Filename, Size, JobNum = this->JobNum](const TArray<FColor>& ImageData)
+                [Filename, Size, JobNum = this->JobNum, SaveJobNum = this->SaveJobNum](const TArray<FColor>& ImageData)
                 {
                     TArray<FColor> DataCopy = ImageData;
                     for (FColor& Pixel : DataCopy) Pixel.A = 255;
-                    (new FAutoDeleteAsyncTask<FAsyncImageSaveTask>(DataCopy, Size, Filename))->StartBackgroundTask();
                     *JobNum -= 1;
+                    (*SaveJobNum)++;
+                    Async(EAsyncExecution::ThreadPool,
+                        [DataCopy = MoveTemp(DataCopy), Size, Filename, SaveJobNum]()
+                        {
+                            FAsyncImageSaveTask(DataCopy, Size, Filename).DoWork();
+                            (*SaveJobNum)--;
+                        });
                 });
             bAnyCaptured = true;
         }
@@ -368,10 +402,17 @@ void FImageCaptureService::SaveMaterialProperties(AFlashPawn* SelectedFlashPawn,
             FIntPoint Size = {Camera->GetImageSize().first, Camera->GetImageSize().second};
 
             Camera->AsyncGetMaterialPropertiesImageData(
-                [Filename, Size, JobNum = this->JobNum](const TArray<FFloat16Color>& ImageData)
+                [Filename, Size, JobNum = this->JobNum, SaveJobNum = this->SaveJobNum](const TArray<FFloat16Color>& ImageData)
                 {
-                    (new FAutoDeleteAsyncTask<FAsyncMatProps16SaveTask>(ImageData, Size, Filename))->StartBackgroundTask();
+                    TArray<FFloat16Color> DataCopy = ImageData;
                     *JobNum -= 1;
+                    (*SaveJobNum)++;
+                    Async(EAsyncExecution::ThreadPool,
+                        [DataCopy = MoveTemp(DataCopy), Size, Filename, SaveJobNum]()
+                        {
+                            FAsyncMatProps16SaveTask(DataCopy, Size, Filename).DoWork();
+                            (*SaveJobNum)--;
+                        });
                 });
             bAnyCaptured = true;
         }

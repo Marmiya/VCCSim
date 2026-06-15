@@ -16,7 +16,7 @@ OutputRoot = "D:/VCCSimData"
 
 # Name or Tag, but tag is recommended.
 # If there is only one robot, the tag is not necessary.
-MainCharacter = "Mavic"
+MainCharacter = "No1"
 StaticMeshActor = ["MFMesh", "CompanionCube"]   # Name or Tag
 ManualControl = true
 
@@ -24,7 +24,7 @@ SubWindows = ["Lit", "Unit", "PointCloud", "RGB", "Depth", "Segmentation", "Norm
 SubWindowsOpacities = [0.95, 0.85, 0.75, 0.95, 0.95, 0.75, 0.9]
 
 StartWithRecording = true
-BetterVisualsRecording = true
+BetterVisualsRecording = false
 
 UseMeshManager = false
 MeshMaterial = "/VCCSim/Materials/M_Static_mesh"
@@ -36,10 +36,10 @@ DefaultCarPawn = "/VCCSim/Pawn/Husky/Blueprints/BP_CarPawn_Husky.BP_CarPawn_Husk
 DefaultFlashPawn = "/VCCSim/Pawn/Flash/BP_FlashPawn.BP_FlashPawn_C"
 
 
-#[[Robots]]
-#UETag = "No1"
-#Type = "Drone"
-#RecordInterval = 0.033333
+[[Robots]]
+UETag = "No1"
+Type = "Drone"
+RecordInterval = 0.033333
 
 #[Robots.ComponentConfigs.Lidar]
 #RecordInterval = 0.1
@@ -51,19 +51,19 @@ DefaultFlashPawn = "/VCCSim/Pawn/Flash/BP_FlashPawn.BP_FlashPawn_C"
 #ScannerAngleDown = 45
 #bVisualizePoints = true
 
-#[Robots.ComponentConfigs.RGBCamera]
-#RecordInterval = 0.033333
-#FOV = 90
-#Width = 1280
-#Height = 720
-#
-#[Robots.ComponentConfigs.DepthCamera]
-#RecordInterval = 0.033333
-#FOV = 90
-#Width = 1280
-#Height = 720
-#MaxRange = 10000.0
-#MinRange = 0.0
+[Robots.ComponentConfigs.RGBCamera]
+RecordInterval = 0.033333
+FOV = 90
+Width = 1280
+Height = 720
+
+[Robots.ComponentConfigs.DepthCamera]
+RecordInterval = 0.033333
+FOV = 90
+Width = 1280
+Height = 720
+MaxRange = 10000.0
+MinRange = 0.0
 #
 #[Robots.ComponentConfigs.NormalCamera]
 #RecordInterval = 0.033333

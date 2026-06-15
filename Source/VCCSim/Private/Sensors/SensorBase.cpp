@@ -20,7 +20,11 @@ DEFINE_LOG_CATEGORY_STATIC(LogCameraSensor, Log, All);
 
 #include "Sensors/SensorBase.h"
 #include "Engine/World.h"
+#include "Engine/TextureRenderTarget2D.h"
 #include "GameFramework/Actor.h"
+#include "RenderingThread.h"
+#include "RHIGPUReadback.h"
+#include <atomic>
 
 USensorBaseComponent::USensorBaseComponent()
 {
@@ -101,4 +105,123 @@ void UCameraBaseComponent::ComputeIntrinsics()
 		FPlane4f(0.0f, 0.0f, 1.0f, 0.0f),
 		FPlane4f(0.0f, 0.0f, 0.0f, 1.0f)
 	);
+}
+
+// ============================================================================
+// Async GPU readback: non-blocking EnqueueCopy + polled Lock, so dataset capture
+// never stalls the render thread on BlockUntilGPUIdle. The pending list is touched
+// only inside render commands (serialized), so no extra locking is needed.
+// ============================================================================
+
+struct UCameraBaseComponent::FReadbackState
+{
+	struct FEntry
+	{
+		TUniquePtr<FRHIGPUTextureReadback> Readback;
+		TUniqueFunction<void(const void*, int32)> OnReady;
+	};
+	TArray<FEntry> Pending;            // render-thread only
+	std::atomic<int32> InFlight{ 0 };  // ++ on the game thread, -- on the render thread
+};
+
+UCameraBaseComponent::~UCameraBaseComponent()
+{
+	if (PollTickerHandle.IsValid())
+	{
+		FTSTicker::GetCoreTicker().RemoveTicker(PollTickerHandle);
+		PollTickerHandle.Reset();
+	}
+}
+
+void UCameraBaseComponent::EnqueueReadback(
+	TUniqueFunction<void(const void* MappedData, int32 RowPitchInPixels)> OnReady)
+{
+	if (!RenderTarget)
+	{
+		return;
+	}
+	if (!ReadbackState.IsValid())
+	{
+		ReadbackState = MakeShared<FReadbackState, ESPMode::ThreadSafe>();
+	}
+	ReadbackState->InFlight.fetch_add(1);
+
+	UTextureRenderTarget2D* RT = RenderTarget;
+	TSharedPtr<FReadbackState, ESPMode::ThreadSafe> State = ReadbackState;
+	ENQUEUE_RENDER_COMMAND(VCCSimEnqueueReadback)(
+		[RT, State, OnReady = MoveTemp(OnReady)](FRHICommandListImmediate& RHICmdList) mutable
+		{
+			FTextureRenderTargetResource* Res = RT->GetRenderTargetResource();
+			FRHITexture* Tex = Res ? Res->GetRenderTargetTexture() : nullptr;
+			if (!Tex)
+			{
+				State->InFlight.fetch_sub(1);
+				return;
+			}
+			FReadbackState::FEntry Entry;
+			Entry.Readback = MakeUnique<FRHIGPUTextureReadback>(TEXT("VCCSimReadback"));
+			Entry.Readback->EnqueueCopy(RHICmdList, Tex);
+			Entry.OnReady = MoveTemp(OnReady);
+			State->Pending.Add(MoveTemp(Entry));
+		});
+
+	EnsurePollTicker();
+}
+
+void UCameraBaseComponent::EnsurePollTicker()
+{
+	if (PollTickerHandle.IsValid())
+	{
+		return;
+	}
+	TWeakObjectPtr<UCameraBaseComponent> WeakThis(this);
+	PollTickerHandle = FTSTicker::GetCoreTicker().AddTicker(
+		FTickerDelegate::CreateLambda([WeakThis](float) -> bool
+		{
+			UCameraBaseComponent* Self = WeakThis.Get();
+			if (!Self)
+			{
+				return false;
+			}
+			Self->PollReadbacks();
+			if (Self->ReadbackState.IsValid() && Self->ReadbackState->InFlight.load() > 0)
+			{
+				return true;
+			}
+			Self->PollTickerHandle.Reset();
+			return false;
+		}), 0.0f);
+}
+
+void UCameraBaseComponent::PollReadbacks()
+{
+	if (!ReadbackState.IsValid())
+	{
+		return;
+	}
+	TSharedPtr<FReadbackState, ESPMode::ThreadSafe> State = ReadbackState;
+	ENQUEUE_RENDER_COMMAND(VCCSimPollReadbacks)(
+		[State](FRHICommandListImmediate& RHICmdList)
+		{
+			for (int32 i = 0; i < State->Pending.Num(); )
+			{
+				FReadbackState::FEntry& Entry = State->Pending[i];
+				if (Entry.Readback->IsReady())
+				{
+					int32 RowPitchInPixels = 0;
+					void* Mapped = Entry.Readback->Lock(RowPitchInPixels);
+					if (Mapped && Entry.OnReady)
+					{
+						Entry.OnReady(Mapped, RowPitchInPixels);
+					}
+					Entry.Readback->Unlock();
+					State->Pending.RemoveAtSwap(i);
+					State->InFlight.fetch_sub(1);
+				}
+				else
+				{
+					++i;
+				}
+			}
+		});
 }

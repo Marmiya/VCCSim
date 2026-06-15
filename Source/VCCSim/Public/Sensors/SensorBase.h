@@ -20,6 +20,7 @@
 #include "CoreMinimal.h"
 #include "Components/SceneComponent.h"
 #include "Components/SceneCaptureComponent2D.h"
+#include "Containers/Ticker.h"
 #include "DataStructures/RecordData.h"
 #include "SensorBase.generated.h"
 
@@ -138,6 +139,7 @@ class VCCSIM_API UCameraBaseComponent : public USensorBaseComponent
 
 public:
 	UCameraBaseComponent();
+	virtual ~UCameraBaseComponent();
 
 	virtual void InitializeRenderTargets() PURE_VIRTUAL(UCameraBaseComponent::InitializeRenderTargets);
 	virtual void SetCaptureComponent() const;
@@ -146,6 +148,10 @@ public:
 
 	void WarmupCapture();
 	void ComputeIntrinsics();
+
+	/** Poll this camera's in-flight async GPU readbacks and deliver any the GPU has
+	 *  finished. Driven automatically by a self-managed per-frame ticker. */
+	void PollReadbacks();
 	FMatrix44f GetCameraIntrinsics() const { return CameraIntrinsics; }
 	double GetLastCaptureTimestamp() const { return LastCaptureTimestamp; }
 
@@ -154,6 +160,11 @@ public:
 
 protected:
 	bool CheckComponentAndRenderTarget() const;
+
+	/** Enqueue a non-blocking GPU readback of RenderTarget. Once the GPU finishes the copy,
+	 *  a later PollReadbacks() locks the staging buffer and calls OnReady(MappedData,
+	 *  RowPitchInPixels) on the render thread. */
+	void EnqueueReadback(TUniqueFunction<void(const void* MappedData, int32 RowPitchInPixels)> OnReady);
 
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Config")
@@ -171,4 +182,11 @@ protected:
 
 	FMatrix44f CameraIntrinsics;
 	double LastCaptureTimestamp = 0.0;
+
+private:
+	void EnsurePollTicker();
+
+	struct FReadbackState;
+	TSharedPtr<FReadbackState, ESPMode::ThreadSafe> ReadbackState;
+	FTSTicker::FDelegateHandle PollTickerHandle;
 };

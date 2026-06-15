@@ -169,7 +169,6 @@ private:
     bool bDrainingCaptureJobs = false;
     bool bSessionCancelled = false;
     bool bWarmupCaptureDone = false;
-    bool bNotificationsWereAllowed = true;
     FOnCaptureSessionComplete SessionCompleteDelegate;
     FTimerHandle AutoCaptureTimerHandle;
     FString SaveDirectory;

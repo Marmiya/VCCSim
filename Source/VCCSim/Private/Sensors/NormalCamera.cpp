@@ -111,7 +111,7 @@ void UNormalCameraComponent::AsyncGetNormalImageData(
     TFunction<void(const TArray<FFloat16Color>&)> Callback)
 {
     AsyncTask(ENamedThreads::GameThread,
-        [this, Callback = MoveTemp(Callback)]() {
+        [this, Callback = MoveTemp(Callback)]() mutable {
             if (!CheckComponentAndRenderTarget())
             {
                 UE_LOG(LogNormalCamera, Warning, 
@@ -121,6 +121,23 @@ void UNormalCameraComponent::AsyncGetNormalImageData(
             }
         
         CaptureComponent->CaptureScene();
-        ProcessNormalTextureParam(Callback);
+
+        const int32 W = Width;
+        const int32 H = Height;
+        EnqueueReadback(
+            [W, H, Callback = MoveTemp(Callback)](const void* Mapped, int32 RowPitchInPixels)
+            {
+                TArray<FFloat16Color> Data;
+                Data.SetNumUninitialized(W * H);
+                const uint8* Src = static_cast<const uint8*>(Mapped);
+                uint8* Dst = reinterpret_cast<uint8*>(Data.GetData());
+                const int32 SrcRowBytes = RowPitchInPixels * sizeof(FFloat16Color);
+                const int32 DstRowBytes = W * sizeof(FFloat16Color);
+                for (int32 Row = 0; Row < H; ++Row)
+                {
+                    FMemory::Memcpy(Dst + Row * DstRowBytes, Src + Row * SrcRowBytes, DstRowBytes);
+                }
+                Callback(Data);
+            });
     });
 }

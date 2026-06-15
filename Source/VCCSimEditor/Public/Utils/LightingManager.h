@@ -21,15 +21,13 @@
 #include "Engine/TimerHandle.h"
 #include "Utils/VCCSimSunPositionHelper.h"
 
-class UWorld;
-
 /**
  * Manages scene lighting, including applying specific sun positions and simulating a day/night cycle.
  */
 class VCCSIMEDITOR_API FLightingManager
 {
 public:
-    FLightingManager(UWorld* InWorld);
+    FLightingManager();
     ~FLightingManager();
 
     /**
@@ -59,9 +57,6 @@ private:
     /** Callback for the day cycle timer. */
     void TickDayCycle();
 
-    /** The world context in which this manager operates. */
-    TWeakObjectPtr<UWorld> World;
-    
     /** Timer handle for the day cycle simulation. */
     FTimerHandle DayCycleTimerHandle;
 

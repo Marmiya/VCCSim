@@ -25,8 +25,7 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogLightingManager, Log, All);
 
-FLightingManager::FLightingManager(UWorld* InWorld)
-    : World(InWorld)
+FLightingManager::FLightingManager()
 {
 }
 
@@ -41,14 +40,15 @@ FLightingManager::~FLightingManager()
 
 void FLightingManager::ApplyLightingCondition(float ElevationDeg, float AzimuthDeg, bool bMarkDirty)
 {
-    if (!World.IsValid())
+    UWorld* CurrentWorld = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
+    if (!CurrentWorld)
     {
         UE_LOG(LogLightingManager, Error, TEXT("World is not available to apply lighting condition."));
         return;
     }
 
     ADirectionalLight* DirectionalLight = nullptr;
-    for (TActorIterator<ADirectionalLight> It(World.Get()); It; ++It)
+    for (TActorIterator<ADirectionalLight> It(CurrentWorld); It; ++It)
     {
         ADirectionalLight* Candidate = *It;
         if (!Candidate) continue;
