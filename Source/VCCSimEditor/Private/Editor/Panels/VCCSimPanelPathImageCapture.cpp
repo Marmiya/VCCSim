@@ -1003,6 +1003,10 @@ bool FVCCSimPanelPathImageCapture::StartCaptureSession(
     bSessionCancelled = false;
     bWarmupCaptureDone = false;
     bGameViewChangedForCapture = EnsureGameView();
+    if (ImageCaptureService.IsValid())
+    {
+        ImageCaptureService->BeginViewportCaptureSession(SelectedFlashPawn.Get());
+    }
     bAutoCaptureInProgress = true;
 
     SelectedFlashPawn->MoveTo(0);
@@ -1101,6 +1105,10 @@ void FVCCSimPanelPathImageCapture::FinishCaptureSession(bool bSuccess)
     bWarmupCaptureDone = false;
     bSessionDatasetChannelsOnly = false;
     SaveDirectory.Empty();
+    if (ImageCaptureService.IsValid())
+    {
+        ImageCaptureService->EndViewportCaptureSession();
+    }
     RestoreGameView(bGameViewChangedForCapture);
     bGameViewChangedForCapture = false;
 

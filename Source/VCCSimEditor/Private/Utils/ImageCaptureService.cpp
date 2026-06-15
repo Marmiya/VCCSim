@@ -25,10 +25,11 @@
 #include "Sensors/BaseColorCamera.h"
 #include "Sensors/MaterialPropertiesCamera.h"
 #include "Utils/ImageProcesser.h"
-#include "HighResScreenshot.h"
 #include "LevelEditorViewport.h"
 #include "Editor.h"
 #include "Async/Async.h"
+#include "Slate/SceneViewport.h"
+#include "UnrealClient.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogImageCaptureService, Log, All);
 
@@ -164,61 +165,7 @@ void FImageCaptureService::SaveRGB(AFlashPawn* SelectedFlashPawn, int32 PoseInde
     }
     else
     {
-        TArray<URGBCameraComponent*> RGBCameras;
-        SelectedFlashPawn->GetComponents<URGBCameraComponent>(RGBCameras);
-        *JobNum += RGBCameras.Num();
-        
-        FEditorViewportClient* ViewportClient = nullptr;
-        for (FLevelEditorViewportClient* LevelVC : GEditor->GetLevelViewportClients())
-        {
-            if (LevelVC && LevelVC->Viewport && !LevelVC->IsOrtho())
-            {
-                ViewportClient = LevelVC;
-                break;
-            }
-        }
-        
-        if (!ViewportClient)
-        {
-            UE_LOG(LogImageCaptureService, Error, TEXT("No valid editor viewport found"));
-            *JobNum -= RGBCameras.Num();
-            return;
-        }
-        
-        for (int32 i = 0; i < RGBCameras.Num(); ++i)
-        {
-            URGBCameraComponent* Camera = RGBCameras[i];
-            if (Camera)
-            {
-                int32 CameraIndex = Camera->GetSensorIndex();
-                if (CameraIndex < 0) CameraIndex = i;
-                
-                FString Filename = InSaveDirectory / FString::Printf(TEXT("RGB_Cam%02d_Pose%03d.png"), CameraIndex, PoseIndex);
-                FIntPoint CameraSize = {Camera->GetImageSize().first, Camera->GetImageSize().second};
-                FTransform CameraTransform = Camera->GetComponentTransform();
-                
-                ViewportClient->SetViewLocation(CameraTransform.GetLocation());
-                ViewportClient->SetViewRotation(CameraTransform.GetRotation().Rotator());
-                ViewportClient->ViewFOV = Camera->FOV;
-                ViewportClient->Invalidate();
-                ViewportClient->Viewport->Draw();
-                
-                FHighResScreenshotConfig& HighResScreenshotConfig = GetHighResScreenshotConfig();
-                HighResScreenshotConfig.SetResolution(CameraSize.X, CameraSize.Y);
-                HighResScreenshotConfig.SetFilename(Filename);
-                HighResScreenshotConfig.bMaskEnabled = false;
-                HighResScreenshotConfig.bCaptureHDR = false;
-                
-                FScreenshotRequest::RequestScreenshot(Filename, false, false);
-                *JobNum -= 1;
-                
-                bAnyCaptured = true;
-            }
-            else
-            {
-                *JobNum -= 1;
-            }
-        }
+        CaptureRGBFromViewport(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
     }
 }
 
@@ -420,5 +367,120 @@ void FImageCaptureService::SaveMaterialProperties(AFlashPawn* SelectedFlashPawn,
         {
             *JobNum -= 1;
         }
+    }
+}
+
+// ============================================================================
+// DIRECT EDITOR-VIEWPORT RGB CAPTURE
+// ============================================================================
+
+FEditorViewportClient* FImageCaptureService::FindPerspectiveViewportClient()
+{
+    if (!GEditor) return nullptr;
+    for (FLevelEditorViewportClient* LevelVC : GEditor->GetLevelViewportClients())
+    {
+        if (LevelVC && LevelVC->Viewport && !LevelVC->IsOrtho())
+        {
+            return LevelVC;
+        }
+    }
+    return nullptr;
+}
+
+void FImageCaptureService::BeginViewportCaptureSession(AFlashPawn* Pawn)
+{
+    bViewportSizeFixed = false;
+
+    TSharedPtr<FVCCSimPanelSelection> SelectionManagerPin = SelectionManager.Pin();
+    if (!SelectionManagerPin.IsValid() || SelectionManagerPin->ShouldUseRGBCameraClass() || !Pawn)
+    {
+        return;  // RGBCamera path (or no pawn): the viewport is not used for RGB.
+    }
+
+    TArray<URGBCameraComponent*> RGBCameras;
+    Pawn->GetComponents<URGBCameraComponent>(RGBCameras);
+    if (RGBCameras.Num() == 0 || !RGBCameras[0]) return;
+
+    FEditorViewportClient* VC = FindPerspectiveViewportClient();
+    if (!VC || !VC->Viewport) return;
+
+    const std::pair<int32, int32> Size = RGBCameras[0]->GetImageSize();
+    static_cast<FSceneViewport*>(VC->Viewport)->SetFixedViewportSize(Size.first, Size.second);
+
+    // The camera teleports between poses, so the motion-blur post-process would smear each
+    // captured frame along that jump. Disable it for the session (restored in End...).
+    bSavedMotionBlur = VC->EngineShowFlags.MotionBlur != 0;
+    VC->EngineShowFlags.SetMotionBlur(false);
+
+    bViewportSizeFixed = true;
+    UE_LOG(LogImageCaptureService, Log,
+        TEXT("Viewport locked to %dx%d for direct RGB capture"), Size.first, Size.second);
+}
+
+void FImageCaptureService::EndViewportCaptureSession()
+{
+    if (!bViewportSizeFixed) return;
+    bViewportSizeFixed = false;
+
+    FEditorViewportClient* VC = FindPerspectiveViewportClient();
+    if (VC && VC->Viewport)
+    {
+        static_cast<FSceneViewport*>(VC->Viewport)->SetFixedViewportSize(0, 0);
+        VC->EngineShowFlags.SetMotionBlur(bSavedMotionBlur);
+    }
+}
+
+void FImageCaptureService::CaptureRGBFromViewport(
+    AFlashPawn* Pawn, int32 PoseIndex, const FString& InSaveDirectory, bool& bAnyCaptured)
+{
+    FEditorViewportClient* VC = FindPerspectiveViewportClient();
+    if (!VC || !VC->Viewport)
+    {
+        UE_LOG(LogImageCaptureService, Error, TEXT("No valid editor viewport found"));
+        return;
+    }
+
+    TArray<URGBCameraComponent*> RGBCameras;
+    Pawn->GetComponents<URGBCameraComponent>(RGBCameras);
+
+    for (int32 i = 0; i < RGBCameras.Num(); ++i)
+    {
+        URGBCameraComponent* Camera = RGBCameras[i];
+        if (!Camera) continue;
+
+        int32 CameraIndex = Camera->GetSensorIndex();
+        if (CameraIndex < 0) CameraIndex = i;
+
+        const FString Filename =
+            InSaveDirectory / FString::Printf(TEXT("RGB_Cam%02d_Pose%03d.png"), CameraIndex, PoseIndex);
+        const FTransform CameraTransform = Camera->GetComponentTransform();
+
+        VC->SetViewLocation(CameraTransform.GetLocation());
+        VC->SetViewRotation(CameraTransform.GetRotation().Rotator());
+        VC->ViewFOV = Camera->FOV;
+        VC->Invalidate();
+        VC->Viewport->Draw();
+
+        // The viewport render target is often a float / 10-bit format; ReadPixels lets the
+        // engine convert it to 8-bit sRGB FColor correctly (a raw GPU readback misinterprets
+        // a non-BGRA8 target → colour moire). Synchronous read, async save.
+        TArray<FColor> Pixels;
+        if (!VC->Viewport->ReadPixels(Pixels))
+        {
+            UE_LOG(LogImageCaptureService, Warning, TEXT("Viewport ReadPixels failed; RGB pose skipped"));
+            continue;
+        }
+        for (FColor& Px : Pixels) { Px.A = 255; }
+
+        const FIntPoint Sz = VC->Viewport->GetSizeXY();
+        TSharedPtr<std::atomic<int32>> SaveCounter = SaveJobNum;
+        (*SaveCounter)++;
+        Async(EAsyncExecution::ThreadPool,
+            [Pixels = MoveTemp(Pixels), Sz, Filename, SaveCounter]()
+            {
+                FAsyncImageSaveTask(Pixels, Sz, Filename).DoWork();
+                (*SaveCounter)--;
+            });
+        bAnyCaptured = true;
     }
 }

@@ -22,6 +22,8 @@
 
 class AFlashPawn;
 class FVCCSimPanelSelection;
+class FViewport;
+class FEditorViewportClient;
 
 /**
  * Service class for handling image capture operations from various sensor components.
@@ -46,11 +48,21 @@ public:
         bool& bAnyCaptured,
         bool bDatasetChannelsOnly = false);
 
+    /**
+     * Locks the editor perspective viewport to the RGB camera resolution so the direct
+     * viewport RGB capture renders at exactly the dataset resolution (matching the other
+     * channels). Call once at session start. No-op when RGB uses the RGBCamera-class path.
+     */
+    void BeginViewportCaptureSession(AFlashPawn* Pawn);
+
+    /** Restores the editor viewport's size. Call at session end. */
+    void EndViewportCaptureSession();
+
     /** Number of capture readbacks still in flight (async save tasks not yet dispatched). */
     int32 GetPendingJobCount() const { return JobNum.IsValid() ? JobNum->load() : 0; }
 
-    /** Readbacks in flight plus save tasks still encoding/writing — the total unfinished
-     *  work used for capture backpressure and end-of-session draining. */
+    /** Sensor readbacks + save tasks — the total unfinished work used for capture
+     *  backpressure and end-of-session draining. */
     int32 GetInFlightCount() const
     {
         return (JobNum.IsValid()     ? JobNum->load()     : 0)
@@ -68,37 +80,20 @@ private:
      *  readback counter so backpressure can bound queued full-res image copies. */
     TSharedPtr<std::atomic<int32>> SaveJobNum;
 
-    /**
-     * Saves RGB image data.
-     * @param SelectedFlashPawn The pawn to capture from.
-     * @param PoseIndex The index of the current pose.
-     * @param InSaveDirectory The directory to save to.
-     * @param bAnyCaptured Set to true if an image is saved.
-     */
     void SaveRGB(AFlashPawn* SelectedFlashPawn, int32 PoseIndex, const FString& InSaveDirectory, bool& bAnyCaptured);
-
-    /**
-     * Saves Depth image data.
-     */
     void SaveDepth(AFlashPawn* SelectedFlashPawn, int32 PoseIndex, const FString& InSaveDirectory, bool& bAnyCaptured);
-
-    /**
-     * Saves Segmentation image data.
-     */
     void SaveSeg(AFlashPawn* SelectedFlashPawn, int32 PoseIndex, const FString& InSaveDirectory, bool& bAnyCaptured);
-    
-    /**
-     * Saves Normal vector image data.
-     */
     void SaveNormal(AFlashPawn* SelectedFlashPawn, int32 PoseIndex, const FString& InSaveDirectory, bool& bAnyCaptured);
-
-    /**
-     * Saves BaseColor (albedo) image data.
-     */
     void SaveBaseColor(AFlashPawn* SelectedFlashPawn, int32 PoseIndex, const FString& InSaveDirectory, bool& bAnyCaptured);
-
-    /**
-     * Saves Material Properties (Roughness, Metallic, etc.) image data.
-     */
     void SaveMaterialProperties(AFlashPawn* SelectedFlashPawn, int32 PoseIndex, const FString& InSaveDirectory, bool& bAnyCaptured);
+
+    // Direct editor-viewport RGB capture (replaces the high-res-screenshot path): render
+    // the level-editor viewport at the camera pose/resolution and read it back. The engine's
+    // ReadPixels converts whatever pixel format the viewport target uses into 8-bit sRGB
+    // FColor (a raw GPU readback would misinterpret a non-BGRA8 target); the save is async.
+    void CaptureRGBFromViewport(AFlashPawn* Pawn, int32 PoseIndex, const FString& InSaveDirectory, bool& bAnyCaptured);
+    static FEditorViewportClient* FindPerspectiveViewportClient();
+
+    bool bViewportSizeFixed = false;
+    bool bSavedMotionBlur = false;
 };
