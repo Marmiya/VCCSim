@@ -23,7 +23,7 @@
 #include "GenericPlatform/GenericPlatformFile.h"
 #include "Misc/FileHelper.h"
 #include "Math/Vector.h"
-#include "PointCloud.generated.h"
+#include "RPointCloud.generated.h"
 
 /**
  * Enhanced point data structure for point cloud loading with normal support

@@ -193,7 +193,7 @@ void FImageCaptureService::SaveDepth(AFlashPawn* SelectedFlashPawn, int32 PoseIn
                     DepthValues.SetNum(ImageData.Num());
                     for (int32 idx = 0; idx < ImageData.Num(); ++idx)
                     {
-                        DepthValues[idx] = ImageData[idx].A;
+                        DepthValues[idx] = ImageData[idx].R;
                     }
 
                     *JobNum -= 1;

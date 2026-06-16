@@ -31,6 +31,8 @@ struct FDepthCameraData final : public FSensorData
 	int32 Width;
 	int32 Height;
 	int32 SensorIndex;
+	float MinRange = 0.f;
+	float MaxRange = 10000.f;
 	TArray<float> DepthData;
 };
 

@@ -20,7 +20,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "SensorBase.h"
-#include "DataStructures/PointCloud.h"
+#include "DataStructures/RPointCloud.h"
 #include "LidarSensor.generated.h"
 
 class UInsMeshHolder;

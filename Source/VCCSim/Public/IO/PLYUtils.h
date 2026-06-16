@@ -19,7 +19,7 @@
 
 #include "CoreMinimal.h"
 #include "Math/Vector.h"
-#include "DataStructures/PointCloud.h"
+#include "DataStructures/RPointCloud.h"
 
 /**
  * PLY file loader utility class with enhanced normal support

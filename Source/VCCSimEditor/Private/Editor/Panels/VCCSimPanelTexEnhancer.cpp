@@ -37,7 +37,7 @@
 #include "DrawDebugHelpers.h"
 #include "IMeshMergeUtilities.h"
 #include "MeshMergeModule.h"
-#include "Engine/MeshMerging.h"
+#include "MeshMerge/MeshMergingSettings.h"
 #include "Misc/ScopeExit.h"
 #include "MeshDescription.h"
 #include "Modules/ModuleManager.h"

@@ -18,7 +18,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "DataStructures/PointCloud.h"
+#include "DataStructures/RPointCloud.h"
 
 class UInstancedStaticMeshComponent;
 class UProceduralMeshComponent;

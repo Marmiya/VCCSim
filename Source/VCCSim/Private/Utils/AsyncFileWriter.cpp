@@ -325,28 +325,11 @@ void FImageCompressionTask::CompressDepthData()
 
     if (bBetterVisuals)
     {
-        // Turbo colormap over a dynamic range: near = blue, far = red.
-        // Range comes from 2nd/98th percentiles to ignore outliers.
-        TArray<float> SortedDepths = DepthData->DepthData;
-        SortedDepths.RemoveAll([](float Depth)
-            { return Depth < 0.0f || !FMath::IsFinite(Depth); });
-        SortedDepths.Sort();
-
-        float MinRange = 0.0f;
-        float MaxRange = 1.0f;
-        if (SortedDepths.Num() > 0)
-        {
-            int32 LowIndex = FMath::Clamp(
-                FMath::FloorToInt(SortedDepths.Num() * 0.02f), 0, SortedDepths.Num() - 1);
-            int32 HighIndex = FMath::Clamp(
-                FMath::FloorToInt(SortedDepths.Num() * 0.98f), LowIndex, SortedDepths.Num() - 1);
-            MinRange = SortedDepths[LowIndex];
-            MaxRange = SortedDepths[HighIndex];
-            if (MaxRange <= MinRange)
-            {
-                MaxRange = MinRange + 1.0f;
-            }
-        }
+        // Turbo colormap over the depth camera's fixed [MinRange, MaxRange]
+        // (near = blue, far = red); depth outside the range saturates.
+        const float MinRange = DepthData->MinRange;
+        const float MaxRange = (DepthData->MaxRange > MinRange)
+            ? DepthData->MaxRange : MinRange + 1.0f;
 
         TArray<FColor> VisualPixels;
         VisualPixels.Reserve(DepthData->DepthData.Num());
@@ -363,13 +346,15 @@ void FImageCompressionTask::CompressDepthData()
         return;
     }
 
-    // Raw 16-bit depth (centimeters) as G16 PNG.
+    // Raw 16-bit depth (centimeters) as G16 PNG, far-clamped to the camera's MaxRange.
+    const float MaxRangeCm = (DepthData->MaxRange > 0.f) ? DepthData->MaxRange : 65535.f;
     TArray<uint16> DepthData16;
     DepthData16.Reserve(DepthData->DepthData.Num());
 
     for (const float& DepthPixel : DepthData->DepthData)
     {
-        uint16 Depth16 = FMath::Clamp(FMath::RoundToInt(DepthPixel), 0, 65535);
+        const float ClampedCm = FMath::Clamp(DepthPixel, 0.f, MaxRangeCm);
+        uint16 Depth16 = FMath::Clamp(FMath::RoundToInt(ClampedCm), 0, 65535);
         DepthData16.Add(Depth16);
     }
 

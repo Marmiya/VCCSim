@@ -25,6 +25,7 @@
 #include "SceneRendering.h"
 #include "LegacyScreenPercentageDriver.h"
 #include "Sensors/LidarSensor.h"
+#include "Sensors/DepthCamera.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogRecorder, Log, All);
 
@@ -761,6 +762,11 @@ void ARecorder::ProcessPendingReadback(const FPendingReadback& PendingData)
                 DepthData->Width = Resolution.X;
                 DepthData->Height = Resolution.Y;
                 DepthData->SensorIndex = Packet.SensorIndex;
+                if (const UDepthCameraComponent* DepthCam = Cast<UDepthCameraComponent>(Camera))
+                {
+                    DepthData->MinRange = DepthCam->MinRange;
+                    DepthData->MaxRange = DepthCam->MaxRange;
+                }
                 DepthData->DepthData.SetNumUninitialized(NumPixels);
                 const FFloat16Color* SourceColors = static_cast<const FFloat16Color*>(PixelData);
 

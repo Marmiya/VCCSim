@@ -15,7 +15,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "DataStructures/PointCloud.h"
+#include "DataStructures/RPointCloud.h"
 #include "Engine/Engine.h"
 #include "Misc/DateTime.h"
 #include "Misc/FileHelper.h"
