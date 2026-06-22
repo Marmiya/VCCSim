@@ -21,6 +21,7 @@
 
 class AActor;
 class UStaticMesh;
+class UMaterialInterface;
 
 struct FGTFoliageExportEntry
 {
@@ -84,4 +85,13 @@ private:
         int32 TextureResolution,
         const FString& ActorDir
     );
+
+    /**
+     * Classify a material as glazing for the Glass Intrinsic Decomposition pipeline.
+     * Opaque interior-cubemap windows are matched by asset name/path (window/glass/interior);
+     * future physical glass is matched by Translucent blend mode or the ThinTranslucent shading
+     * model. Written per material slot as "is_glass" in manifest.json so the preprocess can
+     * rasterize a per-face glass mask without isolating glass as a separate actor.
+     */
+    static bool IsGlassMaterial(const UMaterialInterface* Mat);
 };

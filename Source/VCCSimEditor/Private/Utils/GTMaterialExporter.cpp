@@ -12,6 +12,7 @@
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonWriter.h"
 #include "Materials/MaterialInterface.h"
+#include "Materials/Material.h"
 #include "HAL/PlatformFileManager.h"
 #include "Misc/ScopedSlowTask.h"
 #include "Misc/ScopeExit.h"
@@ -36,6 +37,24 @@ bool FGTMaterialExporter::HasExportableMeshMaterials(const AActor* Actor)
             return true;
         }
     }
+    return false;
+}
+
+bool FGTMaterialExporter::IsGlassMaterial(const UMaterialInterface* Mat)
+{
+    if (!Mat) return false;
+
+    const FString Path = Mat->GetPathName().ToLower();
+    static const TCHAR* GlassTokens[] = {
+        TEXT("window"), TEXT("glass"), TEXT("interior")
+    };
+    for (const TCHAR* Token : GlassTokens)
+    {
+        if (Path.Contains(Token)) return true;
+    }
+
+    if (Mat->GetBlendMode() == BLEND_Translucent) return true;
+    if (Mat->GetShadingModels().HasShadingModel(MSM_ThinTranslucent)) return true;
     return false;
 }
 
@@ -115,11 +134,14 @@ bool FGTMaterialExporter::WriteManifest(
         Slot->SetNumberField(TEXT("slot"), PrimIdx);
 
         FString MatName;
+        bool bIsGlass = false;
         if (Materials.IsValidIndex(PrimIdx) && Materials[PrimIdx])
         {
             MatName = Materials[PrimIdx]->GetName();
+            bIsGlass = IsGlassMaterial(Materials[PrimIdx]);
         }
         Slot->SetStringField(TEXT("material_name"), MatName);
+        Slot->SetBoolField(TEXT("is_glass"), bIsGlass);
 
         if (MatIdx >= 0 && MatIdx < GltfData.Materials.Num())
         {

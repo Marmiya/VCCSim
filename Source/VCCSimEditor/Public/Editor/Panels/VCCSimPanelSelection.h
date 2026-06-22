@@ -149,6 +149,9 @@ private:
     /** Create the shared target actor list panel */
     TSharedRef<SWidget> CreateTargetActorListPanel();
 
+    /** Create the coordinate bounding-box selection sub-panel */
+    TSharedRef<SWidget> CreateBoundsSelectPanel();
+
     /** Create camera status row showing available cameras */
     TSharedRef<SWidget> CreateCameraStatusRow();
     
@@ -175,6 +178,12 @@ private:
     FReply OnAddTargetActorsClicked();
     void SaveTargetActorsToConfig() const;
 
+    /** Add every mesh actor whose bounds center falls inside the coordinate box (clutter-filtered). */
+    FReply OnAddTargetActorsInBoundsClicked();
+
+    /** Fill the coordinate box from the combined AABB of the current editor selection. */
+    FReply OnFillBoundsFromSelectionClicked();
+
     /** Handle camera checkbox changes */
     void OnRGBCameraCheckboxChanged(ECheckBoxState NewState);
     void OnDepthCameraCheckboxChanged(ECheckBoxState NewState);
@@ -193,6 +202,9 @@ private:
     
     /** Clear current selections */
     void ClearSelections();
+
+    /** True for foliage / vehicles / pedestrians / our own helper actors, skipped by bounds selection. */
+    bool IsClutterActor(const AActor* Actor) const;
 
 private:
     // ============================================================================
@@ -247,4 +259,11 @@ private:
 
     /** UI section expansion state */
     bool bFlashPawnSectionExpanded = false;
+
+    /** Coordinate bounding box (UE world cm) used by bounds-based target selection. */
+    FVector BoundsMin = FVector(-100000.0);
+    FVector BoundsMax = FVector(100000.0);
+
+    /** Skip foliage / vehicles / pedestrians when adding actors in bounds. */
+    bool bExcludeClutter = true;
 };

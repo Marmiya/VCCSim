@@ -22,6 +22,7 @@
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Views/STableRow.h"
+#include "Widgets/Input/SNumericEntryBox.h"
 
 TSharedRef<SWidget> FVCCSimPanelSelection::CreateSelectionPanel()
 {
@@ -148,6 +149,13 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateTargetActorListPanel()
 
     +SVerticalBox::Slot()
     .AutoHeight()
+    .Padding(FMargin(0, 4, 0, 4))
+    [
+        CreateBoundsSelectPanel()
+    ]
+
+    +SVerticalBox::Slot()
+    .AutoHeight()
     [
         SNew(SBox)
         .HeightOverride(90.f)
@@ -218,6 +226,117 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateTargetActorListPanel()
                 })
             ]
         ]
+    ];
+}
+
+TSharedRef<SWidget> FVCCSimPanelSelection::CreateBoundsSelectPanel()
+{
+    auto CoordBox = [](TFunction<double()> Get, TFunction<void(double)> Set) -> TSharedRef<SWidget>
+    {
+        return SNew(SNumericEntryBox<double>)
+            .AllowSpin(false)
+            .MinDesiredValueWidth(46.f)
+            .Value_Lambda([Get]() { return TOptional<double>(Get()); })
+            .OnValueCommitted_Lambda([Set](double V, ETextCommit::Type) { Set(V); });
+    };
+
+    auto LabeledRow = [](const FString& Name,
+        TSharedRef<SWidget> X, TSharedRef<SWidget> Y, TSharedRef<SWidget> Z) -> TSharedRef<SWidget>
+    {
+        return SNew(SHorizontalBox)
+        +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(0, 0, 6, 0))
+        [
+            SNew(STextBlock)
+            .Text(FText::FromString(Name))
+            .MinDesiredWidth(28)
+            .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
+            .ColorAndOpacity(FColor(233, 233, 233))
+        ]
+        +SHorizontalBox::Slot().FillWidth(1.f).Padding(FMargin(1, 0)) [ X ]
+        +SHorizontalBox::Slot().FillWidth(1.f).Padding(FMargin(1, 0)) [ Y ]
+        +SHorizontalBox::Slot().FillWidth(1.f).Padding(FMargin(1, 0)) [ Z ];
+    };
+
+    return SNew(SVerticalBox)
+
+    +SVerticalBox::Slot()
+    .AutoHeight()
+    .Padding(FMargin(0, 0, 0, 2))
+    [
+        SNew(STextBlock)
+        .Text(FText::FromString(TEXT("Add by Bounding Box (UE cm):")))
+        .ToolTipText(FText::FromString(TEXT(
+            "Add every mesh actor whose bounds center is inside this world-space box. "
+            "Use 'Fill From Selection' to set the box from selected actors, then narrow it.")))
+        .Font(FAppStyle::GetFontStyle("PropertyWindow.BoldFont"))
+        .ColorAndOpacity(FColor(233, 233, 233))
+    ]
+
+    +SVerticalBox::Slot()
+    .AutoHeight()
+    .Padding(FMargin(0, 1))
+    [
+        LabeledRow(TEXT("Min"),
+            CoordBox([this]() { return BoundsMin.X; }, [this](double V) { BoundsMin.X = V; }),
+            CoordBox([this]() { return BoundsMin.Y; }, [this](double V) { BoundsMin.Y = V; }),
+            CoordBox([this]() { return BoundsMin.Z; }, [this](double V) { BoundsMin.Z = V; }))
+    ]
+
+    +SVerticalBox::Slot()
+    .AutoHeight()
+    .Padding(FMargin(0, 1))
+    [
+        LabeledRow(TEXT("Max"),
+            CoordBox([this]() { return BoundsMax.X; }, [this](double V) { BoundsMax.X = V; }),
+            CoordBox([this]() { return BoundsMax.Y; }, [this](double V) { BoundsMax.Y = V; }),
+            CoordBox([this]() { return BoundsMax.Z; }, [this](double V) { BoundsMax.Z = V; }))
+    ]
+
+    +SVerticalBox::Slot()
+    .AutoHeight()
+    .Padding(FMargin(0, 3, 0, 1))
+    [
+        SNew(SHorizontalBox)
+        +SHorizontalBox::Slot()
+        .AutoWidth()
+        .VAlign(VAlign_Center)
+        .Padding(FMargin(0, 0, 6, 0))
+        [
+            SNew(SCheckBox)
+            .IsChecked_Lambda([this]() { return bExcludeClutter ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+            .OnCheckStateChanged_Lambda([this](ECheckBoxState S) { bExcludeClutter = (S == ECheckBoxState::Checked); })
+            .ToolTipText(FText::FromString(TEXT("Skip foliage / trees / vehicles / pedestrians by class and name")))
+            [
+                SNew(STextBlock)
+                .Text(FText::FromString(TEXT("Exclude clutter")))
+                .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
+                .ColorAndOpacity(FColor(233, 233, 233))
+            ]
+        ]
+        +SHorizontalBox::Slot()
+        .FillWidth(1.f)
+        .Padding(FMargin(4, 0, 0, 0))
+        [
+            SNew(SButton)
+            .ContentPadding(FMargin(5, 2))
+            .HAlign(HAlign_Center)
+            .Text(FText::FromString(TEXT("Fill From Selection")))
+            .ToolTipText(FText::FromString(TEXT("Set Min/Max from the AABB of the actors selected in the viewport")))
+            .OnClicked_Lambda([this]() { return OnFillBoundsFromSelectionClicked(); })
+        ]
+    ]
+
+    +SVerticalBox::Slot()
+    .AutoHeight()
+    .Padding(FMargin(0, 1, 0, 0))
+    [
+        SNew(SButton)
+        .ButtonStyle(FAppStyle::Get(), "FlatButton.Success")
+        .ContentPadding(FMargin(5, 2))
+        .HAlign(HAlign_Center)
+        .Text(FText::FromString(TEXT("+ Add Actors In Bounds")))
+        .ToolTipText(FText::FromString(TEXT("Add all non-clutter mesh actors inside the box to the target list")))
+        .OnClicked_Lambda([this]() { return OnAddTargetActorsInBoundsClicked(); })
     ];
 }
 

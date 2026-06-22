@@ -32,6 +32,8 @@ DEFINE_LOG_CATEGORY_STATIC(LogSelection, Log, All);
 #include "Sensors/NormalCamera.h"
 #include "Sensors/BaseColorCamera.h"
 #include "Sensors/MaterialPropertiesCamera.h"
+#include "Utils/GTMaterialExporter.h"
+#include "Utils/VCCSimUIHelpers.h"
 
 FVCCSimPanelSelection::FVCCSimPanelSelection()
 {
@@ -283,6 +285,120 @@ FReply FVCCSimPanelSelection::OnAddTargetActorsClicked()
         SaveTargetActorsToConfig();
     }
 
+    return FReply::Handled();
+}
+
+bool FVCCSimPanelSelection::IsClutterActor(const AActor* Actor) const
+{
+    if (!Actor) return true;
+    if (Actor->IsA<AFlashPawn>() || Actor->IsA<AVCCSimLookAtPath>()) return true;
+
+    static const TCHAR* ClutterTokens[] = {
+        TEXT("tree"), TEXT("foliage"), TEXT("plant"), TEXT("bush"), TEXT("grass"),
+        TEXT("leaf"), TEXT("branch"), TEXT("hedge"), TEXT("shrub"),
+        TEXT("car"), TEXT("vehicle"), TEXT("truck"), TEXT("bus"), TEXT("van"),
+        TEXT("sedan"), TEXT("suv"), TEXT("taxi"), TEXT("traffic"),
+        TEXT("pedestrian"), TEXT("people"), TEXT("person"), TEXT("npc"), TEXT("character"),
+        TEXT("landscape"), TEXT("instancedfoliage")
+    };
+
+    const FString Label = Actor->GetActorLabel().ToLower();
+    const FString ClassName = Actor->GetClass()->GetName().ToLower();
+    for (const TCHAR* Token : ClutterTokens)
+    {
+        if (Label.Contains(Token) || ClassName.Contains(Token))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+FReply FVCCSimPanelSelection::OnFillBoundsFromSelectionClicked()
+{
+    USelection* Sel = GEditor ? GEditor->GetSelectedActors() : nullptr;
+    if (!Sel || Sel->Num() == 0)
+    {
+        UE_LOG(LogSelection, Warning, TEXT("Fill Bounds: no actor selected in the viewport"));
+        return FReply::Handled();
+    }
+
+    FBox Box(ForceInit);
+    for (int32 i = 0; i < Sel->Num(); ++i)
+    {
+        if (AActor* Actor = Cast<AActor>(Sel->GetSelectedObject(i)))
+        {
+            FVector Origin, Extent;
+            Actor->GetActorBounds(false, Origin, Extent);
+            Box += FBox(Origin - Extent, Origin + Extent);
+        }
+    }
+
+    if (Box.IsValid)
+    {
+        BoundsMin = Box.Min;
+        BoundsMax = Box.Max;
+        UE_LOG(LogSelection, Log, TEXT("Fill Bounds: [%s .. %s]"),
+            *BoundsMin.ToString(), *BoundsMax.ToString());
+    }
+    return FReply::Handled();
+}
+
+FReply FVCCSimPanelSelection::OnAddTargetActorsInBoundsClicked()
+{
+    UWorld* World = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
+    if (!World)
+    {
+        return FReply::Handled();
+    }
+
+    const FBox Query(BoundsMin.ComponentMin(BoundsMax), BoundsMin.ComponentMax(BoundsMax));
+
+    int32 Added = 0;
+    int32 SkippedClutter = 0;
+    for (TActorIterator<AActor> It(World); It; ++It)
+    {
+        AActor* Actor = *It;
+        if (!Actor || !IsValid(Actor)) continue;
+        if (!FGTMaterialExporter::HasExportableMeshMaterials(Actor)) continue;
+
+        FVector Origin, Extent;
+        Actor->GetActorBounds(false, Origin, Extent);
+        if (!Query.IsInsideOrOn(Origin)) continue;
+
+        if (bExcludeClutter && IsClutterActor(Actor))
+        {
+            ++SkippedClutter;
+            continue;
+        }
+
+        const FString Label = Actor->GetActorLabel();
+        const bool bDuplicate = TargetActorItems.ContainsByPredicate(
+            [&Label](const TSharedPtr<FVCCSimTargetActorItem>& Item)
+            {
+                return Item.IsValid() && Item->Label == Label;
+            });
+        if (bDuplicate) continue;
+
+        TSharedPtr<FVCCSimTargetActorItem> Item = MakeShared<FVCCSimTargetActorItem>();
+        Item->Label = Label;
+        TargetActorItems.Add(Item);
+        ++Added;
+    }
+
+    if (Added > 0)
+    {
+        if (TargetActorListView.IsValid())
+        {
+            TargetActorListView->RequestListRefresh();
+        }
+        SaveTargetActorsToConfig();
+    }
+
+    const FString Msg = FString::Printf(
+        TEXT("Add In Bounds: added %d actor(s), skipped %d clutter."), Added, SkippedClutter);
+    UE_LOG(LogSelection, Log, TEXT("%s"), *Msg);
+    FVCCSimUIHelpers::ShowNotification(Msg, false);
     return FReply::Handled();
 }
 
