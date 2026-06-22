@@ -281,10 +281,7 @@ void FGTMaterialExporter::ExportMaterials(
 
     UGLTFExportOptions* Options = NewObject<UGLTFExportOptions>();
     Options->ExportUniformScale = 0.01f;
-    Options->BakeMaterialInputs = EGLTFMaterialBakeMode::UseMeshData;
-    Options->DefaultMaterialBakeSize = FGLTFMaterialBakeSize{ TextureResolution, TextureResolution, false };
-    Options->TextureImageFormat = EGLTFTextureImageFormat::PNG;
-    Options->bAdjustNormalmaps = true;
+    Options->BakeMaterialInputs = EGLTFMaterialBakeMode::Disabled;
     Options->bExportLights = false;
     Options->bExportCameras = false;
     Options->bExportAnimationSequences = false;

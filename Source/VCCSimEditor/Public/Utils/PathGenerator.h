@@ -27,12 +27,14 @@ class AActor;
 class VCCSIMEDITOR_API FPathGenerator
 {
 public:
-    /** One building to orbit: its own world-space bounds and source actor.
-     *  Actor is only dereferenced on the game thread during ray-casting. */
+    /** One building to orbit: its combined world-space bounds and ALL its source
+     *  actors (a building is often several static-mesh actors). Surface probing accepts
+     *  a hit on ANY of these actors; they are never treated as occluders of their own
+     *  building. Actors are only dereferenced on the game thread during ray-casting. */
     struct FOrbitTarget
     {
         FBox Bounds;
-        TWeakObjectPtr<AActor> Actor;
+        TArray<TWeakObjectPtr<AActor>> Actors;
     };
 
     /** Parameters for generating a conformal orbit path. */
@@ -79,4 +81,9 @@ public:
      * @param OnComplete The delegate to call when path generation is finished.
      */
     void GenerateConformalOrbit(const FConformalOrbitParams& Params, FOnPathGenerated OnComplete);
+
+    /** Cluster actors into buildings by AABB proximity (union-find): pieces whose bounds, expanded
+     *  by GroupGap cm, intersect become one building; separate buildings stay separate. Shared by
+     *  path generation and the Object-Selection highlight so both group targets identically. */
+    static TArray<FOrbitTarget> ClusterTargetsByProximity(const TArray<AActor*>& Actors, float GroupGap = 100.0f);
 };

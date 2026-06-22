@@ -164,6 +164,16 @@ void FVCCSimConfigManager::SaveToJsonFile()
             TargetActorsJson.Add(MakeShareable(new FJsonValueObject(EntryJson)));
         }
         RootObject->SetArrayField(TEXT("TargetActors"), TargetActorsJson);
+
+        TSharedPtr<FJsonObject> BoundsJson = MakeShareable(new FJsonObject);
+        BoundsJson->SetNumberField(TEXT("MinX"), TargetActorsConfig.BoundsMin.X);
+        BoundsJson->SetNumberField(TEXT("MinY"), TargetActorsConfig.BoundsMin.Y);
+        BoundsJson->SetNumberField(TEXT("MinZ"), TargetActorsConfig.BoundsMin.Z);
+        BoundsJson->SetNumberField(TEXT("MaxX"), TargetActorsConfig.BoundsMax.X);
+        BoundsJson->SetNumberField(TEXT("MaxY"), TargetActorsConfig.BoundsMax.Y);
+        BoundsJson->SetNumberField(TEXT("MaxZ"), TargetActorsConfig.BoundsMax.Z);
+        BoundsJson->SetBoolField(TEXT("ExcludeClutter"), TargetActorsConfig.bExcludeClutter);
+        RootObject->SetObjectField(TEXT("BoundsSelect"), BoundsJson);
     }
 
     // Skip the disk write when nothing changed (the panel autosave timer calls
@@ -324,6 +334,18 @@ bool FVCCSimConfigManager::LoadFromJsonFile()
                 TargetActorsConfig.Labels.Add(Label);
                 TargetActorsConfig.EnabledFlags.Add(bEnabled);
             }
+        }
+
+        const TSharedPtr<FJsonObject>* BoundsJson = nullptr;
+        if (RootObject->TryGetObjectField(TEXT("BoundsSelect"), BoundsJson))
+        {
+            (*BoundsJson)->TryGetNumberField(TEXT("MinX"), TargetActorsConfig.BoundsMin.X);
+            (*BoundsJson)->TryGetNumberField(TEXT("MinY"), TargetActorsConfig.BoundsMin.Y);
+            (*BoundsJson)->TryGetNumberField(TEXT("MinZ"), TargetActorsConfig.BoundsMin.Z);
+            (*BoundsJson)->TryGetNumberField(TEXT("MaxX"), TargetActorsConfig.BoundsMax.X);
+            (*BoundsJson)->TryGetNumberField(TEXT("MaxY"), TargetActorsConfig.BoundsMax.Y);
+            (*BoundsJson)->TryGetNumberField(TEXT("MaxZ"), TargetActorsConfig.BoundsMax.Z);
+            (*BoundsJson)->TryGetBoolField(TEXT("ExcludeClutter"), TargetActorsConfig.bExcludeClutter);
         }
     }
 

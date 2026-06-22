@@ -400,35 +400,6 @@ FReply FVCCSimPanelPathImageCapture::OnGeneratePosesClicked()
     return FReply::Handled();
 }
 
-FBox FVCCSimPanelPathImageCapture::ComputeCombinedBounds() const
-{
-    UWorld* World = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
-    if (!World || !SelectionManager.IsValid()) return FBox(ForceInit);
-
-    TMap<FString, AActor*> LabelMap;
-    for (TActorIterator<AActor> It(World); It; ++It)
-    {
-        if (AActor* A = *It)
-            LabelMap.Add(A->GetActorLabel(), A);
-    }
-
-    FBox Combined(ForceInit);
-    for (const FString& Label : SelectionManager.Pin()->GetEnabledTargetActorLabels())
-    {
-        AActor** Found = LabelMap.Find(Label);
-        if (!Found || !*Found) continue;
-
-        TArray<UPrimitiveComponent*> Prims;
-        (*Found)->GetComponents<UPrimitiveComponent>(Prims);
-        for (UPrimitiveComponent* Prim : Prims)
-        {
-            if (!Prim || !Prim->IsRegistered()) continue;
-            Combined += Prim->CalcBounds(Prim->GetComponentTransform()).GetBox();
-        }
-    }
-    return Combined;
-}
-
 void FVCCSimPanelPathImageCapture::GeneratePosesAroundTarget()
 {
     auto FailCleanup = [this](const TCHAR* Msg)
@@ -457,22 +428,15 @@ void FVCCSimPanelPathImageCapture::GeneratePosesAroundTarget()
             LabelMap.Add(A->GetActorLabel(), A);
     }
 
+    // Resolve enabled labels to actors, then cluster them into buildings by spatial adjacency
+    // (FPathGenerator::ClusterTargetsByProximity) so each building is orbited as one unit.
+    TArray<AActor*> EnabledActors;
+    EnabledActors.Reserve(TargetLabels.Num());
     for (const FString& Label : TargetLabels)
-    {
-        AActor** Found = LabelMap.Find(Label);
-        if (!Found || !*Found) continue;
+        if (AActor** Found = LabelMap.Find(Label))
+            if (*Found) EnabledActors.Add(*Found);
 
-        TArray<UPrimitiveComponent*> Prims;
-        (*Found)->GetComponents<UPrimitiveComponent>(Prims);
-        FBox Box(ForceInit);
-        for (UPrimitiveComponent* Prim : Prims)
-        {
-            if (!Prim || !Prim->IsRegistered()) continue;
-            Box += Prim->CalcBounds(Prim->GetComponentTransform()).GetBox();
-        }
-        if (Box.IsValid)
-            Params.Buildings.Add({ Box, *Found });
-    }
+    Params.Buildings = FPathGenerator::ClusterTargetsByProximity(EnabledActors);
 
     if (Params.Buildings.Num() == 0)
         return FailCleanup(TEXT("Could not compute valid bounds from selected actors"));
@@ -513,28 +477,23 @@ void FVCCSimPanelPathImageCapture::GeneratePosesAroundTarget()
             FlashPawnWeak->SetPathPanel(Path.Positions, Path.Rotations);
             FlashPawnWeak->MoveTo(0);
 
+            // The capture path lives in the FlashPawn (PendingPositions). The LookAtPath
+            // spline is NOT consumed by capture (GetSamplePoses has no callers), and writing
+            // one spline control point per pose makes the editor spline visualizer tank the
+            // framerate on large paths. So keep the spline EMPTY and use "Show Path" (instanced
+            // meshes, one draw call per role) for the preview — only the look-at target is set.
             if (AVCCSimLookAtPath* LookAt = LookAtWeak.Get())
             {
                 if (LookAt->Spline)
                 {
                     LookAt->Modify();
                     LookAt->Spline->Modify();
-                    LookAt->Spline->ClearSplinePoints(false);
-                    for (int32 i = 0; i < Path.Positions.Num(); ++i)
-                    {
-                        LookAt->Spline->AddSplinePoint(Path.Positions[i], ESplineCoordinateSpace::World, false);
-                        LookAt->Spline->SetSplinePointType(i, ESplinePointType::Linear, false);
-                    }
-                    LookAt->Spline->UpdateSpline();
-                    LookAt->FreeOrientations = Path.Rotations;
-                    LookAt->OrientationMode  = EOrientationMode::FreeOrientation;
-                    if (LookAt->TargetPoint)
-                    {
-                        FBox Bounds = ComputeCombinedBounds();
-                        if(Bounds.IsValid)
-                            LookAt->TargetPoint->SetWorldLocation(Bounds.GetCenter());
-                    }
+                    LookAt->Spline->ClearSplinePoints(true);
                 }
+                // Free (per-pose) orientation instead of looking at a single centre point —
+                // the capture uses the FlashPawn's per-pose orbit rotations, so a look-at
+                // target is unused; default to FreeOrientation for any manual look-at use.
+                LookAt->OrientationMode = EOrientationMode::FreeOrientation;
             }
 
             UE_LOG(LogPathImageCapture, Log, TEXT("Conformal orbit generated with %d poses."), Path.Positions.Num());

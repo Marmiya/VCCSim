@@ -86,11 +86,14 @@ public:
         int32 SunCalcFillSlot  = 1;
     };
 
-    // Shared target actor list (path generation + GT material export)
+    // Shared target actor list (path generation + GT material export) + bounds-select state
     struct FTargetActorsConfig
     {
         TArray<FString> Labels;
         TArray<bool>    EnabledFlags;
+        FVector BoundsMin = FVector(-100000.0);
+        FVector BoundsMax = FVector(100000.0);
+        bool    bExcludeClutter = true;
     };
 
     // PathImageCapture orbit & capture parameters

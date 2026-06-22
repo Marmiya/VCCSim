@@ -20,6 +20,65 @@
 #include "Async/Async.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
+#include "Components/PrimitiveComponent.h"
+
+TArray<FPathGenerator::FOrbitTarget> FPathGenerator::ClusterTargetsByProximity(
+    const TArray<AActor*>& Actors, float GroupGap)
+{
+    struct FActorBox { AActor* Actor; FBox Box; };
+    TArray<FActorBox> Items;
+    Items.Reserve(Actors.Num());
+    for (AActor* A : Actors)
+    {
+        if (!A) continue;
+
+        TArray<UPrimitiveComponent*> Prims;
+        A->GetComponents<UPrimitiveComponent>(Prims);
+        FBox Box(ForceInit);
+        for (UPrimitiveComponent* Prim : Prims)
+        {
+            if (!Prim || !Prim->IsRegistered()) continue;
+            Box += Prim->CalcBounds(Prim->GetComponentTransform()).GetBox();
+        }
+        if (Box.IsValid)
+            Items.Add({ A, Box });
+    }
+
+    const int32 N = Items.Num();
+    TArray<int32> Parent;
+    Parent.SetNum(N);
+    for (int32 i = 0; i < N; ++i) Parent[i] = i;
+    auto Find = [&Parent](int32 x)
+    {
+        while (Parent[x] != x) { Parent[x] = Parent[Parent[x]]; x = Parent[x]; }
+        return x;
+    };
+    for (int32 i = 0; i < N; ++i)
+        for (int32 j = i + 1; j < N; ++j)
+            if (Items[i].Box.ExpandBy(GroupGap).Intersect(Items[j].Box))
+                Parent[Find(i)] = Find(j);
+
+    TArray<FOrbitTarget> Buildings;
+    TMap<int32, int32> RootToBuilding;
+    for (int32 i = 0; i < N; ++i)
+    {
+        const int32 Root = Find(i);
+        if (int32* Existing = RootToBuilding.Find(Root))
+        {
+            FOrbitTarget& T = Buildings[*Existing];
+            T.Bounds += Items[i].Box;
+            T.Actors.Add(Items[i].Actor);
+        }
+        else
+        {
+            FOrbitTarget T;
+            T.Bounds = Items[i].Box;
+            T.Actors.Add(Items[i].Actor);
+            RootToBuilding.Add(Root, Buildings.Add(MoveTemp(T)));
+        }
+    }
+    return Buildings;
+}
 
 void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params, FOnPathGenerated OnComplete)
 {
@@ -39,6 +98,7 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
     {
         TArray<TArray<FVector>> RingOrbitPoints;
         TArray<TArray<FVector>> RingSurfacePoints;
+        TArray<TArray<bool>> RingValid;
         float StepH;
         float TopZ;
     };
@@ -61,7 +121,12 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
         {
             continue;
         }
-        AActor* TargetActor = Building.Actor.Get();
+        TSet<AActor*> TargetActors;
+        for (const TWeakObjectPtr<AActor>& WA : Building.Actors)
+        {
+            if (AActor* A = WA.Get())
+                TargetActors.Add(A);
+        }
 
         const FVector BoxCenter = Building.Bounds.GetCenter();
         const FVector BoxExtent = Building.Bounds.GetExtent();
@@ -80,25 +145,12 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
 
         const float SearchRadius = (FMath::Max(BoxExtent.X, BoxExtent.Y) + Params.Margin) * 4.f + 2000.f;
 
-        // Occluder set: every OTHER selected building. Cameras may not sit inside these.
-        TSet<AActor*> Occluders;
-        for (int32 k = 0; k < Params.Buildings.Num(); ++k)
-        {
-            if (k == BIdx) continue;
-            if (AActor* OA = Params.Buildings[k].Actor.Get())
-            {
-                Occluders.Add(OA);
-            }
-        }
-
-        const float Standoff = FMath::Min(Params.Margin * 0.5f, 100.f);
-        const float MinMargin = Params.Margin * 0.25f;
-
         FBuildingRings Rings;
         Rings.StepH = StepH;
         Rings.TopZ = BoxMaxZ;
         Rings.RingOrbitPoints.Reserve(NumRings);
         Rings.RingSurfacePoints.Reserve(NumRings);
+        Rings.RingValid.Reserve(NumRings);
 
         for (int32 Ring = 0; Ring < NumRings; ++Ring)
         {
@@ -136,7 +188,7 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
                         if (!HitActor)
                             break;
 
-                        if (TargetActor && HitActor == TargetActor)
+                        if (TargetActors.Contains(HitActor))
                         {
                             HitPoint = Hit.ImpactPoint;
                             bFound = true;
@@ -185,8 +237,10 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
 
             TArray<FVector> OrbitPoints;
             TArray<FVector> SurfacePoints;
+            TArray<bool> Valid;
             OrbitPoints.Reserve(NumProbes);
             SurfacePoints.Reserve(NumProbes);
+            Valid.Reserve(NumProbes);
             for (int32 a = 0; a < NumProbes; ++a)
             {
                 const float AngleRad = (2.f * PI * a) / NumProbes;
@@ -197,51 +251,38 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
                     CenterAtZ.Y + Dir.Y * D,
                     Z);
 
-                float OrbitDist = D + Params.Margin;
+                const float OrbitDist = D + Params.Margin;
+                const FVector OrbitPt(
+                    CenterAtZ.X + Dir.X * OrbitDist,
+                    CenterAtZ.Y + Dir.Y * OrbitDist,
+                    Z);
 
-                // Occluder standoff: if a neighbouring building lies within Margin of this
-                // surface point along the outward radial, pull the camera in to its face
-                // (minus a standoff) so it never embeds in the neighbour. Generic scene
-                // clutter is penetrated, so only target buildings trigger a clamp.
-                if (Occluders.Num() > 0)
+                // Validity: the facade must be visible from the camera. Trace from just off the
+                // surface out to the orbit position, ignoring THIS building; any hit means a
+                // neighbour (selected or not) or generic clutter sits in the gap between camera
+                // and wall — or the camera would embed inside it. Such a pose is dropped rather
+                // than squeezed in at a grazing angle. Phase 2 breaks the orbit arc at dropped
+                // points so the path is never interpolated through the gap.
+                bool bValid = true;
                 {
-                    const FVector ClampStart = SurfacePt + Dir * 2.f;
-                    const FVector OrbitPtFull = SurfacePt + Dir * Params.Margin;
-                    FCollisionQueryParams ClampParams = QueryParams;
-                    if (TargetActor) ClampParams.AddIgnoredActor(TargetActor);
-
-                    int32 MaxClampPen = 8;
-                    while (MaxClampPen-- > 0)
+                    FCollisionQueryParams LosParams = QueryParams;
+                    for (AActor* TA : TargetActors) LosParams.AddIgnoredActor(TA);
+                    FHitResult LosHit;
+                    if (Params.World->LineTraceSingleByChannel(
+                            LosHit, SurfacePt + Dir * 2.f, OrbitPt, ECC_Visibility, LosParams))
                     {
-                        FHitResult CHit;
-                        if (!Params.World->LineTraceSingleByChannel(
-                                CHit, ClampStart, OrbitPtFull, ECC_Visibility, ClampParams))
-                            break;
-
-                        AActor* CHitActor = CHit.GetActor();
-                        if (!CHitActor)
-                            break;
-
-                        if (Occluders.Contains(CHitActor))
-                        {
-                            const float dHit = FVector::DotProduct(CHit.ImpactPoint - SurfacePt, Dir);
-                            OrbitDist = D + FMath::Max(dHit - Standoff, MinMargin);
-                            break;
-                        }
-
-                        ClampParams.AddIgnoredActor(CHitActor);
+                        bValid = false;
                     }
                 }
 
                 SurfacePoints.Add(SurfacePt);
-                OrbitPoints.Add(FVector(
-                    CenterAtZ.X + Dir.X * OrbitDist,
-                    CenterAtZ.Y + Dir.Y * OrbitDist,
-                    Z));
+                OrbitPoints.Add(OrbitPt);
+                Valid.Add(bValid);
             }
 
             Rings.RingOrbitPoints.Add(MoveTemp(OrbitPoints));
             Rings.RingSurfacePoints.Add(MoveTemp(SurfacePoints));
+            Rings.RingValid.Add(MoveTemp(Valid));
         }
 
         AllBuildings.Add(MoveTemp(Rings));
@@ -271,6 +312,7 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
             {
                 TArray<TArray<FVector>>& AllRingOrbitPoints = BR.RingOrbitPoints;
                 TArray<TArray<FVector>>& AllRingSurfacePoints = BR.RingSurfacePoints;
+                TArray<TArray<bool>>& AllRingValid = BR.RingValid;
                 const float StepH = BR.StepH;
 
                 if (AllRingOrbitPoints.Num() == 0)
@@ -280,6 +322,7 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
 
                 const TArray<FVector> TopRingPolygon = AllRingOrbitPoints.Last();
                 const TArray<FVector> TopSurfacePolygon = AllRingSurfacePoints.Last();
+                const TArray<bool> TopValidPolygon = AllRingValid.Last();
 
                 // Oblique rings: copies of the top ring raised so the look-at to the
                 // top-ring surface points lands between the horizontal rings (pitch 0)
@@ -303,6 +346,7 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
                         }
                         AllRingOrbitPoints.Add(MoveTemp(Orbit));
                         AllRingSurfacePoints.Add(TopSurface);
+                        AllRingValid.Add(TopValidPolygon);
                     }
                 }
 
@@ -311,15 +355,26 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
                 {
                     const TArray<FVector>& OrbitPoints = AllRingOrbitPoints[r];
                     const TArray<FVector>& SurfacePoints = AllRingSurfacePoints[r];
+                    const TArray<bool>& Valid = AllRingValid[r];
                     const int32 M = OrbitPoints.Num();
                     if (M < 4) continue;
 
                     TArray<FVector> RingPositions;
                     TArray<FRotator> RingRotations;
+                    TArray<bool> BreakAfter;
 
                     float DistUntilNext = 0.f;
                     for (int32 i = 0; i < M; ++i)
                     {
+                        // Drop segments touching an invalid (occluded / gap) orbit point and mark
+                        // a break, so corner smoothing never bridges a path across the dropped span.
+                        if (!Valid[i] || !Valid[(i + 1) % M])
+                        {
+                            if (RingPositions.Num() > 0) BreakAfter.Last() = true;
+                            DistUntilNext = 0.f;
+                            continue;
+                        }
+
                         const FVector& A = OrbitPoints[i];
                         const FVector& B = OrbitPoints[(i + 1) % M];
                         const FVector& SurfA = SurfacePoints[i];
@@ -342,6 +397,7 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
                                 LookDir.SizeSquared2D() > KINDA_SMALL_NUMBER
                                     ? LookDir.Rotation()
                                     : SegRot);
+                            BreakAfter.Add(false);
                             DistUntilNext += StepH;
                         }
                         DistUntilNext -= SegLen;
@@ -355,6 +411,7 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
                         GeneratedPath.Rotations.Add(RingRotations[s]);
 
                         if (s + 1 >= RingPositions.Num()) break;
+                        if (BreakAfter[s]) continue;
 
                         const float YawDelta = FMath::Abs(FMath::FindDeltaAngleDegrees(
                             RingRotations[s].Yaw, RingRotations[s + 1].Yaw));

@@ -149,6 +149,53 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateTargetActorListPanel()
 
     +SVerticalBox::Slot()
     .AutoHeight()
+    .Padding(FMargin(0, 2, 0, 0))
+    [
+        SNew(SButton)
+        .ContentPadding(FMargin(5, 2))
+        .HAlign(HAlign_Center)
+        .Text_Lambda([this]() { return FText::FromString(
+            HighlightActor.IsValid() ? TEXT("Hide Highlight") : TEXT("Highlight Targets in Viewport")); })
+        .ToolTipText(FText::FromString(TEXT(
+            "Toggle labelled boxes around every list actor (green = enabled, gray = disabled), plus "
+            "red boxes for in-box mesh actors not in the list. Click again to hide.")))
+        .IsEnabled_Lambda([this]() { return TargetActorItems.Num() > 0 || HighlightActor.IsValid(); })
+        .OnClicked_Lambda([this]() { return OnHighlightTargetsClicked(); })
+    ]
+
+    +SVerticalBox::Slot()
+    .AutoHeight()
+    .Padding(FMargin(0, 2, 0, 0))
+    [
+        SNew(SButton)
+        .ContentPadding(FMargin(5, 2))
+        .HAlign(HAlign_Center)
+        .Text(FText::FromString(TEXT("Fix Duplicate Labels")))
+        .ToolTipText(FText::FromString(TEXT(
+            "Rename actors that share a label so every label is unique (e.g. ..._System12 / "
+            "..._System12_1). The selection, path generation and GT export all resolve actors by "
+            "label, so duplicates silently drop all but one. Modifies the scene — save afterwards.")))
+        .OnClicked_Lambda([this]() { return OnFixDuplicateLabelsClicked(); })
+    ]
+
+    +SVerticalBox::Slot()
+    .AutoHeight()
+    .Padding(FMargin(0, 2, 0, 0))
+    [
+        SNew(SButton)
+        .ButtonStyle(FAppStyle::Get(), "FlatButton.Primary")
+        .ContentPadding(FMargin(5, 2))
+        .HAlign(HAlign_Center)
+        .Text(FText::FromString(TEXT("Export GT Mesh")))
+        .ToolTipText(FText::FromString(TEXT(
+            "Export the enabled target actors' geometry (+ is_glass metadata) to a chosen "
+            "folder's gt_materials/. No material baking — materials come from the camera captures.")))
+        .IsEnabled_Lambda([this]() { return !bGTExportInProgress && HasEnabledTargetActors(); })
+        .OnClicked_Lambda([this]() { return OnExportGTMeshClicked(); })
+    ]
+
+    +SVerticalBox::Slot()
+    .AutoHeight()
     .Padding(FMargin(0, 4, 0, 4))
     [
         CreateBoundsSelectPanel()
@@ -266,7 +313,7 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateBoundsSelectPanel()
         SNew(STextBlock)
         .Text(FText::FromString(TEXT("Add by Bounding Box (UE cm):")))
         .ToolTipText(FText::FromString(TEXT(
-            "Add every mesh actor whose bounds center is inside this world-space box. "
+            "Add every mesh actor whose bounds OVERLAP this world-space box (a corner inside counts). "
             "Use 'Fill From Selection' to set the box from selected actors, then narrow it.")))
         .Font(FAppStyle::GetFontStyle("PropertyWindow.BoldFont"))
         .ColorAndOpacity(FColor(233, 233, 233))
@@ -274,12 +321,25 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateBoundsSelectPanel()
 
     +SVerticalBox::Slot()
     .AutoHeight()
+    .Padding(FMargin(0, 1, 0, 0))
+    [
+        LabeledRow(TEXT(""),
+            SNew(STextBlock).Text(FText::FromString(TEXT("X"))).Justification(ETextJustify::Center)
+                .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont")).ColorAndOpacity(FColor(160, 160, 160)),
+            SNew(STextBlock).Text(FText::FromString(TEXT("Y"))).Justification(ETextJustify::Center)
+                .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont")).ColorAndOpacity(FColor(160, 160, 160)),
+            SNew(STextBlock).Text(FText::FromString(TEXT("Z"))).Justification(ETextJustify::Center)
+                .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont")).ColorAndOpacity(FColor(160, 160, 160)))
+    ]
+
+    +SVerticalBox::Slot()
+    .AutoHeight()
     .Padding(FMargin(0, 1))
     [
         LabeledRow(TEXT("Min"),
-            CoordBox([this]() { return BoundsMin.X; }, [this](double V) { BoundsMin.X = V; }),
-            CoordBox([this]() { return BoundsMin.Y; }, [this](double V) { BoundsMin.Y = V; }),
-            CoordBox([this]() { return BoundsMin.Z; }, [this](double V) { BoundsMin.Z = V; }))
+            CoordBox([this]() { return BoundsMin.X; }, [this](double V) { BoundsMin.X = V; SaveTargetActorsToConfig(); }),
+            CoordBox([this]() { return BoundsMin.Y; }, [this](double V) { BoundsMin.Y = V; SaveTargetActorsToConfig(); }),
+            CoordBox([this]() { return BoundsMin.Z; }, [this](double V) { BoundsMin.Z = V; SaveTargetActorsToConfig(); }))
     ]
 
     +SVerticalBox::Slot()
@@ -287,9 +347,9 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateBoundsSelectPanel()
     .Padding(FMargin(0, 1))
     [
         LabeledRow(TEXT("Max"),
-            CoordBox([this]() { return BoundsMax.X; }, [this](double V) { BoundsMax.X = V; }),
-            CoordBox([this]() { return BoundsMax.Y; }, [this](double V) { BoundsMax.Y = V; }),
-            CoordBox([this]() { return BoundsMax.Z; }, [this](double V) { BoundsMax.Z = V; }))
+            CoordBox([this]() { return BoundsMax.X; }, [this](double V) { BoundsMax.X = V; SaveTargetActorsToConfig(); }),
+            CoordBox([this]() { return BoundsMax.Y; }, [this](double V) { BoundsMax.Y = V; SaveTargetActorsToConfig(); }),
+            CoordBox([this]() { return BoundsMax.Z; }, [this](double V) { BoundsMax.Z = V; SaveTargetActorsToConfig(); }))
     ]
 
     +SVerticalBox::Slot()
@@ -304,7 +364,7 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateBoundsSelectPanel()
         [
             SNew(SCheckBox)
             .IsChecked_Lambda([this]() { return bExcludeClutter ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
-            .OnCheckStateChanged_Lambda([this](ECheckBoxState S) { bExcludeClutter = (S == ECheckBoxState::Checked); })
+            .OnCheckStateChanged_Lambda([this](ECheckBoxState S) { bExcludeClutter = (S == ECheckBoxState::Checked); SaveTargetActorsToConfig(); })
             .ToolTipText(FText::FromString(TEXT("Skip foliage / trees / vehicles / pedestrians by class and name")))
             [
                 SNew(STextBlock)

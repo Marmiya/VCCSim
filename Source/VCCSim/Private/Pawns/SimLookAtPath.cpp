@@ -44,7 +44,7 @@ AVCCSimLookAtPath::AVCCSimLookAtPath()
 	TargetPoint->SetRelativeLocation(FVector(0.f, 0.f, 300.f));
 
 	SamplingMode    = ELookAtSamplingMode::ControlPoints;
-	OrientationMode = EOrientationMode::LookAtTarget;
+	OrientationMode = EOrientationMode::FreeOrientation;
 	NumDivisions    = 50;
 	PathLength      = 0.f;
 	NumSamplePoints = 0;

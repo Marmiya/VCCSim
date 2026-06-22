@@ -101,7 +101,6 @@ private:
     FReply OnCaptureImagesClicked();
     
     // Path Configuration & Generation
-    FBox ComputeCombinedBounds() const;
     void GeneratePosesAroundTarget();
     
     // Pose File I/O

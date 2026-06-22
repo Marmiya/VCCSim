@@ -184,6 +184,16 @@ private:
     /** Fill the coordinate box from the combined AABB of the current editor selection. */
     FReply OnFillBoundsFromSelectionClicked();
 
+    /** Export the enabled target actors' GT mesh (geometry + is_glass) to a chosen folder. */
+    FReply OnExportGTMeshClicked();
+
+    /** Draw a labelled debug box around every list actor (enabled green / disabled gray). */
+    FReply OnHighlightTargetsClicked();
+
+    /** Rename actors that share a label so every actor label is unique (the whole target
+     *  pipeline resolves actors by label, which UE does not globally enforce as unique). */
+    FReply OnFixDuplicateLabelsClicked();
+
     /** Handle camera checkbox changes */
     void OnRGBCameraCheckboxChanged(ECheckBoxState NewState);
     void OnDepthCameraCheckboxChanged(ECheckBoxState NewState);
@@ -266,4 +276,11 @@ private:
 
     /** Skip foliage / vehicles / pedestrians when adding actors in bounds. */
     bool bExcludeClutter = true;
+
+    /** GT mesh export (relocated here from the TexEnhancer panel; geometry + is_glass only). */
+    TSharedPtr<class FGTMaterialExporter> GTMaterialExporter;
+    bool bGTExportInProgress = false;
+
+    /** Transient actor holding the debug-highlight TextRenderComponents (auto-destroyed). */
+    TWeakObjectPtr<AActor> HighlightActor;
 };

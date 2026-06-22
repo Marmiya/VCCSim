@@ -113,10 +113,10 @@ AActor* UTrajectoryViewer::GenerateVisibleElements(
     UStaticMesh* ConeMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cone"));
     UStaticMesh* CylinderMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder"));
 
-    // GEngine->ArrowMaterial is an unlit gizmo material reliably present in the
-    // editor; both candidate colour params are set so the colour applies whichever
-    // one the material exposes (a missing param is a silent no-op).
-    UMaterialInterface* BaseMat = GEngine ? GEngine->ArrowMaterial : nullptr;
+    // M_PathViz exposes a "Color" vector parameter (set per role below) so each path element can be
+    // tinted; the previous GEngine->ArrowMaterial ignored both candidate colour params and stayed black.
+    UMaterialInterface* BaseMat = LoadObject<UMaterialInterface>(
+        nullptr, TEXT("/VCCSim/Materials/M_PathViz.M_PathViz"));
 
     auto MakeISM = [&](UStaticMesh* Mesh, const FLinearColor& Color) -> UInstancedStaticMeshComponent*
     {
@@ -133,7 +133,6 @@ AActor* UTrajectoryViewer::GenerateVisibleElements(
         if (BaseMat)
         {
             UMaterialInstanceDynamic* MID = UMaterialInstanceDynamic::Create(BaseMat, ISM);
-            MID->SetVectorParameterValue(TEXT("GizmoColor"), Color);
             MID->SetVectorParameterValue(TEXT("Color"), Color);
             ISM->SetMaterial(0, MID);
         }

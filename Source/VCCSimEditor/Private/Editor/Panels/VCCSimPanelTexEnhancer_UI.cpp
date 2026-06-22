@@ -57,12 +57,6 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateTexEnhancerPanel()
         [ FVCCSimUIHelpers::CreateSeparator() ]
 
         +SVerticalBox::Slot().AutoHeight()
-        [ CreateGTExportSection() ]
-
-        +SVerticalBox::Slot().MaxHeight(1).Padding(FMargin(0, 4, 0, 4))
-        [ FVCCSimUIHelpers::CreateSeparator() ]
-
-        +SVerticalBox::Slot().AutoHeight()
         [ CreatePipelineSection() ]
 
         +SVerticalBox::Slot().MaxHeight(1).Padding(FMargin(0, 4, 0, 4))
