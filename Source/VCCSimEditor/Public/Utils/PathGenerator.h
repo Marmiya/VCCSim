@@ -27,20 +27,61 @@ class AActor;
 class VCCSIMEDITOR_API FPathGenerator
 {
 public:
-    /** One building to orbit: its combined world-space bounds and ALL its source
+    /** A vertical oriented bounding box: a rectangle in the XY plane that can yaw about the vertical
+     *  axis, extruded over [MinZ, MaxZ]. Buildings are vertical prisms, so this hugs a rotated
+     *  building far better than a world-axis AABB. AxisX is a unit horizontal vector; AxisY is its
+     *  perpendicular; HalfXY are the half-extents along AxisX / AxisY. */
+    struct FVerticalOBB
+    {
+        FVector   Center = FVector::ZeroVector;
+        FVector2D AxisX  = FVector2D(1.f, 0.f);
+        FVector2D HalfXY = FVector2D::ZeroVector;
+        double    MinZ = 0.0;
+        double    MaxZ = 0.0;
+        bool      bValid = false;
+    };
+
+    /** One building to orbit: its world-space bounds (AABB + oriented OBB) and ALL its source
      *  actors (a building is often several static-mesh actors). Surface probing accepts
      *  a hit on ANY of these actors; they are never treated as occluders of their own
      *  building. Actors are only dereferenced on the game thread during ray-casting. */
     struct FOrbitTarget
     {
         FBox Bounds;
+        FVerticalOBB OBB;
         TArray<TWeakObjectPtr<AActor>> Actors;
+    };
+
+    /** Geometric thresholds for telling buildings (orbit these) from ground/clutter (survey only),
+     *  replacing the old name-based clutter filter. All distances in cm. */
+    struct FBuildingDetectParams
+    {
+        float ConnectGap = 15.0f;            // two structure pieces merge only if their OBBs are
+                                             // within this of touching — near-contact, not 1 m-near,
+                                             // so gapped road clutter no longer joins a building.
+        float MinBuildingHeight = 300.0f;    // cluster Z-extent to qualify as a building
+        float MinBuildingFootprint = 300.0f; // min horizontal extent to qualify as a building
+        // Ground = a mesh that is all three of: flat (not chunky/tall), wide (a real surface, not a
+        // small prop), and low (its edge sits level with the adjacent terrain). All cm.
+        float GroundFlatRatio = 0.5f;        // Z-extent / max-horizontal-extent above this => chunky
+                                             // or tall (trash can, post, wall, tower) => NOT ground.
+        float GroundMinFootprint = 500.0f;   // flat pieces narrower than this are small props
+                                             // (flower bed, sign, bin) => NOT ground.
+        float GroundMaxRise = 200.0f;        // edge surface within this of the adjacent terrain =>
+                                             // ground; an elevated flat roof rises far above => structure.
     };
 
     /** Parameters for generating a conformal orbit path. */
     struct FConformalOrbitParams
     {
+        /** Building clusters that receive facade/oblique orbit rings (geometric subset of the targets). */
         TArray<FOrbitTarget> Buildings;
+
+        /** Every capture target (incl. ground/clutter) the region nadir survey covers. Drives the
+         *  height-map occupancy + region extent independently of Buildings. */
+        TArray<AActor*> SurveyTargets;
+        FBox SurveyRegion = FBox(ForceInit);
+
         UWorld* World;
 
         float Margin = 500.0f;
@@ -85,8 +126,18 @@ public:
      */
     void GenerateConformalOrbit(const FConformalOrbitParams& Params, FOnPathGenerated OnComplete);
 
-    /** Cluster actors into buildings by AABB proximity (union-find): pieces whose bounds, expanded
-     *  by GroupGap cm, intersect become one building; separate buildings stay separate. Shared by
-     *  path generation and the Object-Selection highlight so both group targets identically. */
-    static TArray<FOrbitTarget> ClusterTargetsByProximity(const TArray<AActor*>& Actors, float GroupGap = 100.0f);
+    /** True for a ground / terrain / road mesh. Three tests, all must hold: (1) flat — not chunky or
+     *  tall (rejects bins, posts, walls, towers); (2) wide — a real surface, not a small prop
+     *  (rejects flower beds, signs); (3) low — its surface at each footprint EDGE is level with the
+     *  terrain just outside that edge (rejects elevated flat roofs; handles big sloped tiles, which
+     *  are level with their neighbours, and buildings with no ground modelled beneath them, since the
+     *  terrain is read just OUTSIDE the footprint via penetrating traces). Ground bridges buildings
+     *  into one cluster, so it is kept out of DetectBuildings (still surveyed). Needs World. */
+    static bool IsGroundLikeActor(UWorld* World, const AActor* Actor, const FBuildingDetectParams& Params);
+
+    /** Drop ground-like meshes, cluster the remaining structures by proximity, and return only the
+     *  clusters whose merged bounds pass the building height/footprint thresholds. These are the
+     *  buildings to orbit; everything else is covered by the region survey only. */
+    static TArray<FOrbitTarget> DetectBuildings(
+        UWorld* World, const TArray<AActor*>& Actors, const FBuildingDetectParams& Params);
 };

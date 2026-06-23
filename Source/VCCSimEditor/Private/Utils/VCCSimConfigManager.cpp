@@ -173,7 +173,8 @@ void FVCCSimConfigManager::SaveToJsonFile()
         BoundsJson->SetNumberField(TEXT("MaxX"), TargetActorsConfig.BoundsMax.X);
         BoundsJson->SetNumberField(TEXT("MaxY"), TargetActorsConfig.BoundsMax.Y);
         BoundsJson->SetNumberField(TEXT("MaxZ"), TargetActorsConfig.BoundsMax.Z);
-        BoundsJson->SetBoolField(TEXT("ExcludeClutter"), TargetActorsConfig.bExcludeClutter);
+        BoundsJson->SetNumberField(TEXT("MinBuildingHeight"), TargetActorsConfig.MinBuildingHeight);
+        BoundsJson->SetNumberField(TEXT("MinBuildingFootprint"), TargetActorsConfig.MinBuildingFootprint);
         BoundsJson->SetBoolField(TEXT("ExportContext"), TargetActorsConfig.bExportContext);
         RootObject->SetObjectField(TEXT("BoundsSelect"), BoundsJson);
     }
@@ -348,7 +349,8 @@ bool FVCCSimConfigManager::LoadFromJsonFile()
             (*BoundsJson)->TryGetNumberField(TEXT("MaxX"), TargetActorsConfig.BoundsMax.X);
             (*BoundsJson)->TryGetNumberField(TEXT("MaxY"), TargetActorsConfig.BoundsMax.Y);
             (*BoundsJson)->TryGetNumberField(TEXT("MaxZ"), TargetActorsConfig.BoundsMax.Z);
-            (*BoundsJson)->TryGetBoolField(TEXT("ExcludeClutter"), TargetActorsConfig.bExcludeClutter);
+            (*BoundsJson)->TryGetNumberField(TEXT("MinBuildingHeight"), TargetActorsConfig.MinBuildingHeight);
+            (*BoundsJson)->TryGetNumberField(TEXT("MinBuildingFootprint"), TargetActorsConfig.MinBuildingFootprint);
             (*BoundsJson)->TryGetBoolField(TEXT("ExportContext"), TargetActorsConfig.bExportContext);
         }
     }

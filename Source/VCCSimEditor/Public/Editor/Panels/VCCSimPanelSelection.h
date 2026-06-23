@@ -132,6 +132,11 @@ public:
     /** Initialize and warmup all cameras on the selected FlashPawn */
     void WarmupCameras();
 
+    /** Geometric building-detection thresholds (cm) used to pick which target clusters get facade
+     *  orbits. Consumed by the path-image-capture panel. */
+    float GetMinBuildingHeight() const { return MinBuildingHeight; }
+    float GetMinBuildingFootprint() const { return MinBuildingFootprint; }
+
 private:
     // ============================================================================
     // UI CREATION
@@ -271,8 +276,11 @@ private:
     FVector BoundsMin = FVector(-100000.0);
     FVector BoundsMax = FVector(100000.0);
 
-    /** Skip foliage / vehicles / pedestrians when adding actors in bounds. */
-    bool bExcludeClutter = true;
+    /** Geometric building-detection thresholds (cm): a clustered target counts as a building (and
+     *  gets a facade orbit) only if it is at least this tall and this wide. Everything else is still
+     *  surveyed. Replaces the old name-based clutter exclusion. */
+    float MinBuildingHeight = 300.0f;
+    float MinBuildingFootprint = 300.0f;
 
     /** Also export in-box clutter as a separate region_context mesh (geometry only). */
     bool bExportContextMesh = true;

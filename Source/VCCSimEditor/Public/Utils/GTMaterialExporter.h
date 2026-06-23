@@ -77,8 +77,9 @@ public:
         UWorld* World, const TArray<class UPrimitiveComponent*>& Comps, const FString& Label,
         FGTFoliageExportEntry& OutEntry);
 
-    /** True for foliage / vehicles / pedestrians / roads / our helper pawns — skipped as capture targets. */
-    static bool IsClutterActor(const AActor* Actor);
+    /** True for our own capture / visualization infrastructure (FlashPawn / LookAtPath) — never a
+     *  scene target. Buildings vs ground/clutter is now a geometric decision (FPathGenerator). */
+    static bool IsCaptureInfraActor(const AActor* Actor);
 
     /**
      * Hash of everything that determines the GT export output — the enabled target

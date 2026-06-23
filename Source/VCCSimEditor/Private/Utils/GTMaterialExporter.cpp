@@ -34,6 +34,7 @@
 #include "Misc/Guid.h"
 #include "Pawns/FlashPawn.h"
 #include "Pawns/SimLookAtPath.h"
+#include "Utils/PathGenerator.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGTMaterialExporter, Log, All);
 
@@ -135,33 +136,11 @@ bool FGTMaterialExporter::IsGlassMaterial(const UMaterialInterface* Mat)
     return false;
 }
 
-bool FGTMaterialExporter::IsClutterActor(const AActor* Actor)
+bool FGTMaterialExporter::IsCaptureInfraActor(const AActor* Actor)
 {
     if (!Actor) return true;
-    if (Actor->IsA<AFlashPawn>() || Actor->IsA<AVCCSimLookAtPath>()) return true;
-
-    static const TCHAR* ClutterTokens[] = {
-        TEXT("tree"), TEXT("foliage"), TEXT("plant"), TEXT("bush"), TEXT("grass"),
-        TEXT("leaf"), TEXT("branch"), TEXT("hedge"), TEXT("shrub"),
-        TEXT("car"), TEXT("vehicle"), TEXT("truck"), TEXT("bus"), TEXT("van"),
-        TEXT("sedan"), TEXT("suv"), TEXT("taxi"), TEXT("traffic"),
-        TEXT("pedestrian"), TEXT("people"), TEXT("person"), TEXT("npc"), TEXT("character"),
-        TEXT("fence"), TEXT("hydrant"), TEXT("parking_meter"), TEXT("parkingmeter"),
-        TEXT("road"), TEXT("street"), TEXT("terrain"), TEXT("pavement"),
-        TEXT("sidewalk"), TEXT("asphalt"), TEXT("curb"), TEXT("crosswalk"),
-        TEXT("landscape"), TEXT("instancedfoliage")
-    };
-
-    const FString Label = Actor->GetActorLabel().ToLower();
-    const FString ClassName = Actor->GetClass()->GetName().ToLower();
-    for (const TCHAR* Token : ClutterTokens)
-    {
-        if (Label.Contains(Token) || ClassName.Contains(Token))
-        {
-            return true;
-        }
-    }
-    return false;
+    // Our own capture / visualization infrastructure — never a scene target.
+    return Actor->IsA<AFlashPawn>() || Actor->IsA<AVCCSimLookAtPath>();
 }
 
 bool FGTMaterialExporter::MergeComponentsToEntry(
@@ -237,7 +216,7 @@ void FGTMaterialExporter::ExportMergedRegion(
     {
         AActor* A = *It;
         if (!A || !IsValid(A) || A->HasAnyFlags(RF_Transient)) continue;
-        if (A->IsA<AFlashPawn>() || A->IsA<AVCCSimLookAtPath>()) continue;
+        if (IsCaptureInfraActor(A)) continue;
 
         TArray<UStaticMeshComponent*> MeshComps;
         A->GetComponents<UStaticMeshComponent>(MeshComps);
@@ -249,7 +228,9 @@ void FGTMaterialExporter::ExportMergedRegion(
         A->GetActorBounds(false, Origin, Extent);
         if (!RegionBox.Intersect(FBox(Origin - Extent, Origin + Extent))) continue;
 
-        const bool bTarget = HasExportableMeshGeometry(A) && !IsClutterActor(A);
+        // Structures (buildings, trees, props) -> region_targets; ground/road -> context.
+        const bool bTarget = HasExportableMeshGeometry(A) &&
+            !FPathGenerator::IsGroundLikeActor(World, A, FPathGenerator::FBuildingDetectParams());
         TArray<UPrimitiveComponent*>& Bucket = bTarget ? TargetComps : ContextComps;
         for (UStaticMeshComponent* MC : MeshComps)
             if (MC && MC->GetStaticMesh()) Bucket.Add(MC);

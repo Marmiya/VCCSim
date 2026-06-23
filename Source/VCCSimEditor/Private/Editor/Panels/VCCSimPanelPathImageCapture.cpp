@@ -430,18 +430,26 @@ void FVCCSimPanelPathImageCapture::GeneratePosesAroundTarget()
             LabelMap.Add(A->GetActorLabel(), A);
     }
 
-    // Resolve enabled labels to actors, then cluster them into buildings by spatial adjacency
-    // (FPathGenerator::ClusterTargetsByProximity) so each building is orbited as one unit.
+    // Resolve enabled labels to actors; FPathGenerator::DetectBuildings then drops ground and
+    // clusters the rest by oriented-box adjacency so each building is orbited as one unit.
     TArray<AActor*> EnabledActors;
     EnabledActors.Reserve(TargetLabels.Num());
     for (const FString& Label : TargetLabels)
         if (AActor** Found = LabelMap.Find(Label))
             if (*Found) EnabledActors.Add(*Found);
 
-    Params.Buildings = FPathGenerator::ClusterTargetsByProximity(EnabledActors);
+    if (EnabledActors.Num() == 0)
+        return FailCleanup(TEXT("No target actors selected"));
 
-    if (Params.Buildings.Num() == 0)
-        return FailCleanup(TEXT("Could not compute valid bounds from selected actors"));
+    // Buildings (geometric subset) get facade orbits; the whole target set gets the region survey.
+    FPathGenerator::FBuildingDetectParams BParams;
+    if (TSharedPtr<FVCCSimPanelSelection> SM = SelectionManager.Pin())
+    {
+        BParams.MinBuildingHeight = SM->GetMinBuildingHeight();
+        BParams.MinBuildingFootprint = SM->GetMinBuildingFootprint();
+    }
+    Params.Buildings = FPathGenerator::DetectBuildings(World, EnabledActors, BParams);
+    Params.SurveyTargets = EnabledActors;
 
     Params.World = World;
     Params.Margin = OrbitMargin;

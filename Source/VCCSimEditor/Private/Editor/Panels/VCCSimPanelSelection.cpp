@@ -236,7 +236,8 @@ void FVCCSimPanelSelection::LoadFromConfigManager()
 
     BoundsMin = Config.BoundsMin;
     BoundsMax = Config.BoundsMax;
-    bExcludeClutter = Config.bExcludeClutter;
+    MinBuildingHeight = Config.MinBuildingHeight;
+    MinBuildingFootprint = Config.MinBuildingFootprint;
     bExportContextMesh = Config.bExportContext;
 
     TargetActorItems.Empty();
@@ -265,7 +266,8 @@ void FVCCSimPanelSelection::SaveTargetActorsToConfig() const
     }
     Config.BoundsMin = BoundsMin;
     Config.BoundsMax = BoundsMax;
-    Config.bExcludeClutter = bExcludeClutter;
+    Config.MinBuildingHeight = MinBuildingHeight;
+    Config.MinBuildingFootprint = MinBuildingFootprint;
     Config.bExportContext = bExportContextMesh;
     FVCCSimConfigManager::Get().SetTargetActorsConfig(Config);
 }
@@ -351,20 +353,24 @@ FReply FVCCSimPanelSelection::OnAddTargetActorsInBoundsClicked()
     const FBox Query(BoundsMin.ComponentMin(BoundsMax), BoundsMin.ComponentMax(BoundsMax));
 
     int32 Added = 0;
-    int32 SkippedClutter = 0;
+    int32 SkippedInfra = 0;
     for (TActorIterator<AActor> It(World); It; ++It)
     {
         AActor* Actor = *It;
         if (!Actor || !IsValid(Actor) || Actor->HasAnyFlags(RF_Transient)) continue;
         if (!FGTMaterialExporter::HasExportableMeshGeometry(Actor)) continue;
 
+        // Use the actor's bounds CENTRE for containment, not AABB overlap: an out-of-range actor
+        // whose rotated/elongated AABB merely clips a corner of the box is no longer pulled in.
         FVector Origin, Extent;
         Actor->GetActorBounds(false, Origin, Extent);
-        if (!Query.Intersect(FBox(Origin - Extent, Origin + Extent))) continue;
+        if (!Query.IsInside(Origin)) continue;
 
-        if (bExcludeClutter && FGTMaterialExporter::IsClutterActor(Actor))
+        // Add every in-box mesh actor (buildings, ground, props alike); only skip our own capture
+        // infrastructure. Buildings vs ground is decided geometrically later, not here.
+        if (FGTMaterialExporter::IsCaptureInfraActor(Actor))
         {
-            ++SkippedClutter;
+            ++SkippedInfra;
             continue;
         }
 
@@ -391,10 +397,8 @@ FReply FVCCSimPanelSelection::OnAddTargetActorsInBoundsClicked()
         SaveTargetActorsToConfig();
     }
 
-    const FString Msg = FString::Printf(
-        TEXT("Add In Bounds: added %d actor(s), skipped %d clutter."), Added, SkippedClutter);
-    UE_LOG(LogSelection, Log, TEXT("%s"), *Msg);
-    FVCCSimUIHelpers::ShowNotification(Msg, false);
+    UE_LOG(LogSelection, Log,
+        TEXT("Add In Bounds: added %d actor(s), skipped %d capture-infra."), Added, SkippedInfra);
     return FReply::Handled();
 }
 
@@ -508,14 +512,40 @@ FReply FVCCSimPanelSelection::OnHighlightTargetsClicked()
     {
         LineBatch->DrawBox(Origin, Extent, Color, BoxLifeTime, 0, Thickness);
     };
+    // Oriented box: 12 edges, so it works regardless of which DrawBox overloads the engine exposes.
+    auto AddOBB = [&](const FPathGenerator::FVerticalOBB& O, const FLinearColor& Color, float Thickness)
+    {
+        const FVector2D AX = O.AxisX;
+        const FVector2D AY(-AX.Y, AX.X);
+        auto Corner = [&](double sx, double sy, double z) -> FVector
+        {
+            return FVector(
+                O.Center.X + sx * O.HalfXY.X * AX.X + sy * O.HalfXY.Y * AY.X,
+                O.Center.Y + sx * O.HalfXY.X * AX.Y + sy * O.HalfXY.Y * AY.Y, z);
+        };
+        const FVector C[8] = {
+            Corner(-1,-1,O.MinZ), Corner(1,-1,O.MinZ), Corner(1,1,O.MinZ), Corner(-1,1,O.MinZ),
+            Corner(-1,-1,O.MaxZ), Corner(1,-1,O.MaxZ), Corner(1,1,O.MaxZ), Corner(-1,1,O.MaxZ) };
+        const int32 E[12][2] = {
+            {0,1},{1,2},{2,3},{3,0}, {4,5},{5,6},{6,7},{7,4}, {0,4},{1,5},{2,6},{3,7} };
+        for (const auto& Edge : E)
+            LineBatch->DrawLine(C[Edge[0]], C[Edge[1]], Color, 0, Thickness, BoxLifeTime);
+    };
 
-    // 1) Every entry of the shared list: green = enabled, gray = disabled.
+    // Building-detection params drive the cyan building boxes and the brown ground boxes below.
+    FPathGenerator::FBuildingDetectParams BParams;
+    BParams.MinBuildingHeight = MinBuildingHeight;
+    BParams.MinBuildingFootprint = MinBuildingFootprint;
+    const FLinearColor GroundColor(0.55f, 0.30f, 0.08f);   // brown = ground / terrain
+
+    // 1) Every entry of the shared list: green = enabled structure, brown = enabled ground/terrain,
+    //    gray = disabled.
     TMap<FString, AActor*> LabelMap;
     for (TActorIterator<AActor> It(World); It; ++It)
         if (AActor* A = *It) LabelMap.Add(A->GetActorLabel(), A);
 
     TSet<FString> ListedLabels;
-    int32 Enabled = 0, Disabled = 0, Missing = 0;
+    int32 Enabled = 0, Disabled = 0, Missing = 0, Ground = 0;
     for (const TSharedPtr<FVCCSimTargetActorItem>& Item : TargetActorItems)
     {
         if (!Item.IsValid()) continue;
@@ -525,8 +555,13 @@ FReply FVCCSimPanelSelection::OnHighlightTargetsClicked()
 
         FVector Origin, Extent;
         (*Found)->GetActorBounds(false, Origin, Extent);
-        AddBox(Origin, Extent, Item->bEnabled ? FLinearColor::Green : FLinearColor(0.3f, 0.3f, 0.3f), 8.f);
-        if (Item->bEnabled) ++Enabled; else ++Disabled;
+        const bool bGround = FPathGenerator::IsGroundLikeActor(World, *Found, BParams);
+        FLinearColor Color = FLinearColor(0.3f, 0.3f, 0.3f);   // disabled gray
+        if (Item->bEnabled) Color = bGround ? GroundColor : FLinearColor::Green;
+        AddBox(Origin, Extent, Color, 8.f);
+        if (!Item->bEnabled) ++Disabled;
+        else if (bGround) ++Ground;
+        else ++Enabled;
     }
 
     // 2) Audit every actor inside the configured box that is NOT in the list and has mesh geometry:
@@ -555,7 +590,7 @@ FReply FVCCSimPanelSelection::OnHighlightTargetsClicked()
 
             FVector Origin, Extent;
             Actor->GetActorBounds(false, Origin, Extent);
-            if (!Query.Intersect(FBox(Origin - Extent, Origin + Extent))) continue;
+            if (!Query.IsInside(Origin)) continue;
 
             const bool bExportable = FGTMaterialExporter::HasExportableMeshGeometry(Actor);
             AddBox(Origin, Extent, bExportable ? FLinearColor::Red : FLinearColor(1.f, 0.5f, 0.f), 8.f);
@@ -563,28 +598,32 @@ FReply FVCCSimPanelSelection::OnHighlightTargetsClicked()
         }
     }
 
-    // 3) Building clusters: the same union-find grouping path generation orbits as one building.
-    //    One thick cyan box per cluster, slightly inflated so it reads around the green actor boxes.
+    // 3) Buildings: the exact geometric subset path generation orbits — ground-like meshes dropped,
+    //    structures clustered, kept only if tall/wide enough. One thick cyan box per building.
     TArray<AActor*> EnabledActors;
     for (const TSharedPtr<FVCCSimTargetActorItem>& Item : TargetActorItems)
         if (Item.IsValid() && Item->bEnabled)
             if (AActor** Found = LabelMap.Find(Item->Label))
                 if (*Found) EnabledActors.Add(*Found);
 
-    const TArray<FPathGenerator::FOrbitTarget> Clusters =
-        FPathGenerator::ClusterTargetsByProximity(EnabledActors);
-    for (const FPathGenerator::FOrbitTarget& Cluster : Clusters)
+    const TArray<FPathGenerator::FOrbitTarget> Buildings =
+        FPathGenerator::DetectBuildings(World, EnabledActors, BParams);
+    for (const FPathGenerator::FOrbitTarget& Building : Buildings)
     {
-        if (!Cluster.Bounds.IsValid) continue;
-        const FBox B = Cluster.Bounds.ExpandBy(40.f);
-        AddBox(B.GetCenter(), B.GetExtent(), FLinearColor(0.f, 0.8f, 1.f), 20.f);
+        if (Building.OBB.bValid)
+        {
+            AddOBB(Building.OBB, FLinearColor(0.f, 0.8f, 1.f), 20.f);
+        }
+        else if (Building.Bounds.IsValid)
+        {
+            const FBox B = Building.Bounds.ExpandBy(40.f);
+            AddBox(B.GetCenter(), B.GetExtent(), FLinearColor(0.f, 0.8f, 1.f), 20.f);
+        }
     }
 
-    const FString Msg = FString::Printf(
-        TEXT("Highlight ON: %d enabled, %d disabled, %d building cluster(s); in-box audit %d red (exportable) + %d orange (mesh, not exportable); %d missing. Click again to hide."),
-        Enabled, Disabled, Clusters.Num(), Red, Orange, Missing);
-    UE_LOG(LogSelection, Log, TEXT("%s"), *Msg);
-    FVCCSimUIHelpers::ShowNotification(Msg, Missing > 0);
+    UE_LOG(LogSelection, Log,
+        TEXT("Highlight ON: %d enabled, %d ground, %d disabled, %d building(s); in-box audit %d red (exportable) + %d orange (mesh, not exportable); %d missing. Click again to hide."),
+        Enabled, Ground, Disabled, Buildings.Num(), Red, Orange, Missing);
     return FReply::Handled();
 }
 

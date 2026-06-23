@@ -157,7 +157,8 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateTargetActorListPanel()
         .Text_Lambda([this]() { return FText::FromString(
             HighlightActor.IsValid() ? TEXT("Hide Highlight") : TEXT("Highlight Targets")); })
         .ToolTipText(FText::FromString(TEXT(
-            "Toggle labelled boxes around every list actor (green = enabled, gray = disabled), plus "
+            "Toggle boxes around every list actor: green = enabled structure, brown = enabled "
+            "ground/terrain, gray = disabled; thick cyan = detected building (gets an orbit); plus "
             "red boxes for in-box mesh actors not in the list. Click again to hide.")))
         .IsEnabled_Lambda([this]() { return TargetActorItems.Num() > 0 || HighlightActor.IsValid(); })
         .OnClicked_Lambda([this]() { return OnHighlightTargetsClicked(); })
@@ -365,28 +366,36 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateBoundsSelectPanel()
         .VAlign(VAlign_Center)
         .Padding(FMargin(0, 0, 6, 0))
         [
-            SNew(SCheckBox)
-            .IsChecked_Lambda([this]() { return bExcludeClutter ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
-            .OnCheckStateChanged_Lambda([this](ECheckBoxState S) { bExcludeClutter = (S == ECheckBoxState::Checked); SaveTargetActorsToConfig(); })
-            .ToolTipText(FText::FromString(TEXT("Skip foliage / trees / vehicles / pedestrians by class and name")))
-            [
-                SNew(STextBlock)
-                .Text(FText::FromString(TEXT("Exclude clutter")))
-                .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
-                .ColorAndOpacity(FColor(233, 233, 233))
-            ]
+            SNew(STextBlock)
+            .Text(FText::FromString(TEXT("Min building H/W (m):")))
+            .ToolTipText(FText::FromString(TEXT(
+                "A clustered target gets a facade orbit only if it is at least this tall (H) and this "
+                "wide (W). Smaller things and large-flat ground are still surveyed, just not orbited.")))
+            .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
+            .ColorAndOpacity(FColor(233, 233, 233))
         ]
-        +SHorizontalBox::Slot()
-        .FillWidth(1.f)
-        .Padding(FMargin(4, 0, 0, 0))
+        +SHorizontalBox::Slot().FillWidth(1.f).Padding(FMargin(1, 0))
         [
-            SNew(SButton)
-            .ContentPadding(FMargin(5, 2))
-            .HAlign(HAlign_Center)
-            .Text(FText::FromString(TEXT("Fill From Selection")))
-            .ToolTipText(FText::FromString(TEXT("Set Min/Max from the AABB of the actors selected in the viewport")))
-            .OnClicked_Lambda([this]() { return OnFillBoundsFromSelectionClicked(); })
+            CoordBox([this]() { return MinBuildingHeight / 100.0; },
+                     [this](double V) { MinBuildingHeight = FMath::Max(0.f, (float)(V * 100.0)); SaveTargetActorsToConfig(); })
         ]
+        +SHorizontalBox::Slot().FillWidth(1.f).Padding(FMargin(1, 0))
+        [
+            CoordBox([this]() { return MinBuildingFootprint / 100.0; },
+                     [this](double V) { MinBuildingFootprint = FMath::Max(0.f, (float)(V * 100.0)); SaveTargetActorsToConfig(); })
+        ]
+    ]
+
+    +SVerticalBox::Slot()
+    .AutoHeight()
+    .Padding(FMargin(0, 1, 0, 0))
+    [
+        SNew(SButton)
+        .ContentPadding(FMargin(5, 2))
+        .HAlign(HAlign_Center)
+        .Text(FText::FromString(TEXT("Fill From Selection")))
+        .ToolTipText(FText::FromString(TEXT("Set Min/Max from the AABB of the actors selected in the viewport")))
+        .OnClicked_Lambda([this]() { return OnFillBoundsFromSelectionClicked(); })
     ]
 
     +SVerticalBox::Slot()
@@ -398,7 +407,7 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateBoundsSelectPanel()
         .ContentPadding(FMargin(5, 2))
         .HAlign(HAlign_Center)
         .Text(FText::FromString(TEXT("+ Add Actors In Bounds")))
-        .ToolTipText(FText::FromString(TEXT("Add all non-clutter mesh actors inside the box to the target list")))
+        .ToolTipText(FText::FromString(TEXT("Add every mesh actor inside the box to the target list (only our own capture pawns are skipped)")))
         .OnClicked_Lambda([this]() { return OnAddTargetActorsInBoundsClicked(); })
     ];
 }

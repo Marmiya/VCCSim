@@ -93,7 +93,8 @@ public:
         TArray<bool>    EnabledFlags;
         FVector BoundsMin = FVector(-100000.0);
         FVector BoundsMax = FVector(100000.0);
-        bool    bExcludeClutter = true;
+        float   MinBuildingHeight = 300.0f;
+        float   MinBuildingFootprint = 300.0f;
         bool    bExportContext = true;
     };
 

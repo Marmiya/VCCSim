@@ -22,29 +22,203 @@
 #include "GameFramework/Actor.h"
 #include "Components/PrimitiveComponent.h"
 
-TArray<FPathGenerator::FOrbitTarget> FPathGenerator::ClusterTargetsByProximity(
-    const TArray<AActor*>& Actors, float GroupGap)
+namespace
 {
-    struct FActorBox { AActor* Actor; FBox Box; };
-    TArray<FActorBox> Items;
-    Items.Reserve(Actors.Num());
-    for (AActor* A : Actors)
-    {
-        if (!A) continue;
+    using FVerticalOBB = FPathGenerator::FVerticalOBB;
 
+    // Largest registered primitive component of an actor (by local-box volume). Its world yaw sets
+    // the building's footprint orientation.
+    const UPrimitiveComponent* LargestComponent(const AActor* A, double& OutVolume)
+    {
+        const UPrimitiveComponent* Best = nullptr;
+        OutVolume = -1.0;
+        if (!A) return nullptr;
         TArray<UPrimitiveComponent*> Prims;
-        A->GetComponents<UPrimitiveComponent>(Prims);
-        FBox Box(ForceInit);
-        for (UPrimitiveComponent* Prim : Prims)
+        const_cast<AActor*>(A)->GetComponents<UPrimitiveComponent>(Prims);
+        for (UPrimitiveComponent* P : Prims)
         {
-            if (!Prim || !Prim->IsRegistered()) continue;
-            Box += Prim->CalcBounds(Prim->GetComponentTransform()).GetBox();
+            if (!P || !P->IsRegistered()) continue;
+            const FVector S = P->CalcBounds(FTransform::Identity).GetBox().GetSize();
+            const double Vol = (double)S.X * (double)S.Y * (double)S.Z;
+            if (Vol > OutVolume) { OutVolume = Vol; Best = P; }
         }
-        if (Box.IsValid)
-            Items.Add({ A, Box });
+        return Best;
     }
 
-    const int32 N = Items.Num();
+    // Accumulate an actor's component corners, projected into the (AxisX, AxisY, Z) frame.
+    void AccumulateActorFrame(const AActor* A, const FVector2D& AxisX, const FVector2D& AxisY,
+        double& MinU, double& MaxU, double& MinV, double& MaxV, double& MinZ, double& MaxZ, bool& bAny)
+    {
+        if (!A) return;
+        TArray<UPrimitiveComponent*> Prims;
+        const_cast<AActor*>(A)->GetComponents<UPrimitiveComponent>(Prims);
+        for (UPrimitiveComponent* P : Prims)
+        {
+            if (!P || !P->IsRegistered()) continue;
+            const FBox LB = P->CalcBounds(FTransform::Identity).GetBox();
+            if (!LB.IsValid) continue;
+            const FTransform Xf = P->GetComponentTransform();
+            const FVector Mn = LB.Min, Mx = LB.Max;
+            const FVector LC[8] = {
+                {Mn.X,Mn.Y,Mn.Z},{Mx.X,Mn.Y,Mn.Z},{Mn.X,Mx.Y,Mn.Z},{Mx.X,Mx.Y,Mn.Z},
+                {Mn.X,Mn.Y,Mx.Z},{Mx.X,Mn.Y,Mx.Z},{Mn.X,Mx.Y,Mx.Z},{Mx.X,Mx.Y,Mx.Z} };
+            for (const FVector& L : LC)
+            {
+                const FVector W = Xf.TransformPosition(L);
+                const double U = W.X * AxisX.X + W.Y * AxisX.Y;
+                const double V = W.X * AxisY.X + W.Y * AxisY.Y;
+                MinU = FMath::Min(MinU, U); MaxU = FMath::Max(MaxU, U);
+                MinV = FMath::Min(MinV, V); MaxV = FMath::Max(MaxV, V);
+                MinZ = FMath::Min(MinZ, (double)W.Z); MaxZ = FMath::Max(MaxZ, (double)W.Z);
+                bAny = true;
+            }
+        }
+    }
+
+    // Vertical OBB enclosing a set of actors, oriented to the yaw of their single largest component.
+    FVerticalOBB BuildOBBForActors(const TArray<AActor*>& Members)
+    {
+        FVerticalOBB OBB;
+        const UPrimitiveComponent* Largest = nullptr;
+        double BestVol = -1.0;
+        for (AActor* A : Members)
+        {
+            double Vol;
+            if (const UPrimitiveComponent* P = LargestComponent(A, Vol))
+                if (Vol > BestVol) { BestVol = Vol; Largest = P; }
+        }
+        if (!Largest) return OBB;
+
+        const double Yaw = FMath::DegreesToRadians(Largest->GetComponentRotation().Yaw);
+        const FVector2D AxisX(FMath::Cos(Yaw), FMath::Sin(Yaw));
+        const FVector2D AxisY(-AxisX.Y, AxisX.X);
+
+        double MinU = TNumericLimits<double>::Max(), MaxU = TNumericLimits<double>::Lowest();
+        double MinV = MinU, MaxV = MaxU, MinZ = MinU, MaxZ = MaxU;
+        bool bAny = false;
+        for (AActor* A : Members)
+            AccumulateActorFrame(A, AxisX, AxisY, MinU, MaxU, MinV, MaxV, MinZ, MaxZ, bAny);
+        if (!bAny) return OBB;
+
+        const double CU = 0.5 * (MinU + MaxU), CV = 0.5 * (MinV + MaxV);
+        OBB.Center = FVector(CU * AxisX.X + CV * AxisY.X, CU * AxisX.Y + CV * AxisY.Y, 0.5 * (MinZ + MaxZ));
+        OBB.AxisX = AxisX;
+        OBB.HalfXY = FVector2D(0.5 * (MaxU - MinU), 0.5 * (MaxV - MinV));
+        OBB.MinZ = MinZ; OBB.MaxZ = MaxZ;
+        OBB.bValid = true;
+        return OBB;
+    }
+
+    // Do two vertical OBBs come within Gap of touching? 2D separating-axis test on the four box
+    // edge normals, plus a Z-range overlap check.
+    bool OBBOverlapXY(const FVerticalOBB& A, const FVerticalOBB& B, double Gap)
+    {
+        if (A.MinZ > B.MaxZ + Gap || B.MinZ > A.MaxZ + Gap) return false;
+
+        const FVector2D AY(-A.AxisX.Y, A.AxisX.X);
+        const FVector2D BY(-B.AxisX.Y, B.AxisX.X);
+        const FVector2D dC(B.Center.X - A.Center.X, B.Center.Y - A.Center.Y);
+        const FVector2D Axes[4] = { A.AxisX, AY, B.AxisX, BY };
+        for (const FVector2D& L : Axes)
+        {
+            const double dc = FMath::Abs(dC.X * L.X + dC.Y * L.Y);
+            const double rA = FMath::Abs(A.HalfXY.X * (A.AxisX.X * L.X + A.AxisX.Y * L.Y))
+                            + FMath::Abs(A.HalfXY.Y * (AY.X * L.X + AY.Y * L.Y));
+            const double rB = FMath::Abs(B.HalfXY.X * (B.AxisX.X * L.X + B.AxisX.Y * L.Y))
+                            + FMath::Abs(B.HalfXY.Y * (BY.X * L.X + BY.Y * L.Y));
+            if (dc > rA + rB + Gap) return false;
+        }
+        return true;
+    }
+}
+
+bool FPathGenerator::IsGroundLikeActor(UWorld* World, const AActor* Actor, const FBuildingDetectParams& Params)
+{
+    if (!Actor) return false;
+
+    FVector Origin, Extent;
+    Actor->GetActorBounds(false, Origin, Extent);
+    const double Zext = Extent.Z * 2.0;
+    const double HalfXY = FMath::Max(Extent.X, Extent.Y);
+    const double MaxXY = HalfXY * 2.0;
+    if (MaxXY <= KINDA_SMALL_NUMBER) return false;
+
+    // (1) flat: chunky or tall pieces (bins, posts, walls, towers) are structures — cheap, no traces.
+    if (Zext / MaxXY > Params.GroundFlatRatio) return false;
+    // (2) wide: small flat props (flower beds, signs, debris) are not ground surfaces.
+    if (MaxXY < Params.GroundMinFootprint) return false;
+    if (!World) return false;
+
+    // (3) low: compare the actor's own surface just INSIDE each footprint edge against the terrain
+    // just OUTSIDE that edge. Sampling locally at the edges (not global Max.Z) keeps a big SLOPED
+    // ground tile — level with its neighbours all the way round — from looking like a structure,
+    // while an elevated flat roof shows a large step at every edge. Median over the ring.
+    const double RIn = HalfXY * 0.7;
+    const double ROut = HalfXY * 1.3 + 50.0;
+    const double ZTop = Origin.Z + Extent.Z + 1000.0;
+    const double ZBot = Origin.Z - Extent.Z - 100000.0;
+
+    TArray<double> Rises;
+    const int32 K = 8;
+    for (int32 i = 0; i < K; ++i)
+    {
+        const double Ang = (2.0 * PI * i) / K;
+        const double C = FMath::Cos(Ang), S = FMath::Sin(Ang);
+
+        // terrain just outside the footprint (ignore A): lowest penetrating hit
+        FCollisionQueryParams OutQP; OutQP.bTraceComplex = true; OutQP.AddIgnoredActor(Actor);
+        TArray<FHitResult> OutHits;
+        const FVector OutA(Origin.X + ROut * C, Origin.Y + ROut * S, ZTop);
+        const FVector OutB(Origin.X + ROut * C, Origin.Y + ROut * S, ZBot);
+        if (!World->LineTraceMultiByChannel(OutHits, OutA, OutB, ECC_Visibility, OutQP) || OutHits.Num() == 0)
+            continue;
+        double GroundZ = ZTop;
+        for (const FHitResult& H : OutHits) GroundZ = FMath::Min(GroundZ, (double)H.ImpactPoint.Z);
+
+        // this actor's own surface just inside the edge: highest hit that belongs to A
+        FCollisionQueryParams InQP; InQP.bTraceComplex = true;
+        TArray<FHitResult> InHits;
+        const FVector InA(Origin.X + RIn * C, Origin.Y + RIn * S, ZTop);
+        const FVector InB(Origin.X + RIn * C, Origin.Y + RIn * S, ZBot);
+        World->LineTraceMultiByChannel(InHits, InA, InB, ECC_Visibility, InQP);
+        bool bSurf = false;
+        double SurfZ = 0.0;
+        for (const FHitResult& H : InHits)
+            if (H.GetActor() == Actor && (!bSurf || H.ImpactPoint.Z > SurfZ))
+            {
+                SurfZ = H.ImpactPoint.Z;
+                bSurf = true;
+            }
+        if (!bSurf) continue;
+
+        Rises.Add(SurfZ - GroundZ);
+    }
+
+    if (Rises.Num() == 0) return false;   // couldn't measure -> treat as structure, don't drop it
+    Rises.Sort();
+    const double MedianRise = Rises[Rises.Num() / 2];
+    return MedianRise <= Params.GroundMaxRise;
+}
+
+TArray<FPathGenerator::FOrbitTarget> FPathGenerator::DetectBuildings(
+    UWorld* World, const TArray<AActor*>& Actors, const FBuildingDetectParams& Params)
+{
+    // Drop ground (else it bridges every building into one). No per-piece size filter — connectivity
+    // decides membership, so small genuine attachments (rooftop AC units, parapets) are kept.
+    TArray<AActor*> Structures;
+    Structures.Reserve(Actors.Num());
+    for (AActor* A : Actors)
+        if (A && !IsGroundLikeActor(World, A, Params))
+            Structures.Add(A);
+
+    const int32 N = Structures.Num();
+    TArray<FVerticalOBB> OBBs;
+    OBBs.SetNum(N);
+    for (int32 i = 0; i < N; ++i)
+        OBBs[i] = BuildOBBForActors(TArray<AActor*>{ Structures[i] });
+
+    // Union-find: two pieces merge only if their oriented boxes are within ConnectGap of touching.
+    // Ground is not in this graph, so it can never act as a connector between buildings.
     TArray<int32> Parent;
     Parent.SetNum(N);
     for (int32 i = 0; i < N; ++i) Parent[i] = i;
@@ -55,27 +229,35 @@ TArray<FPathGenerator::FOrbitTarget> FPathGenerator::ClusterTargetsByProximity(
     };
     for (int32 i = 0; i < N; ++i)
         for (int32 j = i + 1; j < N; ++j)
-            if (Items[i].Box.ExpandBy(GroupGap).Intersect(Items[j].Box))
+            if (OBBs[i].bValid && OBBs[j].bValid && OBBOverlapXY(OBBs[i], OBBs[j], Params.ConnectGap))
                 Parent[Find(i)] = Find(j);
 
+    TMap<int32, TArray<int32>> Groups;
+    for (int32 i = 0; i < N; ++i) Groups.FindOrAdd(Find(i)).Add(i);
+
     TArray<FOrbitTarget> Buildings;
-    TMap<int32, int32> RootToBuilding;
-    for (int32 i = 0; i < N; ++i)
+    Buildings.Reserve(Groups.Num());
+    for (const TPair<int32, TArray<int32>>& KV : Groups)
     {
-        const int32 Root = Find(i);
-        if (int32* Existing = RootToBuilding.Find(Root))
+        TArray<AActor*> Members;
+        FOrbitTarget T;
+        for (int32 Idx : KV.Value)
         {
-            FOrbitTarget& T = Buildings[*Existing];
-            T.Bounds += Items[i].Box;
-            T.Actors.Add(Items[i].Actor);
+            AActor* A = Structures[Idx];
+            Members.Add(A);
+            T.Actors.Add(A);
+            FVector O, E;
+            A->GetActorBounds(false, O, E);
+            T.Bounds += FBox(O - E, O + E);
         }
-        else
-        {
-            FOrbitTarget T;
-            T.Bounds = Items[i].Box;
-            T.Actors.Add(Items[i].Actor);
-            RootToBuilding.Add(Root, Buildings.Add(MoveTemp(T)));
-        }
+        T.OBB = BuildOBBForActors(Members);
+
+        const double H = T.OBB.bValid ? (T.OBB.MaxZ - T.OBB.MinZ)
+                                      : (T.Bounds.IsValid ? T.Bounds.GetSize().Z : 0.0);
+        const double Wd = T.OBB.bValid ? 2.0 * FMath::Max(T.OBB.HalfXY.X, T.OBB.HalfXY.Y)
+                                       : (T.Bounds.IsValid ? FMath::Max(T.Bounds.GetSize().X, T.Bounds.GetSize().Y) : 0.0);
+        if (H >= Params.MinBuildingHeight && Wd >= Params.MinBuildingFootprint)
+            Buildings.Add(MoveTemp(T));
     }
     return Buildings;
 }
@@ -174,11 +356,23 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
     const float AspectRatio = (Params.CameraResolution.Y > 0) ? (float)Params.CameraResolution.X / Params.CameraResolution.Y : 16.f / 9.f;
     const float VFovRad = 2.f * FMath::Atan(FMath::Tan(HFovRad * 0.5f) / AspectRatio);
 
-    // Region = union of all building clusters. The oblique/nadir survey is planned ONCE over the
-    // whole region at a constant altitude above the tallest structure (commercial oblique-survey
-    // style), so a short block beside a tall one is no longer skipped.
-    FBox RegionBox(ForceInit);
+    // The nadir/oblique survey covers EVERY capture target (incl. ground/clutter), independently of
+    // which clusters got facade orbits — so nothing in range is left uncovered. Region + occupancy
+    // come from SurveyTargets/SurveyRegion; fall back to the building clusters if those are unset.
+    FBox RegionBox = Params.SurveyRegion;
+    const bool bComputeRegionFromTargets = !RegionBox.IsValid;
     TSet<AActor*> AllTargets;
+    for (AActor* A : Params.SurveyTargets)
+    {
+        if (!A) continue;
+        AllTargets.Add(A);
+        if (bComputeRegionFromTargets)
+        {
+            FVector O, E;
+            A->GetActorBounds(false, O, E);
+            RegionBox += FBox(O - E, O + E);
+        }
+    }
     for (const FOrbitTarget& B : Params.Buildings)
     {
         if (B.Bounds.IsValid) RegionBox += B.Bounds;
@@ -227,10 +421,16 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
                     TargetActors.Add(A);
             }
 
-            const FVector BoxCenter = Building.Bounds.GetCenter();
-            const FVector BoxExtent = Building.Bounds.GetExtent();
-            const float BoxMinZ = Building.Bounds.Min.Z + Params.StartHeight;
-            const float BoxMaxZ = Building.Bounds.Max.Z;
+            // Frame the orbit by the oriented box (tighter for rotated buildings); the radial probe
+            // below still follows the real surface. Fall back to the AABB if the OBB is invalid.
+            const bool bUseOBB = Building.OBB.bValid;
+            const FVector BoxCenter = bUseOBB ? Building.OBB.Center : Building.Bounds.GetCenter();
+            const float MaxHalfXY = bUseOBB
+                ? (float)FMath::Max(Building.OBB.HalfXY.X, Building.OBB.HalfXY.Y)
+                : (float)FMath::Max(Building.Bounds.GetExtent().X, Building.Bounds.GetExtent().Y);
+            const FVector BoxExtent(MaxHalfXY, MaxHalfXY, 0.f);
+            const float BoxMinZ = (bUseOBB ? (float)Building.OBB.MinZ : (float)Building.Bounds.Min.Z) + Params.StartHeight;
+            const float BoxMaxZ = bUseOBB ? (float)Building.OBB.MaxZ : (float)Building.Bounds.Max.Z;
 
             const float StepH = FMath::Max(
                 2.f * Params.Margin * FMath::Tan(HFovRad * 0.5f) * FMath::Max(1.f - Params.HOverlap, 0.05f), 10.f);
