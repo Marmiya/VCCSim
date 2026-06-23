@@ -273,38 +273,47 @@ namespace
         float CellSize = 100.f;
         int32 NumX = 0;
         int32 NumY = 0;
+        float FallbackZ = 0.f;   // used only where a whole neighbourhood is empty (no geometry at all)
         TArray<uint8> Occupied;
-        TArray<float> TopZ;   // target surface height per cell (valid where Occupied) — the DSM
+        TArray<float> TopZ;      // top surface height per cell (valid where Occupied) — the DSM
 
-        int32 CellIndex(float X, float Y) const
-        {
-            if (NumX <= 0 || NumY <= 0) return INDEX_NONE;
-            const int32 ix = FMath::FloorToInt((X - Origin.X) / CellSize);
-            const int32 iy = FMath::FloorToInt((Y - Origin.Y) / CellSize);
-            if (ix < 0 || ix >= NumX || iy < 0 || iy >= NumY) return INDEX_NONE;
-            return iy * NumX + ix;
-        }
-        bool IsOccupied(float X, float Y) const
-        {
-            const int32 i = CellIndex(X, Y);
-            return i != INDEX_NONE && Occupied[i] != 0;
-        }
+        // Conservative surface height for a camera placed at (X,Y): the MAX DSM height over the cell
+        // AND its 8 neighbours. Taking the neighbourhood max (not just the one cell) keeps a waypoint
+        // above a tall feature whose cell its position merely borders, so a grid coarser than the
+        // survey step can never drop a pose below nearby geometry. An entirely empty neighbourhood
+        // (nothing around) falls back to FallbackZ — there is no geometry there to collide with.
         float HeightAt(float X, float Y) const
         {
-            const int32 i = CellIndex(X, Y);
-            return i != INDEX_NONE ? TopZ[i] : 0.f;
+            if (NumX <= 0 || NumY <= 0) return FallbackZ;
+            const int32 cx = FMath::FloorToInt((X - Origin.X) / CellSize);
+            const int32 cy = FMath::FloorToInt((Y - Origin.Y) / CellSize);
+            float Best = -FLT_MAX;
+            for (int32 dy = -1; dy <= 1; ++dy)
+            {
+                for (int32 dx = -1; dx <= 1; ++dx)
+                {
+                    const int32 ix = cx + dx, iy = cy + dy;
+                    if (ix < 0 || ix >= NumX || iy < 0 || iy >= NumY) continue;
+                    const int32 i = iy * NumX + ix;
+                    if (Occupied[i] != 0) Best = FMath::Max(Best, TopZ[i]);
+                }
+            }
+            return Best > -FLT_MAX ? Best : FallbackZ;
         }
     };
 
-    // One downward ray per cell, penetrating non-targets, marks a cell occupied when a TARGET column
-    // exists beneath it. Grid is clamped to <=128 cells/axis to bound the raycast count.
+    // One downward ray per cell, penetrating non-targets, records the topmost TARGET surface beneath
+    // the column (the DSM) and marks the cell occupied. Grid is clamped to <=256 cells/axis so it is
+    // at least as fine as the survey step (a coarse map was dropping poses below geometry), while
+    // still bounding the raycast count.
     FRegionGrid BuildRegionHeightMap(UWorld* World, const FBox& RegionBox, const TSet<AActor*>& Targets)
     {
         FRegionGrid Grid;
         const float ExtentX = FMath::Max(RegionBox.Max.X - RegionBox.Min.X, 1.f);
         const float ExtentY = FMath::Max(RegionBox.Max.Y - RegionBox.Min.Y, 1.f);
-        Grid.CellSize = FMath::Clamp(FMath::Max(ExtentX, ExtentY) / 128.f, 100.f, 2000.f);
+        Grid.CellSize = FMath::Clamp(FMath::Max(ExtentX, ExtentY) / 256.f, 50.f, 1500.f);
         Grid.Origin = FVector2D(RegionBox.Min.X, RegionBox.Min.Y);
+        Grid.FallbackZ = RegionBox.Min.Z;
         Grid.NumX = FMath::Max(1, FMath::CeilToInt(ExtentX / Grid.CellSize));
         Grid.NumY = FMath::Max(1, FMath::CeilToInt(ExtentY / Grid.CellSize));
         Grid.Occupied.SetNumZeroed(Grid.NumX * Grid.NumY);
@@ -338,6 +347,50 @@ namespace
                 const int32 CellIdx = iy * Grid.NumX + ix;
                 Grid.Occupied[CellIdx] = bOcc ? 1 : 0;
                 Grid.TopZ[CellIdx] = HitZ;
+            }
+        }
+
+        // Fill DSM holes by bounded max-dilation. A cell whose single down-ray found no target — a gap
+        // between meshes, or (the boundary case) a cell whose centre fell just past the outermost mesh
+        // or inside an AABB corner off the actual surface — inherits the highest surface among its
+        // occupied neighbours, propagated outward up to MaxDilation rings. This lifts a boundary pose
+        // onto the adjacent real surface instead of dropping it to the global floor and clipping
+        // underground. Areas with no geometry within reach stay empty and use FallbackZ (nothing to hit).
+        {
+            const int32 MaxDilation = 8;
+            for (int32 Pass = 0; Pass < MaxDilation; ++Pass)
+            {
+                TArray<uint8> NextOcc = Grid.Occupied;
+                TArray<float> NextTop = Grid.TopZ;
+                bool bChanged = false;
+                for (int32 iy = 0; iy < Grid.NumY; ++iy)
+                {
+                    for (int32 ix = 0; ix < Grid.NumX; ++ix)
+                    {
+                        const int32 i = iy * Grid.NumX + ix;
+                        if (Grid.Occupied[i] != 0) continue;
+                        float Best = -FLT_MAX;
+                        for (int32 dy = -1; dy <= 1; ++dy)
+                        {
+                            for (int32 dx = -1; dx <= 1; ++dx)
+                            {
+                                const int32 jx = ix + dx, jy = iy + dy;
+                                if (jx < 0 || jx >= Grid.NumX || jy < 0 || jy >= Grid.NumY) continue;
+                                const int32 j = jy * Grid.NumX + jx;
+                                if (Grid.Occupied[j] != 0) Best = FMath::Max(Best, Grid.TopZ[j]);
+                            }
+                        }
+                        if (Best > -FLT_MAX)
+                        {
+                            NextTop[i] = Best;
+                            NextOcc[i] = 1;
+                            bChanged = true;
+                        }
+                    }
+                }
+                Grid.Occupied = MoveTemp(NextOcc);
+                Grid.TopZ = MoveTemp(NextTop);
+                if (!bChanged) break;
             }
         }
         return Grid;
@@ -598,11 +651,11 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
          CornerYawStepDeg = Params.CornerYawStepDeg,
          NumObliqueRings = Params.NumObliqueRings,
          bIncludeNadir = Params.bIncludeNadir,
+         bIncludeOblique = Params.bIncludeOblique,
          bSideOrbit = Params.bSideOrbit,
          NadirAltitude = Params.NadirAltitude,
          NadirTiltAngle = Params.NadirTiltAngle,
          HOverlap = Params.HOverlap,
-         VOverlap = Params.VOverlap,
          RegionBox]() mutable
         {
             FGeneratedPath GeneratedPath;
@@ -735,46 +788,92 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
                 }
             }
 
-            // --- Region-wide nadir survey: a single N-S boustrophedon over the height map ---
-            // Strips run North-South (along X), stepped West->East (along Y), serpentine so the whole
-            // survey is one continuous path. Every waypoint looks straight down at NadirAltitude above
-            // the height map's local surface (the region floor where no target sits beneath). No
-            // culling — the full region bounding box is swept, so nothing is left uncovered.
+            // --- Region-wide survey over the height map: tilt-aware oblique strips ---
+            // Single lens (default): ONE pass, pitched by NadirTiltAngle off vertical (straight down only
+            // when Tilt == 0). 5-lens oblique (bIncludeOblique): a straight-down nadir pass PLUS four
+            // passes pitched by NadirTiltAngle, leaning +X/-X (along the strips) and +Y/-Y (across them).
+            //
+            // Each pass is its own N-S boustrophedon (strips along X, stepped along Y, serpentine), with
+            // step sizes from the TILTED ground footprint so the requested overlap actually holds at the
+            // tilt — NOT the nadir footprint:
+            //   - along the lean axis: the VFOV footprint trapezoid alt*(tan(t+vf/2)-tan(t-vf/2));
+            //   - across it: the HFOV footprint at the cone edge nearest vertical (its narrowest point,
+            //     so the overlap is guaranteed along the whole strip).
+            // BOTH directions use H-Overlap: a flat survey grid has no vertical stacking, so V-Overlap
+            // (the facade ring-to-ring overlap) does not apply here.
+            // At Tilt == 0 this reduces exactly to the plain nadir footprints. Every waypoint sits
+            // NadirAltitude above the local surface, so AGL stays constant. No culling — full box swept.
             if (bIncludeNadir)
             {
-                const float NFootH = 2.f * NadirAltitude * FMath::Tan(HFovRad * 0.5f);
-                const float NFootV = 2.f * NadirAltitude * FMath::Tan(VFovRad * 0.5f);
-                const float CrossStep = FMath::Max(NFootH * FMath::Max(1.f - HOverlap, 0.05f), 10.f);
-                const float AlongStep = FMath::Max(NFootV * FMath::Max(1.f - VOverlap, 0.05f), 10.f);
+                const float HalfHFov = HFovRad * 0.5f;
+                const float HalfVFov = VFovRad * 0.5f;
+
+                // (along-VFOV, across-HFOV) ground footprint for a camera tilted Tau rad off nadir.
+                auto TiltedFootprint = [&](float Tau, float& OutAlong, float& OutAcross)
+                {
+                    const float ANear = FMath::Clamp(Tau - HalfVFov, -1.5f, 1.5f);
+                    const float AFar  = FMath::Clamp(Tau + HalfVFov, -1.5f, 1.5f);
+                    OutAlong = NadirAltitude * FMath::Max(FMath::Tan(AFar) - FMath::Tan(ANear), 0.01f);
+                    const float PhiMin = (ANear <= 0.f && AFar >= 0.f)
+                        ? 0.f : FMath::Min(FMath::Abs(ANear), FMath::Abs(AFar));
+                    OutAcross = 2.f * NadirAltitude * FMath::Tan(HalfHFov) / FMath::Max(FMath::Cos(PhiMin), 0.05f);
+                };
 
                 const float MinX = RegionBox.Min.X, MaxX = RegionBox.Max.X;
                 const float MinY = RegionBox.Min.Y, MaxY = RegionBox.Max.Y;
-                const float FloorZ = RegionBox.Min.Z;
+                const float TiltDeg = FMath::Clamp(NadirTiltAngle, 0.f, 85.f);
 
-                int32 StripIdx = 0;
-                for (float Y = MinY; Y <= MaxY + KINDA_SMALL_NUMBER; Y += CrossStep, ++StripIdx)
+                // Yaw = direction the camera leans; bLeanAlongX = lean axis is X (else Y); TiltDeg per pass.
+                struct FSurveyPass { float Yaw; bool bLeanAlongX; float TiltDeg; };
+                TArray<FSurveyPass> Passes;
+                if (bIncludeOblique)
                 {
-                    TArray<FVector> StripPos;
-                    for (float X = MinX; X <= MaxX + KINDA_SMALL_NUMBER; X += AlongStep)
-                    {
-                        const float SurfZ = Grid.IsOccupied(X, Y) ? Grid.HeightAt(X, Y) : FloorZ;
-                        StripPos.Add(FVector(X, Y, SurfZ + NadirAltitude));
-                    }
+                    Passes.Add({ 0.f,   true,  0.f });        // nadir (straight down)
+                    Passes.Add({ 0.f,   true,  TiltDeg });    // lean +X
+                    Passes.Add({ 180.f, true,  TiltDeg });    // lean -X
+                    Passes.Add({ 90.f,  false, TiltDeg });    // lean +Y
+                    Passes.Add({ 270.f, false, TiltDeg });    // lean -Y
+                }
+                else
+                {
+                    Passes.Add({ 0.f, true, TiltDeg });        // single (tilted) lens
+                }
 
-                    if (StripIdx % 2 == 1)
+                for (const FSurveyPass& Pass : Passes)
+                {
+                    float FAlong, FAcross;
+                    TiltedFootprint(FMath::DegreesToRadians(Pass.TiltDeg), FAlong, FAcross);
+                    const float LeanStep = FMath::Max(FAlong  * FMath::Max(1.f - HOverlap, 0.05f), 10.f);
+                    const float PerpStep = FMath::Max(FAcross * FMath::Max(1.f - HOverlap, 0.05f), 10.f);
+                    const float StepX = Pass.bLeanAlongX ? LeanStep : PerpStep;
+                    const float StepY = Pass.bLeanAlongX ? PerpStep : LeanStep;
+                    const FRotator PoseRot(-(90.f - Pass.TiltDeg), Pass.Yaw, 0.f);
+
+                    int32 StripIdx = 0;
+                    for (float Y = MinY; Y <= MaxY + KINDA_SMALL_NUMBER; Y += StepY, ++StripIdx)
                     {
-                        for (int32 i = StripPos.Num() - 1; i >= 0; --i)
+                        TArray<FVector> StripPos;
+                        for (float X = MinX; X <= MaxX + KINDA_SMALL_NUMBER; X += StepX)
                         {
-                            GeneratedPath.Positions.Add(StripPos[i]);
-                            GeneratedPath.Rotations.Add(FRotator(-90.f, 0.f, 0.f));
+                            const float SurfZ = Grid.HeightAt(X, Y);
+                            StripPos.Add(FVector(X, Y, SurfZ + NadirAltitude));
                         }
-                    }
-                    else
-                    {
-                        for (const FVector& P : StripPos)
+
+                        if (StripIdx % 2 == 1)
                         {
-                            GeneratedPath.Positions.Add(P);
-                            GeneratedPath.Rotations.Add(FRotator(-90.f, 0.f, 0.f));
+                            for (int32 i = StripPos.Num() - 1; i >= 0; --i)
+                            {
+                                GeneratedPath.Positions.Add(StripPos[i]);
+                                GeneratedPath.Rotations.Add(PoseRot);
+                            }
+                        }
+                        else
+                        {
+                            for (const FVector& P : StripPos)
+                            {
+                                GeneratedPath.Positions.Add(P);
+                                GeneratedPath.Rotations.Add(PoseRot);
+                            }
                         }
                     }
                 }

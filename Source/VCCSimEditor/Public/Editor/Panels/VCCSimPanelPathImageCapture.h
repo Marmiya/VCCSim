@@ -144,6 +144,7 @@ private:
     float OrbitNadirAlt = 500.0f;
     float OrbitNadirTiltAngle = 45.0f;
     bool bOrbitIncludeNadir = true;
+    bool bOrbitIncludeOblique = false;
     int32 OrbitObliqueRings = 2;
     bool bOrbitSideOrbit = false;
     float CaptureTickInterval = 0.2f;

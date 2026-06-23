@@ -142,6 +142,20 @@ TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreatePathConfigSection()
         [
             SNew(SCheckBox)
             .ToolTipText(FText::FromString(TEXT(
+                "5-lens oblique survey: a straight-down nadir pass PLUS four passes tilted by 'Tilt (deg)' "
+                "toward N/S/E/W (~5x the survey poses). Off = a single lens pitched by 'Tilt (deg)' (set "
+                "Tilt to 0 for straight down). Strip spacing always uses the tilted footprint to hold overlap.")))
+            .IsChecked_Lambda([this]() { return bOrbitIncludeOblique ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+            .OnCheckStateChanged_Lambda([this](ECheckBoxState S) { bOrbitIncludeOblique = (S == ECheckBoxState::Checked); })
+        ]
+        +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(0, 0, 12, 0))
+        [
+            SNew(STextBlock).Text(FText::FromString(TEXT("Oblique")))
+        ]
+        +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(0, 0, 4, 0))
+        [
+            SNew(SCheckBox)
+            .ToolTipText(FText::FromString(TEXT(
                 "Also generate the per-building facade orbit rings. Off = region oblique/nadir survey only.")))
             .IsChecked_Lambda([this]() { return bOrbitSideOrbit ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
             .OnCheckStateChanged_Lambda([this](ECheckBoxState S) { bOrbitSideOrbit = (S == ECheckBoxState::Checked); })

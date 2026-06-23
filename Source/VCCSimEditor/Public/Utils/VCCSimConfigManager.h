@@ -95,6 +95,7 @@ public:
         FVector BoundsMax = FVector(100000.0);
         float   MinBuildingHeight = 300.0f;
         float   MinBuildingFootprint = 300.0f;
+        float   ConnectGap = 15.0f;
         bool    bExportContext = true;
     };
 
@@ -109,6 +110,7 @@ public:
         float NadirAltitude       = 500.f;
         float NadirTiltAngle      = 45.f;
         bool  bIncludeNadir       = true;
+        bool  bIncludeOblique     = false;
         int32 NumObliqueRings     = 2;
         bool  bSideOrbit          = false;
         float CaptureTickInterval = 0.2f;

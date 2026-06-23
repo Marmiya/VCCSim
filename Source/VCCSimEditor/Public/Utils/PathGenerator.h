@@ -102,6 +102,11 @@ public:
         float NadirAltitude = 500.0f;
         float NadirTiltAngle = 45.0f;
 
+        /** Opt-in 5-lens oblique survey: a straight-down nadir pass PLUS four passes tilted by
+         *  NadirTiltAngle toward ±X/±Y. Default off => a single lens pitched by NadirTiltAngle
+         *  (lighter); set NadirTiltAngle to 0 for that single lens to look straight down. */
+        bool bIncludeOblique = false;
+
         /** Opt-in: also generate the per-building facade orbit rings (default off => region survey only). */
         bool bSideOrbit = false;
     };

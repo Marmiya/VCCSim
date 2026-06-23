@@ -147,6 +147,7 @@ void FVCCSimConfigManager::SaveToJsonFile()
         PathCaptureJson->SetNumberField(TEXT("NadirAltitude"),       PathImageCaptureConfig.NadirAltitude);
         PathCaptureJson->SetNumberField(TEXT("NadirTiltAngle"),      PathImageCaptureConfig.NadirTiltAngle);
         PathCaptureJson->SetBoolField(TEXT("IncludeNadir"),          PathImageCaptureConfig.bIncludeNadir);
+        PathCaptureJson->SetBoolField(TEXT("IncludeOblique"),        PathImageCaptureConfig.bIncludeOblique);
         PathCaptureJson->SetNumberField(TEXT("NumObliqueRings"),     PathImageCaptureConfig.NumObliqueRings);
         PathCaptureJson->SetBoolField(TEXT("SideOrbit"),             PathImageCaptureConfig.bSideOrbit);
         PathCaptureJson->SetNumberField(TEXT("CaptureTickInterval"), PathImageCaptureConfig.CaptureTickInterval);
@@ -175,6 +176,7 @@ void FVCCSimConfigManager::SaveToJsonFile()
         BoundsJson->SetNumberField(TEXT("MaxZ"), TargetActorsConfig.BoundsMax.Z);
         BoundsJson->SetNumberField(TEXT("MinBuildingHeight"), TargetActorsConfig.MinBuildingHeight);
         BoundsJson->SetNumberField(TEXT("MinBuildingFootprint"), TargetActorsConfig.MinBuildingFootprint);
+        BoundsJson->SetNumberField(TEXT("ConnectGap"), TargetActorsConfig.ConnectGap);
         BoundsJson->SetBoolField(TEXT("ExportContext"), TargetActorsConfig.bExportContext);
         RootObject->SetObjectField(TEXT("BoundsSelect"), BoundsJson);
     }
@@ -313,6 +315,7 @@ bool FVCCSimConfigManager::LoadFromJsonFile()
         if ((*PathCaptureJson)->TryGetNumberField(TEXT("NumObliqueRings"), V))     PathImageCaptureConfig.NumObliqueRings     = (int32)V;
         if ((*PathCaptureJson)->TryGetNumberField(TEXT("CaptureTickInterval"), V)) PathImageCaptureConfig.CaptureTickInterval = (float)V;
         (*PathCaptureJson)->TryGetBoolField(TEXT("IncludeNadir"), PathImageCaptureConfig.bIncludeNadir);
+        (*PathCaptureJson)->TryGetBoolField(TEXT("IncludeOblique"), PathImageCaptureConfig.bIncludeOblique);
         (*PathCaptureJson)->TryGetBoolField(TEXT("SideOrbit"), PathImageCaptureConfig.bSideOrbit);
     }
 
@@ -351,6 +354,7 @@ bool FVCCSimConfigManager::LoadFromJsonFile()
             (*BoundsJson)->TryGetNumberField(TEXT("MaxZ"), TargetActorsConfig.BoundsMax.Z);
             (*BoundsJson)->TryGetNumberField(TEXT("MinBuildingHeight"), TargetActorsConfig.MinBuildingHeight);
             (*BoundsJson)->TryGetNumberField(TEXT("MinBuildingFootprint"), TargetActorsConfig.MinBuildingFootprint);
+            (*BoundsJson)->TryGetNumberField(TEXT("ConnectGap"), TargetActorsConfig.ConnectGap);
             (*BoundsJson)->TryGetBoolField(TEXT("ExportContext"), TargetActorsConfig.bExportContext);
         }
     }

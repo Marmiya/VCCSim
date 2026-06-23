@@ -238,6 +238,7 @@ void FVCCSimPanelSelection::LoadFromConfigManager()
     BoundsMax = Config.BoundsMax;
     MinBuildingHeight = Config.MinBuildingHeight;
     MinBuildingFootprint = Config.MinBuildingFootprint;
+    ConnectGap = Config.ConnectGap;
     bExportContextMesh = Config.bExportContext;
 
     TargetActorItems.Empty();
@@ -268,6 +269,7 @@ void FVCCSimPanelSelection::SaveTargetActorsToConfig() const
     Config.BoundsMax = BoundsMax;
     Config.MinBuildingHeight = MinBuildingHeight;
     Config.MinBuildingFootprint = MinBuildingFootprint;
+    Config.ConnectGap = ConnectGap;
     Config.bExportContext = bExportContextMesh;
     FVCCSimConfigManager::Get().SetTargetActorsConfig(Config);
 }
@@ -536,6 +538,7 @@ FReply FVCCSimPanelSelection::OnHighlightTargetsClicked()
     FPathGenerator::FBuildingDetectParams BParams;
     BParams.MinBuildingHeight = MinBuildingHeight;
     BParams.MinBuildingFootprint = MinBuildingFootprint;
+    BParams.ConnectGap = ConnectGap;
     const FLinearColor GroundColor(0.55f, 0.30f, 0.08f);   // brown = ground / terrain
 
     // 1) Every entry of the shared list: green = enabled structure, brown = enabled ground/terrain,

@@ -353,6 +353,7 @@ void FVCCSimPanelPathImageCapture::LoadFromConfigManager()
     OrbitNadirAlt       = Config.NadirAltitude;
     OrbitNadirTiltAngle = Config.NadirTiltAngle;
     bOrbitIncludeNadir  = Config.bIncludeNadir;
+    bOrbitIncludeOblique = Config.bIncludeOblique;
     OrbitObliqueRings   = Config.NumObliqueRings;
     bOrbitSideOrbit     = Config.bSideOrbit;
     CaptureTickInterval = Config.CaptureTickInterval;
@@ -379,6 +380,7 @@ void FVCCSimPanelPathImageCapture::SaveToConfigManager() const
     Config.NadirAltitude       = OrbitNadirAlt;
     Config.NadirTiltAngle      = OrbitNadirTiltAngle;
     Config.bIncludeNadir       = bOrbitIncludeNadir;
+    Config.bIncludeOblique     = bOrbitIncludeOblique;
     Config.NumObliqueRings     = OrbitObliqueRings;
     Config.bSideOrbit          = bOrbitSideOrbit;
     Config.CaptureTickInterval = CaptureTickInterval;
@@ -447,6 +449,7 @@ void FVCCSimPanelPathImageCapture::GeneratePosesAroundTarget()
     {
         BParams.MinBuildingHeight = SM->GetMinBuildingHeight();
         BParams.MinBuildingFootprint = SM->GetMinBuildingFootprint();
+        BParams.ConnectGap = SM->GetConnectGap();
     }
     Params.Buildings = FPathGenerator::DetectBuildings(World, EnabledActors, BParams);
     Params.SurveyTargets = EnabledActors;
@@ -458,6 +461,7 @@ void FVCCSimPanelPathImageCapture::GeneratePosesAroundTarget()
     Params.HOverlap = OrbitHOverlap;
     Params.VOverlap = OrbitVOverlap;
     Params.bIncludeNadir = bOrbitIncludeNadir;
+    Params.bIncludeOblique = bOrbitIncludeOblique;
     Params.NadirAltitude = OrbitNadirAlt;
     Params.NadirTiltAngle = OrbitNadirTiltAngle;
     Params.NumObliqueRings = OrbitObliqueRings;

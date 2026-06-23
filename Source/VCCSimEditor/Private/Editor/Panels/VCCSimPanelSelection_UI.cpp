@@ -151,17 +151,45 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateTargetActorListPanel()
     .AutoHeight()
     .Padding(FMargin(0, 2, 0, 0))
     [
-        SNew(SButton)
-        .ContentPadding(FMargin(5, 2))
-        .HAlign(HAlign_Center)
-        .Text_Lambda([this]() { return FText::FromString(
-            HighlightActor.IsValid() ? TEXT("Hide Highlight") : TEXT("Highlight Targets")); })
-        .ToolTipText(FText::FromString(TEXT(
-            "Toggle boxes around every list actor: green = enabled structure, brown = enabled "
-            "ground/terrain, gray = disabled; thick cyan = detected building (gets an orbit); plus "
-            "red boxes for in-box mesh actors not in the list. Click again to hide.")))
-        .IsEnabled_Lambda([this]() { return TargetActorItems.Num() > 0 || HighlightActor.IsValid(); })
-        .OnClicked_Lambda([this]() { return OnHighlightTargetsClicked(); })
+        SNew(SHorizontalBox)
+        +SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
+        [
+            SNew(SButton)
+            .ContentPadding(FMargin(5, 2))
+            .HAlign(HAlign_Center)
+            .Text_Lambda([this]() { return FText::FromString(
+                HighlightActor.IsValid() ? TEXT("Hide Highlight") : TEXT("Highlight Targets")); })
+            .ToolTipText(FText::FromString(TEXT(
+                "Toggle boxes around every list actor: green = enabled structure, brown = enabled "
+                "ground/terrain, gray = disabled; thick cyan = detected building (gets an orbit); plus "
+                "red boxes for in-box mesh actors not in the list. Click again to hide.")))
+            .IsEnabled_Lambda([this]() { return TargetActorItems.Num() > 0 || HighlightActor.IsValid(); })
+            .OnClicked_Lambda([this]() { return OnHighlightTargetsClicked(); })
+        ]
+        +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(8, 0, 4, 0))
+        [
+            SNew(STextBlock)
+            .Text(FText::FromString(TEXT("Connect gap (cm):")))
+            .ToolTipText(FText::FromString(TEXT(
+                "Two structure pieces are merged into one building only if their oriented boxes come "
+                "within this distance of touching. Larger = pieces modelled with gaps still merge "
+                "(fewer, bigger buildings); smaller = only near-touching pieces merge (road-side props "
+                "stay separate). Shared by Highlight Targets and Generate Poses.")))
+            .Font(FAppStyle::GetFontStyle("PropertyWindow.NormalFont"))
+            .ColorAndOpacity(FColor(233, 233, 233))
+        ]
+        +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+        [
+            SNew(SNumericEntryBox<double>)
+            .AllowSpin(false)
+            .MinDesiredValueWidth(46.f)
+            .Value_Lambda([this]() { return TOptional<double>((double)ConnectGap); })
+            .OnValueCommitted_Lambda([this](double V, ETextCommit::Type)
+            {
+                ConnectGap = FMath::Max(0.f, (float)V);
+                SaveTargetActorsToConfig();
+            })
+        ]
     ]
 
     +SVerticalBox::Slot()
@@ -317,8 +345,9 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateBoundsSelectPanel()
         SNew(STextBlock)
         .Text(FText::FromString(TEXT("Add by Bounding Box (UE cm):")))
         .ToolTipText(FText::FromString(TEXT(
-            "Add every mesh actor whose bounds OVERLAP this world-space box (a corner inside counts). "
-            "Use 'Fill From Selection' to set the box from selected actors, then narrow it.")))
+            "Add every mesh actor whose bounds CENTRE falls inside this world-space box (a corner merely "
+            "clipping the box does not count). Use 'Fill From Selection' to set the box from selected "
+            "actors, then narrow it.")))
         .Font(FAppStyle::GetFontStyle("PropertyWindow.BoldFont"))
         .ColorAndOpacity(FColor(233, 233, 233))
     ]

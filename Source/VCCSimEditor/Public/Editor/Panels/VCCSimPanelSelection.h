@@ -133,9 +133,11 @@ public:
     void WarmupCameras();
 
     /** Geometric building-detection thresholds (cm) used to pick which target clusters get facade
-     *  orbits. Consumed by the path-image-capture panel. */
+     *  orbits. Consumed by the path-image-capture panel so Highlight Targets and Generate Poses
+     *  detect the same buildings. */
     float GetMinBuildingHeight() const { return MinBuildingHeight; }
     float GetMinBuildingFootprint() const { return MinBuildingFootprint; }
+    float GetConnectGap() const { return ConnectGap; }
 
 private:
     // ============================================================================
@@ -281,6 +283,11 @@ private:
      *  surveyed. Replaces the old name-based clutter exclusion. */
     float MinBuildingHeight = 300.0f;
     float MinBuildingFootprint = 300.0f;
+
+    /** Connectivity tolerance (cm): two structure pieces merge into one building only if their
+     *  oriented boxes come within this of touching. Larger merges gapped pieces; smaller keeps
+     *  road-side props separate. Shared by Highlight Targets and Generate Poses. */
+    float ConnectGap = 15.0f;
 
     /** Also export in-box clutter as a separate region_context mesh (geometry only). */
     bool bExportContextMesh = true;
