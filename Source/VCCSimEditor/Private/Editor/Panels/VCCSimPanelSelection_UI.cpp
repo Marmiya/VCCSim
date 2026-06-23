@@ -197,30 +197,17 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateTargetActorListPanel()
     .Padding(FMargin(0, 2, 0, 0))
     [
         SNew(SHorizontalBox)
-        +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(0, 0, 4, 0))
-        [
-            SNew(SCheckBox)
-            .ToolTipText(FText::FromString(TEXT(
-                "Also merge in-box clutter (trees/cars/road) into a separate region_context mesh for "
-                "occlusion/depth/normal supervision. Off = region_targets only.")))
-            .IsChecked_Lambda([this]() { return bExportContextMesh ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
-            .OnCheckStateChanged_Lambda([this](ECheckBoxState S) { bExportContextMesh = (S == ECheckBoxState::Checked); SaveTargetActorsToConfig(); })
-        ]
-        +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(0, 0, 8, 0))
-        [
-            SNew(STextBlock).Text(FText::FromString(TEXT("Include context mesh")))
-        ]
         +SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
         [
             SNew(SButton)
             .ButtonStyle(FAppStyle::Get(), "FlatButton.Primary")
             .ContentPadding(FMargin(5, 2))
             .HAlign(HAlign_Center)
-            .Text(FText::FromString(TEXT("Export Region Mesh")))
+            .Text(FText::FromString(TEXT("Export Mesh")))
             .ToolTipText(FText::FromString(TEXT(
-                "Merge all mesh actors in the coordinate box into region_targets (buildings, keeps is_glass) "
-                "+ region_context (clutter) glTF meshes under gt_materials/. No material baking — materials "
-                "come from the camera captures.")))
+                "Export each enabled target actor as its own mesh.gltf + manifest under gt_materials/. "
+                "The Python preprocess aggregates them into the combined scene mesh. No material baking — "
+                "materials come from the camera captures.")))
             .IsEnabled_Lambda([this]() { return !bGTExportInProgress; })
             .OnClicked_Lambda([this]() { return OnExportGTMeshClicked(); })
         ]

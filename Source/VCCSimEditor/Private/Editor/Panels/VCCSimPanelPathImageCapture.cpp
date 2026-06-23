@@ -350,9 +350,9 @@ void FVCCSimPanelPathImageCapture::LoadFromConfigManager()
     OrbitCameraHFOV     = Config.CameraHFOV;
     OrbitHOverlap       = Config.HOverlap;
     OrbitVOverlap       = Config.VOverlap;
+    OrbitSurveyOverlap  = Config.SurveyHOverlap;
     OrbitNadirAlt       = Config.NadirAltitude;
     OrbitNadirTiltAngle = Config.NadirTiltAngle;
-    bOrbitIncludeNadir  = Config.bIncludeNadir;
     bOrbitIncludeOblique = Config.bIncludeOblique;
     OrbitObliqueRings   = Config.NumObliqueRings;
     bOrbitSideOrbit     = Config.bSideOrbit;
@@ -363,6 +363,7 @@ void FVCCSimPanelPathImageCapture::LoadFromConfigManager()
     OrbitCameraHFOVValue     = OrbitCameraHFOV;
     OrbitHOverlapValue       = OrbitHOverlap;
     OrbitVOverlapValue       = OrbitVOverlap;
+    OrbitSurveyOverlapValue  = OrbitSurveyOverlap;
     OrbitNadirAltValue       = OrbitNadirAlt;
     OrbitNadirTiltValue      = OrbitNadirTiltAngle;
     OrbitObliqueRingsValue   = OrbitObliqueRings;
@@ -377,9 +378,9 @@ void FVCCSimPanelPathImageCapture::SaveToConfigManager() const
     Config.CameraHFOV          = OrbitCameraHFOV;
     Config.HOverlap            = OrbitHOverlap;
     Config.VOverlap            = OrbitVOverlap;
+    Config.SurveyHOverlap      = OrbitSurveyOverlap;
     Config.NadirAltitude       = OrbitNadirAlt;
     Config.NadirTiltAngle      = OrbitNadirTiltAngle;
-    Config.bIncludeNadir       = bOrbitIncludeNadir;
     Config.bIncludeOblique     = bOrbitIncludeOblique;
     Config.NumObliqueRings     = OrbitObliqueRings;
     Config.bSideOrbit          = bOrbitSideOrbit;
@@ -460,7 +461,7 @@ void FVCCSimPanelPathImageCapture::GeneratePosesAroundTarget()
     Params.CameraHFOV = OrbitCameraHFOV;
     Params.HOverlap = OrbitHOverlap;
     Params.VOverlap = OrbitVOverlap;
-    Params.bIncludeNadir = bOrbitIncludeNadir;
+    Params.SurveyHOverlap = OrbitSurveyOverlap;
     Params.bIncludeOblique = bOrbitIncludeOblique;
     Params.NadirAltitude = OrbitNadirAlt;
     Params.NadirTiltAngle = OrbitNadirTiltAngle;

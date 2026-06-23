@@ -33,12 +33,7 @@
 
 class FVCCSimPanelSelection;
 class FVCCSimPanelPathImageCapture;
-class AActor;
-class UStaticMesh;
-class UTexture2D;
 class FLightingManager;
-class FGTMaterialExporter;
-struct FGTFoliageExportEntry;
 
 class VCCSIMEDITOR_API FVCCSimPanelTexEnhancer : public TSharedFromThis<FVCCSimPanelTexEnhancer>
 {
@@ -82,12 +77,6 @@ private:
     TSharedPtr<SNumericEntryBox<int32>> GTTexResSpinBox;
     TOptional<int32> GTTexResValue;
 
-    TSharedPtr<SCheckBox>               IncludeNearbyCheckBox;
-    TSharedPtr<SCheckBox>               VisualizeExpansionCheckBox;
-    TSharedPtr<SCheckBox>               MergeNearbyCheckBox;
-    TSharedPtr<SNumericEntryBox<float>> NearbyRadiusSpinBox;
-    TOptional<float>                    NearbyRadiusValue;
-
     TSharedPtr<SNumericEntryBox<float>> SunCalcLatSpinBox;
     TSharedPtr<SNumericEntryBox<float>> SunCalcLonSpinBox;
     TSharedPtr<SNumericEntryBox<float>> SunCalcTZSpinBox;
@@ -130,10 +119,8 @@ private:
 
     int32 GTTextureResolution = 2048;
 
-    bool  bIncludeNearbyMeshes   = false;
-    bool  bVisualizeExpansion    = false;
-    bool  bMergeNearbyMeshes     = false;
-    float NearbyRadius           = 500.f;
+    bool bOutputImages = true;
+    bool bOutputMesh   = true;
 
     float SunCalcLatitude  = 22.52933f;
     float SunCalcLongitude = 113.94092f;
@@ -159,13 +146,11 @@ private:
     TOptional<int32> SunCalcFillSlotValue;
 
     FTimerHandle StatusTimerHandle;
-    FTimerHandle ExpansionVizTimerHandle;
     FProcHandle  PipelineProcHandle;
 
     TWeakPtr<FVCCSimPanelSelection> SelectionManager;
     TWeakPtr<FVCCSimPanelPathImageCapture> PathImageCaptureManager;
     TSharedPtr<FLightingManager>    LightingManager;
-    TSharedPtr<FGTMaterialExporter> GTMaterialExporter;
 
     // ============================================================================
     // SECTION 1: DATASET CONFIGURATION
@@ -207,37 +192,6 @@ private:
     FReply OnExportGTMaterialsClicked();
     bool StartGTMaterialExport(const FString& BaseDir);
     FString FindLatestCaptureDirectory() const;
-
-    struct FSeedShape
-    {
-        TArray<FVector2D> Polygon;
-        double MinZ = 0.0;
-        double MaxZ = 0.0;
-        FVector VizCenter = FVector::ZeroVector;
-    };
-
-    void BuildSeedShapes(
-        UWorld* World,
-        const TArray<AActor*>& Seeds,
-        float ExpandCm,
-        int32 NumProbes,
-        TArray<FSeedShape>& OutShapes) const;
-
-    void CollectNearbyTargets(
-        UWorld* World,
-        const TArray<AActor*>& SeedActors,
-        float RadiusCm,
-        TArray<FString>& InOutActorLabels,
-        TArray<FGTFoliageExportEntry>& OutFoliageEntries) const;
-
-    bool BuildMergedNearbyEntry(
-        UWorld* World,
-        const TArray<FString>& NearbyStaticLabels,
-        const TArray<FGTFoliageExportEntry>& FoliageEntries,
-        FGTFoliageExportEntry& OutMergedEntry) const;
-
-    void SetExpansionVisualization(bool bEnabled);
-    void TickExpansionVisualization();
 
     // ============================================================================
     // SECTION 6: TEXENHANCER PIPELINE

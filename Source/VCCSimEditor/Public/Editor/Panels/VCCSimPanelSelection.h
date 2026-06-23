@@ -88,6 +88,16 @@ public:
     /** Reload the target actor list from the centralized config manager. */
     void LoadFromConfigManager();
 
+    /** Export each enabled target actor's GT mesh (one mesh.gltf + manifest per actor) into BaseDir.
+     *  The Python preprocess (build_gt_mesh.py) aggregates the per-actor glTFs into the combined
+     *  scene mesh. Shared by this panel's Export Mesh button and the TexEnhancer dataset capture. */
+    void RunGTMeshExport(const FString& BaseDir, const FString& SceneName,
+                         int32 TextureResolution, const FString& Signature,
+                         FSimpleDelegate OnComplete);
+
+    /** True while a GT mesh export started by this panel is running. */
+    bool IsGTExportInProgress() const { return bGTExportInProgress; }
+
     // ============================================================================
     // GETTERS
     // ============================================================================
@@ -288,9 +298,6 @@ private:
      *  oriented boxes come within this of touching. Larger merges gapped pieces; smaller keeps
      *  road-side props separate. Shared by Highlight Targets and Generate Poses. */
     float ConnectGap = 15.0f;
-
-    /** Also export in-box clutter as a separate region_context mesh (geometry only). */
-    bool bExportContextMesh = true;
 
     /** GT mesh export (relocated here from the TexEnhancer panel; geometry + is_glass only). */
     TSharedPtr<class FGTMaterialExporter> GTMaterialExporter;

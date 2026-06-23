@@ -598,74 +598,6 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateGTExportSection()
                 GTTextureResolution, 64, 64)
         ]
 
-        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 0, 0, 2))
-        [
-            FVCCSimUIHelpers::CreatePropertyRow(TEXT("Include Nearby Meshes"),
-                SNew(SHorizontalBox)
-                +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
-                [
-                    SAssignNew(IncludeNearbyCheckBox, SCheckBox)
-                    .ToolTipText(FText::FromString(TEXT(
-                        "Also export any StaticMeshActor or foliage instance whose bounds lie within the expanded XY bounds of a selected actor.")))
-                    .IsChecked_Lambda([this]()
-                    {
-                        return bIncludeNearbyMeshes ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
-                    })
-                    .OnCheckStateChanged_Lambda([this](ECheckBoxState NewState)
-                    {
-                        bIncludeNearbyMeshes = (NewState == ECheckBoxState::Checked);
-                        SavePaths();
-                    })
-                ]
-                +SHorizontalBox::Slot().AutoWidth().Padding(FMargin(16, 0, 0, 0)).VAlign(VAlign_Center)
-                [
-                    SAssignNew(VisualizeExpansionCheckBox, SCheckBox)
-                    .ToolTipText(FText::FromString(TEXT(
-                        "Draw the XY-expanded bounding boxes of the selected actors in the viewport.")))
-                    .IsChecked_Lambda([this]()
-                    {
-                        return bVisualizeExpansion ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
-                    })
-                    .OnCheckStateChanged_Lambda([this](ECheckBoxState NewState)
-                    {
-                        SetExpansionVisualization(NewState == ECheckBoxState::Checked);
-                    })
-                    [
-                        SNew(STextBlock)
-                        .Text(FText::FromString(TEXT("Show")))
-                        .ColorAndOpacity(FLinearColor(0.8f, 0.8f, 0.8f))
-                    ]
-                ]
-            )
-        ]
-
-        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 0, 0, 2))
-        [
-            FVCCSimUIHelpers::CreateNumericPropertyRowFloat(
-                TEXT("Expand"), NearbyRadiusSpinBox, NearbyRadiusValue,
-                NearbyRadius, 0.f, 10.f)
-        ]
-
-        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 0, 0, 2))
-        [
-            FVCCSimUIHelpers::CreatePropertyRow(TEXT("Merge Nearby"),
-                SAssignNew(MergeNearbyCheckBox, SCheckBox)
-                .ToolTipText(FText::FromString(TEXT(
-                    "Merge all nearby static meshes and foliage instances into a single baked static mesh "
-                    "(one GLTF + manifest). The original seed actors are still exported individually.")))
-                .IsEnabled_Lambda([this]() { return bIncludeNearbyMeshes; })
-                .IsChecked_Lambda([this]()
-                {
-                    return bMergeNearbyMeshes ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
-                })
-                .OnCheckStateChanged_Lambda([this](ECheckBoxState NewState)
-                {
-                    bMergeNearbyMeshes = (NewState == ECheckBoxState::Checked);
-                    SavePaths();
-                })
-            )
-        ]
-
         +SVerticalBox::Slot().AutoHeight()
         [
             SNew(SButton)
@@ -711,6 +643,32 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateDatasetCaptureSection()
         +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
         [
             SNew(SHorizontalBox)
+            +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(0, 0, 8, 0))
+            [
+                SNew(SCheckBox)
+                .ToolTipText(FText::FromString(TEXT(
+                    "Capture RGB / BaseColor / MatProps / Normal images for every FlashPawn pose. "
+                    "Off = skip image capture and only export the GT mesh.")))
+                .IsEnabled_Lambda([this]() { return !bDatasetCaptureInProgress; })
+                .IsChecked_Lambda([this]() { return bOutputImages ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+                .OnCheckStateChanged_Lambda([this](ECheckBoxState S) { bOutputImages = (S == ECheckBoxState::Checked); SavePaths(); })
+                [
+                    SNew(STextBlock).Text(FText::FromString(TEXT("Photos")))
+                ]
+            ]
+            +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(0, 0, 8, 0))
+            [
+                SNew(SCheckBox)
+                .ToolTipText(FText::FromString(TEXT(
+                    "Export the GT mesh (gt_materials) for the enabled target actors after capturing. "
+                    "Reused from a previous capture when unchanged. Off = skip mesh export.")))
+                .IsEnabled_Lambda([this]() { return !bDatasetCaptureInProgress; })
+                .IsChecked_Lambda([this]() { return bOutputMesh ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+                .OnCheckStateChanged_Lambda([this](ECheckBoxState S) { bOutputMesh = (S == ECheckBoxState::Checked); SavePaths(); })
+                [
+                    SNew(STextBlock).Text(FText::FromString(TEXT("Mesh")))
+                ]
+            ]
             +SHorizontalBox::Slot().FillWidth(1.f)
             [
                 SNew(SButton)
@@ -720,19 +678,20 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateDatasetCaptureSection()
                 {
                     return bDatasetCaptureInProgress
                         ? FText::FromString(TEXT("Stop Capture"))
-                        : FText::FromString(TEXT("Capture Dataset (Current Lighting)"));
+                        : FText::FromString(TEXT("Capture Dataset"));
                 })
                 .ToolTipText(FText::FromString(
                     TEXT("Writes poses.txt + intrinsics.json + lighting.json and captures "
                          "RGB / BaseColor / MatProps / Normal for every pose on the FlashPawn "
                          "path into a new <Output>/<Scene>/captures/capture_<timestamp> directory. "
                          "Apply the desired lighting first; click again after changing "
-                         "lighting to add another capture window. Exports gt_materials once "
-                         "after the first capture. Click again while running to cancel "
+                         "lighting to add another capture window. Photos / Mesh checkboxes pick "
+                         "which outputs are written. Click again while running to cancel "
                          "(the partial directory is deleted).")))
                 .IsEnabled_Lambda([this]()
                 {
-                    return bDatasetCaptureInProgress || !OutputDirectory.IsEmpty();
+                    return bDatasetCaptureInProgress
+                        || (!OutputDirectory.IsEmpty() && (bOutputImages || bOutputMesh));
                 })
                 .OnClicked_Lambda([this]() { return OnCaptureDatasetClicked(); })
             ]

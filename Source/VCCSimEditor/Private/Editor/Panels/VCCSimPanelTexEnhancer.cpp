@@ -25,22 +25,6 @@
 #include "Editor/Panels/VCCSimPanelSelection.h"
 #include "Editor/Panels/VCCSimPanelPathImageCapture.h"
 #include "HAL/FileManager.h"
-#include "Engine/StaticMeshActor.h"
-#include "Engine/StaticMesh.h"
-#include "Engine/Texture.h"
-#include "Engine/Texture2D.h"
-#include "Materials/MaterialInterface.h"
-#include "Components/StaticMeshComponent.h"
-#include "Components/InstancedStaticMeshComponent.h"
-#include "InstancedFoliageActor.h"
-#include "EngineUtils.h"
-#include "DrawDebugHelpers.h"
-#include "IMeshMergeUtilities.h"
-#include "MeshMergeModule.h"
-#include "MeshMerge/MeshMergingSettings.h"
-#include "Misc/ScopeExit.h"
-#include "MeshDescription.h"
-#include "Modules/ModuleManager.h"
 
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
@@ -64,8 +48,6 @@ DEFINE_LOG_CATEGORY_STATIC(LogTexEnhancerPanel, Log, All);
 
 FVCCSimPanelTexEnhancer::FVCCSimPanelTexEnhancer()
 {
-    GTMaterialExporter = MakeShared<FGTMaterialExporter>();
-
     for (int32 i = 0; i < MaxLightingEntries; ++i)
     {
         SetAElevationValue[i] = SetAElevation[i];
@@ -83,7 +65,6 @@ FVCCSimPanelTexEnhancer::FVCCSimPanelTexEnhancer()
     SunCalcMinuteValue   = SunCalcMinute;
     SunCalcFillSlotValue = SunCalcFillSlot;
     GTTexResValue        = GTTextureResolution;
-    NearbyRadiusValue    = NearbyRadius;
     DayCycleSpeedValue   = DayCycleSpeed;
 }
 
@@ -109,13 +90,7 @@ void FVCCSimPanelTexEnhancer::Cleanup()
     if (GEditor)
     {
         GEditor->GetTimerManager()->ClearTimer(StatusTimerHandle);
-        GEditor->GetTimerManager()->ClearTimer(ExpansionVizTimerHandle);
-        if (UWorld* World = GEditor->GetEditorWorldContext().World())
-        {
-            FlushPersistentDebugLines(World);
-        }
     }
-    bVisualizeExpansion = false;
 
     if (PipelineProcHandle.IsValid())
     {
@@ -175,10 +150,8 @@ void FVCCSimPanelTexEnhancer::LoadFromConfigManager()
         }
     }
 
-    bIncludeNearbyMeshes = Config.bIncludeNearbyMeshes;
-    bMergeNearbyMeshes   = Config.bMergeNearbyMeshes;
-    NearbyRadius         = Config.NearbyRadius;
-    NearbyRadiusValue    = NearbyRadius;
+    bOutputImages = Config.bOutputImages;
+    bOutputMesh   = Config.bOutputMesh;
 
     LoadParamsFromConfig();
 }
@@ -373,374 +346,6 @@ FReply FVCCSimPanelTexEnhancer::OnToggleDayCycleClicked()
 // SECTION 4: GT MATERIAL EXPORT
 // ============================================================================
 
-void FVCCSimPanelTexEnhancer::BuildSeedShapes(
-    UWorld* World,
-    const TArray<AActor*>& Seeds,
-    float ExpandCm,
-    int32 NumProbes,
-    TArray<FSeedShape>& OutShapes) const
-{
-    OutShapes.Reset();
-    if (!World || Seeds.IsEmpty() || NumProbes < 8) return;
-
-    TSet<AActor*> SeedSet;
-    for (AActor* S : Seeds) if (IsValid(S)) SeedSet.Add(S);
-
-    const int32 NumSlices = 3;
-    const float SliceT[NumSlices] = { 0.15f, 0.5f, 0.85f };
-
-    FCollisionQueryParams BaseQueryParams;
-    BaseQueryParams.bTraceComplex = true;
-
-    for (AActor* Seed : Seeds)
-    {
-        if (!IsValid(Seed)) continue;
-
-        FVector Origin, Extent;
-        Seed->GetActorBounds(false, Origin, Extent);
-        const FBox SeedBox(Origin - Extent, Origin + Extent);
-        const FVector2D CenterXY(Origin.X, Origin.Y);
-        const float AABBRadius = FMath::Sqrt(Extent.X * Extent.X + Extent.Y * Extent.Y);
-        const float SearchRadius = AABBRadius * 4.f + 2000.f;
-
-        TArray<float> MaxHitDist;
-        MaxHitDist.Init(-1.f, NumProbes);
-
-        for (int32 s = 0; s < NumSlices; ++s)
-        {
-            const float Z = FMath::Lerp(SeedBox.Min.Z, SeedBox.Max.Z, SliceT[s]);
-            const FVector SliceCenter(CenterXY.X, CenterXY.Y, Z);
-
-            for (int32 a = 0; a < NumProbes; ++a)
-            {
-                const float AngleRad = (2.f * PI * a) / NumProbes;
-                const FVector Dir(FMath::Cos(AngleRad), FMath::Sin(AngleRad), 0.f);
-                const FVector TraceStart = SliceCenter + Dir * SearchRadius;
-
-                FCollisionQueryParams ProbeParams = BaseQueryParams;
-                int32 MaxPenetrations = 16;
-                float HitDist = -1.f;
-
-                while (MaxPenetrations-- > 0)
-                {
-                    FHitResult Hit;
-                    if (!World->LineTraceSingleByChannel(
-                            Hit, TraceStart, SliceCenter, ECC_Visibility, ProbeParams))
-                        break;
-                    AActor* HitActor = Hit.GetActor();
-                    if (!HitActor) break;
-                    if (SeedSet.Contains(HitActor))
-                    {
-                        const FVector Delta = Hit.ImpactPoint - SliceCenter;
-                        HitDist = FMath::Sqrt(Delta.X * Delta.X + Delta.Y * Delta.Y);
-                        break;
-                    }
-                    ProbeParams.AddIgnoredActor(HitActor);
-                }
-
-                if (HitDist > MaxHitDist[a]) MaxHitDist[a] = HitDist;
-            }
-        }
-
-        FSeedShape Shape;
-        Shape.Polygon.Reserve(NumProbes);
-        Shape.MinZ = SeedBox.Min.Z;
-        Shape.MaxZ = SeedBox.Max.Z;
-        Shape.VizCenter = Origin;
-
-        for (int32 a = 0; a < NumProbes; ++a)
-        {
-            const float AngleRad = (2.f * PI * a) / NumProbes;
-            const FVector2D Dir2D(FMath::Cos(AngleRad), FMath::Sin(AngleRad));
-
-            float Dist;
-            if (MaxHitDist[a] >= 0.f)
-            {
-                Dist = MaxHitDist[a] + ExpandCm;
-            }
-            else
-            {
-                const float tX = FMath::Abs(Dir2D.X) > KINDA_SMALL_NUMBER ? Extent.X / FMath::Abs(Dir2D.X) : FLT_MAX;
-                const float tY = FMath::Abs(Dir2D.Y) > KINDA_SMALL_NUMBER ? Extent.Y / FMath::Abs(Dir2D.Y) : FLT_MAX;
-                Dist = FMath::Min(tX, tY) + ExpandCm;
-            }
-            Shape.Polygon.Add(CenterXY + Dir2D * Dist);
-        }
-
-        OutShapes.Add(MoveTemp(Shape));
-    }
-}
-
-static bool PointInPoly2D(const FVector2D& P, const TArray<FVector2D>& Poly)
-{
-    bool bInside = false;
-    const int32 N = Poly.Num();
-    for (int32 i = 0, j = N - 1; i < N; j = i++)
-    {
-        const FVector2D& A = Poly[i];
-        const FVector2D& B = Poly[j];
-        if (((A.Y > P.Y) != (B.Y > P.Y)) &&
-            (P.X < (B.X - A.X) * (P.Y - A.Y) / (B.Y - A.Y) + A.X))
-        {
-            bInside = !bInside;
-        }
-    }
-    return bInside;
-}
-
-void FVCCSimPanelTexEnhancer::CollectNearbyTargets(
-    UWorld* World,
-    const TArray<AActor*>& SeedActors,
-    float RadiusCm,
-    TArray<FString>& InOutActorLabels,
-    TArray<FGTFoliageExportEntry>& OutFoliageEntries) const
-{
-    if (!World || SeedActors.IsEmpty() || RadiusCm < 0.f) return;
-
-    TSet<AActor*> SeedSet;
-    for (AActor* Seed : SeedActors)
-        if (IsValid(Seed)) SeedSet.Add(Seed);
-
-    TArray<FSeedShape> Shapes;
-    BuildSeedShapes(World, SeedActors, RadiusCm, /*NumProbes=*/180, Shapes);
-    if (Shapes.IsEmpty()) return;
-
-    auto OverlapsAnySeed = [&Shapes](const FBox& CandBox) -> bool
-    {
-        const FVector2D Min2D(CandBox.Min.X, CandBox.Min.Y);
-        const FVector2D Max2D(CandBox.Max.X, CandBox.Max.Y);
-        const FVector2D Ctr2D((Min2D.X + Max2D.X) * 0.5f, (Min2D.Y + Max2D.Y) * 0.5f);
-        const FVector2D Corners[5] = {
-            Min2D, { Max2D.X, Min2D.Y }, Max2D, { Min2D.X, Max2D.Y }, Ctr2D
-        };
-
-        for (const FSeedShape& S : Shapes)
-        {
-            if (CandBox.Max.Z < S.MinZ || CandBox.Min.Z > S.MaxZ) continue;
-
-            for (const FVector2D& C : Corners)
-            {
-                if (PointInPoly2D(C, S.Polygon)) return true;
-            }
-            for (const FVector2D& V : S.Polygon)
-            {
-                if (V.X >= Min2D.X && V.X <= Max2D.X &&
-                    V.Y >= Min2D.Y && V.Y <= Max2D.Y) return true;
-            }
-        }
-        return false;
-    };
-
-    TSet<FString> ExistingLabels;
-    for (const FString& L : InOutActorLabels) ExistingLabels.Add(L);
-
-    for (TActorIterator<AActor> It(World); It; ++It)
-    {
-        AActor* Cand = *It;
-        if (!IsValid(Cand) || SeedSet.Contains(Cand)) continue;
-        if (Cand->IsA<AInstancedFoliageActor>()) continue;
-        if (Cand->Tags.Contains(FName("NotSMActor")) || Cand->Tags.Contains(FName("VCCSimPathViz"))) continue;
-        if (!FGTMaterialExporter::HasExportableMeshGeometry(Cand)) continue;
-
-        FVector Origin, Extent;
-        Cand->GetActorBounds(false, Origin, Extent);
-        const FBox CandBox(Origin - Extent, Origin + Extent);
-        if (!OverlapsAnySeed(CandBox)) continue;
-
-        const FString Label = Cand->GetActorLabel();
-        if (!ExistingLabels.Contains(Label))
-        {
-            InOutActorLabels.Add(Label);
-            ExistingLabels.Add(Label);
-        }
-    }
-
-    int32 IFAIdx = 0;
-    for (TActorIterator<AInstancedFoliageActor> It(World); It; ++It, ++IFAIdx)
-    {
-        AInstancedFoliageActor* IFA = *It;
-        if (!IsValid(IFA)) continue;
-
-        TArray<UInstancedStaticMeshComponent*> Components;
-        IFA->GetComponents(Components);
-
-        int32 CompIdx = 0;
-        for (UInstancedStaticMeshComponent* ISM : Components)
-        {
-            if (!ISM) { ++CompIdx; continue; }
-
-            UStaticMesh* Mesh = ISM->GetStaticMesh();
-            if (!Mesh)   { ++CompIdx; continue; }
-
-            const FBoxSphereBounds LocalBounds = Mesh->GetBounds();
-            const int32 Count = ISM->GetInstanceCount();
-
-            for (int32 i = 0; i < Count; ++i)
-            {
-                FTransform T;
-                if (!ISM->GetInstanceTransform(i, T, /*bWorldSpace=*/true)) continue;
-
-                const FBox InstBox = LocalBounds.TransformBy(T).GetBox();
-                if (!OverlapsAnySeed(InstBox)) continue;
-
-                FString Base = FString::Printf(TEXT("Foliage_%s_%d_%d_%d"),
-                    *Mesh->GetName(), IFAIdx, CompIdx, i);
-                FString Label = Base;
-                int32 Suffix = 2;
-                while (ExistingLabels.Contains(Label))
-                {
-                    Label = FString::Printf(TEXT("%s_%d"), *Base, Suffix++);
-                }
-                ExistingLabels.Add(Label);
-
-                FGTFoliageExportEntry Entry;
-                Entry.Mesh = Mesh;
-                Entry.WorldTransform = T;
-                Entry.Label = Label;
-                OutFoliageEntries.Add(MoveTemp(Entry));
-            }
-
-            ++CompIdx;
-        }
-    }
-}
-
-bool FVCCSimPanelTexEnhancer::BuildMergedNearbyEntry(
-    UWorld* World,
-    const TArray<FString>& NearbyStaticLabels,
-    const TArray<FGTFoliageExportEntry>& FoliageEntries,
-    FGTFoliageExportEntry& OutMergedEntry) const
-{
-    if (!World) return false;
-    if (NearbyStaticLabels.IsEmpty() && FoliageEntries.IsEmpty()) return false;
-
-    TMap<FString, AActor*> LabelMap;
-    for (TActorIterator<AActor> It(World); It; ++It)
-        if (AActor* A = *It) LabelMap.Add(A->GetActorLabel(), A);
-
-    TArray<UPrimitiveComponent*> Comps;
-    TArray<AStaticMeshActor*> IntermediateActors;
-
-    for (const FString& L : NearbyStaticLabels)
-    {
-        AActor** Found = LabelMap.Find(L);
-        if (!Found || !IsValid(*Found)) continue;
-
-        TArray<UStaticMeshComponent*> MeshComps;
-        (*Found)->GetComponents<UStaticMeshComponent>(MeshComps);
-        for (UStaticMeshComponent* MC : MeshComps)
-        {
-            if (MC && MC->GetStaticMesh()) Comps.Add(MC);
-        }
-    }
-
-    for (const FGTFoliageExportEntry& E : FoliageEntries)
-    {
-        UStaticMesh* M = E.Mesh.Get();
-        if (!M) continue;
-
-        FActorSpawnParameters SP;
-        SP.ObjectFlags |= RF_Transient;
-        SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-        AStaticMeshActor* TA = World->SpawnActor<AStaticMeshActor>(
-            AStaticMeshActor::StaticClass(), E.WorldTransform, SP);
-        if (!TA) continue;
-
-        TA->SetMobility(EComponentMobility::Movable);
-        if (UStaticMeshComponent* MC = TA->GetStaticMeshComponent())
-        {
-            MC->SetStaticMesh(M);
-        }
-        TA->SetActorEnableCollision(false);
-        TA->SetActorHiddenInGame(true);
-        IntermediateActors.Add(TA);
-        Comps.Add(TA->GetStaticMeshComponent());
-    }
-
-    ON_SCOPE_EXIT
-    {
-        for (AStaticMeshActor* A : IntermediateActors)
-            if (IsValid(A)) World->DestroyActor(A);
-    };
-
-    return FGTMaterialExporter::MergeComponentsToEntry(World, Comps, TEXT("Nearby_Merged"), OutMergedEntry);
-}
-
-void FVCCSimPanelTexEnhancer::SetExpansionVisualization(bool bEnabled)
-{
-    bVisualizeExpansion = bEnabled;
-
-    if (!GEditor) return;
-
-    if (bEnabled)
-    {
-        if (!ExpansionVizTimerHandle.IsValid())
-        {
-            GEditor->GetTimerManager()->SetTimer(ExpansionVizTimerHandle,
-                FTimerDelegate::CreateLambda([this]() { TickExpansionVisualization(); }),
-                0.1f, /*bLoop=*/true);
-        }
-        TickExpansionVisualization();
-    }
-    else
-    {
-        GEditor->GetTimerManager()->ClearTimer(ExpansionVizTimerHandle);
-        if (UWorld* World = GEditor->GetEditorWorldContext().World())
-        {
-            FlushPersistentDebugLines(World);
-        }
-    }
-}
-
-void FVCCSimPanelTexEnhancer::TickExpansionVisualization()
-{
-    if (!bVisualizeExpansion || !GEditor) return;
-    UWorld* World = GEditor->GetEditorWorldContext().World();
-    if (!World) return;
-
-    TSharedPtr<FVCCSimPanelSelection> Sel = SelectionManager.Pin();
-    if (!Sel.IsValid()) return;
-
-    TMap<FString, AActor*> LabelMap;
-    for (TActorIterator<AActor> It(World); It; ++It)
-        if (AActor* A = *It) LabelMap.Add(A->GetActorLabel(), A);
-
-    TArray<AActor*> Seeds;
-    for (const FString& Label : Sel->GetEnabledTargetActorLabels())
-    {
-        if (AActor** Found = LabelMap.Find(Label))
-            if (IsValid(*Found)) Seeds.Add(*Found);
-    }
-    if (Seeds.IsEmpty()) return;
-
-    TArray<FSeedShape> Shapes;
-    BuildSeedShapes(World, Seeds, FMath::Max(0.f, NearbyRadius), /*NumProbes=*/60, Shapes);
-
-    const FColor LineColor = FColor::Yellow;
-    const float  LifeTime  = 0.15f;
-    const float  Thickness = 2.f;
-
-    for (const FSeedShape& S : Shapes)
-    {
-        const int32 N = S.Polygon.Num();
-        if (N < 2) continue;
-        const float LoZ = static_cast<float>(S.MinZ);
-        const float HiZ = static_cast<float>(S.MaxZ);
-        for (int32 i = 0; i < N; ++i)
-        {
-            const FVector2D& P0 = S.Polygon[i];
-            const FVector2D& P1 = S.Polygon[(i + 1) % N];
-            const FVector A_Lo(P0.X, P0.Y, LoZ);
-            const FVector B_Lo(P1.X, P1.Y, LoZ);
-            const FVector A_Hi(P0.X, P0.Y, HiZ);
-            const FVector B_Hi(P1.X, P1.Y, HiZ);
-            DrawDebugLine(World, A_Lo, B_Lo, LineColor, false, LifeTime, 0, Thickness);
-            DrawDebugLine(World, A_Hi, B_Hi, LineColor, false, LifeTime, 0, Thickness);
-            DrawDebugLine(World, A_Lo, A_Hi, LineColor, false, LifeTime, 0, Thickness);
-        }
-    }
-}
-
 FString FVCCSimPanelTexEnhancer::FindLatestCaptureDirectory() const
 {
     const FString Root = GetDatasetCapturesRoot();
@@ -780,7 +385,12 @@ bool FVCCSimPanelTexEnhancer::StartGTMaterialExport(const FString& BaseDir)
         return false;
     }
     TSharedPtr<FVCCSimPanelSelection> Sel = SelectionManager.Pin();
-    TArray<FString> ActorLabels = Sel.IsValid() ? Sel->GetEnabledTargetActorLabels() : TArray<FString>();
+    if (!Sel.IsValid())
+    {
+        FVCCSimUIHelpers::ShowNotification(TEXT("Object Selection panel is not available."), true);
+        return false;
+    }
+    const TArray<FString> ActorLabels = Sel->GetEnabledTargetActorLabels();
     if (ActorLabels.IsEmpty())
     {
         FVCCSimUIHelpers::ShowNotification(TEXT("No enabled target actors. Add and check actors in the Object Selection panel."), true);
@@ -792,13 +402,17 @@ bool FVCCSimPanelTexEnhancer::StartGTMaterialExport(const FString& BaseDir)
         FVCCSimUIHelpers::ShowNotification(TEXT("No editor world available."), true);
         return false;
     }
+    if (Sel->IsGTExportInProgress())
+    {
+        FVCCSimUIHelpers::ShowNotification(TEXT("GT material export already in progress."), true);
+        return false;
+    }
 
     // GT materials are lighting-independent: if a previous capture of this scene exported
-    // the same target set / transforms / materials / resolution, copy it instead of
-    // re-running the (slow) glTF + texture export.
+    // the same target set / transforms / materials, copy it instead of re-running the
+    // (slow) glTF export.
     const FString Signature = FGTMaterialExporter::ComputeSignature(
-        World, ActorLabels, SceneName, GTTextureResolution,
-        bIncludeNearbyMeshes, NearbyRadius, bMergeNearbyMeshes);
+        World, ActorLabels, SceneName, GTTextureResolution);
 
     {
         const FString CapturesRoot = GetDatasetCapturesRoot();
@@ -828,66 +442,7 @@ bool FVCCSimPanelTexEnhancer::StartGTMaterialExport(const FString& BaseDir)
         bGTExportInProgress = false;
     });
 
-    TArray<FGTFoliageExportEntry> FoliageEntries;
-
-    if (bIncludeNearbyMeshes && NearbyRadius >= 0.f)
-    {
-        TMap<FString, AActor*> LabelMap;
-        for (TActorIterator<AActor> It(World); It; ++It)
-            if (AActor* A = *It) LabelMap.Add(A->GetActorLabel(), A);
-
-        TArray<AActor*> SeedActors;
-        for (const FString& Label : ActorLabels)
-        {
-            if (AActor** Found = LabelMap.Find(Label))
-                SeedActors.Add(*Found);
-        }
-
-        const int32 BeforeActors = ActorLabels.Num();
-        CollectNearbyTargets(World, SeedActors, NearbyRadius, ActorLabels, FoliageEntries);
-        const int32 AddedActors = ActorLabels.Num() - BeforeActors;
-        UE_LOG(LogTexEnhancerPanel, Log,
-            TEXT("Nearby expansion (Expand=%.1fcm): +%d static actors, +%d foliage instances"),
-            NearbyRadius, AddedActors, FoliageEntries.Num());
-
-        if (bMergeNearbyMeshes && (AddedActors > 0 || !FoliageEntries.IsEmpty()))
-        {
-            TArray<FString> NearbyStaticLabels;
-            NearbyStaticLabels.Reserve(AddedActors);
-            for (int32 i = BeforeActors; i < ActorLabels.Num(); ++i)
-                NearbyStaticLabels.Add(ActorLabels[i]);
-            ActorLabels.SetNum(BeforeActors);
-
-            TArray<FGTFoliageExportEntry> NearbyFoliage = MoveTemp(FoliageEntries);
-            FoliageEntries.Reset();
-
-            FGTFoliageExportEntry Merged;
-            if (BuildMergedNearbyEntry(World, NearbyStaticLabels, NearbyFoliage, Merged))
-            {
-                FoliageEntries.Add(MoveTemp(Merged));
-                UE_LOG(LogTexEnhancerPanel, Log, TEXT("Merged %d static + %d foliage into a single mesh"),
-                    NearbyStaticLabels.Num(), NearbyFoliage.Num());
-            }
-            else
-            {
-                UE_LOG(LogTexEnhancerPanel, Warning, TEXT("Merge nearby failed; falling back to individual export"));
-                for (const FString& L : NearbyStaticLabels) ActorLabels.Add(L);
-                FoliageEntries = MoveTemp(NearbyFoliage);
-            }
-        }
-    }
-
-    GTMaterialExporter->ExportMaterials(
-        ActorLabels,
-        FoliageEntries,
-        World,
-        BaseDir,
-        SceneName,
-        GTTextureResolution,
-        Signature,
-        OnComplete
-    );
-
+    Sel->RunGTMeshExport(BaseDir, SceneName, GTTextureResolution, Signature, OnComplete);
     return true;
 }
 
@@ -927,6 +482,28 @@ FReply FVCCSimPanelTexEnhancer::OnCaptureDatasetClicked()
     if (OutputDirectory.IsEmpty())
     {
         FVCCSimUIHelpers::ShowNotification(TEXT("Output directory is not set."), true);
+        return FReply::Handled();
+    }
+    if (!bOutputImages && !bOutputMesh)
+    {
+        FVCCSimUIHelpers::ShowNotification(TEXT("Enable Photos and/or Mesh output first."), true);
+        return FReply::Handled();
+    }
+
+    // Mesh-only run: skip the image capture session entirely and export gt_materials into a fresh
+    // capture directory (reuse/copy from a sibling capture still applies via the signature check).
+    if (!bOutputImages)
+    {
+        const FString MeshOnlyDir = MakeNextCaptureDirectory();
+        if (MeshOnlyDir.IsEmpty())
+        {
+            FVCCSimUIHelpers::ShowNotification(TEXT("Could not allocate a capture directory."), true);
+            return FReply::Handled();
+        }
+        if (!StartGTMaterialExport(MeshOnlyDir / TEXT("gt_materials")))
+        {
+            UE_LOG(LogTexEnhancerPanel, Warning, TEXT("Mesh-only gt_materials export could not start"));
+        }
         return FReply::Handled();
     }
 
@@ -998,6 +575,12 @@ void FVCCSimPanelTexEnhancer::OnDatasetCaptureFinished(bool bSuccess, FString Ca
     UE_LOG(LogTexEnhancerPanel, Log, TEXT("Dataset capture complete: %s"), *CaptureDirectory);
     FVCCSimUIHelpers::ShowNotification(
         FString::Printf(TEXT("Dataset capture complete: %s"), *CaptureDirectory), false);
+
+    if (!bOutputMesh)
+    {
+        UE_LOG(LogTexEnhancerPanel, Log, TEXT("Mesh output disabled, gt_materials export skipped"));
+        return;
+    }
 
     TSharedPtr<FVCCSimPanelSelection> Sel = SelectionManager.Pin();
     if (!Sel.IsValid() || !Sel->HasEnabledTargetActors())
@@ -1379,12 +962,11 @@ void FVCCSimPanelTexEnhancer::SavePaths()
     Config.SceneName             = SceneName;
     Config.TexEnhancerScriptPath = TexEnhancerScriptPath;
     Config.EstimatedMaterialsDir = EstimatedMaterialsDir;
-    Config.bIncludeNearbyMeshes   = bIncludeNearbyMeshes;
-    Config.bMergeNearbyMeshes     = bMergeNearbyMeshes;
-    Config.NearbyRadius           = NearbyRadius;
 
     Config.GTTextureResolution = GTTextureResolution;
     Config.DayCycleSpeed       = DayCycleSpeed;
+    Config.bOutputImages       = bOutputImages;
+    Config.bOutputMesh         = bOutputMesh;
 
     Config.SetAElevation.Append(SetAElevation, MaxLightingEntries);
     Config.SetAAzimuth.Append(SetAAzimuth, MaxLightingEntries);
@@ -1412,11 +994,8 @@ void FVCCSimPanelTexEnhancer::LoadPaths()
     if (!Config.SceneName.IsEmpty())             SceneName             = Config.SceneName;
     if (!Config.TexEnhancerScriptPath.IsEmpty()) TexEnhancerScriptPath = Config.TexEnhancerScriptPath;
     if (!Config.EstimatedMaterialsDir.IsEmpty()) EstimatedMaterialsDir = Config.EstimatedMaterialsDir;
-
-    bIncludeNearbyMeshes = Config.bIncludeNearbyMeshes;
-    bMergeNearbyMeshes   = Config.bMergeNearbyMeshes;
-    NearbyRadius         = Config.NearbyRadius;
-    NearbyRadiusValue    = NearbyRadius;
+    bOutputImages = Config.bOutputImages;
+    bOutputMesh   = Config.bOutputMesh;
 
     LoadParamsFromConfig();
 }

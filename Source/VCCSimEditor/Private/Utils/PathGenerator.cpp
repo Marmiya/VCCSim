@@ -109,6 +109,44 @@ namespace
         return OBB;
     }
 
+    // Vertical OBB of a SINGLE primitive component, oriented to the component's own yaw. Used to test
+    // orbit cameras against each neighbour component's box rather than a whole-building bounding box.
+    FVerticalOBB BuildOBBForComponent(const UPrimitiveComponent* P)
+    {
+        FVerticalOBB OBB;
+        if (!P) return OBB;
+        const FBox LB = P->CalcBounds(FTransform::Identity).GetBox();
+        if (!LB.IsValid) return OBB;
+
+        const double Yaw = FMath::DegreesToRadians(P->GetComponentRotation().Yaw);
+        const FVector2D AxisX(FMath::Cos(Yaw), FMath::Sin(Yaw));
+        const FVector2D AxisY(-AxisX.Y, AxisX.X);
+        const FTransform Xf = P->GetComponentTransform();
+        const FVector Mn = LB.Min, Mx = LB.Max;
+        const FVector LC[8] = {
+            {Mn.X,Mn.Y,Mn.Z},{Mx.X,Mn.Y,Mn.Z},{Mn.X,Mx.Y,Mn.Z},{Mx.X,Mx.Y,Mn.Z},
+            {Mn.X,Mn.Y,Mx.Z},{Mx.X,Mn.Y,Mx.Z},{Mn.X,Mx.Y,Mx.Z},{Mx.X,Mx.Y,Mx.Z} };
+
+        double MinU = TNumericLimits<double>::Max(), MaxU = TNumericLimits<double>::Lowest();
+        double MinV = MinU, MaxV = MaxU, MinZ = MinU, MaxZ = MaxU;
+        for (const FVector& L : LC)
+        {
+            const FVector W = Xf.TransformPosition(L);
+            const double U = W.X * AxisX.X + W.Y * AxisX.Y;
+            const double V = W.X * AxisY.X + W.Y * AxisY.Y;
+            MinU = FMath::Min(MinU, U); MaxU = FMath::Max(MaxU, U);
+            MinV = FMath::Min(MinV, V); MaxV = FMath::Max(MaxV, V);
+            MinZ = FMath::Min(MinZ, (double)W.Z); MaxZ = FMath::Max(MaxZ, (double)W.Z);
+        }
+        const double CU = 0.5 * (MinU + MaxU), CV = 0.5 * (MinV + MaxV);
+        OBB.Center = FVector(CU * AxisX.X + CV * AxisY.X, CU * AxisX.Y + CV * AxisY.Y, 0.5 * (MinZ + MaxZ));
+        OBB.AxisX = AxisX;
+        OBB.HalfXY = FVector2D(0.5 * (MaxU - MinU), 0.5 * (MaxV - MinV));
+        OBB.MinZ = MinZ; OBB.MaxZ = MaxZ;
+        OBB.bValid = true;
+        return OBB;
+    }
+
     // Do two vertical OBBs come within Gap of touching? 2D separating-axis test on the four box
     // edge normals, plus a Z-range overlap check.
     bool OBBOverlapXY(const FVerticalOBB& A, const FVerticalOBB& B, double Gap)
@@ -129,6 +167,41 @@ namespace
             if (dc > rA + rB + Gap) return false;
         }
         return true;
+    }
+
+    // 2D convex hull (Andrew's monotone chain), returned in counter-clockwise order. Used to turn a
+    // building's cross-section corner cloud at a given height into a stable footprint polygon.
+    TArray<FVector2D> BuildFootprintHull(TArray<FVector2D> Pts)
+    {
+        TArray<FVector2D> Hull;
+        if (Pts.Num() < 3)
+        {
+            return Hull;
+        }
+        Pts.Sort([](const FVector2D& A, const FVector2D& B)
+        {
+            return A.X < B.X || (A.X == B.X && A.Y < B.Y);
+        });
+        auto Cross = [](const FVector2D& O, const FVector2D& A, const FVector2D& B)
+        {
+            return (A.X - O.X) * (B.Y - O.Y) - (A.Y - O.Y) * (B.X - O.X);
+        };
+        const int32 N = Pts.Num();
+        TArray<FVector2D> H;
+        H.SetNum(2 * N);
+        int32 k = 0;
+        for (int32 i = 0; i < N; ++i)
+        {
+            while (k >= 2 && Cross(H[k - 2], H[k - 1], Pts[i]) <= 0.0) --k;
+            H[k++] = Pts[i];
+        }
+        for (int32 i = N - 2, t = k + 1; i >= 0; --i)
+        {
+            while (k >= t && Cross(H[k - 2], H[k - 1], Pts[i]) <= 0.0) --k;
+            H[k++] = Pts[i];
+        }
+        H.SetNum(FMath::Max(k - 1, 0));
+        return H;
     }
 }
 
@@ -300,6 +373,33 @@ namespace
             }
             return Best > -FLT_MAX ? Best : FallbackZ;
         }
+
+        // Fraction of a ground footprint rectangle that overlaps occupied (mesh) cells. The rectangle
+        // is centred at (Cx,Cy), oriented so its "along" axis points along Yaw, with the given half
+        // sizes. Samples a small NxN grid. Used to cull survey poses aimed mostly at empty background:
+        // outside the scene's real geometry the cells are unoccupied, so the fraction drops toward 0.
+        float OccupiedFraction(float Cx, float Cy, float Yaw, float HalfAlong, float HalfAcross) const
+        {
+            if (NumX <= 0 || NumY <= 0) return 0.f;
+            const float C = FMath::Cos(Yaw), S = FMath::Sin(Yaw);
+            const int32 N = 5;
+            int32 Total = 0, Occ = 0;
+            for (int32 a = 0; a < N; ++a)
+            {
+                const float U = ((a + 0.5f) / N * 2.f - 1.f) * HalfAlong;
+                for (int32 b = 0; b < N; ++b)
+                {
+                    const float V = ((b + 0.5f) / N * 2.f - 1.f) * HalfAcross;
+                    const float X = Cx + U * C - V * S;
+                    const float Y = Cy + U * S + V * C;
+                    const int32 cx = FMath::FloorToInt((X - Origin.X) / CellSize);
+                    const int32 cy = FMath::FloorToInt((Y - Origin.Y) / CellSize);
+                    ++Total;
+                    if (cx >= 0 && cx < NumX && cy >= 0 && cy < NumY && Occupied[cy * NumX + cx] != 0) ++Occ;
+                }
+            }
+            return Total > 0 ? (float)Occ / (float)Total : 0.f;
+        }
     };
 
     // One downward ray per cell, penetrating non-targets, records the topmost TARGET surface beneath
@@ -450,15 +550,26 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
     };
     TArray<FBuildingRings> AllBuildings;
 
-    const int32 NumProbes = 360;
     FCollisionQueryParams QueryParams;
     QueryParams.bTraceComplex = true;
 
-    // Phase 1 (game thread): facade surface probing — ONLY when side orbit is enabled. Each building
-    // is orbited individually so inner facades facing the gaps get their own ring of cameras; the
-    // other selected buildings act as occluders that drop cameras jammed in tight gaps.
+    // Phase 1 (game thread): build each building's per-height footprint polygon from its component
+    // boxes and offset it outward by Margin into orbit rings — ONLY when side orbit is enabled. Each
+    // building is orbited individually; other selected buildings drop cameras that fall inside them.
     if (Params.bSideOrbit)
     {
+        // A camera that lands inside ANOTHER selected building is meaningless. Test each orbit
+        // position against every OTHER building's per-COMPONENT oriented boxes (not the coarse merged
+        // building box) and drop it. The raised oblique rings copy this mask, inheriting the rejection.
+        auto PointInVerticalOBB = [](const FVerticalOBB& O, const FVector& P) -> bool
+        {
+            if (!O.bValid || P.Z < O.MinZ || P.Z > O.MaxZ) return false;
+            const FVector2D D(P.X - O.Center.X, P.Y - O.Center.Y);
+            const FVector2D AxisY(-O.AxisX.Y, O.AxisX.X);
+            return FMath::Abs(FVector2D::DotProduct(D, O.AxisX)) <= O.HalfXY.X
+                && FMath::Abs(FVector2D::DotProduct(D, AxisY)) <= O.HalfXY.Y;
+        };
+
         AllBuildings.Reserve(Params.Buildings.Num());
         for (int32 BIdx = 0; BIdx < Params.Buildings.Num(); ++BIdx)
         {
@@ -467,6 +578,26 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
             {
                 continue;
             }
+
+            TArray<FVerticalOBB> OtherCompOBBs;
+            for (int32 OIdx = 0; OIdx < Params.Buildings.Num(); ++OIdx)
+            {
+                if (OIdx == BIdx) continue;
+                for (const TWeakObjectPtr<AActor>& WA : Params.Buildings[OIdx].Actors)
+                {
+                    AActor* A = WA.Get();
+                    if (!A) continue;
+                    TArray<UPrimitiveComponent*> Prims;
+                    A->GetComponents<UPrimitiveComponent>(Prims);
+                    for (UPrimitiveComponent* P : Prims)
+                    {
+                        if (!P || !P->IsRegistered()) continue;
+                        FVerticalOBB CompOBB = BuildOBBForComponent(P);
+                        if (CompOBB.bValid) OtherCompOBBs.Add(CompOBB);
+                    }
+                }
+            }
+
             TSet<AActor*> TargetActors;
             for (const TWeakObjectPtr<AActor>& WA : Building.Actors)
             {
@@ -474,16 +605,61 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
                     TargetActors.Add(A);
             }
 
-            // Frame the orbit by the oriented box (tighter for rotated buildings); the radial probe
-            // below still follows the real surface. Fall back to the AABB if the OBB is invalid.
+            // Cross-section source: each member primitive contributes its world-space box (8 corners
+            // + a Z-range). At each ring height we hull the corners of the components spanning that
+            // height into a stable footprint polygon — no flaky per-ray surface probing.
+            struct FCompBox { TArray<FVector2D> CornersXY; float MinZ; float MaxZ; };
+            TArray<FCompBox> CompBoxes;
+            for (const TWeakObjectPtr<AActor>& WA : Building.Actors)
+            {
+                AActor* A = WA.Get();
+                if (!A) continue;
+                TArray<UPrimitiveComponent*> Prims;
+                A->GetComponents<UPrimitiveComponent>(Prims);
+                for (UPrimitiveComponent* P : Prims)
+                {
+                    if (!P || !P->IsRegistered()) continue;
+                    const FBox LB = P->CalcBounds(FTransform::Identity).GetBox();
+                    if (!LB.IsValid) continue;
+                    const FTransform Xf = P->GetComponentTransform();
+                    const FVector Mn = LB.Min, Mx = LB.Max;
+                    const FVector LC[8] = {
+                        {Mn.X,Mn.Y,Mn.Z},{Mx.X,Mn.Y,Mn.Z},{Mn.X,Mx.Y,Mn.Z},{Mx.X,Mx.Y,Mn.Z},
+                        {Mn.X,Mn.Y,Mx.Z},{Mx.X,Mn.Y,Mx.Z},{Mn.X,Mx.Y,Mx.Z},{Mx.X,Mx.Y,Mx.Z} };
+                    FCompBox CB;
+                    CB.MinZ = FLT_MAX; CB.MaxZ = -FLT_MAX;
+                    for (const FVector& L : LC)
+                    {
+                        const FVector W = Xf.TransformPosition(L);
+                        CB.CornersXY.Add(FVector2D(W.X, W.Y));
+                        CB.MinZ = FMath::Min(CB.MinZ, (float)W.Z);
+                        CB.MaxZ = FMath::Max(CB.MaxZ, (float)W.Z);
+                    }
+                    CompBoxes.Add(MoveTemp(CB));
+                }
+            }
+
             const bool bUseOBB = Building.OBB.bValid;
-            const FVector BoxCenter = bUseOBB ? Building.OBB.Center : Building.Bounds.GetCenter();
-            const float MaxHalfXY = bUseOBB
-                ? (float)FMath::Max(Building.OBB.HalfXY.X, Building.OBB.HalfXY.Y)
-                : (float)FMath::Max(Building.Bounds.GetExtent().X, Building.Bounds.GetExtent().Y);
-            const FVector BoxExtent(MaxHalfXY, MaxHalfXY, 0.f);
-            const float BoxMinZ = (bUseOBB ? (float)Building.OBB.MinZ : (float)Building.Bounds.Min.Z) + Params.StartHeight;
             const float BoxMaxZ = bUseOBB ? (float)Building.OBB.MaxZ : (float)Building.Bounds.Max.Z;
+
+            // StartHeight is measured above the LOCAL ground, not an absolute Z: ground heights vary
+            // across the scene, so trace straight down through this building to the terrain beneath it
+            // and start the lowest ring StartHeight above that. Falls back to the building base if no
+            // ground is hit (e.g. a building modelled without ground under it).
+            float GroundZ = bUseOBB ? (float)Building.OBB.MinZ : (float)Building.Bounds.Min.Z;
+            {
+                const FVector C = bUseOBB ? Building.OBB.Center : Building.Bounds.GetCenter();
+                FCollisionQueryParams GroundParams = QueryParams;
+                for (AActor* TA : TargetActors) GroundParams.AddIgnoredActor(TA);
+                FHitResult GroundHit;
+                if (Params.World->LineTraceSingleByChannel(
+                        GroundHit, FVector(C.X, C.Y, BoxMaxZ + 1000.f),
+                        FVector(C.X, C.Y, GroundZ - 100000.f), ECC_Visibility, GroundParams))
+                {
+                    GroundZ = (float)GroundHit.ImpactPoint.Z;
+                }
+            }
+            const float BoxMinZ = GroundZ + Params.StartHeight;
 
             const float StepH = FMath::Max(
                 2.f * Params.Margin * FMath::Tan(HFovRad * 0.5f) * FMath::Max(1.f - Params.HOverlap, 0.05f), 10.f);
@@ -495,7 +671,9 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
             const float BuildingH = FMath::Max(BoxMaxZ_Rings - BoxMinZ, 0.f);
             const int32 NumRings = FMath::Max(1, FMath::CeilToInt(BuildingH / StepV));
 
-            const float SearchRadius = (FMath::Max(BoxExtent.X, BoxExtent.Y) + Params.Margin) * 4.f + 2000.f;
+            // Sample the offset contour finer than StepH so Phase 2 can resample to StepH and the
+            // LOS / neighbour-OBB rejection has enough granularity.
+            const float ContourStep = FMath::Max(StepH * 0.5f, 50.f);
 
             FBuildingRings Rings;
             Rings.StepH = StepH;
@@ -507,128 +685,136 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
             {
                 const float T = (NumRings > 1) ? (float)Ring / (NumRings - 1) : 0.5f;
                 const float Z = BoxMinZ + T * BuildingH;
-                const FVector CenterAtZ(BoxCenter.X, BoxCenter.Y, Z);
 
-                TArray<float> SurfaceDistances;
-                SurfaceDistances.Reserve(NumProbes);
-
-                for (int32 a = 0; a < NumProbes; ++a)
+                // Footprint polygon at this height: convex hull of the corners of every component box
+                // spanning Z. Falls back to the building OBB rectangle if nothing spans Z.
+                TArray<FVector2D> Pts;
+                for (const FCompBox& CB : CompBoxes)
                 {
-                    const float AngleRad = (2.f * PI * a) / NumProbes;
-                    const FVector Dir(FMath::Cos(AngleRad), FMath::Sin(AngleRad), 0.f);
-                    const FVector TraceStart = CenterAtZ + Dir * SearchRadius;
-
-                    bool bFound = false;
-                    float HitDistFromCenter = 0.f;
-                    FVector HitPoint = FVector::ZeroVector;
-
-                    // World-level raycast from outside toward the building center, penetrating
-                    // every actor that is NOT this building until this building's surface is hit.
-                    {
-                        FCollisionQueryParams ProbeParams = QueryParams;
-                        int32 MaxPenetrations = 16;
-
-                        while (!bFound && MaxPenetrations-- > 0)
-                        {
-                            FHitResult Hit;
-                            if (!Params.World->LineTraceSingleByChannel(
-                                    Hit, TraceStart, CenterAtZ, ECC_Visibility, ProbeParams))
-                                break;
-
-                            AActor* HitActor = Hit.GetActor();
-                            if (!HitActor)
-                                break;
-
-                            if (TargetActors.Contains(HitActor))
-                            {
-                                HitPoint = Hit.ImpactPoint;
-                                bFound = true;
-                            }
-                            else
-                            {
-                                ProbeParams.AddIgnoredActor(HitActor);
-                            }
-                        }
-
-                        if (bFound)
-                        {
-                            HitDistFromCenter = FMath::Sqrt(
-                                FMath::Square(HitPoint.X - CenterAtZ.X) +
-                                FMath::Square(HitPoint.Y - CenterAtZ.Y));
-                        }
-                    }
-
-                    if (bFound)
-                    {
-                        SurfaceDistances.Add(HitDistFromCenter);
-                    }
-                    else
-                    {
-                        // Bounding box fallback based on angle: distance to the ray/AABB intersection.
-                        const float tX = FMath::Abs(Dir.X) > KINDA_SMALL_NUMBER ? BoxExtent.X / FMath::Abs(Dir.X) : FLT_MAX;
-                        const float tY = FMath::Abs(Dir.Y) > KINDA_SMALL_NUMBER ? BoxExtent.Y / FMath::Abs(Dir.Y) : FLT_MAX;
-                        SurfaceDistances.Add(FMath::Min(tX, tY));
-                    }
+                    if (Z >= CB.MinZ - 1.f && Z <= CB.MaxZ + 1.f)
+                        Pts.Append(CB.CornersXY);
+                }
+                if (Pts.Num() < 3 && bUseOBB)
+                {
+                    const FVerticalOBB& O = Building.OBB;
+                    const FVector2D AxX = O.AxisX;
+                    const FVector2D AxY(-AxX.Y, AxX.X);
+                    const FVector2D C2(O.Center.X, O.Center.Y);
+                    for (int32 sx = -1; sx <= 1; sx += 2)
+                        for (int32 sy = -1; sy <= 1; sy += 2)
+                            Pts.Add(C2 + AxX * ((float)sx * (float)O.HalfXY.X)
+                                       + AxY * ((float)sy * (float)O.HalfXY.Y));
                 }
 
-                // Circular median filter (window 5) over the radial distances: kills single-probe
-                // outliers from railings/protrusions before the orbit polygon is built.
-                TArray<float> FilteredDistances;
-                FilteredDistances.Reserve(NumProbes);
-                for (int32 a = 0; a < NumProbes; ++a)
+                const TArray<FVector2D> Hull = BuildFootprintHull(Pts);
+                const int32 K = Hull.Num();
+                if (K < 3)
                 {
-                    float Window[5];
-                    for (int32 k = -2; k <= 2; ++k)
-                    {
-                        Window[k + 2] = SurfaceDistances[(a + k + NumProbes) % NumProbes];
-                    }
-                    Algo::Sort(MakeArrayView(Window, 5));
-                    FilteredDistances.Add(Window[2]);
+                    Rings.RingOrbitPoints.Add(TArray<FVector>());
+                    Rings.RingSurfacePoints.Add(TArray<FVector>());
+                    Rings.RingValid.Add(TArray<bool>());
+                    continue;
                 }
 
+                FVector2D Centroid(0.f, 0.f);
+                for (const FVector2D& V : Hull) Centroid += V;
+                Centroid /= (float)K;
+
+                auto EdgeNormal = [&](int32 i) -> FVector2D
+                {
+                    const FVector2D EA = Hull[i];
+                    const FVector2D EB = Hull[(i + 1) % K];
+                    const FVector2D E = (EB - EA).GetSafeNormal();
+                    FVector2D Nrm(E.Y, -E.X);
+                    if (FVector2D::DotProduct(Nrm, (EA + EB) * 0.5f - Centroid) < 0.f) Nrm = -Nrm;
+                    return Nrm;
+                };
+
+                // Offset the footprint polygon OUTWARD by Margin along each edge's normal, walking it
+                // CCW. Per vertex: emit a Margin-radius corner arc (constant standoff round convex
+                // corners), then sample along the outgoing edge. Surface foot = the polygon point;
+                // orbit point = foot + outward normal * Margin, so a flat wall gives a straight orbit
+                // line at perpendicular distance Margin and the downstream look-at (orbit -> surface)
+                // faces the wall squarely. LOS + neighbour-OBB rejection drops occluded / embedded poses.
                 TArray<FVector> OrbitPoints;
                 TArray<FVector> SurfacePoints;
                 TArray<bool> Valid;
-                OrbitPoints.Reserve(NumProbes);
-                SurfacePoints.Reserve(NumProbes);
-                Valid.Reserve(NumProbes);
-                for (int32 a = 0; a < NumProbes; ++a)
+
+                auto Emit = [&](const FVector2D& FootXY, const FVector2D& Nrm)
                 {
-                    const float AngleRad = (2.f * PI * a) / NumProbes;
-                    const FVector Dir(FMath::Cos(AngleRad), FMath::Sin(AngleRad), 0.f);
-                    const float D = FilteredDistances[a];
-                    const FVector SurfacePt(
-                        CenterAtZ.X + Dir.X * D,
-                        CenterAtZ.Y + Dir.Y * D,
-                        Z);
+                    const FVector SurfacePt(FootXY.X, FootXY.Y, Z);
+                    const FVector OrbitPt(FootXY.X + Nrm.X * Params.Margin, FootXY.Y + Nrm.Y * Params.Margin, Z);
 
-                    const float OrbitDist = D + Params.Margin;
-                    const FVector OrbitPt(
-                        CenterAtZ.X + Dir.X * OrbitDist,
-                        CenterAtZ.Y + Dir.Y * OrbitDist,
-                        Z);
-
-                    // Validity: the facade must be visible from the camera. Trace from just off the
-                    // surface out to the orbit position, ignoring THIS building; any hit means a
-                    // neighbour (selected or not) or generic clutter sits in the gap between camera
-                    // and wall — or the camera would embed inside it. Such a pose is dropped rather
-                    // than squeezed in at a grazing angle. Phase 2 breaks the orbit arc at dropped
-                    // points so the path is never interpolated through the gap.
                     bool bValid = true;
                     {
                         FCollisionQueryParams LosParams = QueryParams;
                         for (AActor* TA : TargetActors) LosParams.AddIgnoredActor(TA);
                         FHitResult LosHit;
+                        const FVector LosStart(FootXY.X + Nrm.X * 2.f, FootXY.Y + Nrm.Y * 2.f, Z);
                         if (Params.World->LineTraceSingleByChannel(
-                                LosHit, SurfacePt + Dir * 2.f, OrbitPt, ECC_Visibility, LosParams))
+                                LosHit, LosStart, OrbitPt, ECC_Visibility, LosParams))
                         {
                             bValid = false;
+                        }
+                    }
+                    if (bValid)
+                    {
+                        for (const FVerticalOBB& O : OtherCompOBBs)
+                            if (PointInVerticalOBB(O, OrbitPt)) { bValid = false; break; }
+                    }
+
+                    // Underground guard: BoxMinZ is set from the ground under the building CENTRE, but
+                    // a camera stands Margin away over possibly higher terrain (a slope), so its ring
+                    // height can fall below the LOCAL ground. Trace straight down at the camera's own
+                    // XY (ignoring this building) to the local surface and drop the pose if the camera
+                    // is not clearly above it.
+                    if (bValid)
+                    {
+                        FCollisionQueryParams GroundParams = QueryParams;
+                        for (AActor* TA : TargetActors) GroundParams.AddIgnoredActor(TA);
+                        FHitResult GroundHit;
+                        if (Params.World->LineTraceSingleByChannel(
+                                GroundHit, FVector(OrbitPt.X, OrbitPt.Y, RegionBox.Max.Z + 1000.f),
+                                FVector(OrbitPt.X, OrbitPt.Y, RegionBox.Min.Z - 100000.f), ECC_Visibility, GroundParams))
+                        {
+                            const float GroundClearance = FMath::Clamp(Params.StartHeight * 0.5f, 50.f, 300.f);
+                            if (OrbitPt.Z < (float)GroundHit.ImpactPoint.Z + GroundClearance)
+                            {
+                                bValid = false;
+                            }
                         }
                     }
 
                     SurfacePoints.Add(SurfacePt);
                     OrbitPoints.Add(OrbitPt);
                     Valid.Add(bValid);
+                };
+
+                for (int32 i = 0; i < K; ++i)
+                {
+                    const FVector2D A = Hull[i];
+                    const FVector2D B = Hull[(i + 1) % K];
+                    const FVector2D Ncur = EdgeNormal(i);
+                    const FVector2D Nprev = EdgeNormal((i - 1 + K) % K);
+
+                    const float Ang0 = FMath::Atan2(Nprev.Y, Nprev.X);
+                    const float DAng = FMath::FindDeltaAngleRadians(Ang0, FMath::Atan2(Ncur.Y, Ncur.X));
+                    if (DAng > KINDA_SMALL_NUMBER)
+                    {
+                        const int32 Steps = FMath::Max(1, FMath::CeilToInt((DAng * Params.Margin) / ContourStep));
+                        for (int32 s = 1; s < Steps; ++s)
+                        {
+                            const float Ang = Ang0 + DAng * ((float)s / Steps);
+                            Emit(A, FVector2D(FMath::Cos(Ang), FMath::Sin(Ang)));
+                        }
+                    }
+
+                    const float EdgeLen = (B - A).Size();
+                    const int32 ES = FMath::Max(1, FMath::CeilToInt(EdgeLen / ContourStep));
+                    for (int32 s = 0; s < ES; ++s)
+                    {
+                        Emit(A + (B - A) * ((float)s / ES), Ncur);
+                    }
                 }
 
                 Rings.RingOrbitPoints.Add(MoveTemp(OrbitPoints));
@@ -655,7 +841,7 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
          bSideOrbit = Params.bSideOrbit,
          NadirAltitude = Params.NadirAltitude,
          NadirTiltAngle = Params.NadirTiltAngle,
-         HOverlap = Params.HOverlap,
+         SurveyHOverlap = Params.SurveyHOverlap,
          RegionBox]() mutable
         {
             FGeneratedPath GeneratedPath;
@@ -799,8 +985,8 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
             //   - along the lean axis: the VFOV footprint trapezoid alt*(tan(t+vf/2)-tan(t-vf/2));
             //   - across it: the HFOV footprint at the cone edge nearest vertical (its narrowest point,
             //     so the overlap is guaranteed along the whole strip).
-            // BOTH directions use H-Overlap: a flat survey grid has no vertical stacking, so V-Overlap
-            // (the facade ring-to-ring overlap) does not apply here.
+            // BOTH directions use the dedicated Survey overlap (independent of the facade orbit's
+            // H-Overlap): a flat survey grid has no vertical stacking, so V-Overlap does not apply.
             // At Tilt == 0 this reduces exactly to the plain nadir footprints. Every waypoint sits
             // NadirAltitude above the local surface, so AGL stays constant. No culling — full box swept.
             if (bIncludeNadir)
@@ -843,11 +1029,21 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
                 {
                     float FAlong, FAcross;
                     TiltedFootprint(FMath::DegreesToRadians(Pass.TiltDeg), FAlong, FAcross);
-                    const float LeanStep = FMath::Max(FAlong  * FMath::Max(1.f - HOverlap, 0.05f), 10.f);
-                    const float PerpStep = FMath::Max(FAcross * FMath::Max(1.f - HOverlap, 0.05f), 10.f);
+                    const float LeanStep = FMath::Max(FAlong  * FMath::Max(1.f - SurveyHOverlap, 0.05f), 10.f);
+                    const float PerpStep = FMath::Max(FAcross * FMath::Max(1.f - SurveyHOverlap, 0.05f), 10.f);
                     const float StepX = Pass.bLeanAlongX ? LeanStep : PerpStep;
                     const float StepY = Pass.bLeanAlongX ? PerpStep : LeanStep;
                     const FRotator PoseRot(-(90.f - Pass.TiltDeg), Pass.Yaw, 0.f);
+
+                    // Cull poses aimed mostly at empty background (the scene isn't a clean rectangle, so
+                    // the region box overhangs into void at the edges/corners). The footprint on the
+                    // ground is centred a tilt-shift downrange of the camera and sized FAlong x FAcross;
+                    // if under 80% of it overlaps mesh (>20% empty), drop the pose.
+                    const float YawRad = FMath::DegreesToRadians(Pass.Yaw);
+                    const float TiltShift = NadirAltitude * FMath::Tan(FMath::DegreesToRadians(Pass.TiltDeg));
+                    const float ShiftX = TiltShift * FMath::Cos(YawRad);
+                    const float ShiftY = TiltShift * FMath::Sin(YawRad);
+                    const float MinMeshFraction = 0.8f;
 
                     int32 StripIdx = 0;
                     for (float Y = MinY; Y <= MaxY + KINDA_SMALL_NUMBER; Y += StepY, ++StripIdx)
@@ -855,6 +1051,10 @@ void FPathGenerator::GenerateConformalOrbit(const FConformalOrbitParams& Params,
                         TArray<FVector> StripPos;
                         for (float X = MinX; X <= MaxX + KINDA_SMALL_NUMBER; X += StepX)
                         {
+                            const float MeshFraction = Grid.OccupiedFraction(
+                                X + ShiftX, Y + ShiftY, YawRad, FAlong * 0.5f, FAcross * 0.5f);
+                            if (MeshFraction < MinMeshFraction) continue;
+
                             const float SurfZ = Grid.HeightAt(X, Y);
                             StripPos.Add(FVector(X, Y, SurfZ + NadirAltitude));
                         }

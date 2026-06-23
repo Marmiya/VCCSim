@@ -105,11 +105,10 @@ void FVCCSimConfigManager::SaveToJsonFile()
     TexEnhancerConfigJson->SetStringField(TEXT("SceneName"), TexEnhancerConfig.SceneName);
     TexEnhancerConfigJson->SetStringField(TEXT("TexEnhancerScriptPath"), TexEnhancerConfig.TexEnhancerScriptPath);
     TexEnhancerConfigJson->SetStringField(TEXT("EstimatedMaterialsDir"), TexEnhancerConfig.EstimatedMaterialsDir);
-    TexEnhancerConfigJson->SetBoolField(TEXT("IncludeNearbyMeshes"),     TexEnhancerConfig.bIncludeNearbyMeshes);
-    TexEnhancerConfigJson->SetBoolField(TEXT("MergeNearbyMeshes"),       TexEnhancerConfig.bMergeNearbyMeshes);
-    TexEnhancerConfigJson->SetNumberField(TEXT("NearbyRadius"),          TexEnhancerConfig.NearbyRadius);
     TexEnhancerConfigJson->SetNumberField(TEXT("GTTextureResolution"),   TexEnhancerConfig.GTTextureResolution);
     TexEnhancerConfigJson->SetNumberField(TEXT("DayCycleSpeed"),         TexEnhancerConfig.DayCycleSpeed);
+    TexEnhancerConfigJson->SetBoolField(TEXT("OutputImages"),            TexEnhancerConfig.bOutputImages);
+    TexEnhancerConfigJson->SetBoolField(TEXT("OutputMesh"),              TexEnhancerConfig.bOutputMesh);
 
     {
         auto MakeFloatArrayJson = [](const TArray<float>& Values)
@@ -144,9 +143,9 @@ void FVCCSimConfigManager::SaveToJsonFile()
         PathCaptureJson->SetNumberField(TEXT("CameraHFOV"),          PathImageCaptureConfig.CameraHFOV);
         PathCaptureJson->SetNumberField(TEXT("HOverlap"),            PathImageCaptureConfig.HOverlap);
         PathCaptureJson->SetNumberField(TEXT("VOverlap"),            PathImageCaptureConfig.VOverlap);
+        PathCaptureJson->SetNumberField(TEXT("SurveyHOverlap"),      PathImageCaptureConfig.SurveyHOverlap);
         PathCaptureJson->SetNumberField(TEXT("NadirAltitude"),       PathImageCaptureConfig.NadirAltitude);
         PathCaptureJson->SetNumberField(TEXT("NadirTiltAngle"),      PathImageCaptureConfig.NadirTiltAngle);
-        PathCaptureJson->SetBoolField(TEXT("IncludeNadir"),          PathImageCaptureConfig.bIncludeNadir);
         PathCaptureJson->SetBoolField(TEXT("IncludeOblique"),        PathImageCaptureConfig.bIncludeOblique);
         PathCaptureJson->SetNumberField(TEXT("NumObliqueRings"),     PathImageCaptureConfig.NumObliqueRings);
         PathCaptureJson->SetBoolField(TEXT("SideOrbit"),             PathImageCaptureConfig.bSideOrbit);
@@ -177,7 +176,6 @@ void FVCCSimConfigManager::SaveToJsonFile()
         BoundsJson->SetNumberField(TEXT("MinBuildingHeight"), TargetActorsConfig.MinBuildingHeight);
         BoundsJson->SetNumberField(TEXT("MinBuildingFootprint"), TargetActorsConfig.MinBuildingFootprint);
         BoundsJson->SetNumberField(TEXT("ConnectGap"), TargetActorsConfig.ConnectGap);
-        BoundsJson->SetBoolField(TEXT("ExportContext"), TargetActorsConfig.bExportContext);
         RootObject->SetObjectField(TEXT("BoundsSelect"), BoundsJson);
     }
 
@@ -264,7 +262,6 @@ bool FVCCSimConfigManager::LoadFromJsonFile()
         (*TexEnhancerConfigJson)->TryGetStringField(TEXT("EstimatedMaterialsDir"), TexEnhancerConfig.EstimatedMaterialsDir);
         {
             double V = 0.0;
-            if ((*TexEnhancerConfigJson)->TryGetNumberField(TEXT("NearbyRadius"), V))         TexEnhancerConfig.NearbyRadius        = (float)V;
             if ((*TexEnhancerConfigJson)->TryGetNumberField(TEXT("GTTextureResolution"), V))  TexEnhancerConfig.GTTextureResolution = (int32)V;
             if ((*TexEnhancerConfigJson)->TryGetNumberField(TEXT("DayCycleSpeed"), V))        TexEnhancerConfig.DayCycleSpeed       = (float)V;
             if ((*TexEnhancerConfigJson)->TryGetNumberField(TEXT("SunCalcLatitude"), V))      TexEnhancerConfig.SunCalcLatitude     = (float)V;
@@ -277,8 +274,8 @@ bool FVCCSimConfigManager::LoadFromJsonFile()
             if ((*TexEnhancerConfigJson)->TryGetNumberField(TEXT("SunCalcMinute"), V))        TexEnhancerConfig.SunCalcMinute       = (int32)V;
             if ((*TexEnhancerConfigJson)->TryGetNumberField(TEXT("SunCalcFillSlot"), V))      TexEnhancerConfig.SunCalcFillSlot     = (int32)V;
         }
-        (*TexEnhancerConfigJson)->TryGetBoolField(TEXT("IncludeNearbyMeshes"), TexEnhancerConfig.bIncludeNearbyMeshes);
-        (*TexEnhancerConfigJson)->TryGetBoolField(TEXT("MergeNearbyMeshes"),   TexEnhancerConfig.bMergeNearbyMeshes);
+        (*TexEnhancerConfigJson)->TryGetBoolField(TEXT("OutputImages"), TexEnhancerConfig.bOutputImages);
+        (*TexEnhancerConfigJson)->TryGetBoolField(TEXT("OutputMesh"),   TexEnhancerConfig.bOutputMesh);
 
         {
             auto LoadFloatArray = [&TexEnhancerConfigJson](const TCHAR* Field, TArray<float>& Out)
@@ -310,11 +307,11 @@ bool FVCCSimConfigManager::LoadFromJsonFile()
         if ((*PathCaptureJson)->TryGetNumberField(TEXT("CameraHFOV"), V))          PathImageCaptureConfig.CameraHFOV          = (float)V;
         if ((*PathCaptureJson)->TryGetNumberField(TEXT("HOverlap"), V))            PathImageCaptureConfig.HOverlap            = (float)V;
         if ((*PathCaptureJson)->TryGetNumberField(TEXT("VOverlap"), V))            PathImageCaptureConfig.VOverlap            = (float)V;
+        if ((*PathCaptureJson)->TryGetNumberField(TEXT("SurveyHOverlap"), V))      PathImageCaptureConfig.SurveyHOverlap      = (float)V;
         if ((*PathCaptureJson)->TryGetNumberField(TEXT("NadirAltitude"), V))       PathImageCaptureConfig.NadirAltitude       = (float)V;
         if ((*PathCaptureJson)->TryGetNumberField(TEXT("NadirTiltAngle"), V))      PathImageCaptureConfig.NadirTiltAngle      = (float)V;
         if ((*PathCaptureJson)->TryGetNumberField(TEXT("NumObliqueRings"), V))     PathImageCaptureConfig.NumObliqueRings     = (int32)V;
         if ((*PathCaptureJson)->TryGetNumberField(TEXT("CaptureTickInterval"), V)) PathImageCaptureConfig.CaptureTickInterval = (float)V;
-        (*PathCaptureJson)->TryGetBoolField(TEXT("IncludeNadir"), PathImageCaptureConfig.bIncludeNadir);
         (*PathCaptureJson)->TryGetBoolField(TEXT("IncludeOblique"), PathImageCaptureConfig.bIncludeOblique);
         (*PathCaptureJson)->TryGetBoolField(TEXT("SideOrbit"), PathImageCaptureConfig.bSideOrbit);
     }
@@ -355,7 +352,6 @@ bool FVCCSimConfigManager::LoadFromJsonFile()
             (*BoundsJson)->TryGetNumberField(TEXT("MinBuildingHeight"), TargetActorsConfig.MinBuildingHeight);
             (*BoundsJson)->TryGetNumberField(TEXT("MinBuildingFootprint"), TargetActorsConfig.MinBuildingFootprint);
             (*BoundsJson)->TryGetNumberField(TEXT("ConnectGap"), TargetActorsConfig.ConnectGap);
-            (*BoundsJson)->TryGetBoolField(TEXT("ExportContext"), TargetActorsConfig.bExportContext);
         }
     }
 

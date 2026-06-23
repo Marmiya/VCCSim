@@ -63,12 +63,12 @@ public:
         FString SceneName = TEXT("Scene_A");
         FString TexEnhancerScriptPath;
         FString EstimatedMaterialsDir;
-        bool    bIncludeNearbyMeshes = false;
-        bool    bMergeNearbyMeshes   = false;
-        float   NearbyRadius         = 500.f;
 
         int32   GTTextureResolution  = 2048;
         float   DayCycleSpeed        = 10.f;
+
+        bool    bOutputImages = true;
+        bool    bOutputMesh   = true;
 
         TArray<float> SetAElevation;
         TArray<float> SetAAzimuth;
@@ -96,7 +96,6 @@ public:
         float   MinBuildingHeight = 300.0f;
         float   MinBuildingFootprint = 300.0f;
         float   ConnectGap = 15.0f;
-        bool    bExportContext = true;
     };
 
     // PathImageCapture orbit & capture parameters
@@ -107,9 +106,9 @@ public:
         float CameraHFOV          = 90.f;
         float HOverlap            = 0.6f;
         float VOverlap            = 0.6f;
+        float SurveyHOverlap      = 0.7f;
         float NadirAltitude       = 500.f;
         float NadirTiltAngle      = 45.f;
-        bool  bIncludeNadir       = true;
         bool  bIncludeOblique     = false;
         int32 NumObliqueRings     = 2;
         bool  bSideOrbit          = false;

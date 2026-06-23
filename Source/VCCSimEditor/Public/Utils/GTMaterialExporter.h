@@ -49,14 +49,6 @@ public:
         FSimpleDelegate OnComplete
     );
 
-    /** Merge every mesh actor whose AABB intersects RegionBox into one "region_targets" mesh
-     *  (buildings — keeps is_glass per slot) and, if bIncludeContext, one "region_context" mesh
-     *  (clutter), exporting both as geometry-only glTF. Reuses ExportMaterials. */
-    void ExportMergedRegion(
-        UWorld* World, const FBox& RegionBox, bool bIncludeContext,
-        const FString& BaseDir, const FString& SceneName, int32 TextureResolution,
-        const FString& Signature, FSimpleDelegate OnComplete);
-
 public:
     /** True if the actor owns at least one StaticMeshComponent (incl. ISM/HISM) with a mesh and materials. */
     static bool HasExportableMeshMaterials(const AActor* Actor);
@@ -67,15 +59,9 @@ public:
     static bool HasExportableMeshGeometry(const AActor* Actor);
 
     /** Build a transient (RF_Transient) UStaticMesh from a DynamicMeshComponent, mirroring its
-     *  material slots, so dynamic-mesh geometry can flow through the static-mesh merge/export.
-     *  Returns nullptr if the component is empty or conversion fails. */
+     *  material slots, so dynamic-mesh geometry (e.g. ADynamicMeshActor roofs) can flow through the
+     *  per-actor static-mesh export. Returns nullptr if the component is empty or conversion fails. */
     static UStaticMesh* BuildStaticMeshFromDynamic(UDynamicMeshComponent* DMC);
-
-    /** Merge primitive components into one transient UStaticMesh (geometry only, material sections
-     *  preserved) wrapped as an export entry. False if nothing merged. */
-    static bool MergeComponentsToEntry(
-        UWorld* World, const TArray<class UPrimitiveComponent*>& Comps, const FString& Label,
-        FGTFoliageExportEntry& OutEntry);
 
     /** True for our own capture / visualization infrastructure (FlashPawn / LookAtPath) — never a
      *  scene target. Buildings vs ground/clutter is now a geometric decision (FPathGenerator). */
@@ -83,20 +69,17 @@ public:
 
     /**
      * Hash of everything that determines the GT export output — the enabled target
-     * actors (labels, transforms, meshes, materials), texture resolution, scene name
-     * and nearby-mesh config. GT materials are lighting-independent, so two captures
-     * with the same signature produce identical gt_materials and the export can be
-     * reused. Note: keyed on material *asset paths*, not content — an in-place edit to
-     * a material asset will not change the signature.
+     * actors (labels, transforms, meshes, materials), texture resolution and scene name.
+     * GT materials are lighting-independent, so two captures with the same signature
+     * produce identical gt_materials and the export can be reused. Note: keyed on
+     * material *asset paths*, not content — an in-place edit to a material asset will
+     * not change the signature.
      */
     static FString ComputeSignature(
         UWorld* World,
         const TArray<FString>& SeedLabels,
         const FString& SceneName,
-        int32 TextureResolution,
-        bool bIncludeNearby,
-        float NearbyRadius,
-        bool bMergeNearby);
+        int32 TextureResolution);
 
     /**
      * Searches sibling capture_* dirs under CapturesRoot for a complete gt_materials

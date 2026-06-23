@@ -91,6 +91,10 @@ public:
         float HOverlap = 0.6f;
         float VOverlap = 0.6f;
 
+        /** Forward/side overlap for the top-down zigzag region survey ONLY (independent of the facade
+         *  orbit's HOverlap). Drives the survey strip spacing. */
+        float SurveyHOverlap = 0.7f;
+
         /** Max yaw change between consecutive ring poses; larger turns get interpolated poses inserted. */
         float CornerYawStepDeg = 15.0f;
 

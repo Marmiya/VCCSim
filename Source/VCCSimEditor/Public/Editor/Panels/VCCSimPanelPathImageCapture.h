@@ -128,6 +128,7 @@ private:
     TSharedPtr<SNumericEntryBox<float>> OrbitCameraHFOVSpinBox;
     TSharedPtr<SNumericEntryBox<float>> OrbitHOverlapSpinBox;
     TSharedPtr<SNumericEntryBox<float>> OrbitVOverlapSpinBox;
+    TSharedPtr<SNumericEntryBox<float>> OrbitSurveyOverlapSpinBox;
     TSharedPtr<SNumericEntryBox<float>> OrbitNadirAltSpinBox;
     TSharedPtr<SNumericEntryBox<float>> OrbitNadirTiltSpinBox;
     TSharedPtr<SNumericEntryBox<int32>> OrbitObliqueRingsSpinBox;
@@ -141,9 +142,9 @@ private:
     float OrbitCameraHFOV = 90.0f;
     float OrbitHOverlap = 0.60f;
     float OrbitVOverlap = 0.60f;
+    float OrbitSurveyOverlap = 0.70f;
     float OrbitNadirAlt = 500.0f;
     float OrbitNadirTiltAngle = 45.0f;
-    bool bOrbitIncludeNadir = true;
     bool bOrbitIncludeOblique = false;
     int32 OrbitObliqueRings = 2;
     bool bOrbitSideOrbit = false;
@@ -154,6 +155,7 @@ private:
     TOptional<float> OrbitCameraHFOVValue;
     TOptional<float> OrbitHOverlapValue;
     TOptional<float> OrbitVOverlapValue;
+    TOptional<float> OrbitSurveyOverlapValue;
     TOptional<float> OrbitNadirAltValue;
     TOptional<float> OrbitNadirTiltValue;
     TOptional<int32> OrbitObliqueRingsValue;

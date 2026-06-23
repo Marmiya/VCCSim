@@ -239,7 +239,6 @@ void FVCCSimPanelSelection::LoadFromConfigManager()
     MinBuildingHeight = Config.MinBuildingHeight;
     MinBuildingFootprint = Config.MinBuildingFootprint;
     ConnectGap = Config.ConnectGap;
-    bExportContextMesh = Config.bExportContext;
 
     TargetActorItems.Empty();
     for (int32 i = 0; i < Config.Labels.Num(); ++i)
@@ -270,7 +269,6 @@ void FVCCSimPanelSelection::SaveTargetActorsToConfig() const
     Config.MinBuildingHeight = MinBuildingHeight;
     Config.MinBuildingFootprint = MinBuildingFootprint;
     Config.ConnectGap = ConnectGap;
-    Config.bExportContext = bExportContextMesh;
     FVCCSimConfigManager::Get().SetTargetActorsConfig(Config);
 }
 
@@ -413,33 +411,10 @@ FReply FVCCSimPanelSelection::OnExportGTMeshClicked()
     if (!World)
         return FReply::Handled();
 
-    // Region = the configured coordinate box, or (if unset) the union of the enabled targets so we
-    // never merge the whole scene by accident.
-    FBox RegionBox(ForceInit);
-    const bool bBoxConfigured =
-        !(BoundsMin.Equals(FVector(-100000.0), 1.0) && BoundsMax.Equals(FVector(100000.0), 1.0));
-    if (bBoxConfigured)
-    {
-        RegionBox = FBox(BoundsMin.ComponentMin(BoundsMax), BoundsMin.ComponentMax(BoundsMax));
-    }
-    else
-    {
-        TMap<FString, AActor*> LabelMap;
-        for (TActorIterator<AActor> It(World); It; ++It)
-            if (AActor* A = *It) LabelMap.Add(A->GetActorLabel(), A);
-        for (const FString& L : GetEnabledTargetActorLabels())
-            if (AActor** Found = LabelMap.Find(L))
-                if (*Found)
-                {
-                    FVector O, E;
-                    (*Found)->GetActorBounds(false, O, E);
-                    RegionBox += FBox(O - E, O + E);
-                }
-    }
-    if (!RegionBox.IsValid)
+    if (!HasEnabledTargetActors())
     {
         FVCCSimUIHelpers::ShowNotification(
-            TEXT("Set a bounds box or enable target actors before exporting a region mesh."), true);
+            TEXT("Enable target actors before exporting a mesh."), true);
         return FReply::Handled();
     }
 
@@ -450,7 +425,7 @@ FReply FVCCSimPanelSelection::OnExportGTMeshClicked()
     const void* ParentWindowHandle = FSlateApplication::Get().FindBestParentWindowHandleForDialogs(nullptr);
     FString ChosenDir;
     if (!DesktopPlatform->OpenDirectoryDialog(
-            ParentWindowHandle, TEXT("Choose region mesh export folder"),
+            ParentWindowHandle, TEXT("Choose mesh export folder"),
             FPaths::ProjectSavedDir(), ChosenDir) || ChosenDir.IsEmpty())
         return FReply::Handled();
 
@@ -458,18 +433,53 @@ FReply FVCCSimPanelSelection::OnExportGTMeshClicked()
     const FString SceneName = TEXT("RegionMesh");
     const int32 TextureResolution = 2048;   // vestigial (no baking); kept for manifest/signature
     const FString Signature = FGTMaterialExporter::ComputeSignature(
-        World, GetEnabledTargetActorLabels(), SceneName, TextureResolution, false, 0.f, false);
+        World, GetEnabledTargetActorLabels(), SceneName, TextureResolution);
+
+    RunGTMeshExport(BaseDir, SceneName, TextureResolution, Signature, FSimpleDelegate());
+    return FReply::Handled();
+}
+
+void FVCCSimPanelSelection::RunGTMeshExport(
+    const FString& BaseDir, const FString& SceneName,
+    int32 TextureResolution, const FString& Signature,
+    FSimpleDelegate OnComplete)
+{
+    if (bGTExportInProgress)
+    {
+        OnComplete.ExecuteIfBound();
+        return;
+    }
+
+    UWorld* World = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
+    if (!World)
+    {
+        OnComplete.ExecuteIfBound();
+        return;
+    }
+
+    const TArray<FString> Labels = GetEnabledTargetActorLabels();
+    if (Labels.IsEmpty())
+    {
+        FVCCSimUIHelpers::ShowNotification(
+            TEXT("Enable target actors before exporting meshes."), true);
+        OnComplete.ExecuteIfBound();
+        return;
+    }
 
     if (!GTMaterialExporter.IsValid())
         GTMaterialExporter = MakeShared<FGTMaterialExporter>();
 
     bGTExportInProgress = true;
-    UE_LOG(LogSelection, Log, TEXT("Region mesh export -> %s (context=%d)"), *BaseDir, bExportContextMesh ? 1 : 0);
-    GTMaterialExporter->ExportMergedRegion(
-        World, RegionBox, bExportContextMesh, BaseDir, SceneName, TextureResolution, Signature,
-        FSimpleDelegate::CreateLambda([this]() { bGTExportInProgress = false; }));
+    FSimpleDelegate Wrapped = FSimpleDelegate::CreateLambda([this, OnComplete]()
+    {
+        bGTExportInProgress = false;
+        OnComplete.ExecuteIfBound();
+    });
 
-    return FReply::Handled();
+    // One mesh.gltf + manifest per actor; the Python preprocess aggregates them into the scene mesh.
+    UE_LOG(LogSelection, Log, TEXT("Mesh export (per-actor) -> %s (%d actors)"), *BaseDir, Labels.Num());
+    GTMaterialExporter->ExportMaterials(
+        Labels, TArray<FGTFoliageExportEntry>(), World, BaseDir, SceneName, TextureResolution, Signature, Wrapped);
 }
 
 FReply FVCCSimPanelSelection::OnHighlightTargetsClicked()

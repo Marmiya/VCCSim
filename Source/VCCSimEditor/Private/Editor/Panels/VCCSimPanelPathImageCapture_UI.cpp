@@ -67,8 +67,17 @@ TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreatePathConfigSection()
     .AutoHeight()
     .Padding(FMargin(0, 4, 0, 4))
     [
-        FVCCSimUIHelpers::CreateNumericPropertyRowFloat(
-            TEXT("Margin (cm)"), OrbitMarginSpinBox, OrbitMarginValue, OrbitMargin, 50.f, 50.f)
+        SNew(SHorizontalBox)
+        +SHorizontalBox::Slot().FillWidth(1.f).Padding(FMargin(0, 0, 4, 0))
+        [
+            FVCCSimUIHelpers::CreateNumericPropertyRowFloat(
+                TEXT("Margin (cm)"), OrbitMarginSpinBox, OrbitMarginValue, OrbitMargin, 50.f, 50.f)
+        ]
+        +SHorizontalBox::Slot().FillWidth(1.f)
+        [
+            FVCCSimUIHelpers::CreateNumericPropertyRowFloat(
+                TEXT("Survey Overlap"), OrbitSurveyOverlapSpinBox, OrbitSurveyOverlapValue, OrbitSurveyOverlap, 0.f, 0.05f)
+        ]
     ]
 
     +SVerticalBox::Slot()
@@ -110,12 +119,6 @@ TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreatePathConfigSection()
     .Padding(FMargin(0, 0, 0, 4))
     [
         SNew(SHorizontalBox)
-        +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(0, 0, 4, 0))
-        [
-            SNew(SCheckBox)
-            .IsChecked_Lambda([this]() { return bOrbitIncludeNadir ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
-            .OnCheckStateChanged_Lambda([this](ECheckBoxState S) { bOrbitIncludeNadir = (S == ECheckBoxState::Checked); })
-        ]
         +SHorizontalBox::Slot().FillWidth(1.f).Padding(FMargin(0, 0, 4, 0))
         [
             FVCCSimUIHelpers::CreateNumericPropertyRowFloat(
