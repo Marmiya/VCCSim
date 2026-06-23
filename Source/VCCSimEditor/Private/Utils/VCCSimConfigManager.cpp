@@ -148,6 +148,7 @@ void FVCCSimConfigManager::SaveToJsonFile()
         PathCaptureJson->SetNumberField(TEXT("NadirTiltAngle"),      PathImageCaptureConfig.NadirTiltAngle);
         PathCaptureJson->SetBoolField(TEXT("IncludeNadir"),          PathImageCaptureConfig.bIncludeNadir);
         PathCaptureJson->SetNumberField(TEXT("NumObliqueRings"),     PathImageCaptureConfig.NumObliqueRings);
+        PathCaptureJson->SetBoolField(TEXT("SideOrbit"),             PathImageCaptureConfig.bSideOrbit);
         PathCaptureJson->SetNumberField(TEXT("CaptureTickInterval"), PathImageCaptureConfig.CaptureTickInterval);
         RootObject->SetObjectField(TEXT("PathImageCaptureConfig"), PathCaptureJson);
     }
@@ -173,6 +174,7 @@ void FVCCSimConfigManager::SaveToJsonFile()
         BoundsJson->SetNumberField(TEXT("MaxY"), TargetActorsConfig.BoundsMax.Y);
         BoundsJson->SetNumberField(TEXT("MaxZ"), TargetActorsConfig.BoundsMax.Z);
         BoundsJson->SetBoolField(TEXT("ExcludeClutter"), TargetActorsConfig.bExcludeClutter);
+        BoundsJson->SetBoolField(TEXT("ExportContext"), TargetActorsConfig.bExportContext);
         RootObject->SetObjectField(TEXT("BoundsSelect"), BoundsJson);
     }
 
@@ -310,6 +312,7 @@ bool FVCCSimConfigManager::LoadFromJsonFile()
         if ((*PathCaptureJson)->TryGetNumberField(TEXT("NumObliqueRings"), V))     PathImageCaptureConfig.NumObliqueRings     = (int32)V;
         if ((*PathCaptureJson)->TryGetNumberField(TEXT("CaptureTickInterval"), V)) PathImageCaptureConfig.CaptureTickInterval = (float)V;
         (*PathCaptureJson)->TryGetBoolField(TEXT("IncludeNadir"), PathImageCaptureConfig.bIncludeNadir);
+        (*PathCaptureJson)->TryGetBoolField(TEXT("SideOrbit"), PathImageCaptureConfig.bSideOrbit);
     }
 
     // Load shared target actor list
@@ -346,6 +349,7 @@ bool FVCCSimConfigManager::LoadFromJsonFile()
             (*BoundsJson)->TryGetNumberField(TEXT("MaxY"), TargetActorsConfig.BoundsMax.Y);
             (*BoundsJson)->TryGetNumberField(TEXT("MaxZ"), TargetActorsConfig.BoundsMax.Z);
             (*BoundsJson)->TryGetBoolField(TEXT("ExcludeClutter"), TargetActorsConfig.bExcludeClutter);
+            (*BoundsJson)->TryGetBoolField(TEXT("ExportContext"), TargetActorsConfig.bExportContext);
         }
     }
 

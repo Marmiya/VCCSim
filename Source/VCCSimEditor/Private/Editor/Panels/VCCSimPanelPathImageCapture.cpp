@@ -354,6 +354,7 @@ void FVCCSimPanelPathImageCapture::LoadFromConfigManager()
     OrbitNadirTiltAngle = Config.NadirTiltAngle;
     bOrbitIncludeNadir  = Config.bIncludeNadir;
     OrbitObliqueRings   = Config.NumObliqueRings;
+    bOrbitSideOrbit     = Config.bSideOrbit;
     CaptureTickInterval = Config.CaptureTickInterval;
 
     OrbitMarginValue         = OrbitMargin;
@@ -379,6 +380,7 @@ void FVCCSimPanelPathImageCapture::SaveToConfigManager() const
     Config.NadirTiltAngle      = OrbitNadirTiltAngle;
     Config.bIncludeNadir       = bOrbitIncludeNadir;
     Config.NumObliqueRings     = OrbitObliqueRings;
+    Config.bSideOrbit          = bOrbitSideOrbit;
     Config.CaptureTickInterval = CaptureTickInterval;
     FVCCSimConfigManager::Get().SetPathImageCaptureConfig(Config);
 }
@@ -451,6 +453,7 @@ void FVCCSimPanelPathImageCapture::GeneratePosesAroundTarget()
     Params.NadirAltitude = OrbitNadirAlt;
     Params.NadirTiltAngle = OrbitNadirTiltAngle;
     Params.NumObliqueRings = OrbitObliqueRings;
+    Params.bSideOrbit = bOrbitSideOrbit;
 
     TArray<URGBCameraComponent*> RGBCameras;
     SelectionManager.Pin()->GetSelectedFlashPawn()->GetComponents<URGBCameraComponent>(RGBCameras);

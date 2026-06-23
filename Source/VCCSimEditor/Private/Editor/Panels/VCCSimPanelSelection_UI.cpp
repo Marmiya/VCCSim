@@ -155,7 +155,7 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateTargetActorListPanel()
         .ContentPadding(FMargin(5, 2))
         .HAlign(HAlign_Center)
         .Text_Lambda([this]() { return FText::FromString(
-            HighlightActor.IsValid() ? TEXT("Hide Highlight") : TEXT("Highlight Targets in Viewport")); })
+            HighlightActor.IsValid() ? TEXT("Hide Highlight") : TEXT("Highlight Targets")); })
         .ToolTipText(FText::FromString(TEXT(
             "Toggle labelled boxes around every list actor (green = enabled, gray = disabled), plus "
             "red boxes for in-box mesh actors not in the list. Click again to hide.")))
@@ -167,31 +167,34 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateTargetActorListPanel()
     .AutoHeight()
     .Padding(FMargin(0, 2, 0, 0))
     [
-        SNew(SButton)
-        .ContentPadding(FMargin(5, 2))
-        .HAlign(HAlign_Center)
-        .Text(FText::FromString(TEXT("Fix Duplicate Labels")))
-        .ToolTipText(FText::FromString(TEXT(
-            "Rename actors that share a label so every label is unique (e.g. ..._System12 / "
-            "..._System12_1). The selection, path generation and GT export all resolve actors by "
-            "label, so duplicates silently drop all but one. Modifies the scene — save afterwards.")))
-        .OnClicked_Lambda([this]() { return OnFixDuplicateLabelsClicked(); })
-    ]
-
-    +SVerticalBox::Slot()
-    .AutoHeight()
-    .Padding(FMargin(0, 2, 0, 0))
-    [
-        SNew(SButton)
-        .ButtonStyle(FAppStyle::Get(), "FlatButton.Primary")
-        .ContentPadding(FMargin(5, 2))
-        .HAlign(HAlign_Center)
-        .Text(FText::FromString(TEXT("Export GT Mesh")))
-        .ToolTipText(FText::FromString(TEXT(
-            "Export the enabled target actors' geometry (+ is_glass metadata) to a chosen "
-            "folder's gt_materials/. No material baking — materials come from the camera captures.")))
-        .IsEnabled_Lambda([this]() { return !bGTExportInProgress && HasEnabledTargetActors(); })
-        .OnClicked_Lambda([this]() { return OnExportGTMeshClicked(); })
+        SNew(SHorizontalBox)
+        +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(0, 0, 4, 0))
+        [
+            SNew(SCheckBox)
+            .ToolTipText(FText::FromString(TEXT(
+                "Also merge in-box clutter (trees/cars/road) into a separate region_context mesh for "
+                "occlusion/depth/normal supervision. Off = region_targets only.")))
+            .IsChecked_Lambda([this]() { return bExportContextMesh ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+            .OnCheckStateChanged_Lambda([this](ECheckBoxState S) { bExportContextMesh = (S == ECheckBoxState::Checked); SaveTargetActorsToConfig(); })
+        ]
+        +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(0, 0, 8, 0))
+        [
+            SNew(STextBlock).Text(FText::FromString(TEXT("Include context mesh")))
+        ]
+        +SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
+        [
+            SNew(SButton)
+            .ButtonStyle(FAppStyle::Get(), "FlatButton.Primary")
+            .ContentPadding(FMargin(5, 2))
+            .HAlign(HAlign_Center)
+            .Text(FText::FromString(TEXT("Export Region Mesh")))
+            .ToolTipText(FText::FromString(TEXT(
+                "Merge all mesh actors in the coordinate box into region_targets (buildings, keeps is_glass) "
+                "+ region_context (clutter) glTF meshes under gt_materials/. No material baking — materials "
+                "come from the camera captures.")))
+            .IsEnabled_Lambda([this]() { return !bGTExportInProgress; })
+            .OnClicked_Lambda([this]() { return OnExportGTMeshClicked(); })
+        ]
     ]
 
     +SVerticalBox::Slot()
@@ -517,6 +520,19 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateCameraSelectPanel()
                 WarmupCameras();
                 return FReply::Handled();
             })
+        ]
+        +SHorizontalBox::Slot()
+        .AutoWidth()
+        .VAlign(VAlign_Center)
+        .Padding(FMargin(8, 0, 0, 0))
+        [
+            SNew(SButton)
+            .Text(FText::FromString(TEXT("Fix Duplicate Labels")))
+            .ToolTipText(FText::FromString(TEXT(
+                "Rename actors that share a label so every label is unique (e.g. ..._System12 / "
+                "..._System12_1). The selection, path generation and GT export all resolve actors by "
+                "label, so duplicates silently drop all but one. Modifies the scene — save afterwards.")))
+            .OnClicked_Lambda([this]() { return OnFixDuplicateLabelsClicked(); })
         ]
     ];
 }

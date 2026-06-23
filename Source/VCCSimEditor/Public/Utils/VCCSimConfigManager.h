@@ -94,6 +94,7 @@ public:
         FVector BoundsMin = FVector(-100000.0);
         FVector BoundsMax = FVector(100000.0);
         bool    bExcludeClutter = true;
+        bool    bExportContext = true;
     };
 
     // PathImageCapture orbit & capture parameters
@@ -108,6 +109,7 @@ public:
         float NadirTiltAngle      = 45.f;
         bool  bIncludeNadir       = true;
         int32 NumObliqueRings     = 2;
+        bool  bSideOrbit          = false;
         float CaptureTickInterval = 0.2f;
     };
 

@@ -19,6 +19,21 @@
 #include "Exporters/GLTFExporter.h"
 #include "Options/GLTFExportOptions.h"
 #include "UserData/GLTFMaterialUserData.h"
+#include "Modules/ModuleManager.h"
+#include "IMeshMergeUtilities.h"
+#include "MeshMergeModule.h"
+#include "MeshMerge/MeshMergingSettings.h"
+#include "Components/PrimitiveComponent.h"
+#include "Components/DynamicMeshComponent.h"
+#include "UDynamicMesh.h"
+#include "DynamicMesh/DynamicMesh3.h"
+#include "DynamicMeshToMeshDescription.h"
+#include "StaticMeshAttributes.h"
+#include "MeshDescription.h"
+#include "UObject/Package.h"
+#include "Misc/Guid.h"
+#include "Pawns/FlashPawn.h"
+#include "Pawns/SimLookAtPath.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGTMaterialExporter, Log, All);
 
@@ -40,6 +55,68 @@ bool FGTMaterialExporter::HasExportableMeshMaterials(const AActor* Actor)
     return false;
 }
 
+bool FGTMaterialExporter::HasExportableMeshGeometry(const AActor* Actor)
+{
+    if (!Actor) return false;
+    if (HasExportableMeshMaterials(Actor)) return true;
+
+    TArray<UDynamicMeshComponent*> DynComps;
+    Actor->GetComponents<UDynamicMeshComponent>(DynComps);
+    for (UDynamicMeshComponent* DMC : DynComps)
+    {
+        if (!DMC) continue;
+        UDynamicMesh* DynObj = DMC->GetDynamicMesh();
+        if (DynObj && DynObj->GetTriangleCount() > 0)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+UStaticMesh* FGTMaterialExporter::BuildStaticMeshFromDynamic(UDynamicMeshComponent* DMC)
+{
+    if (!DMC) return nullptr;
+    UDynamicMesh* DynObj = DMC->GetDynamicMesh();
+    if (!DynObj || DynObj->GetTriangleCount() == 0) return nullptr;
+
+    FMeshDescription MeshDesc;
+    FStaticMeshAttributes Attributes(MeshDesc);
+    Attributes.Register();
+
+    DynObj->ProcessMesh([&MeshDesc](const UE::Geometry::FDynamicMesh3& ReadMesh)
+    {
+        FDynamicMeshToMeshDescription Converter;
+        Converter.Convert(&ReadMesh, MeshDesc, /*bCopyTangents=*/true);
+    });
+
+    if (MeshDesc.Vertices().Num() == 0 || MeshDesc.Triangles().Num() == 0)
+        return nullptr;
+
+    UStaticMesh* StaticMesh = NewObject<UStaticMesh>(GetTransientPackage(), NAME_None, RF_Transient);
+    StaticMesh->NeverStream = true;
+
+    // Mirror the component's material slots so per-slot is_glass classification survives.
+    const int32 NumMats = FMath::Max(DMC->GetNumMaterials(), 1);
+    for (int32 i = 0; i < NumMats; ++i)
+    {
+        UMaterialInterface* Mat = DMC->GetMaterial(i);
+        if (!Mat) Mat = UMaterial::GetDefaultMaterial(MD_Surface);
+        StaticMesh->GetStaticMaterials().Add(FStaticMaterial(Mat, *FString::Printf(TEXT("Slot_%d"), i)));
+    }
+
+    UStaticMesh::FBuildMeshDescriptionsParams BuildParams;
+    BuildParams.bBuildSimpleCollision = false;
+    BuildParams.bFastBuild = true;
+
+    TArray<const FMeshDescription*> Descriptions;
+    Descriptions.Add(&MeshDesc);
+    if (!StaticMesh->BuildFromMeshDescriptions(Descriptions, BuildParams))
+        return nullptr;
+
+    return StaticMesh;
+}
+
 bool FGTMaterialExporter::IsGlassMaterial(const UMaterialInterface* Mat)
 {
     if (!Mat) return false;
@@ -56,6 +133,201 @@ bool FGTMaterialExporter::IsGlassMaterial(const UMaterialInterface* Mat)
     if (Mat->GetBlendMode() == BLEND_Translucent) return true;
     if (Mat->GetShadingModels().HasShadingModel(MSM_ThinTranslucent)) return true;
     return false;
+}
+
+bool FGTMaterialExporter::IsClutterActor(const AActor* Actor)
+{
+    if (!Actor) return true;
+    if (Actor->IsA<AFlashPawn>() || Actor->IsA<AVCCSimLookAtPath>()) return true;
+
+    static const TCHAR* ClutterTokens[] = {
+        TEXT("tree"), TEXT("foliage"), TEXT("plant"), TEXT("bush"), TEXT("grass"),
+        TEXT("leaf"), TEXT("branch"), TEXT("hedge"), TEXT("shrub"),
+        TEXT("car"), TEXT("vehicle"), TEXT("truck"), TEXT("bus"), TEXT("van"),
+        TEXT("sedan"), TEXT("suv"), TEXT("taxi"), TEXT("traffic"),
+        TEXT("pedestrian"), TEXT("people"), TEXT("person"), TEXT("npc"), TEXT("character"),
+        TEXT("fence"), TEXT("hydrant"), TEXT("parking_meter"), TEXT("parkingmeter"),
+        TEXT("road"), TEXT("street"), TEXT("terrain"), TEXT("pavement"),
+        TEXT("sidewalk"), TEXT("asphalt"), TEXT("curb"), TEXT("crosswalk"),
+        TEXT("landscape"), TEXT("instancedfoliage")
+    };
+
+    const FString Label = Actor->GetActorLabel().ToLower();
+    const FString ClassName = Actor->GetClass()->GetName().ToLower();
+    for (const TCHAR* Token : ClutterTokens)
+    {
+        if (Label.Contains(Token) || ClassName.Contains(Token))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool FGTMaterialExporter::MergeComponentsToEntry(
+    UWorld* World, const TArray<UPrimitiveComponent*>& Comps, const FString& Label,
+    FGTFoliageExportEntry& OutEntry)
+{
+    if (!World || Comps.IsEmpty()) return false;
+
+    const IMeshMergeUtilities& MeshUtils = FModuleManager::Get()
+        .LoadModuleChecked<IMeshMergeModule>("MeshMergeUtilities").GetUtilities();
+
+    // Keep per-source material sections so the per-slot is_glass classification survives the merge.
+    FMeshMergingSettings Settings;
+    Settings.bMergeMaterials   = false;
+    Settings.bPivotPointAtZero = false;
+    Settings.LODSelectionType  = EMeshLODSelectionType::SpecificLOD;
+    Settings.SpecificLOD       = 0;
+
+    const FString GuidStr = FGuid::NewGuid().ToString(EGuidFormats::Short);
+    const FString PackageName = FString::Printf(TEXT("/Engine/Transient/_VCCSimRegionMerged_%s"), *GuidStr);
+    UPackage* Package = CreatePackage(*PackageName);
+    if (!Package) return false;
+    Package->SetFlags(RF_Transient);
+    Package->AddToRoot();
+    ON_SCOPE_EXIT { Package->RemoveFromRoot(); };
+
+    TArray<UObject*> CreatedAssets;
+    FVector MergedLocation = FVector::ZeroVector;
+    MeshUtils.MergeComponentsToStaticMesh(
+        Comps, World, Settings, /*BaseMaterial=*/nullptr, Package, PackageName,
+        CreatedAssets, MergedLocation, /*ScreenSize=*/TNumericLimits<float>::Max(), /*bSilent=*/true);
+
+    UStaticMesh* MergedMesh = nullptr;
+    int32 TotalTriangles = 0;
+    for (UObject* Obj : CreatedAssets)
+    {
+        if (UStaticMesh* SM = Cast<UStaticMesh>(Obj))
+        {
+            MergedMesh = SM;
+            if (SM->GetRenderData() && SM->GetRenderData()->LODResources.Num() > 0)
+                TotalTriangles = SM->GetRenderData()->LODResources[0].GetNumTriangles();
+            break;
+        }
+    }
+    if (!MergedMesh || TotalTriangles == 0) return false;
+
+    OutEntry.Mesh = MergedMesh;
+    OutEntry.WorldTransform = FTransform(MergedLocation);
+    OutEntry.Label = Label;
+    return true;
+}
+
+void FGTMaterialExporter::ExportMergedRegion(
+    UWorld* World, const FBox& RegionBox, bool bIncludeContext,
+    const FString& BaseDir, const FString& SceneName, int32 TextureResolution,
+    const FString& Signature, FSimpleDelegate OnComplete)
+{
+    if (!World)
+    {
+        OnComplete.ExecuteIfBound();
+        return;
+    }
+
+    // Split every mesh actor intersecting the box into target buildings vs context clutter.
+    TArray<UPrimitiveComponent*> TargetComps;
+    TArray<UPrimitiveComponent*> ContextComps;
+    // DynamicMeshActor geometry can't go through the static-mesh merge directly; collect the
+    // components here and convert them to transient static-mesh actors after the iteration (spawning
+    // mid-iteration would perturb the actor iterator).
+    struct FDynConvert { UDynamicMeshComponent* DMC; bool bTarget; };
+    TArray<FDynConvert> DynConverts;
+    for (TActorIterator<AActor> It(World); It; ++It)
+    {
+        AActor* A = *It;
+        if (!A || !IsValid(A) || A->HasAnyFlags(RF_Transient)) continue;
+        if (A->IsA<AFlashPawn>() || A->IsA<AVCCSimLookAtPath>()) continue;
+
+        TArray<UStaticMeshComponent*> MeshComps;
+        A->GetComponents<UStaticMeshComponent>(MeshComps);
+        TArray<UDynamicMeshComponent*> DynComps;
+        A->GetComponents<UDynamicMeshComponent>(DynComps);
+        if (MeshComps.Num() == 0 && DynComps.Num() == 0) continue;
+
+        FVector Origin, Extent;
+        A->GetActorBounds(false, Origin, Extent);
+        if (!RegionBox.Intersect(FBox(Origin - Extent, Origin + Extent))) continue;
+
+        const bool bTarget = HasExportableMeshGeometry(A) && !IsClutterActor(A);
+        TArray<UPrimitiveComponent*>& Bucket = bTarget ? TargetComps : ContextComps;
+        for (UStaticMeshComponent* MC : MeshComps)
+            if (MC && MC->GetStaticMesh()) Bucket.Add(MC);
+        for (UDynamicMeshComponent* DMC : DynComps)
+            if (DMC && DMC->GetDynamicMesh() && DMC->GetDynamicMesh()->GetTriangleCount() > 0)
+                DynConverts.Add({ DMC, bTarget });
+    }
+
+    // Convert collected dynamic meshes to transient static-mesh actors and bucket their components.
+    TArray<AActor*> TempDynActors;
+    for (const FDynConvert& DC : DynConverts)
+    {
+        UStaticMesh* SM = BuildStaticMeshFromDynamic(DC.DMC);
+        if (!SM) continue;
+
+        FActorSpawnParameters SpawnParams;
+        SpawnParams.ObjectFlags |= RF_Transient;
+        SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+        AStaticMeshActor* Temp = World->SpawnActor<AStaticMeshActor>(
+            AStaticMeshActor::StaticClass(), DC.DMC->GetComponentTransform(), SpawnParams);
+        if (!Temp) continue;
+
+        Temp->SetMobility(EComponentMobility::Movable);
+        if (UStaticMeshComponent* MC = Temp->GetStaticMeshComponent())
+        {
+            MC->SetStaticMesh(SM);
+            (DC.bTarget ? TargetComps : ContextComps).Add(MC);
+        }
+        Temp->SetActorEnableCollision(false);
+        Temp->SetActorHiddenInGame(true);
+        TempDynActors.Add(Temp);
+    }
+    ON_SCOPE_EXIT
+    {
+        for (AActor* Temp : TempDynActors)
+            if (IsValid(Temp)) World->DestroyActor(Temp);
+    };
+
+    // Merge each role into one mesh; root the results so they survive GC until the export finishes.
+    TArray<FGTFoliageExportEntry> Entries;
+    FGTFoliageExportEntry TargetEntry;
+    if (MergeComponentsToEntry(World, TargetComps, TEXT("region_targets"), TargetEntry))
+    {
+        if (UStaticMesh* M = TargetEntry.Mesh.Get()) M->AddToRoot();
+        Entries.Add(MoveTemp(TargetEntry));
+    }
+    else
+    {
+        UE_LOG(LogGTMaterialExporter, Warning, TEXT("Region export: no target buildings merged."));
+    }
+
+    if (bIncludeContext)
+    {
+        FGTFoliageExportEntry ContextEntry;
+        if (MergeComponentsToEntry(World, ContextComps, TEXT("region_context"), ContextEntry))
+        {
+            if (UStaticMesh* M = ContextEntry.Mesh.Get()) M->AddToRoot();
+            Entries.Add(MoveTemp(ContextEntry));
+        }
+    }
+
+    if (Entries.IsEmpty())
+    {
+        FVCCSimUIHelpers::ShowNotification(TEXT("Region export: no mesh actors in the box."), true);
+        OnComplete.ExecuteIfBound();
+        return;
+    }
+
+    UE_LOG(LogGTMaterialExporter, Log,
+        TEXT("Region export: %d target comps, %d context comps -> %d merged mesh(es)"),
+        TargetComps.Num(), ContextComps.Num(), Entries.Num());
+
+    // ExportMaterials (synchronous) wraps each merged mesh in a temp actor and writes
+    // <Label>/mesh.gltf + a manifest with is_glass per slot (targets keep window/glass materials).
+    ExportMaterials(TArray<FString>(), Entries, World, BaseDir, SceneName, TextureResolution, Signature, OnComplete);
+
+    for (const FGTFoliageExportEntry& E : Entries)
+        if (UStaticMesh* M = E.Mesh.Get()) M->RemoveFromRoot();
 }
 
 bool FGTMaterialExporter::WriteManifest(
@@ -208,11 +480,43 @@ void FGTMaterialExporter::ExportMaterials(
         {
             Actors.Add(*Found);
             Labels.Add(Label);
+            continue;
         }
-        else
+
+        // DynamicMeshActor roofs: convert each dynamic mesh component to a transient static-mesh
+        // actor so it exports through the normal static-mesh path.
+        TArray<UDynamicMeshComponent*> DynComps;
+        (*Found)->GetComponents<UDynamicMeshComponent>(DynComps);
+        int32 Converted = 0;
+        for (int32 di = 0; di < DynComps.Num(); ++di)
+        {
+            UStaticMesh* SM = BuildStaticMeshFromDynamic(DynComps[di]);
+            if (!SM) continue;
+
+            FActorSpawnParameters SpawnParams;
+            SpawnParams.ObjectFlags |= RF_Transient;
+            SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+            AStaticMeshActor* Temp = World->SpawnActor<AStaticMeshActor>(
+                AStaticMeshActor::StaticClass(), DynComps[di]->GetComponentTransform(), SpawnParams);
+            if (!Temp) continue;
+
+            Temp->SetMobility(EComponentMobility::Movable);
+            if (UStaticMeshComponent* MC = Temp->GetStaticMeshComponent())
+                MC->SetStaticMesh(SM);
+            Temp->SetActorEnableCollision(false);
+            Temp->SetActorHiddenInGame(true);
+
+            const FString OutLabel = (DynComps.Num() > 1) ? FString::Printf(TEXT("%s_%d"), *Label, di) : Label;
+            Temp->SetActorLabel(OutLabel);
+            Actors.Add(Temp);
+            Labels.Add(OutLabel);
+            TempFoliageActors.Add(Temp);
+            ++Converted;
+        }
+        if (Converted == 0)
         {
             UE_LOG(LogGTMaterialExporter, Warning,
-                TEXT("GT Export: actor '%s' has no StaticMeshComponent with materials, skipped"), *Label);
+                TEXT("GT Export: actor '%s' has no exportable static or dynamic mesh, skipped"), *Label);
         }
     }
 

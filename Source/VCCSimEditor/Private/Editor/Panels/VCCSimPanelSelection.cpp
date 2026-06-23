@@ -237,6 +237,7 @@ void FVCCSimPanelSelection::LoadFromConfigManager()
     BoundsMin = Config.BoundsMin;
     BoundsMax = Config.BoundsMax;
     bExcludeClutter = Config.bExcludeClutter;
+    bExportContextMesh = Config.bExportContext;
 
     TargetActorItems.Empty();
     for (int32 i = 0; i < Config.Labels.Num(); ++i)
@@ -265,6 +266,7 @@ void FVCCSimPanelSelection::SaveTargetActorsToConfig() const
     Config.BoundsMin = BoundsMin;
     Config.BoundsMax = BoundsMax;
     Config.bExcludeClutter = bExcludeClutter;
+    Config.bExportContext = bExportContextMesh;
     FVCCSimConfigManager::Get().SetTargetActorsConfig(Config);
 }
 
@@ -305,35 +307,6 @@ FReply FVCCSimPanelSelection::OnAddTargetActorsClicked()
     }
 
     return FReply::Handled();
-}
-
-bool FVCCSimPanelSelection::IsClutterActor(const AActor* Actor) const
-{
-    if (!Actor) return true;
-    if (Actor->IsA<AFlashPawn>() || Actor->IsA<AVCCSimLookAtPath>()) return true;
-
-    static const TCHAR* ClutterTokens[] = {
-        TEXT("tree"), TEXT("foliage"), TEXT("plant"), TEXT("bush"), TEXT("grass"),
-        TEXT("leaf"), TEXT("branch"), TEXT("hedge"), TEXT("shrub"),
-        TEXT("car"), TEXT("vehicle"), TEXT("truck"), TEXT("bus"), TEXT("van"),
-        TEXT("sedan"), TEXT("suv"), TEXT("taxi"), TEXT("traffic"),
-        TEXT("pedestrian"), TEXT("people"), TEXT("person"), TEXT("npc"), TEXT("character"),
-        TEXT("fence"), TEXT("hydrant"), TEXT("parking_meter"), TEXT("parkingmeter"),
-        TEXT("road"), TEXT("street"), TEXT("ground"), TEXT("terrain"), TEXT("pavement"),
-        TEXT("sidewalk"), TEXT("asphalt"), TEXT("curb"), TEXT("crosswalk"),
-        TEXT("landscape"), TEXT("instancedfoliage")
-    };
-
-    const FString Label = Actor->GetActorLabel().ToLower();
-    const FString ClassName = Actor->GetClass()->GetName().ToLower();
-    for (const TCHAR* Token : ClutterTokens)
-    {
-        if (Label.Contains(Token) || ClassName.Contains(Token))
-        {
-            return true;
-        }
-    }
-    return false;
 }
 
 FReply FVCCSimPanelSelection::OnFillBoundsFromSelectionClicked()
@@ -382,14 +355,14 @@ FReply FVCCSimPanelSelection::OnAddTargetActorsInBoundsClicked()
     for (TActorIterator<AActor> It(World); It; ++It)
     {
         AActor* Actor = *It;
-        if (!Actor || !IsValid(Actor)) continue;
-        if (!FGTMaterialExporter::HasExportableMeshMaterials(Actor)) continue;
+        if (!Actor || !IsValid(Actor) || Actor->HasAnyFlags(RF_Transient)) continue;
+        if (!FGTMaterialExporter::HasExportableMeshGeometry(Actor)) continue;
 
         FVector Origin, Extent;
         Actor->GetActorBounds(false, Origin, Extent);
         if (!Query.Intersect(FBox(Origin - Extent, Origin + Extent))) continue;
 
-        if (bExcludeClutter && IsClutterActor(Actor))
+        if (bExcludeClutter && FGTMaterialExporter::IsClutterActor(Actor))
         {
             ++SkippedClutter;
             continue;
@@ -434,10 +407,33 @@ FReply FVCCSimPanelSelection::OnExportGTMeshClicked()
     if (!World)
         return FReply::Handled();
 
-    const TArray<FString> Labels = GetEnabledTargetActorLabels();
-    if (Labels.Num() == 0)
+    // Region = the configured coordinate box, or (if unset) the union of the enabled targets so we
+    // never merge the whole scene by accident.
+    FBox RegionBox(ForceInit);
+    const bool bBoxConfigured =
+        !(BoundsMin.Equals(FVector(-100000.0), 1.0) && BoundsMax.Equals(FVector(100000.0), 1.0));
+    if (bBoxConfigured)
     {
-        FVCCSimUIHelpers::ShowNotification(TEXT("No enabled target actors to export."), true);
+        RegionBox = FBox(BoundsMin.ComponentMin(BoundsMax), BoundsMin.ComponentMax(BoundsMax));
+    }
+    else
+    {
+        TMap<FString, AActor*> LabelMap;
+        for (TActorIterator<AActor> It(World); It; ++It)
+            if (AActor* A = *It) LabelMap.Add(A->GetActorLabel(), A);
+        for (const FString& L : GetEnabledTargetActorLabels())
+            if (AActor** Found = LabelMap.Find(L))
+                if (*Found)
+                {
+                    FVector O, E;
+                    (*Found)->GetActorBounds(false, O, E);
+                    RegionBox += FBox(O - E, O + E);
+                }
+    }
+    if (!RegionBox.IsValid)
+    {
+        FVCCSimUIHelpers::ShowNotification(
+            TEXT("Set a bounds box or enable target actors before exporting a region mesh."), true);
         return FReply::Handled();
     }
 
@@ -448,24 +444,23 @@ FReply FVCCSimPanelSelection::OnExportGTMeshClicked()
     const void* ParentWindowHandle = FSlateApplication::Get().FindBestParentWindowHandleForDialogs(nullptr);
     FString ChosenDir;
     if (!DesktopPlatform->OpenDirectoryDialog(
-            ParentWindowHandle, TEXT("Choose GT mesh export folder"),
+            ParentWindowHandle, TEXT("Choose region mesh export folder"),
             FPaths::ProjectSavedDir(), ChosenDir) || ChosenDir.IsEmpty())
         return FReply::Handled();
 
     const FString BaseDir = ChosenDir / TEXT("gt_materials");
-    const FString SceneName = TEXT("GTMesh");
+    const FString SceneName = TEXT("RegionMesh");
     const int32 TextureResolution = 2048;   // vestigial (no baking); kept for manifest/signature
     const FString Signature = FGTMaterialExporter::ComputeSignature(
-        World, Labels, SceneName, TextureResolution, false, 0.f, false);
+        World, GetEnabledTargetActorLabels(), SceneName, TextureResolution, false, 0.f, false);
 
     if (!GTMaterialExporter.IsValid())
         GTMaterialExporter = MakeShared<FGTMaterialExporter>();
 
     bGTExportInProgress = true;
-    UE_LOG(LogSelection, Log, TEXT("GT mesh export: %d actor(s) -> %s"), Labels.Num(), *BaseDir);
-    GTMaterialExporter->ExportMaterials(
-        Labels, TArray<FGTFoliageExportEntry>(), World, BaseDir, SceneName,
-        TextureResolution, Signature,
+    UE_LOG(LogSelection, Log, TEXT("Region mesh export -> %s (context=%d)"), *BaseDir, bExportContextMesh ? 1 : 0);
+    GTMaterialExporter->ExportMergedRegion(
+        World, RegionBox, bExportContextMesh, BaseDir, SceneName, TextureResolution, Signature,
         FSimpleDelegate::CreateLambda([this]() { bGTExportInProgress = false; }));
 
     return FReply::Handled();
@@ -550,7 +545,7 @@ FReply FVCCSimPanelSelection::OnHighlightTargetsClicked()
         for (TActorIterator<AActor> It(World); It && (Red + Orange) < MaxAudit; ++It)
         {
             AActor* Actor = *It;
-            if (!Actor || !IsValid(Actor) || Actor == VizActor) continue;
+            if (!Actor || !IsValid(Actor) || Actor == VizActor || Actor->HasAnyFlags(RF_Transient)) continue;
             if (Actor->IsA<AFlashPawn>() || Actor->IsA<AVCCSimLookAtPath>()) continue;
             if (ListedLabels.Contains(Actor->GetActorLabel())) continue;
 
@@ -562,7 +557,7 @@ FReply FVCCSimPanelSelection::OnHighlightTargetsClicked()
             Actor->GetActorBounds(false, Origin, Extent);
             if (!Query.Intersect(FBox(Origin - Extent, Origin + Extent))) continue;
 
-            const bool bExportable = FGTMaterialExporter::HasExportableMeshMaterials(Actor);
+            const bool bExportable = FGTMaterialExporter::HasExportableMeshGeometry(Actor);
             AddBox(Origin, Extent, bExportable ? FLinearColor::Red : FLinearColor(1.f, 0.5f, 0.f), 8.f);
             if (bExportable) ++Red; else ++Orange;
         }

@@ -63,6 +63,12 @@ public class VCCSimEditor : ModuleRules
                 "MeshDescription",
                 "ImageWrapper",
 
+                // Convert DynamicMeshActor (UDynamicMeshComponent) geometry to static meshes for export
+                "GeometryFramework",
+                "GeometryCore",
+                "MeshConversion",
+                "StaticMeshDescription",
+
                 // GT material export
                 "GLTFExporter",
 

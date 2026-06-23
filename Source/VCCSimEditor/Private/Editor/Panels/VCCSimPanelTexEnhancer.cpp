@@ -540,7 +540,7 @@ void FVCCSimPanelTexEnhancer::CollectNearbyTargets(
         if (!IsValid(Cand) || SeedSet.Contains(Cand)) continue;
         if (Cand->IsA<AInstancedFoliageActor>()) continue;
         if (Cand->Tags.Contains(FName("NotSMActor")) || Cand->Tags.Contains(FName("VCCSimPathViz"))) continue;
-        if (!FGTMaterialExporter::HasExportableMeshMaterials(Cand)) continue;
+        if (!FGTMaterialExporter::HasExportableMeshGeometry(Cand)) continue;
 
         FVector Origin, Extent;
         Cand->GetActorBounds(false, Origin, Extent);
@@ -663,62 +663,7 @@ bool FVCCSimPanelTexEnhancer::BuildMergedNearbyEntry(
             if (IsValid(A)) World->DestroyActor(A);
     };
 
-    if (Comps.IsEmpty()) return false;
-
-    const IMeshMergeUtilities& MeshUtils = FModuleManager::Get()
-        .LoadModuleChecked<IMeshMergeModule>("MeshMergeUtilities").GetUtilities();
-
-    FMeshMergingSettings Settings;
-    Settings.bMergeMaterials        = false;
-    Settings.bPivotPointAtZero      = false;
-    Settings.LODSelectionType       = EMeshLODSelectionType::SpecificLOD;
-    Settings.SpecificLOD            = 0;
-
-    const FString GuidStr = FGuid::NewGuid().ToString(EGuidFormats::Short);
-    const FString PackageName = FString::Printf(TEXT("/Engine/Transient/_VCCSimNearbyMerged_%s"), *GuidStr);
-    UPackage* Package = CreatePackage(*PackageName);
-    if (!Package) return false;
-    Package->SetFlags(RF_Transient);
-    Package->AddToRoot();
-    ON_SCOPE_EXIT { Package->RemoveFromRoot(); };
-
-    TArray<UObject*> CreatedAssets;
-    FVector MergedLocation = FVector::ZeroVector;
-
-    MeshUtils.MergeComponentsToStaticMesh(
-        Comps, World, Settings, /*BaseMaterial=*/nullptr,
-        Package, PackageName,
-        CreatedAssets, MergedLocation,
-        /*ScreenSize=*/TNumericLimits<float>::Max(),
-        /*bSilent=*/true);
-
-    UStaticMesh* MergedMesh = nullptr;
-    int32 TotalTriangles = 0;
-    for (UObject* Obj : CreatedAssets)
-    {
-        if (UStaticMesh* SM = Cast<UStaticMesh>(Obj))
-        {
-            MergedMesh = SM;
-            if (SM->GetRenderData() && SM->GetRenderData()->LODResources.Num() > 0)
-            {
-                TotalTriangles = SM->GetRenderData()->LODResources[0].GetNumTriangles();
-            }
-            break;
-        }
-    }
-
-    UE_LOG(LogTexEnhancerPanel, Log,
-        TEXT("Merge: components=%d, assets=%d, mesh=%s, LOD0 tris=%d"),
-        Comps.Num(), CreatedAssets.Num(),
-        MergedMesh ? *MergedMesh->GetName() : TEXT("<null>"),
-        TotalTriangles);
-
-    if (!MergedMesh || TotalTriangles == 0) return false;
-
-    OutMergedEntry.Mesh = MergedMesh;
-    OutMergedEntry.WorldTransform = FTransform(MergedLocation);
-    OutMergedEntry.Label = TEXT("Nearby_Merged");
-    return true;
+    return FGTMaterialExporter::MergeComponentsToEntry(World, Comps, TEXT("Nearby_Merged"), OutMergedEntry);
 }
 
 void FVCCSimPanelTexEnhancer::SetExpansionVisualization(bool bEnabled)

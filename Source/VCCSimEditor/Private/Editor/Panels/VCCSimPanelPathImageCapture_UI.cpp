@@ -132,8 +132,24 @@ TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreatePathConfigSection()
     .AutoHeight()
     .Padding(FMargin(0, 0, 0, 4))
     [
-        FVCCSimUIHelpers::CreateNumericPropertyRowInt32(
-            TEXT("Oblique Rings"), OrbitObliqueRingsSpinBox, OrbitObliqueRingsValue, OrbitObliqueRings, 0, 1)
+        SNew(SHorizontalBox)
+        +SHorizontalBox::Slot().FillWidth(1.f).Padding(FMargin(0, 0, 8, 0))
+        [
+            FVCCSimUIHelpers::CreateNumericPropertyRowInt32(
+                TEXT("Oblique Rings"), OrbitObliqueRingsSpinBox, OrbitObliqueRingsValue, OrbitObliqueRings, 0, 1)
+        ]
+        +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(0, 0, 4, 0))
+        [
+            SNew(SCheckBox)
+            .ToolTipText(FText::FromString(TEXT(
+                "Also generate the per-building facade orbit rings. Off = region oblique/nadir survey only.")))
+            .IsChecked_Lambda([this]() { return bOrbitSideOrbit ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+            .OnCheckStateChanged_Lambda([this](ECheckBoxState S) { bOrbitSideOrbit = (S == ECheckBoxState::Checked); })
+        ]
+        +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+        [
+            SNew(STextBlock).Text(FText::FromString(TEXT("Side Orbit")))
+        ]
     ]
 
     +SVerticalBox::Slot()

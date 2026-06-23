@@ -213,9 +213,6 @@ private:
     /** Clear current selections */
     void ClearSelections();
 
-    /** True for foliage / vehicles / pedestrians / our own helper actors, skipped by bounds selection. */
-    bool IsClutterActor(const AActor* Actor) const;
-
 private:
     // ============================================================================
     // UI ELEMENTS
@@ -276,6 +273,9 @@ private:
 
     /** Skip foliage / vehicles / pedestrians when adding actors in bounds. */
     bool bExcludeClutter = true;
+
+    /** Also export in-box clutter as a separate region_context mesh (geometry only). */
+    bool bExportContextMesh = true;
 
     /** GT mesh export (relocated here from the TexEnhancer panel; geometry + is_glass only). */
     TSharedPtr<class FGTMaterialExporter> GTMaterialExporter;

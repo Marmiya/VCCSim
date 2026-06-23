@@ -60,6 +60,9 @@ public:
         bool bIncludeNadir = true;
         float NadirAltitude = 500.0f;
         float NadirTiltAngle = 45.0f;
+
+        /** Opt-in: also generate the per-building facade orbit rings (default off => region survey only). */
+        bool bSideOrbit = false;
     };
 
     /** The output of a path generation operation. */

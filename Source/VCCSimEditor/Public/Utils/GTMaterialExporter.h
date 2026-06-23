@@ -22,6 +22,9 @@
 class AActor;
 class UStaticMesh;
 class UMaterialInterface;
+class UPrimitiveComponent;
+class UDynamicMeshComponent;
+class UWorld;
 
 struct FGTFoliageExportEntry
 {
@@ -46,9 +49,36 @@ public:
         FSimpleDelegate OnComplete
     );
 
+    /** Merge every mesh actor whose AABB intersects RegionBox into one "region_targets" mesh
+     *  (buildings — keeps is_glass per slot) and, if bIncludeContext, one "region_context" mesh
+     *  (clutter), exporting both as geometry-only glTF. Reuses ExportMaterials. */
+    void ExportMergedRegion(
+        UWorld* World, const FBox& RegionBox, bool bIncludeContext,
+        const FString& BaseDir, const FString& SceneName, int32 TextureResolution,
+        const FString& Signature, FSimpleDelegate OnComplete);
+
 public:
     /** True if the actor owns at least one StaticMeshComponent (incl. ISM/HISM) with a mesh and materials. */
     static bool HasExportableMeshMaterials(const AActor* Actor);
+
+    /** Broader gate for the target pipeline: true if the actor has any surveyable/exportable mesh
+     *  geometry — a StaticMeshComponent (mesh+materials) OR a DynamicMeshComponent with triangles
+     *  (e.g. ADynamicMeshActor roofs). */
+    static bool HasExportableMeshGeometry(const AActor* Actor);
+
+    /** Build a transient (RF_Transient) UStaticMesh from a DynamicMeshComponent, mirroring its
+     *  material slots, so dynamic-mesh geometry can flow through the static-mesh merge/export.
+     *  Returns nullptr if the component is empty or conversion fails. */
+    static UStaticMesh* BuildStaticMeshFromDynamic(UDynamicMeshComponent* DMC);
+
+    /** Merge primitive components into one transient UStaticMesh (geometry only, material sections
+     *  preserved) wrapped as an export entry. False if nothing merged. */
+    static bool MergeComponentsToEntry(
+        UWorld* World, const TArray<class UPrimitiveComponent*>& Comps, const FString& Label,
+        FGTFoliageExportEntry& OutEntry);
+
+    /** True for foliage / vehicles / pedestrians / roads / our helper pawns — skipped as capture targets. */
+    static bool IsClutterActor(const AActor* Actor);
 
     /**
      * Hash of everything that determines the GT export output — the enabled target
