@@ -62,6 +62,9 @@ void UMaterialPropertiesCameraComponent::SetCaptureComponent() const
     }
 
     auto& SF = CaptureComponent->ShowFlags;
+    SF.DisableFeaturesForUnlit();
+    SF.SetPostProcessing(true);
+    SF.SetPostProcessMaterial(true);
     SF.SetMotionBlur(false);
     SF.SetDepthOfField(false);
     SF.SetLensFlares(false);

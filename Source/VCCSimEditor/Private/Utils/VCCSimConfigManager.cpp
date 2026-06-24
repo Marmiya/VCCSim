@@ -109,6 +109,7 @@ void FVCCSimConfigManager::SaveToJsonFile()
     TexEnhancerConfigJson->SetNumberField(TEXT("DayCycleSpeed"),         TexEnhancerConfig.DayCycleSpeed);
     TexEnhancerConfigJson->SetBoolField(TEXT("OutputImages"),            TexEnhancerConfig.bOutputImages);
     TexEnhancerConfigJson->SetBoolField(TEXT("OutputMesh"),              TexEnhancerConfig.bOutputMesh);
+    TexEnhancerConfigJson->SetBoolField(TEXT("UseCaptureReuse"),         TexEnhancerConfig.bUseCaptureReuse);
 
     {
         auto MakeFloatArrayJson = [](const TArray<float>& Values)
@@ -279,6 +280,7 @@ bool FVCCSimConfigManager::LoadFromJsonFile()
         }
         (*TexEnhancerConfigJson)->TryGetBoolField(TEXT("OutputImages"), TexEnhancerConfig.bOutputImages);
         (*TexEnhancerConfigJson)->TryGetBoolField(TEXT("OutputMesh"),   TexEnhancerConfig.bOutputMesh);
+        (*TexEnhancerConfigJson)->TryGetBoolField(TEXT("UseCaptureReuse"), TexEnhancerConfig.bUseCaptureReuse);
 
         {
             auto LoadFloatArray = [&TexEnhancerConfigJson](const TCHAR* Field, TArray<float>& Out)

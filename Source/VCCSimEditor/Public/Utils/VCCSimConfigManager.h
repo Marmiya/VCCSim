@@ -69,6 +69,7 @@ public:
 
         bool    bOutputImages = true;
         bool    bOutputMesh   = true;
+        bool    bUseCaptureReuse = true;
 
         TArray<float> LightingElevation;
         TArray<float> LightingAzimuth;

@@ -569,6 +569,20 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateDatasetCaptureSection()
                     SNew(STextBlock).Text(FText::FromString(TEXT("Mesh")))
                 ]
             ]
+            +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(0, 0, 8, 0))
+            [
+                SNew(SCheckBox)
+                .ToolTipText(FText::FromString(TEXT(
+                    "Reuse lighting-independent GT channels (BaseColor / MatProps / Normal / gt_materials) "
+                    "from a matching earlier capture, so later lighting windows only re-shoot RGB. "
+                    "Off = every lighting window captures the full channel set (complete, self-contained dataset).")))
+                .IsEnabled_Lambda([this]() { return !bDatasetCaptureInProgress; })
+                .IsChecked_Lambda([this]() { return bUseCaptureReuse ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+                .OnCheckStateChanged_Lambda([this](ECheckBoxState S) { bUseCaptureReuse = (S == ECheckBoxState::Checked); SavePaths(); })
+                [
+                    SNew(STextBlock).Text(FText::FromString(TEXT("Reuse")))
+                ]
+            ]
             +SHorizontalBox::Slot().FillWidth(1.f)
             [
                 SNew(SButton)

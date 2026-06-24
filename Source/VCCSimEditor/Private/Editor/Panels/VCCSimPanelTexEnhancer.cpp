@@ -151,6 +151,7 @@ void FVCCSimPanelTexEnhancer::LoadFromConfigManager()
 
     bOutputImages = Config.bOutputImages;
     bOutputMesh   = Config.bOutputMesh;
+    bUseCaptureReuse = Config.bUseCaptureReuse;
 
     LoadParamsFromConfig();
 }
@@ -460,7 +461,8 @@ FReply FVCCSimPanelTexEnhancer::OnCaptureDatasetClicked()
         FCaptureReuseEntry Entry;
         Entry.SceneKey = FGTMaterialExporter::ComputeSceneSignature(World);
         Entry.GtMaterialsKey = GtMatKey;
-        Entry.GtMaterialsOwner = GtMatKey.IsEmpty() ? FString() : Manifest.FindGtMaterialsOwner(GtMatKey);
+        Entry.GtMaterialsOwner = (bUseCaptureReuse && !GtMatKey.IsEmpty())
+            ? Manifest.FindGtMaterialsOwner(GtMatKey) : FString();
 
         if (!Entry.GtMaterialsOwner.IsEmpty())
         {
@@ -548,8 +550,9 @@ bool FVCCSimPanelTexEnhancer::DecideAndStartCapture(const FString& CaptureDir)
     }
 
     FCaptureReuseManifest Manifest = FCaptureReuseManifest::Load(GetDatasetCapturesRoot());
-    const FString ViewGtOwner = Manifest.FindViewGtOwner(PoseKey, SceneKey);
-    const FString GtMatOwner  = GtMatKey.IsEmpty() ? FString() : Manifest.FindGtMaterialsOwner(GtMatKey);
+    const FString ViewGtOwner = bUseCaptureReuse ? Manifest.FindViewGtOwner(PoseKey, SceneKey) : FString();
+    const FString GtMatOwner  = (bUseCaptureReuse && !GtMatKey.IsEmpty())
+        ? Manifest.FindGtMaterialsOwner(GtMatKey) : FString();
 
     PendingCaptureName = FPaths::GetCleanFilename(CaptureDir);
     PendingReuseEntry = FCaptureReuseEntry();
@@ -1065,6 +1068,7 @@ void FVCCSimPanelTexEnhancer::SavePaths()
     Config.DayCycleSpeed       = DayCycleSpeed;
     Config.bOutputImages       = bOutputImages;
     Config.bOutputMesh         = bOutputMesh;
+    Config.bUseCaptureReuse    = bUseCaptureReuse;
 
     Config.LightingElevation.Append(LightingElevation, NumLightingConditions);
     Config.LightingAzimuth.Append(LightingAzimuth, NumLightingConditions);
@@ -1093,6 +1097,7 @@ void FVCCSimPanelTexEnhancer::LoadPaths()
     if (!Config.EstimatedMaterialsDir.IsEmpty()) EstimatedMaterialsDir = Config.EstimatedMaterialsDir;
     bOutputImages = Config.bOutputImages;
     bOutputMesh   = Config.bOutputMesh;
+    bUseCaptureReuse = Config.bUseCaptureReuse;
 
     LoadParamsFromConfig();
 }

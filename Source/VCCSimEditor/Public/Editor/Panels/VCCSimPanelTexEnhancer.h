@@ -121,6 +121,7 @@ private:
 
     bool bOutputImages = true;
     bool bOutputMesh   = true;
+    bool bUseCaptureReuse = true;
 
     float SunCalcLatitude  = 22.52933f;
     float SunCalcLongitude = 113.94092f;
