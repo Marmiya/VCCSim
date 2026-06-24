@@ -44,7 +44,8 @@ void FImageCaptureService::CaptureImageFromCurrentPose(
     int32 PoseIndex,
     const FString& InSaveDirectory,
     bool& bAnyCaptured,
-    bool bDatasetChannelsOnly)
+    bool bDatasetChannelsOnly,
+    bool bRgbOnly)
 {
     TSharedPtr<FVCCSimPanelSelection> SelectionManagerPin = SelectionManager.Pin();
     if (!SelectionManagerPin.IsValid())
@@ -68,17 +69,20 @@ void FImageCaptureService::CaptureImageFromCurrentPose(
             {
                 SaveRGB(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
             }
-            if (SelectionManagerPin->HasNormalCamera())
+            if (!bRgbOnly)
             {
-                SaveNormal(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
-            }
-            if (SelectionManagerPin->HasBaseColorCamera())
-            {
-                SaveBaseColor(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
-            }
-            if (SelectionManagerPin->HasMaterialPropertiesCamera())
-            {
-                SaveMaterialProperties(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
+                if (SelectionManagerPin->HasNormalCamera())
+                {
+                    SaveNormal(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
+                }
+                if (SelectionManagerPin->HasBaseColorCamera())
+                {
+                    SaveBaseColor(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
+                }
+                if (SelectionManagerPin->HasMaterialPropertiesCamera())
+                {
+                    SaveMaterialProperties(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
+                }
             }
         }
         else

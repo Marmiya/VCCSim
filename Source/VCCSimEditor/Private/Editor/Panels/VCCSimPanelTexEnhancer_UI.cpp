@@ -132,21 +132,12 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateDatasetConfigSection()
 
 TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateLightingScheduleSection()
 {
-    TSharedRef<SVerticalBox> SetAEntries = SNew(SVerticalBox);
-    for (int32 i = 0; i < NumLightingSetA; ++i)
+    TSharedRef<SVerticalBox> Entries = SNew(SVerticalBox);
+    for (int32 i = 0; i < NumLightingConditions; ++i)
     {
-        SetAEntries->AddSlot().AutoHeight().Padding(FMargin(0, 1))
+        Entries->AddSlot().AutoHeight().Padding(FMargin(0, 1))
         [
-            CreateSetALightingEntry(i)
-        ];
-    }
-
-    TSharedRef<SVerticalBox> SetBEntries = SNew(SVerticalBox);
-    for (int32 i = 0; i < NumLightingSetB; ++i)
-    {
-        SetBEntries->AddSlot().AutoHeight().Padding(FMargin(0, 1))
-        [
-            CreateSetBLightingEntry(i)
+            CreateLightingEntry(i)
         ];
     }
 
@@ -160,44 +151,7 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateLightingScheduleSection()
             .BorderBackgroundColor(FColor(20, 40, 80, 255))
             .Padding(FMargin(6, 3))
             [
-                SNew(SVerticalBox)
-                +SVerticalBox::Slot().AutoHeight()
-                [
-                    SNew(STextBlock)
-                    .Text(FText::FromString(TEXT("Set-A  (Estimation)")))
-                    .ColorAndOpacity(FLinearColor(0.5f, 0.8f, 1.f))
-                    .Font(FCoreStyle::GetDefaultFontStyle("Bold", 9))
-                ]
-                +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2, 0, 0))
-                [
-                    SetAEntries
-                ]
-            ]
-        ]
-
-        +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2))
-        [
-            SNew(SBorder)
-            .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
-            .BorderBackgroundColor(FColor(80, 40, 10, 255))
-            .Padding(FMargin(6, 3))
-            [
-                SNew(SVerticalBox)
-                +SVerticalBox::Slot().AutoHeight()
-                [
-                    SNew(SHorizontalBox)
-                    +SHorizontalBox::Slot().FillWidth(1.f)
-                    [
-                        SNew(STextBlock)
-                        .Text(FText::FromString(TEXT("Set-B  (Evaluation — Held-out)")))
-                        .ColorAndOpacity(FLinearColor(1.f, 0.6f, 0.2f))
-                        .Font(FCoreStyle::GetDefaultFontStyle("Bold", 9))
-                    ]
-                ]
-                +SVerticalBox::Slot().AutoHeight().Padding(FMargin(0, 2, 0, 0))
-                [
-                    SetBEntries
-                ]
+                Entries
             ]
         ]
 
@@ -422,8 +376,8 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateSunPositionCalculatorWidget()
                 [
                     SAssignNew(SunCalcFillSlotSpinBox, SNumericEntryBox<int32>)
                     .Value_Lambda([this]() { return SunCalcFillSlotValue; })
-                    .MinValue(1).MaxValue(MaxLightingEntries).Delta(1).AllowSpin(false)
-                    .ToolTipText(FText::FromString(TEXT("Target slot index (1-4)")))
+                    .MinValue(1).MaxValue(NumLightingConditions).Delta(1).AllowSpin(false)
+                    .ToolTipText(FText::FromString(TEXT("Target slot index (1-5)")))
                     .OnValueChanged_Lambda([this](int32 Val)
                     {
                         SunCalcFillSlot      = Val;
@@ -432,37 +386,27 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateSunPositionCalculatorWidget()
                 ]
             ]
 
-            +SHorizontalBox::Slot().AutoWidth().Padding(FMargin(0, 0, 4, 0))
+            +SHorizontalBox::Slot().AutoWidth()
             [
                 SNew(SButton)
                 .ButtonStyle(FAppStyle::Get(), "FlatButton.Primary")
                 .ContentPadding(FMargin(6, 2))
-                .Text(FText::FromString(TEXT("-> Set-A")))
-                .ToolTipText(FText::FromString(TEXT("Write computed Elevation/Azimuth into the chosen Set-A slot")))
-                .OnClicked_Lambda([this]() { return OnFillSetAFromSunPositionClicked(); })
-            ]
-
-            +SHorizontalBox::Slot().AutoWidth()
-            [
-                SNew(SButton)
-                .ButtonStyle(FAppStyle::Get(), "FlatButton.Danger")
-                .ContentPadding(FMargin(6, 2))
-                .Text(FText::FromString(TEXT("-> Set-B")))
-                .ToolTipText(FText::FromString(TEXT("Write computed Elevation/Azimuth into the chosen Set-B slot")))
-                .OnClicked_Lambda([this]() { return OnFillSetBFromSunPositionClicked(); })
+                .Text(FText::FromString(TEXT("-> Slot")))
+                .ToolTipText(FText::FromString(TEXT("Write computed Elevation/Azimuth into the chosen slot")))
+                .OnClicked_Lambda([this]() { return OnFillFromSunPositionClicked(); })
             ]
         ]
     ];
 }
 
-TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateSetALightingEntry(int32 Index)
+TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateLightingEntry(int32 Index)
 {
     return SNew(SHorizontalBox)
 
     +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(0, 0, 4, 0))
     [
         SNew(STextBlock)
-        .Text(FText::FromString(FString::Printf(TEXT("A%d"), Index + 1)))
+        .Text(FText::FromString(FString::Printf(TEXT("%d"), Index + 1)))
         .ColorAndOpacity(FLinearColor(0.6f, 0.6f, 0.6f))
         .MinDesiredWidth(18.f)
     ]
@@ -474,14 +418,15 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateSetALightingEntry(int32 Index
         .BorderBackgroundColor(FColor(5, 5, 5, 255))
         .Padding(2, 0)
         [
-            SAssignNew(SetAElevationSpinBox[Index], SNumericEntryBox<float>)
-            .Value_Lambda([this, Index]() { return SetAElevationValue[Index]; })
+            SAssignNew(LightingElevationSpinBox[Index], SNumericEntryBox<float>)
+            .Value_Lambda([this, Index]() { return LightingElevationValue[Index]; })
             .MinValue(0.f).MaxValue(90.f).Delta(1.f).AllowSpin(false)
             .ToolTipText(FText::FromString(TEXT("Sun elevation (°)")))
             .OnValueChanged_Lambda([this, Index](float Val)
             {
-                SetAElevation[Index] = Val;
-                SetAElevationValue[Index] = Val;
+                LightingElevation[Index] = Val;
+                LightingElevationValue[Index] = Val;
+                SavePaths();
             })
         ]
     ]
@@ -493,14 +438,15 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateSetALightingEntry(int32 Index
         .BorderBackgroundColor(FColor(5, 5, 5, 255))
         .Padding(2, 0)
         [
-            SAssignNew(SetAAzimuthSpinBox[Index], SNumericEntryBox<float>)
-            .Value_Lambda([this, Index]() { return SetAAzimuthValue[Index]; })
+            SAssignNew(LightingAzimuthSpinBox[Index], SNumericEntryBox<float>)
+            .Value_Lambda([this, Index]() { return LightingAzimuthValue[Index]; })
             .MinValue(0.f).MaxValue(360.f).Delta(5.f).AllowSpin(false)
             .ToolTipText(FText::FromString(TEXT("Sun azimuth (°)")))
             .OnValueChanged_Lambda([this, Index](float Val)
             {
-                SetAAzimuth[Index] = Val;
-                SetAAzimuthValue[Index] = Val;
+                LightingAzimuth[Index] = Val;
+                LightingAzimuthValue[Index] = Val;
+                SavePaths();
             })
         ]
     ]
@@ -512,68 +458,22 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateSetALightingEntry(int32 Index
         .ContentPadding(FMargin(4, 2))
         .Text(FText::FromString(TEXT("Apply")))
         .ToolTipText(FText::FromString(TEXT("Apply this lighting condition to the scene")))
-        .OnClicked_Lambda([this, Index]() { return OnApplySetALightingClicked(Index); })
-    ];
-}
-
-TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateSetBLightingEntry(int32 Index)
-{
-    return SNew(SHorizontalBox)
-
-    +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(0, 0, 4, 0))
-    [
-        SNew(STextBlock)
-        .Text(FText::FromString(FString::Printf(TEXT("B%d"), Index + 1)))
-        .ColorAndOpacity(FLinearColor(0.7f, 0.5f, 0.3f))
-        .MinDesiredWidth(18.f)
+        .OnClicked_Lambda([this, Index]() { return OnApplyLightingClicked(Index); })
     ]
 
-    +SHorizontalBox::Slot().MaxWidth(80).Padding(FMargin(0, 0, 2, 0))
+    +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(6, 0, 0, 0))
     [
-        SNew(SBorder)
-        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
-        .BorderBackgroundColor(FColor(5, 5, 5, 255))
-        .Padding(2, 0)
-        [
-            SAssignNew(SetBElevationSpinBox[Index], SNumericEntryBox<float>)
-            .Value_Lambda([this, Index]() { return SetBElevationValue[Index]; })
-            .MinValue(0.f).MaxValue(90.f).Delta(1.f).AllowSpin(false)
-            .ToolTipText(FText::FromString(TEXT("Sun elevation (°) — evaluation only")))
-            .OnValueChanged_Lambda([this, Index](float Val)
-            {
-                SetBElevation[Index] = Val;
-                SetBElevationValue[Index] = Val;
-            })
-        ]
-    ]
-
-    +SHorizontalBox::Slot().MaxWidth(80).Padding(FMargin(0, 0, 4, 0))
-    [
-        SNew(SBorder)
-        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
-        .BorderBackgroundColor(FColor(5, 5, 5, 255))
-        .Padding(2, 0)
-        [
-            SAssignNew(SetBAzimuthSpinBox[Index], SNumericEntryBox<float>)
-            .Value_Lambda([this, Index]() { return SetBAzimuthValue[Index]; })
-            .MinValue(0.f).MaxValue(360.f).Delta(5.f).AllowSpin(false)
-            .ToolTipText(FText::FromString(TEXT("Sun azimuth (°) — evaluation only")))
-            .OnValueChanged_Lambda([this, Index](float Val)
-            {
-                SetBAzimuth[Index] = Val;
-                SetBAzimuthValue[Index] = Val;
-            })
-        ]
-    ]
-
-    +SHorizontalBox::Slot().MaxWidth(80).HAlign(HAlign_Fill)
-    [
-        SNew(SButton)
-        .ButtonStyle(FAppStyle::Get(), "FlatButton.Warning")
-        .ContentPadding(FMargin(4, 2))
-        .Text(FText::FromString(TEXT("Apply")))
-        .ToolTipText(FText::FromString(TEXT("Apply this evaluation lighting — use only after Set-B is captured")))
-        .OnClicked_Lambda([this, Index]() { return OnApplySetBLightingClicked(Index); })
+        SNew(SCheckBox)
+        .IsChecked_Lambda([this, Index]()
+        {
+            return bLightingSelected[Index] ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
+        })
+        .OnCheckStateChanged_Lambda([this, Index](ECheckBoxState State)
+        {
+            bLightingSelected[Index] = (State == ECheckBoxState::Checked);
+            SavePaths();
+        })
+        .ToolTipText(FText::FromString(TEXT("Include this lighting condition in batch Capture Dataset")))
     ];
 }
 

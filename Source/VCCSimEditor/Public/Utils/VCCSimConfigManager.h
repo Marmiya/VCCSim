@@ -70,10 +70,9 @@ public:
         bool    bOutputImages = true;
         bool    bOutputMesh   = true;
 
-        TArray<float> SetAElevation;
-        TArray<float> SetAAzimuth;
-        TArray<float> SetBElevation;
-        TArray<float> SetBAzimuth;
+        TArray<float> LightingElevation;
+        TArray<float> LightingAzimuth;
+        TArray<bool>  LightingSelected;
 
         float SunCalcLatitude  = 22.52933f;
         float SunCalcLongitude = 113.94092f;

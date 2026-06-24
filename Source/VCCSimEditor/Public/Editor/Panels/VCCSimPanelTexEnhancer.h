@@ -30,6 +30,7 @@
 
 #include "Utils/LightingManager.h"
 #include "Utils/GTMaterialExporter.h"
+#include "Utils/CaptureReuseManifest.h"
 
 class FVCCSimPanelSelection;
 class FVCCSimPanelPathImageCapture;
@@ -62,14 +63,10 @@ private:
     TSharedPtr<SEditableTextBox> OutputDirTextBox;
     TSharedPtr<SEditableTextBox> SceneNameTextBox;
 
-    TSharedPtr<SNumericEntryBox<float>> SetAElevationSpinBox[4];
-    TSharedPtr<SNumericEntryBox<float>> SetAAzimuthSpinBox[4];
-    TSharedPtr<SNumericEntryBox<float>> SetBElevationSpinBox[4];
-    TSharedPtr<SNumericEntryBox<float>> SetBAzimuthSpinBox[4];
-    TOptional<float> SetAElevationValue[4];
-    TOptional<float> SetAAzimuthValue[4];
-    TOptional<float> SetBElevationValue[4];
-    TOptional<float> SetBAzimuthValue[4];
+    TSharedPtr<SNumericEntryBox<float>> LightingElevationSpinBox[5];
+    TSharedPtr<SNumericEntryBox<float>> LightingAzimuthSpinBox[5];
+    TOptional<float> LightingElevationValue[5];
+    TOptional<float> LightingAzimuthValue[5];
 
     TSharedPtr<SEditableTextBox> TexEnhancerScriptTextBox;
     TSharedPtr<SEditableTextBox> EstimatedMaterialsDirTextBox;
@@ -96,15 +93,11 @@ private:
     bool bSectionExpanded             = false;
     bool bLightingScheduleExpanded    = false;
 
-    static constexpr int32 MaxLightingEntries = 4;
-    int32 NumLightingSetA = 3;
-    int32 NumLightingSetB = 2;
+    static constexpr int32 NumLightingConditions = 5;
 
-    float SetAElevation[MaxLightingEntries] = { 35.f, 65.f, 50.f, 0.f };
-    float SetAAzimuth[MaxLightingEntries]   = { 120.f, 150.f, 90.f, 0.f };
-
-    float SetBElevation[MaxLightingEntries] = { 25.f, 75.f, 0.f, 0.f };
-    float SetBAzimuth[MaxLightingEntries]   = { 200.f, 60.f, 0.f, 0.f };
+    float LightingElevation[NumLightingConditions] = { 20.f, 70.f, 35.f, 85.f, 15.f };
+    float LightingAzimuth[NumLightingConditions]   = { 30.f, 110.f, 190.f, 250.f, 320.f };
+    bool  bLightingSelected[NumLightingConditions] = {};
 
     FString OutputDirectory;
     FString SceneName = TEXT("Scene_A");
@@ -115,7 +108,14 @@ private:
     bool bEvalInProgress        = false;
     bool bGTExportInProgress    = false;
     bool bDatasetCaptureInProgress = false;
+    bool bBatchCapture          = false;
     bool bDayCycleActive        = false;
+
+    FString BatchCaptureTimestamp;
+    TArray<int32> LightingCaptureQueue;
+
+    FString PendingCaptureName;
+    FCaptureReuseEntry PendingReuseEntry;
 
     int32 GTTextureResolution = 2048;
 
@@ -164,14 +164,11 @@ private:
     // ============================================================================
 
     TSharedRef<SWidget> CreateLightingScheduleSection();
-    TSharedRef<SWidget> CreateSetALightingEntry(int32 Index);
-    TSharedRef<SWidget> CreateSetBLightingEntry(int32 Index);
+    TSharedRef<SWidget> CreateLightingEntry(int32 Index);
     TSharedRef<SWidget> CreateSunPositionCalculatorWidget();
-    FReply OnApplySetALightingClicked(int32 Index);
-    FReply OnApplySetBLightingClicked(int32 Index);
+    FReply OnApplyLightingClicked(int32 Index);
     FReply OnCalculateSunPositionClicked();
-    FReply OnFillSetAFromSunPositionClicked();
-    FReply OnFillSetBFromSunPositionClicked();
+    FReply OnFillFromSunPositionClicked();
     FReply OnToggleDayCycleClicked();
 
     // ============================================================================
@@ -180,6 +177,8 @@ private:
 
     TSharedRef<SWidget> CreateDatasetCaptureSection();
     FReply OnCaptureDatasetClicked();
+    bool DecideAndStartCapture(const FString& CaptureDir);
+    void StartNextBatchCapture();
     void OnDatasetCaptureFinished(bool bSuccess, FString CaptureDirectory);
     FString GetDatasetCapturesRoot() const;
     FString MakeNextCaptureDirectory() const;
@@ -216,8 +215,6 @@ private:
     // UTILITIES
     // ============================================================================
 
-    FString GetSetACaptureDir() const;
-    FString GetSetBCaptureDir() const;
     FString GetGTMaterialsPath() const;
     FString GetEvaluationOutputDir() const;
 

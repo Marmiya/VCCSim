@@ -63,16 +63,24 @@ public:
      *
      * @param TargetDirectory Capture output directory (created if missing).
      * @param bDatasetChannelsOnly Force the dataset channel set (RGB/Normal/BaseColor/MatProps).
+     * @param bRgbOnly Capture only RGB and skip the lighting-independent GT channels
+     *        (Normal/BaseColor/MatProps) — used when those are reused from another capture.
      * @param OnComplete Fired with true on success, false on cancel/failure.
      * @return false if a session is already running or prerequisites are missing.
      */
     bool StartCaptureSession(
         const FString& TargetDirectory,
         bool bDatasetChannelsOnly,
+        bool bRgbOnly,
         FOnCaptureSessionComplete OnComplete);
 
     /** True when the selected FlashPawn has a path and the dataset cameras are present. */
     bool CanRunDatasetCapture(FString& OutReason) const;
+
+    /** Stable hash of the selected FlashPawn's current path poses (the same poses written to
+     *  poses.txt). Two captures along the same path share it — used to gate GT-channel reuse.
+     *  Empty if no FlashPawn/path is available. */
+    FString ComputePathPoseKey() const;
 
     /** Cancels the running capture session; fires the session delegate with false. */
     void StopAutoCapture();
@@ -169,6 +177,7 @@ private:
     bool bGenerationInProgress = false;
     bool bGameViewChangedForCapture = false;
     bool bSessionDatasetChannelsOnly = false;
+    bool bSessionRgbOnly = false;
     bool bDrainingCaptureJobs = false;
     bool bSessionCancelled = false;
     bool bWarmupCaptureDone = false;

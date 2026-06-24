@@ -4,6 +4,7 @@
 #include "Engine/StaticMeshActor.h"
 #include "Engine/StaticMesh.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/InstancedStaticMeshComponent.h"
 #include "EngineUtils.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
@@ -99,9 +100,13 @@ UStaticMesh* FGTMaterialExporter::BuildStaticMeshFromDynamic(UDynamicMeshCompone
         StaticMesh->GetStaticMaterials().Add(FStaticMaterial(Mat, *FString::Printf(TEXT("Slot_%d"), i)));
     }
 
+    StaticMesh->bAllowCPUAccess = true;
+
     UStaticMesh::FBuildMeshDescriptionsParams BuildParams;
     BuildParams.bBuildSimpleCollision = false;
-    BuildParams.bFastBuild = true;
+    BuildParams.bFastBuild = false;
+    BuildParams.bCommitMeshDescription = true;
+    BuildParams.bAllowCpuAccess = true;
 
     TArray<const FMeshDescription*> Descriptions;
     Descriptions.Add(&MeshDesc);
@@ -525,62 +530,62 @@ FString FGTMaterialExporter::ComputeSignature(
     return FMD5::HashAnsiString(*Canon);
 }
 
-FString FGTMaterialExporter::FindReusableExport(
-    const FString& CapturesRoot,
-    const FString& ExcludeCaptureDirName,
-    const FString& Signature)
+FString FGTMaterialExporter::ComputeSceneSignature(UWorld* World)
 {
-    if (Signature.IsEmpty())
+    if (!World)
     {
         return FString();
     }
 
-    IFileManager& FileManager = IFileManager::Get();
-    TArray<FString> CaptureDirs;
-    FileManager.FindFiles(CaptureDirs, *(CapturesRoot / TEXT("capture_*")), false, true);
-    CaptureDirs.Sort();
-
-    for (const FString& Dir : CaptureDirs)
+    TArray<FString> Lines;
+    for (TActorIterator<AActor> It(World); It; ++It)
     {
-        if (Dir == ExcludeCaptureDirName) continue;
+        AActor* Actor = *It;
+        if (!Actor || IsCaptureInfraActor(Actor)) continue;
 
-        const FString GTDir = CapturesRoot / Dir / TEXT("gt_materials");
-        FString JsonStr;
-        if (!FFileHelper::LoadFileToString(JsonStr, *(GTDir / TEXT("manifest.json"))))
-            continue;
+        TArray<UStaticMeshComponent*> MeshComps;   // includes ISM / HISM (subclasses)
+        Actor->GetComponents<UStaticMeshComponent>(MeshComps);
+        TArray<UDynamicMeshComponent*> DynComps;
+        Actor->GetComponents<UDynamicMeshComponent>(DynComps);
+        if (MeshComps.Num() == 0 && DynComps.Num() == 0) continue;
 
-        TSharedPtr<FJsonObject> Root;
-        TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonStr);
-        if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
-            continue;
+        FString Line = Actor->GetActorLabel() + TEXT("|") + Actor->GetActorTransform().ToString();
 
-        FString ExistingSig;
-        if (!Root->TryGetStringField(TEXT("signature"), ExistingSig) || ExistingSig != Signature)
-            continue;
-
-        // Only reuse a complete export: every listed actor must still have its mesh.gltf.
-        const TArray<TSharedPtr<FJsonValue>>* Actors = nullptr;
-        if (!Root->TryGetArrayField(TEXT("actors"), Actors) || !Actors || Actors->Num() == 0)
-            continue;
-
-        bool bComplete = true;
-        for (const TSharedPtr<FJsonValue>& Value : *Actors)
+        for (UStaticMeshComponent* MC : MeshComps)
         {
-            const TSharedPtr<FJsonObject> AObj = Value.IsValid() ? Value->AsObject() : nullptr;
-            FString Label;
-            if (!AObj.IsValid() || !AObj->TryGetStringField(TEXT("label"), Label)
-                || !FPaths::FileExists(GTDir / Label / TEXT("mesh.gltf")))
+            if (!MC) continue;
+            UStaticMesh* SM = MC->GetStaticMesh();
+            Line += TEXT("|sm=") + (SM ? SM->GetPathName() : FString(TEXT("none")));
+            if (const UInstancedStaticMeshComponent* ISM = Cast<UInstancedStaticMeshComponent>(MC))
             {
-                bComplete = false;
-                break;
+                Line += FString::Printf(TEXT("|inst=%d"), ISM->GetInstanceCount());
+            }
+            for (int32 m = 0; m < MC->GetNumMaterials(); ++m)
+            {
+                UMaterialInterface* Mat = MC->GetMaterial(m);
+                Line += TEXT("|mat=") + (Mat ? Mat->GetPathName() : FString(TEXT("none")));
             }
         }
-
-        if (bComplete)
+        for (UDynamicMeshComponent* DMC : DynComps)
         {
-            return GTDir;
+            if (!DMC) continue;
+            UDynamicMesh* Dyn = DMC->GetDynamicMesh();
+            Line += FString::Printf(TEXT("|dyn=%d"), Dyn ? Dyn->GetTriangleCount() : 0);
+            for (int32 m = 0; m < DMC->GetNumMaterials(); ++m)
+            {
+                UMaterialInterface* Mat = DMC->GetMaterial(m);
+                Line += TEXT("|dmat=") + (Mat ? Mat->GetPathName() : FString(TEXT("none")));
+            }
         }
+        Lines.Add(Line);
     }
 
-    return FString();
+    Lines.Sort();   // actor iteration order is not stable; sort for a deterministic hash
+    FString Canon;
+    for (const FString& L : Lines)
+    {
+        Canon += L + TEXT("\n");
+    }
+    return FMD5::HashAnsiString(*Canon);
 }
+

@@ -41,6 +41,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogPathImageCapture, Log, All);
 #include "Serialization/JsonWriter.h"
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
+#include "Misc/SecureHash.h"
 
 static bool EnsureGameView()
 {
@@ -881,7 +882,7 @@ void FVCCSimPanelPathImageCapture::CaptureImageFromCurrentPose()
     }
 
     ImageCaptureService->CaptureImageFromCurrentPose(
-        PoseIndex, SaveDirectory, bAnyCaptured, bSessionDatasetChannelsOnly);
+        PoseIndex, SaveDirectory, bAnyCaptured, bSessionDatasetChannelsOnly, bSessionRgbOnly);
 }
 
 bool FVCCSimPanelPathImageCapture::CanRunDatasetCapture(FString& OutReason) const
@@ -926,9 +927,32 @@ bool FVCCSimPanelPathImageCapture::CanRunDatasetCapture(FString& OutReason) cons
     return true;
 }
 
+FString FVCCSimPanelPathImageCapture::ComputePathPoseKey() const
+{
+    if (!SelectionManager.IsValid()) return FString();
+    TWeakObjectPtr<AFlashPawn> Pawn = SelectionManager.Pin()->GetSelectedFlashPawn();
+    if (!Pawn.IsValid() || Pawn->GetPoseCount() <= 0) return FString();
+
+    TArray<FVector> Positions;
+    TArray<FRotator> Rotations;
+    Pawn->GetCurrentPath(Positions, Rotations);
+    ApplyCameraLocalTransform(Pawn.Get(), Positions, Rotations);
+
+    FString Canon = FString::Printf(TEXT("n=%d"), Positions.Num());
+    for (int32 i = 0; i < Positions.Num(); ++i)
+    {
+        const FVector& P = Positions[i];
+        const FRotator& R = Rotations.IsValidIndex(i) ? Rotations[i] : FRotator::ZeroRotator;
+        Canon += FString::Printf(TEXT(";%.3f,%.3f,%.3f,%.3f,%.3f,%.3f"),
+            P.X, P.Y, P.Z, R.Pitch, R.Yaw, R.Roll);
+    }
+    return FMD5::HashAnsiString(*Canon);
+}
+
 bool FVCCSimPanelPathImageCapture::StartCaptureSession(
     const FString& TargetDirectory,
     bool bDatasetChannelsOnly,
+    bool bRgbOnly,
     FOnCaptureSessionComplete OnComplete)
 {
     if (bAutoCaptureInProgress)
@@ -973,6 +997,7 @@ bool FVCCSimPanelPathImageCapture::StartCaptureSession(
         SaveDirectory);
 
     bSessionDatasetChannelsOnly = bDatasetChannelsOnly;
+    bSessionRgbOnly = bRgbOnly;
     SessionCompleteDelegate = MoveTemp(OnComplete);
     bDrainingCaptureJobs = false;
     bSessionCancelled = false;
@@ -1079,6 +1104,7 @@ void FVCCSimPanelPathImageCapture::FinishCaptureSession(bool bSuccess)
     bSessionCancelled = false;
     bWarmupCaptureDone = false;
     bSessionDatasetChannelsOnly = false;
+    bSessionRgbOnly = false;
     SaveDirectory.Empty();
     if (ImageCaptureService.IsValid())
     {
@@ -1102,7 +1128,7 @@ void FVCCSimPanelPathImageCapture::StartAutoCapture()
 {
     const FString TargetDirectory =
         GetVCCSimOutputRoot() / TEXT("VCCSimCaptures") / GetTimestampedFilename();
-    StartCaptureSession(TargetDirectory, false, FOnCaptureSessionComplete());
+    StartCaptureSession(TargetDirectory, false, false, FOnCaptureSessionComplete());
 }
 
 void FVCCSimPanelPathImageCapture::StopAutoCapture()

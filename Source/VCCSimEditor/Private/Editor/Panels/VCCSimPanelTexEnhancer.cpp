@@ -22,6 +22,7 @@
 #include "Utils/ConfigParser.h"
 #include "Utils/LightingManager.h"
 #include "Utils/GTMaterialExporter.h"
+#include "Utils/CaptureReuseManifest.h"
 #include "Editor/Panels/VCCSimPanelSelection.h"
 #include "Editor/Panels/VCCSimPanelPathImageCapture.h"
 #include "HAL/FileManager.h"
@@ -48,12 +49,10 @@ DEFINE_LOG_CATEGORY_STATIC(LogTexEnhancerPanel, Log, All);
 
 FVCCSimPanelTexEnhancer::FVCCSimPanelTexEnhancer()
 {
-    for (int32 i = 0; i < MaxLightingEntries; ++i)
+    for (int32 i = 0; i < NumLightingConditions; ++i)
     {
-        SetAElevationValue[i] = SetAElevation[i];
-        SetAAzimuthValue[i]   = SetAAzimuth[i];
-        SetBElevationValue[i] = SetBElevation[i];
-        SetBAzimuthValue[i]   = SetBAzimuth[i];
+        LightingElevationValue[i] = LightingElevation[i];
+        LightingAzimuthValue[i]   = LightingAzimuth[i];
     }
     SunCalcLatValue      = SunCalcLatitude;
     SunCalcLonValue      = SunCalcLongitude;
@@ -168,17 +167,14 @@ void FVCCSimPanelTexEnhancer::LoadParamsFromConfig()
     GTTextureResolution = Config.GTTextureResolution;
     DayCycleSpeed       = Config.DayCycleSpeed;
 
-    for (int32 i = 0; i < MaxLightingEntries; ++i)
+    for (int32 i = 0; i < NumLightingConditions; ++i)
     {
-        if (Config.SetAElevation.IsValidIndex(i)) SetAElevation[i] = Config.SetAElevation[i];
-        if (Config.SetAAzimuth.IsValidIndex(i))   SetAAzimuth[i]   = Config.SetAAzimuth[i];
-        if (Config.SetBElevation.IsValidIndex(i)) SetBElevation[i] = Config.SetBElevation[i];
-        if (Config.SetBAzimuth.IsValidIndex(i))   SetBAzimuth[i]   = Config.SetBAzimuth[i];
+        if (Config.LightingElevation.IsValidIndex(i)) LightingElevation[i] = Config.LightingElevation[i];
+        if (Config.LightingAzimuth.IsValidIndex(i))   LightingAzimuth[i]   = Config.LightingAzimuth[i];
+        if (Config.LightingSelected.IsValidIndex(i))  bLightingSelected[i] = Config.LightingSelected[i];
 
-        SetAElevationValue[i] = SetAElevation[i];
-        SetAAzimuthValue[i]   = SetAAzimuth[i];
-        SetBElevationValue[i] = SetBElevation[i];
-        SetBAzimuthValue[i]   = SetBAzimuth[i];
+        LightingElevationValue[i] = LightingElevation[i];
+        LightingAzimuthValue[i]   = LightingAzimuth[i];
     }
 
     SunCalcLatitude  = Config.SunCalcLatitude;
@@ -233,21 +229,12 @@ FReply FVCCSimPanelTexEnhancer::OnBrowseOutputDirClicked()
 // SECTION 2: LIGHTING SCHEDULE
 // ============================================================================
 
-FReply FVCCSimPanelTexEnhancer::OnApplySetALightingClicked(int32 Index)
+FReply FVCCSimPanelTexEnhancer::OnApplyLightingClicked(int32 Index)
 {
-    if (Index < 0 || Index >= NumLightingSetA || !LightingManager.IsValid()) return FReply::Handled();
-    LightingManager->ApplyLightingCondition(SetAElevation[Index], SetAAzimuth[Index]);
-    UE_LOG(LogTexEnhancerPanel, Log, TEXT("Set-A%d applied: Elev=%.1f Az=%.1f"),
-        Index + 1, SetAElevation[Index], SetAAzimuth[Index]);
-    return FReply::Handled();
-}
-
-FReply FVCCSimPanelTexEnhancer::OnApplySetBLightingClicked(int32 Index)
-{
-    if (Index < 0 || Index >= NumLightingSetB || !LightingManager.IsValid()) return FReply::Handled();
-    LightingManager->ApplyLightingCondition(SetBElevation[Index], SetBAzimuth[Index]);
-    UE_LOG(LogTexEnhancerPanel, Log, TEXT("Set-B%d applied: Elev=%.1f Az=%.1f"),
-        Index + 1, SetBElevation[Index], SetBAzimuth[Index]);
+    if (Index < 0 || Index >= NumLightingConditions || !LightingManager.IsValid()) return FReply::Handled();
+    LightingManager->ApplyLightingCondition(LightingElevation[Index], LightingAzimuth[Index]);
+    UE_LOG(LogTexEnhancerPanel, Log, TEXT("Lighting condition %d applied: Elev=%.1f Az=%.1f"),
+        Index + 1, LightingElevation[Index], LightingAzimuth[Index]);
     return FReply::Handled();
 }
 
@@ -275,49 +262,25 @@ FReply FVCCSimPanelTexEnhancer::OnCalculateSunPositionClicked()
     return FReply::Handled();
 }
 
-FReply FVCCSimPanelTexEnhancer::OnFillSetAFromSunPositionClicked()
+FReply FVCCSimPanelTexEnhancer::OnFillFromSunPositionClicked()
 {
-    int32 SlotIdx = FMath::Clamp(SunCalcFillSlot - 1, 0, NumLightingSetA - 1);
-    SetAElevation[SlotIdx]      = SunCalcElevation;
-    SetAAzimuth[SlotIdx]        = SunCalcAzimuth;
-    SetAElevationValue[SlotIdx] = SunCalcElevation;
-    SetAAzimuthValue[SlotIdx]   = SunCalcAzimuth;
+    int32 SlotIdx = FMath::Clamp(SunCalcFillSlot - 1, 0, NumLightingConditions - 1);
+    LightingElevation[SlotIdx]      = SunCalcElevation;
+    LightingAzimuth[SlotIdx]        = SunCalcAzimuth;
+    LightingElevationValue[SlotIdx] = SunCalcElevation;
+    LightingAzimuthValue[SlotIdx]   = SunCalcAzimuth;
 
-    if (SetAElevationSpinBox[SlotIdx].IsValid())
+    if (LightingElevationSpinBox[SlotIdx].IsValid())
     {
-        SetAElevationSpinBox[SlotIdx]->Invalidate(EInvalidateWidgetReason::Paint);
+        LightingElevationSpinBox[SlotIdx]->Invalidate(EInvalidateWidgetReason::Paint);
     }
-    if (SetAAzimuthSpinBox[SlotIdx].IsValid())
+    if (LightingAzimuthSpinBox[SlotIdx].IsValid())
     {
-        SetAAzimuthSpinBox[SlotIdx]->Invalidate(EInvalidateWidgetReason::Paint);
+        LightingAzimuthSpinBox[SlotIdx]->Invalidate(EInvalidateWidgetReason::Paint);
     }
 
     UE_LOG(LogTexEnhancerPanel, Log,
-        TEXT("Sun position filled into Set-A slot %d: Elevation=%.1f°  Azimuth=%.1f°"),
-        SunCalcFillSlot, SunCalcElevation, SunCalcAzimuth);
-
-    return FReply::Handled();
-}
-
-FReply FVCCSimPanelTexEnhancer::OnFillSetBFromSunPositionClicked()
-{
-    int32 SlotIdx = FMath::Clamp(SunCalcFillSlot - 1, 0, NumLightingSetB - 1);
-    SetBElevation[SlotIdx]      = SunCalcElevation;
-    SetBAzimuth[SlotIdx]        = SunCalcAzimuth;
-    SetBElevationValue[SlotIdx] = SunCalcElevation;
-    SetBAzimuthValue[SlotIdx]   = SunCalcAzimuth;
-
-    if (SetBElevationSpinBox[SlotIdx].IsValid())
-    {
-        SetBElevationSpinBox[SlotIdx]->Invalidate(EInvalidateWidgetReason::Paint);
-    }
-    if (SetBAzimuthSpinBox[SlotIdx].IsValid())
-    {
-        SetBAzimuthSpinBox[SlotIdx]->Invalidate(EInvalidateWidgetReason::Paint);
-    }
-
-    UE_LOG(LogTexEnhancerPanel, Log,
-        TEXT("Sun position filled into Set-B slot %d: Elevation=%.1f°  Azimuth=%.1f°"),
+        TEXT("Sun position filled into slot %d: Elevation=%.1f°  Azimuth=%.1f°"),
         SunCalcFillSlot, SunCalcElevation, SunCalcAzimuth);
 
     return FReply::Handled();
@@ -408,31 +371,11 @@ bool FVCCSimPanelTexEnhancer::StartGTMaterialExport(const FString& BaseDir)
         return false;
     }
 
-    // GT materials are lighting-independent: if a previous capture of this scene exported
-    // the same target set / transforms / materials, copy it instead of re-running the
-    // (slow) glTF export.
+    // gt_materials reuse is decided upstream via captures/reuse.json (DecideAndStartCapture):
+    // when reusable, the export is skipped and an owner reference is recorded instead. Reaching
+    // here means this capture is the owner, so always run the full export.
     const FString Signature = FGTMaterialExporter::ComputeSignature(
         World, ActorLabels, SceneName, GTTextureResolution);
-
-    {
-        const FString CapturesRoot = GetDatasetCapturesRoot();
-        const FString CurrentCaptureDir = FPaths::GetCleanFilename(FPaths::GetPath(BaseDir));
-        const FString Reusable = FGTMaterialExporter::FindReusableExport(
-            CapturesRoot, CurrentCaptureDir, Signature);
-        if (!Reusable.IsEmpty())
-        {
-            if (FPlatformFileManager::Get().GetPlatformFile().CopyDirectoryTree(*BaseDir, *Reusable, true))
-            {
-                UE_LOG(LogTexEnhancerPanel, Log,
-                    TEXT("Reused GT materials from %s (signature match); skipped export"), *Reusable);
-                FVCCSimUIHelpers::ShowNotification(
-                    TEXT("GT materials reused from a previous capture (unchanged)."));
-                return true;
-            }
-            UE_LOG(LogTexEnhancerPanel, Warning,
-                TEXT("Failed to copy reusable GT materials from %s; exporting fresh"), *Reusable);
-        }
-    }
 
     bGTExportInProgress = true;
     FVCCSimUIHelpers::ShowNotification(TEXT("Starting GT material export..."));
@@ -491,7 +434,7 @@ FReply FVCCSimPanelTexEnhancer::OnCaptureDatasetClicked()
     }
 
     // Mesh-only run: skip the image capture session entirely and export gt_materials into a fresh
-    // capture directory (reuse/copy from a sibling capture still applies via the signature check).
+    // capture directory. gt_materials reuse is recorded in captures/reuse.json (owner reference).
     if (!bOutputImages)
     {
         const FString MeshOnlyDir = MakeNextCaptureDirectory();
@@ -500,10 +443,37 @@ FReply FVCCSimPanelTexEnhancer::OnCaptureDatasetClicked()
             FVCCSimUIHelpers::ShowNotification(TEXT("Could not allocate a capture directory."), true);
             return FReply::Handled();
         }
-        if (!StartGTMaterialExport(MeshOnlyDir / TEXT("gt_materials")))
+
+        UWorld* World = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
+        TSharedPtr<FVCCSimPanelSelection> Sel = SelectionManager.Pin();
+        FString GtMatKey;
+        if (Sel.IsValid() && World)
+        {
+            const TArray<FString> Labels = Sel->GetEnabledTargetActorLabels();
+            if (Labels.Num() > 0)
+            {
+                GtMatKey = FGTMaterialExporter::ComputeSignature(World, Labels, SceneName, GTTextureResolution);
+            }
+        }
+
+        FCaptureReuseManifest Manifest = FCaptureReuseManifest::Load(GetDatasetCapturesRoot());
+        FCaptureReuseEntry Entry;
+        Entry.SceneKey = FGTMaterialExporter::ComputeSceneSignature(World);
+        Entry.GtMaterialsKey = GtMatKey;
+        Entry.GtMaterialsOwner = GtMatKey.IsEmpty() ? FString() : Manifest.FindGtMaterialsOwner(GtMatKey);
+
+        if (!Entry.GtMaterialsOwner.IsEmpty())
+        {
+            UE_LOG(LogTexEnhancerPanel, Log,
+                TEXT("Mesh-only: gt_materials reused from %s (manifest reference)"), *Entry.GtMaterialsOwner);
+        }
+        else if (!StartGTMaterialExport(MeshOnlyDir / TEXT("gt_materials")))
         {
             UE_LOG(LogTexEnhancerPanel, Warning, TEXT("Mesh-only gt_materials export could not start"));
         }
+
+        Manifest.AddOrUpdate(FPaths::GetCleanFilename(MeshOnlyDir), Entry);
+        Manifest.Save();
         return FReply::Handled();
     }
 
@@ -521,6 +491,22 @@ FReply FVCCSimPanelTexEnhancer::OnCaptureDatasetClicked()
         return FReply::Handled();
     }
 
+    LightingCaptureQueue.Reset();
+    for (int32 i = 0; i < NumLightingConditions; ++i)
+    {
+        if (bLightingSelected[i]) LightingCaptureQueue.Add(i);
+    }
+    if (LightingCaptureQueue.Num() > 0)
+    {
+        BatchCaptureTimestamp = FDateTime::Now().ToString(TEXT("%Y%m%d_%H%M%S"));
+        bBatchCapture = true;
+        bDatasetCaptureInProgress = true;
+        UE_LOG(LogTexEnhancerPanel, Log,
+            TEXT("Batch dataset capture: %d selected lighting conditions"), LightingCaptureQueue.Num());
+        StartNextBatchCapture();
+        return FReply::Handled();
+    }
+
     const FString CaptureDir = MakeNextCaptureDirectory();
     if (CaptureDir.IsEmpty())
     {
@@ -528,10 +514,58 @@ FReply FVCCSimPanelTexEnhancer::OnCaptureDatasetClicked()
         return FReply::Handled();
     }
 
+    if (!DecideAndStartCapture(CaptureDir))
+    {
+        FVCCSimUIHelpers::ShowNotification(TEXT("Failed to start dataset capture."), true);
+        return FReply::Handled();
+    }
+
+    bDatasetCaptureInProgress = true;
+    return FReply::Handled();
+}
+
+bool FVCCSimPanelTexEnhancer::DecideAndStartCapture(const FString& CaptureDir)
+{
+    TSharedPtr<FVCCSimPanelPathImageCapture> PathCapture = PathImageCaptureManager.Pin();
+    if (!PathCapture.IsValid())
+    {
+        return false;
+    }
+
+    UWorld* World = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
+    TSharedPtr<FVCCSimPanelSelection> Sel = SelectionManager.Pin();
+
+    const FString PoseKey  = PathCapture->ComputePathPoseKey();
+    const FString SceneKey = FGTMaterialExporter::ComputeSceneSignature(World);
+    FString GtMatKey;
+    if (bOutputMesh && Sel.IsValid() && World)
+    {
+        const TArray<FString> Labels = Sel->GetEnabledTargetActorLabels();
+        if (Labels.Num() > 0)
+        {
+            GtMatKey = FGTMaterialExporter::ComputeSignature(World, Labels, SceneName, GTTextureResolution);
+        }
+    }
+
+    FCaptureReuseManifest Manifest = FCaptureReuseManifest::Load(GetDatasetCapturesRoot());
+    const FString ViewGtOwner = Manifest.FindViewGtOwner(PoseKey, SceneKey);
+    const FString GtMatOwner  = GtMatKey.IsEmpty() ? FString() : Manifest.FindGtMaterialsOwner(GtMatKey);
+
+    PendingCaptureName = FPaths::GetCleanFilename(CaptureDir);
+    PendingReuseEntry = FCaptureReuseEntry();
+    PendingReuseEntry.PoseKey          = PoseKey;
+    PendingReuseEntry.SceneKey         = SceneKey;
+    PendingReuseEntry.GtMaterialsKey   = GtMatKey;
+    PendingReuseEntry.ViewGtOwner      = ViewGtOwner;
+    PendingReuseEntry.GtMaterialsOwner = GtMatOwner;
+
+    const bool bRgbOnly = !ViewGtOwner.IsEmpty();
+
     TWeakPtr<FVCCSimPanelTexEnhancer> WeakSelf = AsShared();
     const bool bStarted = PathCapture->StartCaptureSession(
         CaptureDir,
-        true,
+        /*bDatasetChannelsOnly*/ true,
+        bRgbOnly,
         FOnCaptureSessionComplete::CreateLambda(
             [WeakSelf, CaptureDir](bool bSuccess)
             {
@@ -541,21 +575,59 @@ FReply FVCCSimPanelTexEnhancer::OnCaptureDatasetClicked()
                 }
             }));
 
-    if (!bStarted)
+    if (bStarted)
     {
-        FVCCSimUIHelpers::ShowNotification(TEXT("Failed to start dataset capture."), true);
-        return FReply::Handled();
+        if (bRgbOnly)
+        {
+            UE_LOG(LogTexEnhancerPanel, Log,
+                TEXT("Capture %s: RGB-only (GT image channels reused from %s)"),
+                *PendingCaptureName, *ViewGtOwner);
+        }
+        else
+        {
+            UE_LOG(LogTexEnhancerPanel, Log,
+                TEXT("Capture %s: full GT capture (owner)"), *PendingCaptureName);
+        }
+    }
+    return bStarted;
+}
+
+void FVCCSimPanelTexEnhancer::StartNextBatchCapture()
+{
+    if (LightingCaptureQueue.Num() == 0)
+    {
+        bBatchCapture = false;
+        bDatasetCaptureInProgress = false;
+        return;
     }
 
-    bDatasetCaptureInProgress = true;
-    UE_LOG(LogTexEnhancerPanel, Log, TEXT("Dataset capture started: %s"), *CaptureDir);
-    return FReply::Handled();
+    const int32 Slot = LightingCaptureQueue[0];
+    LightingCaptureQueue.RemoveAt(0);
+
+    if (LightingManager.IsValid())
+    {
+        LightingManager->ApplyLightingCondition(LightingElevation[Slot], LightingAzimuth[Slot]);
+    }
+
+    const FString CaptureDir = GetDatasetCapturesRoot()
+        / FString::Printf(TEXT("capture_%s_L%d"), *BatchCaptureTimestamp, Slot + 1);
+
+    if (!DecideAndStartCapture(CaptureDir))
+    {
+        bBatchCapture = false;
+        bDatasetCaptureInProgress = false;
+        LightingCaptureQueue.Reset();
+        FVCCSimUIHelpers::ShowNotification(TEXT("Failed to start dataset capture."), true);
+        return;
+    }
+
+    UE_LOG(LogTexEnhancerPanel, Log,
+        TEXT("Batch capture (lighting %d, Elev=%.1f Az=%.1f): %s"),
+        Slot + 1, LightingElevation[Slot], LightingAzimuth[Slot], *CaptureDir);
 }
 
 void FVCCSimPanelTexEnhancer::OnDatasetCaptureFinished(bool bSuccess, FString CaptureDirectory)
 {
-    bDatasetCaptureInProgress = false;
-
     if (!bSuccess)
     {
         if (IFileManager::Get().DeleteDirectory(*CaptureDirectory, false, true))
@@ -569,6 +641,9 @@ void FVCCSimPanelTexEnhancer::OnDatasetCaptureFinished(bool bSuccess, FString Ca
                 TEXT("Dataset capture cancelled or failed; could not remove partial directory: %s"), *CaptureDirectory);
         }
         FVCCSimUIHelpers::ShowNotification(TEXT("Dataset capture did not complete."), true);
+        LightingCaptureQueue.Reset();
+        bBatchCapture = false;
+        bDatasetCaptureInProgress = false;
         return;
     }
 
@@ -576,23 +651,48 @@ void FVCCSimPanelTexEnhancer::OnDatasetCaptureFinished(bool bSuccess, FString Ca
     FVCCSimUIHelpers::ShowNotification(
         FString::Printf(TEXT("Dataset capture complete: %s"), *CaptureDirectory), false);
 
-    if (!bOutputMesh)
+    TSharedPtr<FVCCSimPanelSelection> Sel = SelectionManager.Pin();
+    if (!PendingReuseEntry.GtMaterialsOwner.IsEmpty())
+    {
+        UE_LOG(LogTexEnhancerPanel, Log,
+            TEXT("gt_materials reused from %s (manifest reference); export skipped"),
+            *PendingReuseEntry.GtMaterialsOwner);
+    }
+    else if (!bOutputMesh)
     {
         UE_LOG(LogTexEnhancerPanel, Log, TEXT("Mesh output disabled, gt_materials export skipped"));
-        return;
     }
-
-    TSharedPtr<FVCCSimPanelSelection> Sel = SelectionManager.Pin();
-    if (!Sel.IsValid() || !Sel->HasEnabledTargetActors())
+    else if (!Sel.IsValid() || !Sel->HasEnabledTargetActors())
     {
         UE_LOG(LogTexEnhancerPanel, Log, TEXT("No enabled target actors, gt_materials export skipped"));
-        return;
     }
-
-    if (!StartGTMaterialExport(CaptureDirectory / TEXT("gt_materials")))
+    else if (!StartGTMaterialExport(CaptureDirectory / TEXT("gt_materials")))
     {
         UE_LOG(LogTexEnhancerPanel, Warning, TEXT("gt_materials export could not start"));
     }
+
+    // Record this capture's reuse relationship (owner refs) for the Python resolve step.
+    if (!PendingCaptureName.IsEmpty()
+        && FPaths::GetCleanFilename(CaptureDirectory) == PendingCaptureName)
+    {
+        FCaptureReuseManifest Manifest = FCaptureReuseManifest::Load(GetDatasetCapturesRoot());
+        Manifest.AddOrUpdate(PendingCaptureName, PendingReuseEntry);
+        Manifest.Save();
+    }
+
+    if (bBatchCapture)
+    {
+        if (LightingCaptureQueue.Num() > 0)
+        {
+            StartNextBatchCapture();
+            return;
+        }
+        bBatchCapture = false;
+        FVCCSimUIHelpers::ShowNotification(
+            TEXT("Batch dataset capture complete (all selected lighting)."), false);
+    }
+
+    bDatasetCaptureInProgress = false;
 }
 
 // ============================================================================
@@ -650,7 +750,15 @@ FReply FVCCSimPanelTexEnhancer::OnRunTexEnhancerClicked()
         return FReply::Handled();
     }
 
-    FString CameraInfoDir  = FPaths::Combine(GetSetACaptureDir(), TEXT("config"));
+    const FString CaptureDir = FindLatestCaptureDirectory();
+    if (CaptureDir.IsEmpty())
+    {
+        FVCCSimUIHelpers::ShowNotification(
+            TEXT("No capture found. Run 'Capture Dataset' first."), true);
+        return FReply::Handled();
+    }
+
+    FString CameraInfoDir  = CaptureDir;
     FString GTMaterialsPath  = GetGTMaterialsPath();
     FString PipelineOutDir   = FPaths::Combine(OutputDirectory, TEXT("estimated"));
 
@@ -664,7 +772,7 @@ FReply FVCCSimPanelTexEnhancer::OnRunTexEnhancerClicked()
         TEXT("\"%s\" --camera_info_dir \"%s\" --image_dir \"%s\" --output_dir \"%s\" --gt_materials \"%s\""),
         *TexEnhancerScriptPath,
         *CameraInfoDir,
-        *FPaths::Combine(GetSetACaptureDir(), TEXT("images")),
+        *CaptureDir,
         *PipelineOutDir,
         *GTMaterialsPath
     );
@@ -928,16 +1036,6 @@ void FVCCSimPanelTexEnhancer::RunBRDFEvaluation()
 // UTILITIES
 // ============================================================================
 
-FString FVCCSimPanelTexEnhancer::GetSetACaptureDir() const
-{
-    return FPaths::Combine(OutputDirectory, SceneName, TEXT("capture_setA"));
-}
-
-FString FVCCSimPanelTexEnhancer::GetSetBCaptureDir() const
-{
-    return FPaths::Combine(OutputDirectory, SceneName, TEXT("capture_setB"));
-}
-
 FString FVCCSimPanelTexEnhancer::GetGTMaterialsPath() const
 {
     const FString CaptureDir = FindLatestCaptureDirectory();
@@ -968,10 +1066,9 @@ void FVCCSimPanelTexEnhancer::SavePaths()
     Config.bOutputImages       = bOutputImages;
     Config.bOutputMesh         = bOutputMesh;
 
-    Config.SetAElevation.Append(SetAElevation, MaxLightingEntries);
-    Config.SetAAzimuth.Append(SetAAzimuth, MaxLightingEntries);
-    Config.SetBElevation.Append(SetBElevation, MaxLightingEntries);
-    Config.SetBAzimuth.Append(SetBAzimuth, MaxLightingEntries);
+    Config.LightingElevation.Append(LightingElevation, NumLightingConditions);
+    Config.LightingAzimuth.Append(LightingAzimuth, NumLightingConditions);
+    Config.LightingSelected.Append(bLightingSelected, NumLightingConditions);
 
     Config.SunCalcLatitude  = SunCalcLatitude;
     Config.SunCalcLongitude = SunCalcLongitude;

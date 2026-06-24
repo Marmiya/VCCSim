@@ -41,12 +41,16 @@ public:
      * @param bAnyCaptured Output parameter, set to true if at least one image was captured.
      * @param bDatasetChannelsOnly When true, capture the fixed dataset channel set
      *        (RGB, Normal, BaseColor, MaterialProperties) regardless of panel camera toggles.
+     * @param bRgbOnly When true (with bDatasetChannelsOnly), capture only RGB and skip the
+     *        lighting-independent GT channels (Normal/BaseColor/MaterialProperties) — used when
+     *        those are reused from another capture under different lighting.
      */
     void CaptureImageFromCurrentPose(
         int32 PoseIndex,
         const FString& InSaveDirectory,
         bool& bAnyCaptured,
-        bool bDatasetChannelsOnly = false);
+        bool bDatasetChannelsOnly = false,
+        bool bRgbOnly = false);
 
     /**
      * Locks the editor perspective viewport to the RGB camera resolution so the direct

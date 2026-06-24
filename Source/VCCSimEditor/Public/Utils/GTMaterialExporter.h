@@ -82,14 +82,14 @@ public:
         int32 TextureResolution);
 
     /**
-     * Searches sibling capture_* dirs under CapturesRoot for a complete gt_materials
-     * export whose manifest signature matches Signature, skipping ExcludeCaptureDirName.
-     * Returns that gt_materials directory (to copy from), or empty if none qualifies.
+     * Best-effort hash of the whole visible scene that affects the per-view GT image channels
+     * (BaseColor/MatProps/Normal): every mesh actor's label, transform, mesh asset path,
+     * material asset paths, and instance/triangle counts. Lighting actors carry no mesh
+     * component and are excluded, so the sun position never changes it. Two captures with the
+     * same scene_key (and same pose_key) render identical GT channels and can share them.
+     * Best-effort like ComputeSignature: keyed on asset paths, not asset content.
      */
-    static FString FindReusableExport(
-        const FString& CapturesRoot,
-        const FString& ExcludeCaptureDirName,
-        const FString& Signature);
+    static FString ComputeSceneSignature(UWorld* World);
 
 private:
     static bool WriteManifest(

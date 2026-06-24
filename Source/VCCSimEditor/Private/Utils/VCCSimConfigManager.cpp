@@ -118,10 +118,13 @@ void FVCCSimConfigManager::SaveToJsonFile()
                 Arr.Add(MakeShareable(new FJsonValueNumber(V)));
             return Arr;
         };
-        TexEnhancerConfigJson->SetArrayField(TEXT("SetAElevation"), MakeFloatArrayJson(TexEnhancerConfig.SetAElevation));
-        TexEnhancerConfigJson->SetArrayField(TEXT("SetAAzimuth"),   MakeFloatArrayJson(TexEnhancerConfig.SetAAzimuth));
-        TexEnhancerConfigJson->SetArrayField(TEXT("SetBElevation"), MakeFloatArrayJson(TexEnhancerConfig.SetBElevation));
-        TexEnhancerConfigJson->SetArrayField(TEXT("SetBAzimuth"),   MakeFloatArrayJson(TexEnhancerConfig.SetBAzimuth));
+        TexEnhancerConfigJson->SetArrayField(TEXT("LightingElevation"), MakeFloatArrayJson(TexEnhancerConfig.LightingElevation));
+        TexEnhancerConfigJson->SetArrayField(TEXT("LightingAzimuth"),   MakeFloatArrayJson(TexEnhancerConfig.LightingAzimuth));
+
+        TArray<TSharedPtr<FJsonValue>> SelectedArr;
+        for (bool bSel : TexEnhancerConfig.LightingSelected)
+            SelectedArr.Add(MakeShareable(new FJsonValueBoolean(bSel)));
+        TexEnhancerConfigJson->SetArrayField(TEXT("LightingSelected"), SelectedArr);
     }
 
     TexEnhancerConfigJson->SetNumberField(TEXT("SunCalcLatitude"),  TexEnhancerConfig.SunCalcLatitude);
@@ -290,10 +293,20 @@ bool FVCCSimConfigManager::LoadFromJsonFile()
                         Out.Add((float)V);
                 }
             };
-            LoadFloatArray(TEXT("SetAElevation"), TexEnhancerConfig.SetAElevation);
-            LoadFloatArray(TEXT("SetAAzimuth"),   TexEnhancerConfig.SetAAzimuth);
-            LoadFloatArray(TEXT("SetBElevation"), TexEnhancerConfig.SetBElevation);
-            LoadFloatArray(TEXT("SetBAzimuth"),   TexEnhancerConfig.SetBAzimuth);
+            LoadFloatArray(TEXT("LightingElevation"), TexEnhancerConfig.LightingElevation);
+            LoadFloatArray(TEXT("LightingAzimuth"),   TexEnhancerConfig.LightingAzimuth);
+
+            const TArray<TSharedPtr<FJsonValue>>* SelectedArr = nullptr;
+            if ((*TexEnhancerConfigJson)->TryGetArrayField(TEXT("LightingSelected"), SelectedArr))
+            {
+                TexEnhancerConfig.LightingSelected.Empty();
+                for (const TSharedPtr<FJsonValue>& Val : *SelectedArr)
+                {
+                    bool bSel = false;
+                    if (Val->TryGetBool(bSel))
+                        TexEnhancerConfig.LightingSelected.Add(bSel);
+                }
+            }
         }
     }
 
