@@ -69,6 +69,11 @@ public:
                                              // (flower bed, sign, bin) => NOT ground.
         float GroundMaxRise = 200.0f;        // edge surface within this of the adjacent terrain =>
                                              // ground; an elevated flat roof rises far above => structure.
+
+        // Actors the user manually marked as ground in the panel. Treated as ground unconditionally
+        // (skipping the geometric test) — the escape hatch for shapes the heuristic misses: jagged /
+        // small-triangle tiles, or stepped surfaces with large height differences.
+        TSet<const AActor*> ForcedGroundActors;
     };
 
     /** Parameters for generating a conformal orbit path. */
@@ -149,4 +154,19 @@ public:
      *  buildings to orbit; everything else is covered by the region survey only. */
     static TArray<FOrbitTarget> DetectBuildings(
         UWorld* World, const TArray<AActor*>& Actors, const FBuildingDetectParams& Params);
+
+    /** Cached wrapper around DetectBuildings. The collision-based clustering is expensive, so the
+     *  result is memoised and only recomputed when the actor set, any actor's transform, or the
+     *  detection params change. Shared by Highlight Targets and path generation, which run the same
+     *  detection back-to-back — they now compute it once and reuse. Game-thread only. */
+    static TArray<FOrbitTarget> DetectBuildingsCached(
+        UWorld* World, const TArray<AActor*>& Actors, const FBuildingDetectParams& Params);
+
+    /** Drop the DetectBuildingsCached memo (e.g. when geometry changed without an actor transform
+     *  change). The next DetectBuildingsCached call recomputes. */
+    static void InvalidateBuildingCache();
+
+    /** Minimum-area vertical OBB hugging an actor's footprint — the exact box DetectBuildings tests for
+     *  connectivity. Exposed so editor tooling can visualise the real connectivity box (not the AABB). */
+    static FVerticalOBB BuildActorOBB(const AActor* Actor);
 };

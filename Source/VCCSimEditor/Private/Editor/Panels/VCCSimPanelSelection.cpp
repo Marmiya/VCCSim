@@ -38,8 +38,11 @@ DEFINE_LOG_CATEGORY_STATIC(LogSelection, Log, All);
 #include "IDesktopPlatform.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Misc/Paths.h"
-#include "Components/LineBatchComponent.h"
 #include "Components/MeshComponent.h"
+#include "Components/InstancedStaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
+#include "Materials/MaterialInterface.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Utils/PathGenerator.h"
 #include "ScopedTransaction.h"
 
@@ -64,6 +67,16 @@ void FVCCSimPanelSelection::Cleanup()
     if (AActor* HA = HighlightActor.Get())
         HA->Destroy();
     HighlightActor.Reset();
+
+    for (const TWeakObjectPtr<AActor>& WA : HiddenGroundActors)
+        if (AActor* A = WA.Get())
+            A->SetIsTemporarilyHiddenInEditor(false);
+    HiddenGroundActors.Reset();
+
+    for (const TWeakObjectPtr<AActor>& WA : HiddenUnmatchedActors)
+        if (AActor* A = WA.Get())
+            A->SetIsTemporarilyHiddenInEditor(false);
+    HiddenUnmatchedActors.Reset();
 
     SelectedFlashPawnText.Reset();
     SelectFlashPawnToggle.Reset();
@@ -249,9 +262,17 @@ void FVCCSimPanelSelection::LoadFromConfigManager()
         TargetActorItems.Add(Item);
     }
 
+    GroundActorItems.Empty();
+    for (const FString& Label : Config.GroundLabels)
+        GroundActorItems.Add(MakeShared<FString>(Label));
+
     if (TargetActorListView.IsValid())
     {
         TargetActorListView->RequestListRefresh();
+    }
+    if (GroundActorListView.IsValid())
+    {
+        GroundActorListView->RequestListRefresh();
     }
 }
 
@@ -264,6 +285,8 @@ void FVCCSimPanelSelection::SaveTargetActorsToConfig() const
         Config.Labels.Add(Item->Label);
         Config.EnabledFlags.Add(Item->bEnabled);
     }
+    for (const TSharedPtr<FString>& Item : GroundActorItems)
+        if (Item.IsValid()) Config.GroundLabels.Add(*Item);
     Config.BoundsMin = BoundsMin;
     Config.BoundsMax = BoundsMax;
     Config.MinBuildingHeight = MinBuildingHeight;
@@ -311,35 +334,51 @@ FReply FVCCSimPanelSelection::OnAddTargetActorsClicked()
     return FReply::Handled();
 }
 
-FReply FVCCSimPanelSelection::OnFillBoundsFromSelectionClicked()
+FReply FVCCSimPanelSelection::OnAddGroundActorsClicked()
 {
     USelection* Sel = GEditor ? GEditor->GetSelectedActors() : nullptr;
-    if (!Sel || Sel->Num() == 0)
-    {
-        UE_LOG(LogSelection, Warning, TEXT("Fill Bounds: no actor selected in the viewport"));
-        return FReply::Handled();
-    }
+    if (!Sel) return FReply::Handled();
 
-    FBox Box(ForceInit);
+    bool bAdded = false;
     for (int32 i = 0; i < Sel->Num(); ++i)
     {
-        if (AActor* Actor = Cast<AActor>(Sel->GetSelectedObject(i)))
+        AActor* Actor = Cast<AActor>(Sel->GetSelectedObject(i));
+        if (!Actor) continue;
+
+        const FString Label = Actor->GetActorLabel();
+        const bool bDuplicate = GroundActorItems.ContainsByPredicate(
+            [&Label](const TSharedPtr<FString>& Item) { return Item.IsValid() && *Item == Label; });
+        if (!bDuplicate)
         {
-            FVector Origin, Extent;
-            Actor->GetActorBounds(false, Origin, Extent);
-            Box += FBox(Origin - Extent, Origin + Extent);
+            GroundActorItems.Add(MakeShared<FString>(Label));
+            bAdded = true;
         }
     }
 
-    if (Box.IsValid)
+    if (bAdded)
     {
-        BoundsMin = Box.Min;
-        BoundsMax = Box.Max;
+        if (GroundActorListView.IsValid())
+            GroundActorListView->RequestListRefresh();
         SaveTargetActorsToConfig();
-        UE_LOG(LogSelection, Log, TEXT("Fill Bounds: [%s .. %s]"),
-            *BoundsMin.ToString(), *BoundsMax.ToString());
     }
     return FReply::Handled();
+}
+
+TSet<const AActor*> FVCCSimPanelSelection::GetForcedGroundActors(UWorld* World) const
+{
+    TSet<const AActor*> Result;
+    if (!World || GroundActorItems.Num() == 0) return Result;
+
+    TSet<FString> Wanted;
+    for (const TSharedPtr<FString>& Item : GroundActorItems)
+        if (Item.IsValid()) Wanted.Add(*Item);
+
+    for (TActorIterator<AActor> It(World); It; ++It)
+        if (AActor* A = *It)
+            if (Wanted.Contains(A->GetActorLabel()))
+                Result.Add(A);
+
+    return Result;
 }
 
 FReply FVCCSimPanelSelection::OnAddTargetActorsInBoundsClicked()
@@ -496,9 +535,10 @@ FReply FVCCSimPanelSelection::OnHighlightTargetsClicked()
         return FReply::Handled();
     }
 
-    // Boxes go into a ULineBatchComponent on a transient actor — self-contained, so toggling off
-    // just destroys the actor. (DrawDebug's persistent lines are shared with the capture / path-viz
-    // flush and could not be cleared in isolation.)
+    // Highlight is drawn as instanced cube "beams" (box edges) on a transient actor, NOT debug lines:
+    // ULineBatchComponent re-processes every persistent line every frame (the lifetime-ageing pass),
+    // which with thousands of boxes stalls the editor. Instanced static meshes are GPU-resident and cost
+    // nothing per frame once built — the same mesh-based approach as the path visualisation.
     FActorSpawnParameters SpawnParams;
     SpawnParams.ObjectFlags = RF_Transient;
     SpawnParams.bNoFail = true;
@@ -510,21 +550,64 @@ FReply FVCCSimPanelSelection::OnHighlightTargetsClicked()
     Root->SetMobility(EComponentMobility::Movable);
     VizActor->SetRootComponent(Root);
     Root->RegisterComponent();
-
-    ULineBatchComponent* LineBatch = NewObject<ULineBatchComponent>(VizActor);
-    LineBatch->SetupAttachment(Root);
-    LineBatch->SetHiddenInGame(true);
-    LineBatch->RegisterComponent();
     HighlightActor = VizActor;
 
-    // Lines persist until the actor is destroyed; the line-batch component does not tick down in the
-    // editor, and the huge lifetime is a belt-and-suspenders guard in case it ever does.
-    const float BoxLifeTime = 1.0e8f;
+    UStaticMesh* CubeMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+    UMaterialInterface* BaseMat =
+        LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
+    if (!CubeMesh)
+        return FReply::Handled();
+
+    // One instanced-mesh component per colour (only a handful), each with a coloured material instance.
+    TMap<uint32, UInstancedStaticMeshComponent*> ColorISMCs;
+    auto GetISMC = [&](const FLinearColor& Color) -> UInstancedStaticMeshComponent*
+    {
+        const uint32 Key = Color.ToFColor(false).ToPackedARGB();
+        if (UInstancedStaticMeshComponent** Found = ColorISMCs.Find(Key))
+            return *Found;
+        UInstancedStaticMeshComponent* ISMC = NewObject<UInstancedStaticMeshComponent>(VizActor);
+        ISMC->SetStaticMesh(CubeMesh);
+        ISMC->SetMobility(EComponentMobility::Movable);
+        ISMC->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        ISMC->SetCastShadow(false);
+        ISMC->SetupAttachment(Root);
+        if (BaseMat)
+        {
+            UMaterialInstanceDynamic* MID = UMaterialInstanceDynamic::Create(BaseMat, VizActor);
+            MID->SetVectorParameterValue(FName("Color"), Color);
+            ISMC->SetMaterial(0, MID);
+        }
+        ISMC->RegisterComponent();
+        ColorISMCs.Add(Key, ISMC);
+        return ISMC;
+    };
+
+    // The BasicShapes cube is a 100 cm box centred on its pivot, so a beam A->B is the cube scaled to
+    // (length, thickness, thickness) along local X, rotated onto B-A, centred at the segment midpoint.
+    auto AddEdge = [&](const FVector& A, const FVector& B, const FLinearColor& Color, float Thickness)
+    {
+        const FVector Dir = B - A;
+        const float Len = Dir.Size();
+        if (Len < KINDA_SMALL_NUMBER) return;
+        const FQuat Rot = FRotationMatrix::MakeFromX(Dir).ToQuat();
+        const FVector Scale(Len / 100.f, Thickness / 100.f, Thickness / 100.f);
+        GetISMC(Color)->AddInstance(FTransform(Rot, (A + B) * 0.5f, Scale), /*bWorldSpace=*/true);
+    };
+    auto AddEdges = [&](const FVector C[8], const FLinearColor& Color, float Thickness)
+    {
+        const int32 E[12][2] = {
+            {0,1},{1,2},{2,3},{3,0}, {4,5},{5,6},{6,7},{7,4}, {0,4},{1,5},{2,6},{3,7} };
+        for (const auto& Edge : E) AddEdge(C[Edge[0]], C[Edge[1]], Color, Thickness);
+    };
     auto AddBox = [&](const FVector& Origin, const FVector& Extent, const FLinearColor& Color, float Thickness)
     {
-        LineBatch->DrawBox(Origin, Extent, Color, BoxLifeTime, 0, Thickness);
+        const FVector C[8] = {
+            Origin + FVector(-Extent.X,-Extent.Y,-Extent.Z), Origin + FVector( Extent.X,-Extent.Y,-Extent.Z),
+            Origin + FVector( Extent.X, Extent.Y,-Extent.Z), Origin + FVector(-Extent.X, Extent.Y,-Extent.Z),
+            Origin + FVector(-Extent.X,-Extent.Y, Extent.Z), Origin + FVector( Extent.X,-Extent.Y, Extent.Z),
+            Origin + FVector( Extent.X, Extent.Y, Extent.Z), Origin + FVector(-Extent.X, Extent.Y, Extent.Z) };
+        AddEdges(C, Color, Thickness);
     };
-    // Oriented box: 12 edges, so it works regardless of which DrawBox overloads the engine exposes.
     auto AddOBB = [&](const FPathGenerator::FVerticalOBB& O, const FLinearColor& Color, float Thickness)
     {
         const FVector2D AX = O.AxisX;
@@ -538,25 +621,51 @@ FReply FVCCSimPanelSelection::OnHighlightTargetsClicked()
         const FVector C[8] = {
             Corner(-1,-1,O.MinZ), Corner(1,-1,O.MinZ), Corner(1,1,O.MinZ), Corner(-1,1,O.MinZ),
             Corner(-1,-1,O.MaxZ), Corner(1,-1,O.MaxZ), Corner(1,1,O.MaxZ), Corner(-1,1,O.MaxZ) };
-        const int32 E[12][2] = {
-            {0,1},{1,2},{2,3},{3,0}, {4,5},{5,6},{6,7},{7,4}, {0,4},{1,5},{2,6},{3,7} };
-        for (const auto& Edge : E)
-            LineBatch->DrawLine(C[Edge[0]], C[Edge[1]], Color, 0, Thickness, BoxLifeTime);
+        AddEdges(C, Color, Thickness);
     };
 
-    // Building-detection params drive the cyan building boxes and the brown ground boxes below.
+    // Building-detection params drive the per-building colouring and the brown ground boxes below.
     FPathGenerator::FBuildingDetectParams BParams;
     BParams.MinBuildingHeight = MinBuildingHeight;
     BParams.MinBuildingFootprint = MinBuildingFootprint;
     BParams.ConnectGap = ConnectGap;
+    BParams.ForcedGroundActors = GetForcedGroundActors(World);
     const FLinearColor GroundColor(0.55f, 0.30f, 0.08f);   // brown = ground / terrain
 
-    // 1) Every entry of the shared list: green = enabled structure, brown = enabled ground/terrain,
-    //    gray = disabled.
     TMap<FString, AActor*> LabelMap;
     for (TActorIterator<AActor> It(World); It; ++It)
         if (AActor* A = *It) LabelMap.Add(A->GetActorLabel(), A);
 
+    // Detect buildings up front so each list actor can be coloured by the building it was merged into.
+    TArray<AActor*> EnabledActors;
+    for (const TSharedPtr<FVCCSimTargetActorItem>& Item : TargetActorItems)
+        if (Item.IsValid() && Item->bEnabled)
+            if (AActor** Found = LabelMap.Find(Item->Label))
+                if (*Found) EnabledActors.Add(*Found);
+
+    const TArray<FPathGenerator::FOrbitTarget> Buildings =
+        FPathGenerator::DetectBuildingsCached(World, EnabledActors, BParams);
+
+    TMap<const AActor*, int32> ActorBuilding;
+    for (int32 b = 0; b < Buildings.Num(); ++b)
+        for (const TWeakObjectPtr<AActor>& WA : Buildings[b].Actors)
+            if (const AActor* A = WA.Get()) ActorBuilding.Add(A, b);
+
+    // One distinct colour per building (members of the same building share it); palette avoids the
+    // reserved green (non-building structure) / brown (ground) / gray (disabled) / red+orange (audit).
+    auto BuildingColor = [](int32 Idx) -> FLinearColor
+    {
+        static const FLinearColor Palette[] = {
+            FLinearColor(0.00f, 0.80f, 1.00f), FLinearColor(1.00f, 0.00f, 1.00f),
+            FLinearColor(1.00f, 0.85f, 0.00f), FLinearColor(0.30f, 0.45f, 1.00f),
+            FLinearColor(0.70f, 0.20f, 1.00f), FLinearColor(0.00f, 0.85f, 0.55f),
+            FLinearColor(1.00f, 0.45f, 0.75f), FLinearColor(0.50f, 0.80f, 1.00f),
+            FLinearColor(0.85f, 0.50f, 1.00f), FLinearColor(0.95f, 0.75f, 0.20f) };
+        return Palette[Idx % (sizeof(Palette) / sizeof(Palette[0]))];
+    };
+
+    // 1) Every list entry: building members take their building's colour; enabled structures not merged
+    //    into any building = green; enabled ground = brown; disabled = gray.
     TSet<FString> ListedLabels;
     int32 Enabled = 0, Disabled = 0, Missing = 0, Ground = 0;
     for (const TSharedPtr<FVCCSimTargetActorItem>& Item : TargetActorItems)
@@ -566,12 +675,27 @@ FReply FVCCSimPanelSelection::OnHighlightTargetsClicked()
         AActor** Found = LabelMap.Find(Item->Label);
         if (!Found || !*Found) { ++Missing; continue; }
 
-        FVector Origin, Extent;
-        (*Found)->GetActorBounds(false, Origin, Extent);
         const bool bGround = FPathGenerator::IsGroundLikeActor(World, *Found, BParams);
         FLinearColor Color = FLinearColor(0.3f, 0.3f, 0.3f);   // disabled gray
-        if (Item->bEnabled) Color = bGround ? GroundColor : FLinearColor::Green;
-        AddBox(Origin, Extent, Color, 8.f);
+        if (Item->bEnabled)
+        {
+            if (bGround) Color = GroundColor;
+            else if (const int32* BIdx = ActorBuilding.Find(*Found)) Color = BuildingColor(*BIdx);
+            else Color = FLinearColor::Green;
+        }
+        // Draw the min-area OBB — the exact box DetectBuildings tests for connectivity. AABB fallback
+        // only if the OBB degenerates.
+        const FPathGenerator::FVerticalOBB ItemOBB = FPathGenerator::BuildActorOBB(*Found);
+        if (ItemOBB.bValid)
+        {
+            AddOBB(ItemOBB, Color, 8.f);
+        }
+        else
+        {
+            FVector Origin, Extent;
+            (*Found)->GetActorBounds(false, Origin, Extent);
+            AddBox(Origin, Extent, Color, 8.f);
+        }
         if (!Item->bEnabled) ++Disabled;
         else if (bGround) ++Ground;
         else ++Enabled;
@@ -611,8 +735,57 @@ FReply FVCCSimPanelSelection::OnHighlightTargetsClicked()
         }
     }
 
-    // 3) Buildings: the exact geometric subset path generation orbits — ground-like meshes dropped,
-    //    structures clustered, kept only if tall/wide enough. One thick cyan box per building.
+    // 3) One thick merged outline per detected building, in that building's colour — the bold envelope
+    //    around its same-coloured members.
+    for (int32 b = 0; b < Buildings.Num(); ++b)
+    {
+        const FPathGenerator::FOrbitTarget& Building = Buildings[b];
+        const FLinearColor Color = BuildingColor(b);
+        if (Building.OBB.bValid)
+        {
+            AddOBB(Building.OBB, Color, 20.f);
+        }
+        else if (Building.Bounds.IsValid)
+        {
+            const FBox B = Building.Bounds.ExpandBy(40.f);
+            AddBox(B.GetCenter(), B.GetExtent(), Color, 20.f);
+        }
+    }
+
+    UE_LOG(LogSelection, Log,
+        TEXT("Highlight ON: %d enabled, %d ground, %d disabled, %d building(s); in-box audit %d red (exportable) + %d orange (mesh, not exportable); %d missing. Click again to hide."),
+        Enabled, Ground, Disabled, Buildings.Num(), Red, Orange, Missing);
+    return FReply::Handled();
+}
+
+FReply FVCCSimPanelSelection::OnHideUnmatchedActorsClicked()
+{
+    // Toggle: a second click restores everything this tool hid.
+    if (HiddenUnmatchedActors.Num() > 0)
+    {
+        for (const TWeakObjectPtr<AActor>& WA : HiddenUnmatchedActors)
+            if (AActor* A = WA.Get())
+                A->SetIsTemporarilyHiddenInEditor(false);
+        const int32 Restored = HiddenUnmatchedActors.Num();
+        HiddenUnmatchedActors.Reset();
+        UE_LOG(LogSelection, Log, TEXT("Hide Unmatched OFF: restored %d actor(s)."), Restored);
+        return FReply::Handled();
+    }
+
+    UWorld* World = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
+    if (!World)
+        return FReply::Handled();
+
+    FPathGenerator::FBuildingDetectParams BParams;
+    BParams.MinBuildingHeight = MinBuildingHeight;
+    BParams.MinBuildingFootprint = MinBuildingFootprint;
+    BParams.ConnectGap = ConnectGap;
+    BParams.ForcedGroundActors = GetForcedGroundActors(World);
+
+    TMap<FString, AActor*> LabelMap;
+    for (TActorIterator<AActor> It(World); It; ++It)
+        if (AActor* A = *It) LabelMap.Add(A->GetActorLabel(), A);
+
     TArray<AActor*> EnabledActors;
     for (const TSharedPtr<FVCCSimTargetActorItem>& Item : TargetActorItems)
         if (Item.IsValid() && Item->bEnabled)
@@ -620,23 +793,90 @@ FReply FVCCSimPanelSelection::OnHighlightTargetsClicked()
                 if (*Found) EnabledActors.Add(*Found);
 
     const TArray<FPathGenerator::FOrbitTarget> Buildings =
-        FPathGenerator::DetectBuildings(World, EnabledActors, BParams);
-    for (const FPathGenerator::FOrbitTarget& Building : Buildings)
+        FPathGenerator::DetectBuildingsCached(World, EnabledActors, BParams);
+    TSet<const AActor*> InBuilding;
+    for (const FPathGenerator::FOrbitTarget& B : Buildings)
+        for (const TWeakObjectPtr<AActor>& WA : B.Actors)
+            if (const AActor* A = WA.Get()) InBuilding.Add(A);
+
+    // Green = enabled, not ground, not merged into any building.
+    int32 Hidden = 0;
+    for (AActor* A : EnabledActors)
     {
-        if (Building.OBB.bValid)
-        {
-            AddOBB(Building.OBB, FLinearColor(0.f, 0.8f, 1.f), 20.f);
-        }
-        else if (Building.Bounds.IsValid)
-        {
-            const FBox B = Building.Bounds.ExpandBy(40.f);
-            AddBox(B.GetCenter(), B.GetExtent(), FLinearColor(0.f, 0.8f, 1.f), 20.f);
-        }
+        if (FPathGenerator::IsGroundLikeActor(World, A, BParams)) continue;   // brown, not green
+        if (InBuilding.Contains(A)) continue;                                 // matched into a building
+        A->SetIsTemporarilyHiddenInEditor(true);
+        HiddenUnmatchedActors.Add(A);
+        ++Hidden;
     }
 
     UE_LOG(LogSelection, Log,
-        TEXT("Highlight ON: %d enabled, %d ground, %d disabled, %d building(s); in-box audit %d red (exportable) + %d orange (mesh, not exportable); %d missing. Click again to hide."),
-        Enabled, Ground, Disabled, Buildings.Num(), Red, Orange, Missing);
+        TEXT("Hide Unmatched ON: hid %d unmatched (green) actor(s). Click again to restore."), Hidden);
+    return FReply::Handled();
+}
+
+FReply FVCCSimPanelSelection::OnForceRecomputeClicked()
+{
+    FPathGenerator::InvalidateBuildingCache();
+    UE_LOG(LogSelection, Log, TEXT("Building-detection cache invalidated; next detection recomputes."));
+
+    // If a highlight is currently shown, rebuild it so the recompute shows immediately. The highlight
+    // handler is a toggle: once tears the current one down, once draws a fresh one — and the fresh draw
+    // calls DetectBuildingsCached, which now recomputes because the cache was just cleared.
+    if (HighlightActor.IsValid())
+    {
+        OnHighlightTargetsClicked();
+        OnHighlightTargetsClicked();
+    }
+    return FReply::Handled();
+}
+
+FReply FVCCSimPanelSelection::OnHideGroundActorsClicked()
+{
+    // Toggle: a second click restores everything this tool hid.
+    if (HiddenGroundActors.Num() > 0)
+    {
+        for (const TWeakObjectPtr<AActor>& WA : HiddenGroundActors)
+            if (AActor* A = WA.Get())
+                A->SetIsTemporarilyHiddenInEditor(false);
+        const int32 Restored = HiddenGroundActors.Num();
+        HiddenGroundActors.Reset();
+        UE_LOG(LogSelection, Log, TEXT("Hide Ground OFF: restored %d actor(s)."), Restored);
+        return FReply::Handled();
+    }
+
+    UWorld* World = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
+    if (!World)
+        return FReply::Handled();
+
+    // Same ground test and enabled-actor set DetectBuildings runs on, so what stays visible is exactly
+    // the structure set being clustered.
+    FPathGenerator::FBuildingDetectParams BParams;
+    BParams.MinBuildingHeight = MinBuildingHeight;
+    BParams.MinBuildingFootprint = MinBuildingFootprint;
+    BParams.ConnectGap = ConnectGap;
+    BParams.ForcedGroundActors = GetForcedGroundActors(World);
+
+    TMap<FString, AActor*> LabelMap;
+    for (TActorIterator<AActor> It(World); It; ++It)
+        if (AActor* A = *It) LabelMap.Add(A->GetActorLabel(), A);
+
+    int32 Hidden = 0;
+    for (const TSharedPtr<FVCCSimTargetActorItem>& Item : TargetActorItems)
+    {
+        if (!Item.IsValid() || !Item->bEnabled) continue;
+        AActor** Found = LabelMap.Find(Item->Label);
+        if (!Found || !*Found) continue;
+        if (!FPathGenerator::IsGroundLikeActor(World, *Found, BParams)) continue;
+
+        (*Found)->SetIsTemporarilyHiddenInEditor(true);
+        HiddenGroundActors.Add(*Found);
+        ++Hidden;
+    }
+
+    UE_LOG(LogSelection, Log,
+        TEXT("Hide Ground ON: hid %d ground-classified actor(s); remaining visible meshes are the clustered structures. Click again to restore."),
+        Hidden);
     return FReply::Handled();
 }
 

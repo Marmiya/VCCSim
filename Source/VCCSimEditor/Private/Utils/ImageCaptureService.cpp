@@ -462,6 +462,17 @@ void FImageCaptureService::CaptureRGBFromViewport(
         VC->SetViewLocation(CameraTransform.GetLocation());
         VC->SetViewRotation(CameraTransform.GetRotation().Rotator());
         VC->ViewFOV = Camera->FOV;
+
+        // Warm-up: the camera just jumped to this pose, but the viewport renders with temporal occlusion
+        // culling (HZB built from the PREVIOUS frame's depth), Lumen and streaming — all of which need a
+        // few frames to converge. The first frame after a jump culls parts of buildings using the old
+        // pose's depth, so they go missing (and appear the next pose). Draw throwaway frames first so the
+        // occlusion / Lumen / streaming state settles to this pose, then draw the frame we read back.
+        for (int32 w = 0; w < ViewportWarmupFrames; ++w)
+        {
+            VC->Invalidate();
+            VC->Viewport->Draw();
+        }
         VC->Invalidate();
         VC->Viewport->Draw();
 

@@ -62,6 +62,12 @@ public:
     /** Restores the editor viewport's size. Call at session end. */
     void EndViewportCaptureSession();
 
+    /** Throwaway viewport frames drawn before reading back each direct-viewport RGB capture, so the
+     *  viewport's temporal occlusion culling (HZB), Lumen and streaming converge to the jumped-to pose
+     *  before the pixels are read. Without this the first frame after a camera jump culls parts of
+     *  buildings using the previous pose's depth and they go missing. */
+    void SetViewportWarmupFrames(int32 N) { ViewportWarmupFrames = FMath::Max(0, N); }
+
     /** Number of capture readbacks still in flight (async save tasks not yet dispatched). */
     int32 GetPendingJobCount() const { return JobNum.IsValid() ? JobNum->load() : 0; }
 
@@ -100,4 +106,5 @@ private:
 
     bool bViewportSizeFixed = false;
     bool bSavedMotionBlur = false;
+    int32 ViewportWarmupFrames = 3;
 };

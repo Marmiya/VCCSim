@@ -154,6 +154,7 @@ void FVCCSimConfigManager::SaveToJsonFile()
         PathCaptureJson->SetNumberField(TEXT("NumObliqueRings"),     PathImageCaptureConfig.NumObliqueRings);
         PathCaptureJson->SetBoolField(TEXT("SideOrbit"),             PathImageCaptureConfig.bSideOrbit);
         PathCaptureJson->SetNumberField(TEXT("CaptureTickInterval"), PathImageCaptureConfig.CaptureTickInterval);
+        PathCaptureJson->SetNumberField(TEXT("PoseWarmupFrames"),    PathImageCaptureConfig.PoseWarmupFrames);
         RootObject->SetObjectField(TEXT("PathImageCaptureConfig"), PathCaptureJson);
     }
 
@@ -169,6 +170,11 @@ void FVCCSimConfigManager::SaveToJsonFile()
             TargetActorsJson.Add(MakeShareable(new FJsonValueObject(EntryJson)));
         }
         RootObject->SetArrayField(TEXT("TargetActors"), TargetActorsJson);
+
+        TArray<TSharedPtr<FJsonValue>> GroundActorsJson;
+        for (const FString& Label : TargetActorsConfig.GroundLabels)
+            GroundActorsJson.Add(MakeShareable(new FJsonValueString(Label)));
+        RootObject->SetArrayField(TEXT("GroundActors"), GroundActorsJson);
 
         TSharedPtr<FJsonObject> BoundsJson = MakeShareable(new FJsonObject);
         BoundsJson->SetNumberField(TEXT("MinX"), TargetActorsConfig.BoundsMin.X);
@@ -327,6 +333,7 @@ bool FVCCSimConfigManager::LoadFromJsonFile()
         if ((*PathCaptureJson)->TryGetNumberField(TEXT("NadirTiltAngle"), V))      PathImageCaptureConfig.NadirTiltAngle      = (float)V;
         if ((*PathCaptureJson)->TryGetNumberField(TEXT("NumObliqueRings"), V))     PathImageCaptureConfig.NumObliqueRings     = (int32)V;
         if ((*PathCaptureJson)->TryGetNumberField(TEXT("CaptureTickInterval"), V)) PathImageCaptureConfig.CaptureTickInterval = (float)V;
+        if ((*PathCaptureJson)->TryGetNumberField(TEXT("PoseWarmupFrames"), V))    PathImageCaptureConfig.PoseWarmupFrames    = (int32)V;
         (*PathCaptureJson)->TryGetBoolField(TEXT("IncludeOblique"), PathImageCaptureConfig.bIncludeOblique);
         (*PathCaptureJson)->TryGetBoolField(TEXT("SideOrbit"), PathImageCaptureConfig.bSideOrbit);
     }
@@ -352,6 +359,18 @@ bool FVCCSimConfigManager::LoadFromJsonFile()
 
                 TargetActorsConfig.Labels.Add(Label);
                 TargetActorsConfig.EnabledFlags.Add(bEnabled);
+            }
+        }
+
+        TargetActorsConfig.GroundLabels.Empty();
+        const TArray<TSharedPtr<FJsonValue>>* GroundActorsArr = nullptr;
+        if (RootObject->TryGetArrayField(TEXT("GroundActors"), GroundActorsArr))
+        {
+            for (const TSharedPtr<FJsonValue>& Val : *GroundActorsArr)
+            {
+                FString Label;
+                if (Val->TryGetString(Label) && !Label.IsEmpty())
+                    TargetActorsConfig.GroundLabels.Add(Label);
             }
         }
 

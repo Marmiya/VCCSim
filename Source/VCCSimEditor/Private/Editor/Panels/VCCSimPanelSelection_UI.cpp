@@ -95,6 +95,13 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateSelectionPanel()
                 [
                     CreateTargetActorListPanel()
                 ]
+
+                +SVerticalBox::Slot()
+                .AutoHeight()
+                .Padding(FMargin(0, 6, 0, 0))
+                [
+                    CreateGroundActorListPanel()
+                ]
             ]
         ];
 }
@@ -166,6 +173,18 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateTargetActorListPanel()
             .IsEnabled_Lambda([this]() { return TargetActorItems.Num() > 0 || HighlightActor.IsValid(); })
             .OnClicked_Lambda([this]() { return OnHighlightTargetsClicked(); })
         ]
+        +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(4, 0, 0, 0))
+        [
+            SNew(SButton)
+            .ContentPadding(FMargin(5, 2))
+            .HAlign(HAlign_Center)
+            .Text(FText::FromString(TEXT("Recompute")))
+            .ToolTipText(FText::FromString(TEXT(
+                "Force building detection to recompute, ignoring the cache. Use after a change the cache "
+                "signature does not track — scaling an actor, or editing a mesh's collision/geometry "
+                "without moving it. Refreshes the highlight if it is currently shown.")))
+            .OnClicked_Lambda([this]() { return OnForceRecomputeClicked(); })
+        ]
         +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(8, 0, 4, 0))
         [
             SNew(STextBlock)
@@ -210,6 +229,35 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateTargetActorListPanel()
                 "materials come from the camera captures.")))
             .IsEnabled_Lambda([this]() { return !bGTExportInProgress; })
             .OnClicked_Lambda([this]() { return OnExportGTMeshClicked(); })
+        ]
+        +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(4, 0, 0, 0))
+        [
+            SNew(SButton)
+            .ContentPadding(FMargin(5, 2))
+            .HAlign(HAlign_Center)
+            .Text_Lambda([this]() { return FText::FromString(
+                HiddenUnmatchedActors.Num() > 0 ? TEXT("Show Unmatched") : TEXT("Hide Unmatched")); })
+            .ToolTipText(FText::FromString(TEXT(
+                "Debug aid: temporarily hide every enabled actor that ended up GREEN in the highlight — "
+                "non-ground actors not merged into any building. What stays visible is the matched "
+                "buildings (and ground). Click again to restore.")))
+            .IsEnabled_Lambda([this]() { return TargetActorItems.Num() > 0 || HiddenUnmatchedActors.Num() > 0; })
+            .OnClicked_Lambda([this]() { return OnHideUnmatchedActorsClicked(); })
+        ]
+        +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(4, 0, 0, 0))
+        [
+            SNew(SButton)
+            .ContentPadding(FMargin(5, 2))
+            .HAlign(HAlign_Center)
+            .Text_Lambda([this]() { return FText::FromString(
+                HiddenGroundActors.Num() > 0 ? TEXT("Show Ground") : TEXT("Hide Ground")); })
+            .ToolTipText(FText::FromString(TEXT(
+                "Debug aid for building detection: temporarily hide every enabled list actor classified "
+                "as ground (same test as Generate Poses). What stays visible is exactly the structure set "
+                "DetectBuildings clusters — a street still visible between two buildings is a piece NOT "
+                "recognised as ground that bridges them into one building. Click again to restore.")))
+            .IsEnabled_Lambda([this]() { return TargetActorItems.Num() > 0 || HiddenGroundActors.Num() > 0; })
+            .OnClicked_Lambda([this]() { return OnHideGroundActorsClicked(); })
         ]
     ]
 
@@ -333,8 +381,7 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateBoundsSelectPanel()
         .Text(FText::FromString(TEXT("Add by Bounding Box (UE cm):")))
         .ToolTipText(FText::FromString(TEXT(
             "Add every mesh actor whose bounds CENTRE falls inside this world-space box (a corner merely "
-            "clipping the box does not count). Use 'Fill From Selection' to set the box from selected "
-            "actors, then narrow it.")))
+            "clipping the box does not count).")))
         .Font(FAppStyle::GetFontStyle("PropertyWindow.BoldFont"))
         .ColorAndOpacity(FColor(233, 233, 233))
     ]
@@ -407,18 +454,6 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateBoundsSelectPanel()
     .Padding(FMargin(0, 1, 0, 0))
     [
         SNew(SButton)
-        .ContentPadding(FMargin(5, 2))
-        .HAlign(HAlign_Center)
-        .Text(FText::FromString(TEXT("Fill From Selection")))
-        .ToolTipText(FText::FromString(TEXT("Set Min/Max from the AABB of the actors selected in the viewport")))
-        .OnClicked_Lambda([this]() { return OnFillBoundsFromSelectionClicked(); })
-    ]
-
-    +SVerticalBox::Slot()
-    .AutoHeight()
-    .Padding(FMargin(0, 1, 0, 0))
-    [
-        SNew(SButton)
         .ButtonStyle(FAppStyle::Get(), "FlatButton.Success")
         .ContentPadding(FMargin(5, 2))
         .HAlign(HAlign_Center)
@@ -426,6 +461,112 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateBoundsSelectPanel()
         .ToolTipText(FText::FromString(TEXT("Add every mesh actor inside the box to the target list (only our own capture pawns are skipped)")))
         .OnClicked_Lambda([this]() { return OnAddTargetActorsInBoundsClicked(); })
     ];
+}
+
+TSharedRef<SWidget> FVCCSimPanelSelection::CreateGroundActorListPanel()
+{
+    return SNew(SExpandableArea)
+        .InitiallyCollapsed(!bGroundActorSectionExpanded)
+        .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
+        .BorderBackgroundColor(FColor(40, 40, 40))
+        .OnAreaExpansionChanged_Lambda([this](bool bIsExpanded) { bGroundActorSectionExpanded = bIsExpanded; })
+        .HeaderContent()
+        [
+            SNew(STextBlock)
+            .Text(FText::FromString(TEXT("Ground Actors (manual override)")))
+            .ToolTipText(FText::FromString(TEXT(
+                "Actors listed here are forced to count as ground: dropped from building detection (so they "
+                "never bridge two buildings) but still surveyed/captured. Use it for ground the automatic "
+                "test misses — jagged or small-triangle tiles, or stepped surfaces with large height steps.")))
+            .Font(FAppStyle::GetFontStyle("PropertyWindow.BoldFont"))
+            .ColorAndOpacity(FColor(233, 233, 233))
+        ]
+        .BodyContent()
+        [
+            SNew(SVerticalBox)
+
+            +SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(FMargin(0, 2, 0, 2))
+            [
+                SNew(SHorizontalBox)
+                +SHorizontalBox::Slot().FillWidth(1.f)
+                [
+                    SNew(SButton)
+                    .ButtonStyle(FAppStyle::Get(), "FlatButton.Success")
+                    .ContentPadding(FMargin(5, 2))
+                    .Text(FText::FromString(TEXT("+ Add Selected Actors")))
+                    .ToolTipText(FText::FromString(TEXT("Mark the viewport-selected actors as ground")))
+                    .OnClicked_Lambda([this]() { return OnAddGroundActorsClicked(); })
+                ]
+                +SHorizontalBox::Slot().AutoWidth().Padding(FMargin(4, 0, 0, 0))
+                [
+                    SNew(SButton)
+                    .ButtonStyle(FAppStyle::Get(), "FlatButton.Danger")
+                    .ContentPadding(FMargin(5, 2))
+                    .Text(FText::FromString(TEXT("Clear All")))
+                    .OnClicked_Lambda([this]() -> FReply
+                    {
+                        GroundActorItems.Empty();
+                        if (GroundActorListView.IsValid())
+                            GroundActorListView->RequestListRefresh();
+                        SaveTargetActorsToConfig();
+                        return FReply::Handled();
+                    })
+                ]
+            ]
+
+            +SVerticalBox::Slot()
+            .AutoHeight()
+            [
+                SNew(SBox)
+                .HeightOverride(70.f)
+                [
+                    SNew(SBorder)
+                    .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
+                    .BorderBackgroundColor(FColor(10, 10, 10, 255))
+                    .Padding(2)
+                    [
+                        SAssignNew(GroundActorListView, SListView<TSharedPtr<FString>>)
+                        .ListItemsSource(&GroundActorItems)
+                        .SelectionMode(ESelectionMode::None)
+                        .OnGenerateRow_Lambda([this](TSharedPtr<FString> Item,
+                            const TSharedRef<STableViewBase>& Owner) -> TSharedRef<ITableRow>
+                        {
+                            return SNew(STableRow<TSharedPtr<FString>>, Owner)
+                            [
+                                SNew(SHorizontalBox)
+                                +SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center).Padding(FMargin(2, 0))
+                                [
+                                    SNew(STextBlock)
+                                    .Text(FText::FromString(Item.IsValid() ? *Item : FString()))
+                                    .ColorAndOpacity(FLinearColor(0.85f, 0.7f, 0.45f))
+                                    .Font(FCoreStyle::GetDefaultFontStyle("Mono", 8))
+                                ]
+                                +SHorizontalBox::Slot().AutoWidth()
+                                [
+                                    SNew(SButton)
+                                    .ButtonStyle(FAppStyle::Get(), "FlatButton.Danger")
+                                    .ContentPadding(FMargin(4, 1))
+                                    .Text(FText::FromString(TEXT("×")))
+                                    .OnClicked_Lambda([this, Item]() -> FReply
+                                    {
+                                        if (Item.IsValid())
+                                        {
+                                            GroundActorItems.Remove(Item);
+                                            if (GroundActorListView.IsValid())
+                                                GroundActorListView->RequestListRefresh();
+                                            SaveTargetActorsToConfig();
+                                        }
+                                        return FReply::Handled();
+                                    })
+                                ]
+                            ];
+                        })
+                    ]
+                ]
+            ]
+        ];
 }
 
 TSharedRef<SWidget> FVCCSimPanelSelection::CreatePawnSelectPanel()

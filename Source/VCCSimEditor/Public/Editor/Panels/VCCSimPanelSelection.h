@@ -85,6 +85,12 @@ public:
     /** True if at least one list entry is enabled. */
     bool HasEnabledTargetActors() const;
 
+    /** Resolve the manually-marked ground actor labels to live actors in World. Fed into
+     *  FBuildingDetectParams::ForcedGroundActors so building detection treats them as ground
+     *  unconditionally (the escape hatch for jagged / small-triangle / stepped ground the geometric
+     *  test misses). Shared by Highlight Targets, the Hide Ground debug toggle, and path generation. */
+    TSet<const AActor*> GetForcedGroundActors(UWorld* World) const;
+
     /** Reload the target actor list from the centralized config manager. */
     void LoadFromConfigManager();
 
@@ -166,6 +172,9 @@ private:
     /** Create the shared target actor list panel */
     TSharedRef<SWidget> CreateTargetActorListPanel();
 
+    /** Create the collapsible manual ground-actor list panel (add/remove actors forced to ground). */
+    TSharedRef<SWidget> CreateGroundActorListPanel();
+
     /** Create the coordinate bounding-box selection sub-panel */
     TSharedRef<SWidget> CreateBoundsSelectPanel();
 
@@ -198,14 +207,30 @@ private:
     /** Add every mesh actor whose bounds center falls inside the coordinate box (clutter-filtered). */
     FReply OnAddTargetActorsInBoundsClicked();
 
-    /** Fill the coordinate box from the combined AABB of the current editor selection. */
-    FReply OnFillBoundsFromSelectionClicked();
+    /** Add the viewport-selected actors to the manual ground-actor list. */
+    FReply OnAddGroundActorsClicked();
 
     /** Export the enabled target actors' GT mesh (geometry + is_glass) to a chosen folder. */
     FReply OnExportGTMeshClicked();
 
     /** Draw a labelled debug box around every list actor (enabled green / disabled gray). */
     FReply OnHighlightTargetsClicked();
+
+    /** Drop the building-detection cache and recompute now. For changes the cache signature does not
+     *  track (actor scale, mesh collision/geometry edits with no transform change); refreshes the
+     *  highlight in place if one is shown. */
+    FReply OnForceRecomputeClicked();
+
+    /** Debug aid for building-detection: temporarily hide every enabled list actor classified as
+     *  ground by FPathGenerator::IsGroundLikeActor, so the remaining visible meshes are exactly the
+     *  structures DetectBuildings clusters — streets wrongly kept as structure show up as the visible
+     *  bridges joining a block into one building. Click again to restore visibility. */
+    FReply OnHideGroundActorsClicked();
+
+    /** Debug aid: temporarily hide every enabled actor that highlights GREEN — non-ground actors not
+     *  merged into any detected building — so only the matched buildings (and ground) stay visible.
+     *  Click again to restore. */
+    FReply OnHideUnmatchedActorsClicked();
 
     /** Rename actors that share a label so every actor label is unique (the whole target
      *  pipeline resolves actors by label, which UE does not globally enforce as unique). */
@@ -246,6 +271,11 @@ private:
     // Shared target actor list UI
     TSharedPtr<SListView<TSharedPtr<FVCCSimTargetActorItem>>> TargetActorListView;
     TArray<TSharedPtr<FVCCSimTargetActorItem>> TargetActorItems;
+
+    // Manual ground-actor override list UI (label-only entries)
+    TSharedPtr<SListView<TSharedPtr<FString>>> GroundActorListView;
+    TArray<TSharedPtr<FString>> GroundActorItems;
+    bool bGroundActorSectionExpanded = false;
     
     // ============================================================================
     // SELECTION STATE
@@ -305,4 +335,10 @@ private:
 
     /** Transient actor holding the debug-highlight TextRenderComponents (auto-destroyed). */
     TWeakObjectPtr<AActor> HighlightActor;
+
+    /** Actors hidden by the "Hide Ground" debug toggle; restored (un-hidden) on the next click. */
+    TArray<TWeakObjectPtr<AActor>> HiddenGroundActors;
+
+    /** Actors hidden by the "Hide Unmatched" debug toggle (green, non-building); restored on next click. */
+    TArray<TWeakObjectPtr<AActor>> HiddenUnmatchedActors;
 };

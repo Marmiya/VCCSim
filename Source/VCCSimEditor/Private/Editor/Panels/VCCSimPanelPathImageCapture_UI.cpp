@@ -207,30 +207,66 @@ TSharedRef<SWidget> FVCCSimPanelPathImageCapture::CreateImageCaptureSection()
     .Padding(0, 0, 0, 4)
     [
         FVCCSimUIHelpers::CreatePropertyRow(TEXT("Tick (s)"),
-            SNew(SBorder)
-            .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
-            .BorderBackgroundColor(FColor(5, 5, 5, 255))
-            .Padding(4, 0)
+            SNew(SHorizontalBox)
+            + SHorizontalBox::Slot()
+            .FillWidth(1.f)
+            .Padding(0, 0, 6, 0)
             [
-                SAssignNew(CaptureTickIntervalSpinBox, SNumericEntryBox<float>)
-                .Value_Lambda([this]() { return CaptureTickIntervalValue; })
-                .MinValue(0.05f).MaxValue(5.f).Delta(0.05f).AllowSpin(true)
-                .ToolTipText(FText::FromString(TEXT(
-                    "Interval between capture ticks during auto/dataset capture. "
-                    "Takes effect immediately, even while a capture is running.")))
-                .OnValueChanged_Lambda([this](float Val)
-                {
-                    CaptureTickInterval = FMath::Clamp(Val, 0.05f, 5.f);
-                    CaptureTickIntervalValue = CaptureTickInterval;
-                    if (bAutoCaptureInProgress && GEditor)
+                SNew(SBorder)
+                .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
+                .BorderBackgroundColor(FColor(5, 5, 5, 255))
+                .Padding(4, 0)
+                [
+                    SAssignNew(CaptureTickIntervalSpinBox, SNumericEntryBox<float>)
+                    .Value_Lambda([this]() { return CaptureTickIntervalValue; })
+                    .MinValue(0.05f).MaxValue(5.f).Delta(0.05f).AllowSpin(true)
+                    .ToolTipText(FText::FromString(TEXT(
+                        "Interval between capture ticks during auto/dataset capture. "
+                        "Takes effect immediately, even while a capture is running.")))
+                    .OnValueChanged_Lambda([this](float Val)
                     {
-                        GEditor->GetTimerManager()->SetTimer(
-                            AutoCaptureTimerHandle,
-                            FTimerDelegate::CreateLambda([this]() { TickCaptureSession(); }),
-                            CaptureTickInterval,
-                            true);
-                    }
-                })
+                        CaptureTickInterval = FMath::Clamp(Val, 0.05f, 5.f);
+                        CaptureTickIntervalValue = CaptureTickInterval;
+                        if (bAutoCaptureInProgress && GEditor)
+                        {
+                            GEditor->GetTimerManager()->SetTimer(
+                                AutoCaptureTimerHandle,
+                                FTimerDelegate::CreateLambda([this]() { TickCaptureSession(); }),
+                                CaptureTickInterval,
+                                true);
+                        }
+                    })
+                ]
+            ]
+            + SHorizontalBox::Slot()
+            .AutoWidth()
+            .VAlign(VAlign_Center)
+            .Padding(0, 0, 6, 0)
+            [
+                SNew(STextBlock)
+                .Text(FText::FromString(TEXT("Warmup")))
+            ]
+            + SHorizontalBox::Slot()
+            .FillWidth(1.f)
+            [
+                SNew(SBorder)
+                .BorderImage(FAppStyle::GetBrush("DetailsView.CategoryMiddle"))
+                .BorderBackgroundColor(FColor(5, 5, 5, 255))
+                .Padding(4, 0)
+                [
+                    SAssignNew(PoseWarmupFramesSpinBox, SNumericEntryBox<int32>)
+                    .Value_Lambda([this]() { return PoseWarmupFramesValue; })
+                    .MinValue(1).MaxValue(30).Delta(1).AllowSpin(true)
+                    .ToolTipText(FText::FromString(TEXT(
+                        "Throwaway frames rendered at each pose before capture, so occlusion culling and "
+                        "temporal state converge. Higher = fewer half-loaded buildings but slower capture. "
+                        "Takes effect from the next pose.")))
+                    .OnValueChanged_Lambda([this](int32 Val)
+                    {
+                        PoseWarmupFrames = FMath::Clamp(Val, 1, 30);
+                        PoseWarmupFramesValue = PoseWarmupFrames;
+                    })
+                ]
             ]
         )
     ]

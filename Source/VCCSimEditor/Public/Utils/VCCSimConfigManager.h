@@ -91,6 +91,7 @@ public:
     {
         TArray<FString> Labels;
         TArray<bool>    EnabledFlags;
+        TArray<FString> GroundLabels;   // actors manually marked as ground (forced out of buildings)
         FVector BoundsMin = FVector(-100000.0);
         FVector BoundsMax = FVector(100000.0);
         float   MinBuildingHeight = 300.0f;
@@ -113,6 +114,7 @@ public:
         int32 NumObliqueRings     = 2;
         bool  bSideOrbit          = false;
         float CaptureTickInterval = 0.2f;
+        int32 PoseWarmupFrames    = 3;
     };
 
     // Getters and setters for panel states

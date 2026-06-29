@@ -285,6 +285,7 @@ FVCCSimPanelPathImageCapture::FVCCSimPanelPathImageCapture()
     OrbitNadirTiltValue   = OrbitNadirTiltAngle;
     OrbitObliqueRingsValue = OrbitObliqueRings;
     CaptureTickIntervalValue = CaptureTickInterval;
+    PoseWarmupFramesValue = PoseWarmupFrames;
 }
 
 FVCCSimPanelPathImageCapture::~FVCCSimPanelPathImageCapture()
@@ -358,6 +359,7 @@ void FVCCSimPanelPathImageCapture::LoadFromConfigManager()
     OrbitObliqueRings   = Config.NumObliqueRings;
     bOrbitSideOrbit     = Config.bSideOrbit;
     CaptureTickInterval = Config.CaptureTickInterval;
+    PoseWarmupFrames    = Config.PoseWarmupFrames;
 
     OrbitMarginValue         = OrbitMargin;
     OrbitStartHeightValue    = OrbitStartHeight;
@@ -369,6 +371,7 @@ void FVCCSimPanelPathImageCapture::LoadFromConfigManager()
     OrbitNadirTiltValue      = OrbitNadirTiltAngle;
     OrbitObliqueRingsValue   = OrbitObliqueRings;
     CaptureTickIntervalValue = CaptureTickInterval;
+    PoseWarmupFramesValue    = PoseWarmupFrames;
 }
 
 void FVCCSimPanelPathImageCapture::SaveToConfigManager() const
@@ -386,6 +389,7 @@ void FVCCSimPanelPathImageCapture::SaveToConfigManager() const
     Config.NumObliqueRings     = OrbitObliqueRings;
     Config.bSideOrbit          = bOrbitSideOrbit;
     Config.CaptureTickInterval = CaptureTickInterval;
+    Config.PoseWarmupFrames    = PoseWarmupFrames;
     FVCCSimConfigManager::Get().SetPathImageCaptureConfig(Config);
 }
 
@@ -452,8 +456,9 @@ void FVCCSimPanelPathImageCapture::GeneratePosesAroundTarget()
         BParams.MinBuildingHeight = SM->GetMinBuildingHeight();
         BParams.MinBuildingFootprint = SM->GetMinBuildingFootprint();
         BParams.ConnectGap = SM->GetConnectGap();
+        BParams.ForcedGroundActors = SM->GetForcedGroundActors(World);
     }
-    Params.Buildings = FPathGenerator::DetectBuildings(World, EnabledActors, BParams);
+    Params.Buildings = FPathGenerator::DetectBuildingsCached(World, EnabledActors, BParams);
     Params.SurveyTargets = EnabledActors;
 
     Params.World = World;
@@ -881,6 +886,10 @@ void FVCCSimPanelPathImageCapture::CaptureImageFromCurrentPose()
         PoseIndex = SelectionManager.Pin()->GetSelectedFlashPawn()->GetCurrentIndex();
     }
 
+    // Direct-viewport RGB capture renders throwaway frames before reading back so the viewport's
+    // temporal occlusion culling / Lumen / streaming converge to the jumped-to pose; drive that count
+    // from the panel's Warmup setting.
+    ImageCaptureService->SetViewportWarmupFrames(PoseWarmupFrames);
     ImageCaptureService->CaptureImageFromCurrentPose(
         PoseIndex, SaveDirectory, bAnyCaptured, bSessionDatasetChannelsOnly, bSessionRgbOnly);
 }
@@ -1001,7 +1010,7 @@ bool FVCCSimPanelPathImageCapture::StartCaptureSession(
     SessionCompleteDelegate = MoveTemp(OnComplete);
     bDrainingCaptureJobs = false;
     bSessionCancelled = false;
-    bWarmupCaptureDone = false;
+    PoseWarmupRemaining = PoseWarmupFrames;
     bGameViewChangedForCapture = EnsureGameView();
     if (ImageCaptureService.IsValid())
     {
@@ -1050,9 +1059,12 @@ void FVCCSimPanelPathImageCapture::TickCaptureSession()
     // Check if the FlashPawn is ready to capture
     if (SelectedFlashPawn->IsReady())
     {
-        // Discarded warm-up render at the first pose: the very first capture
-        // after a cold start produces stale frames (TAA/exposure/Lumen history).
-        if (!bWarmupCaptureDone)
+        // Per-pose warm-up: after the camera jumps to a pose, the SceneCapture channels (BaseColor /
+        // Normal / Depth / MaterialProperties) need a few throwaway renders for temporal occlusion
+        // culling / Lumen / exposure history to converge — otherwise they capture stale or incomplete.
+        // Direct-viewport RGB does its own warm-up draws inside CaptureRGBFromViewport; both use the same
+        // PoseWarmupFrames count.
+        if (PoseWarmupRemaining > 0)
         {
             TArray<UCameraBaseComponent*> Cameras;
             SelectedFlashPawn->GetComponents<UCameraBaseComponent>(Cameras);
@@ -1063,7 +1075,7 @@ void FVCCSimPanelPathImageCapture::TickCaptureSession()
                     Camera->WarmupCapture();
                 }
             }
-            bWarmupCaptureDone = true;
+            --PoseWarmupRemaining;
             return;
         }
 
@@ -1072,6 +1084,7 @@ void FVCCSimPanelPathImageCapture::TickCaptureSession()
         const bool bWasLastPose =
             SelectedFlashPawn->GetCurrentIndex() == SelectedFlashPawn->GetPoseCount() - 1;
         SelectedFlashPawn->MoveToNext();
+        PoseWarmupRemaining = PoseWarmupFrames;   // re-arm warm-up for the next pose
 
         if (bWasLastPose)
         {
@@ -1102,7 +1115,7 @@ void FVCCSimPanelPathImageCapture::FinishCaptureSession(bool bSuccess)
     bAutoCaptureInProgress = false;
     bDrainingCaptureJobs = false;
     bSessionCancelled = false;
-    bWarmupCaptureDone = false;
+    PoseWarmupRemaining = 0;
     bSessionDatasetChannelsOnly = false;
     bSessionRgbOnly = false;
     SaveDirectory.Empty();

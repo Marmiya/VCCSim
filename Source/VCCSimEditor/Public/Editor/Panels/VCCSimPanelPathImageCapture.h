@@ -126,7 +126,7 @@ private:
     void StartAutoCapture();
     void TickCaptureSession();
     void FinishCaptureSession(bool bSuccess);
-    
+
     // Utility
     static FString GetTimestampedFilename();
 
@@ -141,6 +141,7 @@ private:
     TSharedPtr<SNumericEntryBox<float>> OrbitNadirTiltSpinBox;
     TSharedPtr<SNumericEntryBox<int32>> OrbitObliqueRingsSpinBox;
     TSharedPtr<SNumericEntryBox<float>> CaptureTickIntervalSpinBox;
+    TSharedPtr<SNumericEntryBox<int32>> PoseWarmupFramesSpinBox;
     TSharedPtr<SButton> VisualizePathButton;
     TSharedPtr<SButton> AutoCaptureButton;
     
@@ -168,6 +169,7 @@ private:
     TOptional<float> OrbitNadirTiltValue;
     TOptional<int32> OrbitObliqueRingsValue;
     TOptional<float> CaptureTickIntervalValue;
+    TOptional<int32> PoseWarmupFramesValue;
     
     bool bPathVisualized = false;
     bool bPathNeedsUpdate = true;
@@ -180,7 +182,13 @@ private:
     bool bSessionRgbOnly = false;
     bool bDrainingCaptureJobs = false;
     bool bSessionCancelled = false;
-    bool bWarmupCaptureDone = false;
+    // Per-pose warm-up: ticks spent rendering throwaway frames at each pose before capture, so temporal
+    // occlusion culling (HZB) / Lumen / exposure history converge to the jumped-to pose. This counts down
+    // the SceneCapture channels' warm-up (BaseColor / Normal / Depth / MaterialProperties); direct-
+    // viewport RGB warms up separately inside CaptureRGBFromViewport. Both are driven by PoseWarmupFrames,
+    // which is exposed in the panel next to Tick and persisted to config.
+    int32 PoseWarmupRemaining = 0;
+    int32 PoseWarmupFrames = 3;
     FOnCaptureSessionComplete SessionCompleteDelegate;
     FTimerHandle AutoCaptureTimerHandle;
     FString SaveDirectory;
