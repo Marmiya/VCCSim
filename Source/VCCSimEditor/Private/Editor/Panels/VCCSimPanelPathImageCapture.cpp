@@ -790,6 +790,11 @@ void FVCCSimPanelPathImageCapture::UpdatePathVisualization()
         return;
     }
 
+    // Destroy any existing preview first: GenerateVisibleElements spawns a fresh "PathVisualization"
+    // actor (with several instanced-mesh components + dynamic materials) every call, so re-showing or
+    // regenerating without this leaves the old ones stacked in the world until the next Hide.
+    HidePathVisualization();
+
     PathVisualizationActor = UTrajectoryViewer::GenerateVisibleElements(
         GEditor->GetEditorWorldContext().World(),
         Positions,

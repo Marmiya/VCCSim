@@ -83,7 +83,16 @@ bool UCameraBaseComponent::CheckComponentAndRenderTarget() const
 
 void UCameraBaseComponent::WarmupCapture()
 {
-	InitializeRenderTargets();
+	// Warm-up runs every tick of the per-pose warm-up loop, for every camera. InitializeRenderTargets()
+	// allocates a brand-new UTextureRenderTarget2D each call (it does not reuse the existing one), so
+	// calling it unconditionally here leaked one full-resolution render target per warm-up frame per
+	// camera — thousands over a dataset capture — until GC caught up, which it cannot during a tight
+	// capture loop (OOM crash). The render target only needs creating once; resolution changes re-init
+	// it through the cameras' own paths. So allocate only when it is actually missing.
+	if (!CheckComponentAndRenderTarget())
+	{
+		InitializeRenderTargets();
+	}
 	SetCaptureComponent();
 	if (CaptureComponent)
 	{
