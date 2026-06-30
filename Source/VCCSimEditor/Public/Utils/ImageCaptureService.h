@@ -68,6 +68,19 @@ public:
      *  buildings using the previous pose's depth and they go missing. */
     void SetViewportWarmupFrames(int32 N) { ViewportWarmupFrames = FMath::Max(0, N); }
 
+    /** Per-pose completion mask for an existing capture directory, used by resume. Element i is true
+     *  only when EVERY expected output file for pose i (each channel of the active set, for every
+     *  camera of that type) exists on disk with non-zero size. The channel set mirrors
+     *  CaptureImageFromCurrentPose's branch on (bDatasetChannelsOnly, bRgbOnly), and filenames mirror
+     *  the Save* helpers, so "complete" matches exactly what a full capture would have written.
+     *  Returns an all-false mask (capture everything) when no channels/cameras are known. */
+    TArray<bool> ComputeCompletedPoses(
+        AFlashPawn* Pawn,
+        const FString& Dir,
+        int32 PoseCount,
+        bool bDatasetChannelsOnly,
+        bool bRgbOnly) const;
+
     /** Number of capture readbacks still in flight (async save tasks not yet dispatched). */
     int32 GetPendingJobCount() const { return JobNum.IsValid() ? JobNum->load() : 0; }
 

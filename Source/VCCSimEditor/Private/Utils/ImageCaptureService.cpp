@@ -30,8 +30,30 @@
 #include "Async/Async.h"
 #include "Slate/SceneViewport.h"
 #include "UnrealClient.h"
+#include "HAL/FileManager.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogImageCaptureService, Log, All);
+
+namespace
+{
+    // Append one "<Prefix>_Cam%02d" base name + extension per camera of type TComp on the pawn, using the
+    // same camera index as the Save* helpers (GetSensorIndex(), falling back to the enumeration order).
+    template<typename TComp>
+    void CollectChannelBases(AFlashPawn* Pawn, const TCHAR* Prefix, const TCHAR* Ext,
+        TArray<TPair<FString, FString>>& Out)
+    {
+        TArray<TComp*> Cams;
+        Pawn->GetComponents<TComp>(Cams);
+        for (int32 i = 0; i < Cams.Num(); ++i)
+        {
+            TComp* C = Cams[i];
+            if (!C) continue;
+            int32 Idx = C->GetSensorIndex();
+            if (Idx < 0) Idx = i;
+            Out.Emplace(FString::Printf(TEXT("%s_Cam%02d"), Prefix, Idx), FString(Ext));
+        }
+    }
+}
 
 FImageCaptureService::FImageCaptureService(TSharedPtr<FVCCSimPanelSelection> InSelectionManager)
     : SelectionManager(InSelectionManager)
@@ -498,4 +520,72 @@ void FImageCaptureService::CaptureRGBFromViewport(
             });
         bAnyCaptured = true;
     }
+}
+
+TArray<bool> FImageCaptureService::ComputeCompletedPoses(
+    AFlashPawn* Pawn,
+    const FString& Dir,
+    int32 PoseCount,
+    bool bDatasetChannelsOnly,
+    bool bRgbOnly) const
+{
+    TArray<bool> Completed;
+    Completed.Init(false, FMath::Max(PoseCount, 0));
+    if (!Pawn || PoseCount <= 0)
+    {
+        return Completed;
+    }
+
+    // Build the expected (base, ext) list once: it is constant across poses (channels × cameras),
+    // differing only by the _Pose%03d suffix appended per pose below.
+    TArray<TPair<FString, FString>> Expected;
+    if (bDatasetChannelsOnly)
+    {
+        // Dataset set: RGB always; the lighting-independent GT channels only when not RGB-only.
+        CollectChannelBases<URGBCameraComponent>(Pawn, TEXT("RGB"), TEXT("png"), Expected);
+        if (!bRgbOnly)
+        {
+            CollectChannelBases<UNormalCameraComponent>(Pawn, TEXT("Normal"), TEXT("exr"), Expected);
+            CollectChannelBases<UBaseColorCameraComponent>(Pawn, TEXT("BaseColor"), TEXT("png"), Expected);
+            CollectChannelBases<UMaterialPropertiesCameraComponent>(Pawn, TEXT("MatProps"), TEXT("png"), Expected);
+        }
+    }
+    else if (TSharedPtr<FVCCSimPanelSelection> SM = SelectionManager.Pin())
+    {
+        // Free capture: whatever the panel toggles select (mirrors CaptureImageFromCurrentPose).
+        if (SM->IsUsingRGBCamera() && SM->HasRGBCamera())
+            CollectChannelBases<URGBCameraComponent>(Pawn, TEXT("RGB"), TEXT("png"), Expected);
+        if (SM->IsUsingDepthCamera() && SM->HasDepthCamera())
+            CollectChannelBases<UDepthCameraComponent>(Pawn, TEXT("Depth16"), TEXT("png"), Expected);
+        if (SM->IsUsingSegmentationCamera() && SM->HasSegmentationCamera())
+            CollectChannelBases<USegCameraComponent>(Pawn, TEXT("Seg"), TEXT("png"), Expected);
+        if (SM->IsUsingNormalCamera() && SM->HasNormalCamera())
+            CollectChannelBases<UNormalCameraComponent>(Pawn, TEXT("Normal"), TEXT("exr"), Expected);
+        if (SM->IsUsingBaseColorCamera() && SM->HasBaseColorCamera())
+            CollectChannelBases<UBaseColorCameraComponent>(Pawn, TEXT("BaseColor"), TEXT("png"), Expected);
+        if (SM->IsUsingMaterialPropertiesCamera() && SM->HasMaterialPropertiesCamera())
+            CollectChannelBases<UMaterialPropertiesCameraComponent>(Pawn, TEXT("MatProps"), TEXT("png"), Expected);
+    }
+
+    if (Expected.Num() == 0)
+    {
+        return Completed;   // nothing known to expect → treat all poses as not done (capture everything)
+    }
+
+    IFileManager& FM = IFileManager::Get();
+    for (int32 p = 0; p < PoseCount; ++p)
+    {
+        bool bAll = true;
+        for (const TPair<FString, FString>& E : Expected)
+        {
+            const FString Path = Dir / FString::Printf(TEXT("%s_Pose%03d.%s"), *E.Key, p, *E.Value);
+            if (FM.FileSize(*Path) <= 0)   // -1 missing, 0 empty (e.g. truncated at crash) → not done
+            {
+                bAll = false;
+                break;
+            }
+        }
+        Completed[p] = bAll;
+    }
+    return Completed;
 }

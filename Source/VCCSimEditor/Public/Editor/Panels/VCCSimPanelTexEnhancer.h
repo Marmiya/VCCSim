@@ -31,6 +31,7 @@
 #include "Utils/LightingManager.h"
 #include "Utils/GTMaterialExporter.h"
 #include "Utils/CaptureReuseManifest.h"
+#include "Utils/CaptureSessionCheckpoint.h"
 
 class FVCCSimPanelSelection;
 class FVCCSimPanelPathImageCapture;
@@ -117,6 +118,11 @@ private:
     FString PendingCaptureName;
     FCaptureReuseEntry PendingReuseEntry;
 
+    // In-memory copy of the on-disk resume checkpoint for the active dataset run. Written to
+    // <captures>/capture_session.json when a run starts (and updated with each window's channel mode),
+    // and cleared when the whole run finishes. Survives Stop; the on-disk copy survives an editor crash.
+    FCaptureSessionCheckpoint ActiveCheckpoint;
+
     int32 GTTextureResolution = 2048;
 
     bool bOutputImages = true;
@@ -183,6 +189,12 @@ private:
     void OnDatasetCaptureFinished(bool bSuccess, FString CaptureDirectory);
     FString GetDatasetCapturesRoot() const;
     FString MakeNextCaptureDirectory() const;
+
+    /** Continue the last interrupted dataset capture (from <captures>/capture_session.json): skip
+     *  windows/poses already on disk, re-shoot the last present pose, finish the rest. */
+    FReply OnResumeCaptureClicked();
+    /** True when a resumable checkpoint exists and no capture is currently running. */
+    bool HasResumableCapture() const;
 
     // ============================================================================
     // SECTION 4: GT MATERIAL EXPORT

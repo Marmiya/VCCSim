@@ -85,6 +85,11 @@ public:
     /** Cancels the running capture session; fires the session delegate with false. */
     void StopAutoCapture();
 
+    /** True when every pose of the selected FlashPawn's path already has all expected channel files
+     *  present (non-empty) in Dir. Used by dataset-capture resume to skip windows that are fully done.
+     *  bRgbOnly selects the channel set (RGB-only vs the full dataset GT channels). */
+    bool IsCaptureWindowComplete(const FString& Dir, bool bRgbOnly) const;
+
     // UI state access for persistence
     bool IsPathImageCaptureSectionExpanded() const { return bPathImageCaptureSectionExpanded; }
     void SetPathImageCaptureSectionExpanded(bool bExpanded) { bPathImageCaptureSectionExpanded = bExpanded; }
@@ -189,6 +194,10 @@ private:
     // which is exposed in the panel next to Tick and persisted to config.
     int32 PoseWarmupRemaining = 0;
     int32 PoseWarmupFrames = 3;
+    // Resume support: per-pose completion mask for the session's directory, computed at StartCaptureSession
+    // from files already on disk. Poses marked true are skipped (no warm-up, no capture); the rest are
+    // captured. Empty when not resuming (fresh directory => all poses captured).
+    TArray<bool> SessionCompleted;
     FOnCaptureSessionComplete SessionCompleteDelegate;
     FTimerHandle AutoCaptureTimerHandle;
     FString SaveDirectory;

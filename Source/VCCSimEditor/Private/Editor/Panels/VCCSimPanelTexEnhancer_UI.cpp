@@ -600,14 +600,29 @@ TSharedRef<SWidget> FVCCSimPanelTexEnhancer::CreateDatasetCaptureSection()
                          "path into a new <Output>/<Scene>/captures/capture_<timestamp> directory. "
                          "Apply the desired lighting first; click again after changing "
                          "lighting to add another capture window. Photos / Mesh checkboxes pick "
-                         "which outputs are written. Click again while running to cancel "
-                         "(the partial directory is deleted).")))
+                         "which outputs are written. Click again while running to stop "
+                         "(the partial output is kept — use Resume to continue it).")))
                 .IsEnabled_Lambda([this]()
                 {
                     return bDatasetCaptureInProgress
                         || (!OutputDirectory.IsEmpty() && (bOutputImages || bOutputMesh));
                 })
                 .OnClicked_Lambda([this]() { return OnCaptureDatasetClicked(); })
+            ]
+            +SHorizontalBox::Slot().AutoWidth().Padding(FMargin(4, 0, 0, 0))
+            [
+                SNew(SButton)
+                .ButtonStyle(FAppStyle::Get(), "FlatButton.Primary")
+                .ContentPadding(FMargin(5, 2))
+                .Text(FText::FromString(TEXT("Resume")))
+                .ToolTipText(FText::FromString(
+                    TEXT("Continue the last dataset capture that was stopped or interrupted by a crash "
+                         "(reads <Scene>/captures/capture_session.json). Skips poses and lighting "
+                         "windows already on disk, re-shoots the last pose as a safety measure, and "
+                         "finishes the rest. Requires the same FlashPawn path and scene as the "
+                         "interrupted run. Enabled only when a resumable capture exists.")))
+                .IsEnabled_Lambda([this]() { return HasResumableCapture(); })
+                .OnClicked_Lambda([this]() { return OnResumeCaptureClicked(); })
             ]
         ]
     );

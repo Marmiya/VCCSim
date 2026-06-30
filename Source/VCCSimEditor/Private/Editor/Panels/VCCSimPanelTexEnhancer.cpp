@@ -23,8 +23,10 @@
 #include "Utils/LightingManager.h"
 #include "Utils/GTMaterialExporter.h"
 #include "Utils/CaptureReuseManifest.h"
+#include "Utils/CaptureSessionCheckpoint.h"
 #include "Editor/Panels/VCCSimPanelSelection.h"
 #include "Editor/Panels/VCCSimPanelPathImageCapture.h"
+#include "Pawns/FlashPawn.h"
 #include "HAL/FileManager.h"
 
 #include "Serialization/JsonSerializer.h"
@@ -503,6 +505,40 @@ FReply FVCCSimPanelTexEnhancer::OnCaptureDatasetClicked()
         BatchCaptureTimestamp = FDateTime::Now().ToString(TEXT("%Y%m%d_%H%M%S"));
         bBatchCapture = true;
         bDatasetCaptureInProgress = true;
+
+        // Resume checkpoint: record every planned lighting window up front so an interrupted run
+        // (Stop or editor crash) can be continued from <captures>/capture_session.json.
+        {
+            UWorld* World = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
+            ActiveCheckpoint = FCaptureSessionCheckpoint();
+            ActiveCheckpoint.CapturesRoot       = GetDatasetCapturesRoot();
+            ActiveCheckpoint.BatchTimestamp     = BatchCaptureTimestamp;
+            ActiveCheckpoint.PoseKey            = PathCapture->ComputePathPoseKey();
+            ActiveCheckpoint.SceneKey           = FGTMaterialExporter::ComputeSceneSignature(World);
+            ActiveCheckpoint.bOutputMesh        = bOutputMesh;
+            ActiveCheckpoint.GTTextureResolution= GTTextureResolution;
+            ActiveCheckpoint.bUseCaptureReuse   = bUseCaptureReuse;
+            ActiveCheckpoint.SceneName          = SceneName;
+            if (TSharedPtr<FVCCSimPanelSelection> Sel = SelectionManager.Pin())
+            {
+                ActiveCheckpoint.TargetLabels = Sel->GetEnabledTargetActorLabels();
+                if (AFlashPawn* Pawn = Sel->GetSelectedFlashPawn().Get())
+                {
+                    Pawn->GetCurrentPath(ActiveCheckpoint.PathPositions, ActiveCheckpoint.PathRotations);
+                }
+            }
+            for (int32 Slot : LightingCaptureQueue)
+            {
+                FCaptureWindow W;
+                W.Slot      = Slot;
+                W.Elevation = LightingElevation[Slot];
+                W.Azimuth   = LightingAzimuth[Slot];
+                W.DirName   = FString::Printf(TEXT("capture_%s_L%d"), *BatchCaptureTimestamp, Slot + 1);
+                ActiveCheckpoint.Windows.Add(W);
+            }
+            ActiveCheckpoint.Save();
+        }
+
         UE_LOG(LogTexEnhancerPanel, Log,
             TEXT("Batch dataset capture: %d selected lighting conditions"), LightingCaptureQueue.Num());
         StartNextBatchCapture();
@@ -516,13 +552,44 @@ FReply FVCCSimPanelTexEnhancer::OnCaptureDatasetClicked()
         return FReply::Handled();
     }
 
+    // Resume checkpoint for the single (no-lighting) capture: one window, Slot -1 (no lighting to
+    // re-apply on resume — it captures under whatever lighting is currently in the level).
+    {
+        UWorld* World = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
+        ActiveCheckpoint = FCaptureSessionCheckpoint();
+        ActiveCheckpoint.CapturesRoot       = GetDatasetCapturesRoot();
+        ActiveCheckpoint.BatchTimestamp.Empty();
+        ActiveCheckpoint.PoseKey            = PathCapture->ComputePathPoseKey();
+        ActiveCheckpoint.SceneKey           = FGTMaterialExporter::ComputeSceneSignature(World);
+        ActiveCheckpoint.bOutputMesh        = bOutputMesh;
+        ActiveCheckpoint.GTTextureResolution= GTTextureResolution;
+        ActiveCheckpoint.bUseCaptureReuse   = bUseCaptureReuse;
+        ActiveCheckpoint.SceneName          = SceneName;
+        if (TSharedPtr<FVCCSimPanelSelection> Sel = SelectionManager.Pin())
+        {
+            ActiveCheckpoint.TargetLabels = Sel->GetEnabledTargetActorLabels();
+            if (AFlashPawn* Pawn = Sel->GetSelectedFlashPawn().Get())
+            {
+                Pawn->GetCurrentPath(ActiveCheckpoint.PathPositions, ActiveCheckpoint.PathRotations);
+            }
+        }
+        FCaptureWindow W;
+        W.Slot    = -1;
+        W.DirName = FPaths::GetCleanFilename(CaptureDir);
+        ActiveCheckpoint.Windows.Add(W);
+        ActiveCheckpoint.Save();
+    }
+
+    bDatasetCaptureInProgress = true;
+
     if (!DecideAndStartCapture(CaptureDir))
     {
+        bDatasetCaptureInProgress = false;
+        FCaptureSessionCheckpoint::Clear(GetDatasetCapturesRoot());
         FVCCSimUIHelpers::ShowNotification(TEXT("Failed to start dataset capture."), true);
         return FReply::Handled();
     }
 
-    bDatasetCaptureInProgress = true;
     return FReply::Handled();
 }
 
@@ -580,6 +647,14 @@ bool FVCCSimPanelTexEnhancer::DecideAndStartCapture(const FString& CaptureDir)
 
     if (bStarted)
     {
+        // Record the resolved channel mode for this window so resume scans it with the right channel
+        // set (RGB-only windows expect only RGB files; full windows expect the GT channels too).
+        ActiveCheckpoint.SetWindowRgbOnly(FPaths::GetCleanFilename(CaptureDir), bRgbOnly);
+        if (!ActiveCheckpoint.CapturesRoot.IsEmpty())
+        {
+            ActiveCheckpoint.Save();
+        }
+
         if (bRgbOnly)
         {
             UE_LOG(LogTexEnhancerPanel, Log,
@@ -607,9 +682,18 @@ void FVCCSimPanelTexEnhancer::StartNextBatchCapture()
     const int32 Slot = LightingCaptureQueue[0];
     LightingCaptureQueue.RemoveAt(0);
 
+    // Apply the lighting recorded for this slot in the active checkpoint, so a resumed run reproduces
+    // the exact lighting the window was started with even if the panel's slot values changed since.
+    // During a fresh run the checkpoint mirrors the panel, so this is equivalent. Falls back to panel.
+    float Elev = LightingElevation[Slot];
+    float Az   = LightingAzimuth[Slot];
+    for (const FCaptureWindow& W : ActiveCheckpoint.Windows)
+    {
+        if (W.Slot == Slot) { Elev = W.Elevation; Az = W.Azimuth; break; }
+    }
     if (LightingManager.IsValid())
     {
-        LightingManager->ApplyLightingCondition(LightingElevation[Slot], LightingAzimuth[Slot]);
+        LightingManager->ApplyLightingCondition(Elev, Az);
     }
 
     const FString CaptureDir = GetDatasetCapturesRoot()
@@ -633,17 +717,11 @@ void FVCCSimPanelTexEnhancer::OnDatasetCaptureFinished(bool bSuccess, FString Ca
 {
     if (!bSuccess)
     {
-        if (IFileManager::Get().DeleteDirectory(*CaptureDirectory, false, true))
-        {
-            UE_LOG(LogTexEnhancerPanel, Warning,
-                TEXT("Dataset capture cancelled or failed; partial directory removed: %s"), *CaptureDirectory);
-        }
-        else
-        {
-            UE_LOG(LogTexEnhancerPanel, Warning,
-                TEXT("Dataset capture cancelled or failed; could not remove partial directory: %s"), *CaptureDirectory);
-        }
-        FVCCSimUIHelpers::ShowNotification(TEXT("Dataset capture did not complete."), true);
+        // Keep the partial output AND the resume checkpoint on disk so the run can be continued via the
+        // Resume button (this is the whole point — a large dataset interrupted by Stop or a crash must
+        // not lose what it already captured). Only the live (in-memory) run state is reset here.
+        UE_LOG(LogTexEnhancerPanel, Warning,
+            TEXT("Dataset capture stopped or failed; partial output kept for resume: %s"), *CaptureDirectory);
         LightingCaptureQueue.Reset();
         bBatchCapture = false;
         bDatasetCaptureInProgress = false;
@@ -688,14 +766,144 @@ void FVCCSimPanelTexEnhancer::OnDatasetCaptureFinished(bool bSuccess, FString Ca
         if (LightingCaptureQueue.Num() > 0)
         {
             StartNextBatchCapture();
-            return;
+            return;   // more windows to go — keep the resume checkpoint
         }
         bBatchCapture = false;
         FVCCSimUIHelpers::ShowNotification(
             TEXT("Batch dataset capture complete (all selected lighting)."), false);
     }
 
+    // Whole run finished successfully — drop the resume checkpoint so the Resume button goes inactive.
+    FCaptureSessionCheckpoint::Clear(GetDatasetCapturesRoot());
+    ActiveCheckpoint = FCaptureSessionCheckpoint();
     bDatasetCaptureInProgress = false;
+}
+
+bool FVCCSimPanelTexEnhancer::HasResumableCapture() const
+{
+    return !bDatasetCaptureInProgress
+        && FCaptureSessionCheckpoint::Exists(GetDatasetCapturesRoot());
+}
+
+FReply FVCCSimPanelTexEnhancer::OnResumeCaptureClicked()
+{
+    if (bDatasetCaptureInProgress)
+    {
+        return FReply::Handled();
+    }
+
+    const FString Root = GetDatasetCapturesRoot();
+    FCaptureSessionCheckpoint Cp = FCaptureSessionCheckpoint::Load(Root);
+    if (!Cp.IsValid())
+    {
+        UE_LOG(LogTexEnhancerPanel, Warning, TEXT("Resume: no resumable capture found in %s"), *Root);
+        return FReply::Handled();
+    }
+
+    TSharedPtr<FVCCSimPanelPathImageCapture> PathCapture = PathImageCaptureManager.Pin();
+    if (!PathCapture.IsValid())
+    {
+        UE_LOG(LogTexEnhancerPanel, Warning, TEXT("Resume: PathImageCapture panel is not available."));
+        return FReply::Handled();
+    }
+
+    TSharedPtr<FVCCSimPanelSelection> Sel = SelectionManager.Pin();
+    AFlashPawn* Pawn = Sel.IsValid() ? Sel->GetSelectedFlashPawn().Get() : nullptr;
+    if (!Pawn)
+    {
+        UE_LOG(LogTexEnhancerPanel, Warning, TEXT("Resume: no FlashPawn selected to drive the capture."));
+        return FReply::Handled();
+    }
+
+    // Restore the recorded path onto the FlashPawn so resume is self-contained even after a crash where
+    // the level (and the pawn's in-memory path) was never saved. The path is the capture target; with it
+    // restored, the pose key matches by construction. (Scene changes are tolerated — only the pose path
+    // is validated; if it still does not match after restore, refuse rather than mix mismatched images.)
+    if (Cp.PathPositions.Num() > 0 && Cp.PathPositions.Num() == Cp.PathRotations.Num())
+    {
+        Pawn->SetPathPanel(Cp.PathPositions, Cp.PathRotations);
+        Pawn->MoveTo(0);
+        UE_LOG(LogTexEnhancerPanel, Log,
+            TEXT("Resume: restored FlashPawn path from checkpoint (%d poses)."), Cp.PathPositions.Num());
+    }
+
+    const FString CurPoseKey = PathCapture->ComputePathPoseKey();
+    if (!Cp.PoseKey.IsEmpty() && CurPoseKey != Cp.PoseKey)
+    {
+        UE_LOG(LogTexEnhancerPanel, Warning,
+            TEXT("Resume refused: the FlashPawn path differs from the interrupted capture and could not "
+                 "be restored. Load or regenerate the original path, then Resume."));
+        return FReply::Handled();
+    }
+
+    // Log (do not refuse) if the enabled target actors differ from the recorded task — gt_materials
+    // export uses the current selection, so this is worth surfacing.
+    if (Sel.IsValid())
+    {
+        TArray<FString> CurLabels = Sel->GetEnabledTargetActorLabels();
+        CurLabels.Sort();
+        TArray<FString> SavedLabels = Cp.TargetLabels;
+        SavedLabels.Sort();
+        if (CurLabels != SavedLabels)
+        {
+            UE_LOG(LogTexEnhancerPanel, Warning,
+                TEXT("Resume: enabled target actors differ from the interrupted capture; "
+                     "gt_materials will use the CURRENT selection."));
+        }
+    }
+
+    // Restore run-wide settings from the checkpoint.
+    ActiveCheckpoint      = Cp;
+    BatchCaptureTimestamp = Cp.BatchTimestamp;
+    bOutputMesh           = Cp.bOutputMesh;
+    bUseCaptureReuse      = Cp.bUseCaptureReuse;
+    bOutputImages         = true;
+    if (Cp.GTTextureResolution > 0) GTTextureResolution = Cp.GTTextureResolution;
+
+    // Build the work list: skip windows already fully present on disk; enqueue the rest. A run is
+    // either batch (Slot >= 0 windows) or single (one Slot == -1 window) — never both.
+    LightingCaptureQueue.Reset();
+    bool bHasSingle = false;
+    FString SingleDir;
+    for (const FCaptureWindow& W : Cp.Windows)
+    {
+        const FString Dir = Root / W.DirName;
+        if (PathCapture->IsCaptureWindowComplete(Dir, W.bRgbOnly))
+        {
+            continue;
+        }
+        if (W.Slot >= 0) LightingCaptureQueue.Add(W.Slot);
+        else { bHasSingle = true; SingleDir = Dir; }
+    }
+
+    if (LightingCaptureQueue.Num() == 0 && !bHasSingle)
+    {
+        UE_LOG(LogTexEnhancerPanel, Log,
+            TEXT("Resume: every window is already complete; clearing checkpoint."));
+        FCaptureSessionCheckpoint::Clear(Root);
+        ActiveCheckpoint = FCaptureSessionCheckpoint();
+        return FReply::Handled();
+    }
+
+    bDatasetCaptureInProgress = true;
+    if (LightingCaptureQueue.Num() > 0)
+    {
+        bBatchCapture = true;
+        UE_LOG(LogTexEnhancerPanel, Log,
+            TEXT("Resuming dataset capture: %d lighting window(s) remaining."), LightingCaptureQueue.Num());
+        StartNextBatchCapture();
+    }
+    else
+    {
+        bBatchCapture = false;
+        UE_LOG(LogTexEnhancerPanel, Log, TEXT("Resuming single dataset capture: %s"), *SingleDir);
+        if (!DecideAndStartCapture(SingleDir))
+        {
+            bDatasetCaptureInProgress = false;
+            UE_LOG(LogTexEnhancerPanel, Warning, TEXT("Resume: failed to start capture."));
+        }
+    }
+    return FReply::Handled();
 }
 
 // ============================================================================

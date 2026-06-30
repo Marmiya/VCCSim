@@ -1023,7 +1023,41 @@ bool FVCCSimPanelPathImageCapture::StartCaptureSession(
     }
     bAutoCaptureInProgress = true;
 
-    SelectedFlashPawn->MoveTo(0);
+    // Resume support: skip poses already fully captured on disk. A pose counts as done only when every
+    // expected channel file for it exists and is non-empty. Force re-capture of the highest existing
+    // pose — a previous run may have crashed mid-write, leaving that pose's last file truncated. Start
+    // the session at the first missing pose so a large interrupted capture continues instead of redoing.
+    int32 ResumeStartIndex = 0;
+    {
+        const int32 PoseCount = SelectedFlashPawn->GetPoseCount();
+        SessionCompleted = ImageCaptureService->ComputeCompletedPoses(
+            SelectedFlashPawn.Get(), SaveDirectory, PoseCount,
+            bSessionDatasetChannelsOnly, bSessionRgbOnly);
+
+        int32 HighestDone = INDEX_NONE, NumDone = 0;
+        for (int32 i = 0; i < SessionCompleted.Num(); ++i)
+        {
+            if (SessionCompleted[i]) { ++NumDone; HighestDone = i; }
+        }
+        if (HighestDone != INDEX_NONE)
+        {
+            SessionCompleted[HighestDone] = false;   // re-capture the last present pose (truncation guard)
+            --NumDone;
+        }
+        while (ResumeStartIndex < SessionCompleted.Num() && SessionCompleted[ResumeStartIndex])
+        {
+            ++ResumeStartIndex;
+        }
+
+        if (NumDone > 0 || ResumeStartIndex > 0)
+        {
+            UE_LOG(LogPathImageCapture, Log,
+                TEXT("Resuming capture in %s: %d/%d poses already present, starting at pose %d (re-capturing pose %d)"),
+                *SaveDirectory, NumDone, PoseCount, ResumeStartIndex, HighestDone);
+        }
+    }
+
+    SelectedFlashPawn->MoveTo(ResumeStartIndex);
 
     // Set up a timer to check if the FlashPawn is ready for capture
     GEditor->GetTimerManager()->SetTimer(
@@ -1064,6 +1098,22 @@ void FVCCSimPanelPathImageCapture::TickCaptureSession()
     // Check if the FlashPawn is ready to capture
     if (SelectedFlashPawn->IsReady())
     {
+        // Resume: a pose already present on disk (from an earlier interrupted run) is skipped entirely —
+        // no warm-up, no capture — just advance. Common case jumps straight past it via MoveTo at start;
+        // this also covers any interior gap. Last-pose handling mirrors the capture branch below.
+        const int32 CurIdx = SelectedFlashPawn->GetCurrentIndex();
+        if (SessionCompleted.IsValidIndex(CurIdx) && SessionCompleted[CurIdx])
+        {
+            const bool bWasLastPose = CurIdx == SelectedFlashPawn->GetPoseCount() - 1;
+            SelectedFlashPawn->MoveToNext();
+            PoseWarmupRemaining = PoseWarmupFrames;
+            if (bWasLastPose)
+            {
+                bDrainingCaptureJobs = true;
+            }
+            return;
+        }
+
         // Per-pose warm-up: after the camera jumps to a pose, the SceneCapture channels (BaseColor /
         // Normal / Depth / MaterialProperties) need a few throwaway renders for temporal occlusion
         // culling / Lumen / exposure history to converge — otherwise they capture stale or incomplete.
@@ -1086,8 +1136,17 @@ void FVCCSimPanelPathImageCapture::TickCaptureSession()
 
         CaptureImageFromCurrentPose();
 
-        const bool bWasLastPose =
-            SelectedFlashPawn->GetCurrentIndex() == SelectedFlashPawn->GetPoseCount() - 1;
+        const int32 DoneIdx = SelectedFlashPawn->GetCurrentIndex();
+        const int32 Total = SelectedFlashPawn->GetPoseCount();
+        const bool bWasLastPose = DoneIdx == Total - 1;
+
+        // Periodic progress to the Output Log. The actual resumable progress is the image files on disk
+        // (the resume scan reads them), so this is purely visibility — no separate progress file needed.
+        if (bWasLastPose || (DoneIdx % 25) == 0)
+        {
+            UE_LOG(LogPathImageCapture, Log, TEXT("Capture progress: pose %d/%d"), DoneIdx + 1, Total);
+        }
+
         SelectedFlashPawn->MoveToNext();
         PoseWarmupRemaining = PoseWarmupFrames;   // re-arm warm-up for the next pose
 
@@ -1121,6 +1180,7 @@ void FVCCSimPanelPathImageCapture::FinishCaptureSession(bool bSuccess)
     bDrainingCaptureJobs = false;
     bSessionCancelled = false;
     PoseWarmupRemaining = 0;
+    SessionCompleted.Reset();
     bSessionDatasetChannelsOnly = false;
     bSessionRgbOnly = false;
     SaveDirectory.Empty();
@@ -1160,6 +1220,35 @@ void FVCCSimPanelPathImageCapture::StopAutoCapture()
     bDrainingCaptureJobs = true;
     UE_LOG(LogPathImageCapture, Log,
         TEXT("Auto-capture stop requested; waiting for pending writes"));
+}
+
+bool FVCCSimPanelPathImageCapture::IsCaptureWindowComplete(const FString& Dir, bool bRgbOnly) const
+{
+    if (!ImageCaptureService.IsValid() || !SelectionManager.IsValid())
+    {
+        return false;
+    }
+    TWeakObjectPtr<AFlashPawn> Pawn = SelectionManager.Pin()->GetSelectedFlashPawn();
+    if (!Pawn.IsValid())
+    {
+        return false;
+    }
+    const int32 PoseCount = Pawn->GetPoseCount();
+    if (PoseCount <= 0)
+    {
+        return false;
+    }
+    const TArray<bool> Done = ImageCaptureService->ComputeCompletedPoses(
+        Pawn.Get(), Dir, PoseCount, /*bDatasetChannelsOnly*/ true, bRgbOnly);
+    if (Done.Num() != PoseCount)
+    {
+        return false;
+    }
+    for (bool b : Done)
+    {
+        if (!b) return false;
+    }
+    return true;
 }
 
 // ============================================================================
