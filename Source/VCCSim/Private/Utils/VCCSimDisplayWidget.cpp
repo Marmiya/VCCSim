@@ -674,7 +674,7 @@ void UVCCSIMDisplayWidget::ProcessCaptureByType(EVCCSimViewType ViewType)
         FIntPoint Size(Camera->Width, Camera->Height);
         Camera->AsyncGetNormalImageData([FilePath, Size](const TArray<FFloat16Color>& ImageData)
         {
-            (new FAutoDeleteAsyncTask<FAsyncNormalEXRSaveTask>(ImageData, Size, FilePath))
+            (new FAutoDeleteAsyncTask<FAsyncEXRSaveTask>(ImageData, Size, FilePath))
                 ->StartBackgroundTask();
         });
         return;

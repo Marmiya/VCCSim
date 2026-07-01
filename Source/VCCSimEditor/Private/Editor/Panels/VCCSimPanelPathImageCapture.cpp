@@ -23,6 +23,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogPathImageCapture, Log, All);
 #include "Utils/ConfigParser.h"
 #include "Utils/PathGenerator.h"
 #include "Utils/ImageCaptureService.h"
+#include "Utils/SkyHDRICapture.h"
 #include "Pawns/FlashPawn.h"
 #include "Pawns/SimLookAtPath.h"
 #include "Sensors/RGBCamera.h"
@@ -30,6 +31,10 @@ DEFINE_LOG_CATEGORY_STATIC(LogPathImageCapture, Log, All);
 #include "Components/PrimitiveComponent.h"
 #include "Engine/DirectionalLight.h"
 #include "Components/DirectionalLightComponent.h"
+#include "Engine/SkyLight.h"
+#include "Components/SkyLightComponent.h"
+#include "Engine/ExponentialHeightFog.h"
+#include "Components/ExponentialHeightFogComponent.h"
 #include "Styling/AppStyle.h"
 #include "Styling/CoreStyle.h"
 #include "Utils/TrajectoryViewer.h"
@@ -232,6 +237,49 @@ namespace
             ColorArr.Add(MakeShared<FJsonValueNumber>(Color.B));
             Root->SetArrayField(TEXT("light_color_linear"), ColorArr);
             Root->SetBoolField(TEXT("atmosphere_sun_light"), Comp->IsUsedAsAtmosphereSunLight());
+            Root->SetStringField(TEXT("sun_intensity_unit"), TEXT("lux"));
+            Root->SetNumberField(TEXT("sun_angular_diameter_deg"), Comp->LightSourceAngle);
+        }
+
+        Root->SetStringField(TEXT("exposure_mode"), TEXT("manual"));
+        Root->SetNumberField(TEXT("exposure_value"), 1.0);
+        Root->SetStringField(TEXT("tone_curve"), TEXT("disabled"));
+
+        ASkyLight* SkyLight = nullptr;
+        for (TActorIterator<ASkyLight> It(World); It; ++It)
+        {
+            if (*It) { SkyLight = *It; break; }
+        }
+        if (SkyLight)
+        {
+            if (USkyLightComponent* SkyComp = SkyLight->GetLightComponent())
+            {
+                Root->SetNumberField(TEXT("sky_intensity_scale"), SkyComp->Intensity);
+            }
+        }
+        Root->SetStringField(TEXT("sky_hdri"), TEXT("sky.exr"));
+        Root->SetStringField(TEXT("sky_equirect_convention"),
+            TEXT("RH world +Z up; v=0->+Z (north pole), v=H->-Z (south pole); "
+                 "u: yaw=0->+Y (north/fwd), increasing toward +X (east/right)"));
+
+        AExponentialHeightFog* Fog = nullptr;
+        for (TActorIterator<AExponentialHeightFog> It(World); It; ++It)
+        {
+            if (*It) { Fog = *It; break; }
+        }
+        UExponentialHeightFogComponent* FogComp = Fog ? Fog->GetComponent() : nullptr;
+        if (FogComp && FogComp->FogDensity > 0.0f)
+        {
+            TSharedRef<FJsonObject> FogJson = MakeShared<FJsonObject>();
+            FogJson->SetNumberField(TEXT("density"), FogComp->FogDensity);
+            FogJson->SetNumberField(TEXT("height_falloff"), FogComp->FogHeightFalloff);
+            FogJson->SetNumberField(TEXT("fog_height"), Fog->GetActorLocation().Z);
+            FogJson->SetNumberField(TEXT("start_distance"), FogComp->StartDistance);
+            Root->SetObjectField(TEXT("height_fog"), FogJson);
+        }
+        else
+        {
+            Root->SetStringField(TEXT("height_fog"), TEXT("off"));
         }
 
         Root->SetStringField(TEXT("utc_captured"), FDateTime::UtcNow().ToIso8601());
@@ -1006,9 +1054,14 @@ bool FVCCSimPanelPathImageCapture::StartCaptureSession(
     ApplyCameraLocalTransform(SelectedFlashPawn.Get(), Positions, Rotations);
     WritePosesToFile(Positions, Rotations, SaveDirectory / TEXT("poses.txt"));
     WriteIntrinsicsJsonFromFlashPawn(SelectedFlashPawn.Get(), SaveDirectory);
-    WriteLightingJsonFromWorld(
-        GEditor ? GEditor->GetEditorWorldContext().World() : nullptr,
-        SaveDirectory);
+    UWorld* CaptureWorld = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
+    WriteLightingJsonFromWorld(CaptureWorld, SaveDirectory);
+
+    const FString SkyExrPath = SaveDirectory / TEXT("sky.exr");
+    if (CaptureWorld && IFileManager::Get().FileSize(*SkyExrPath) <= 0)
+    {
+        FSkyHDRICapture::CaptureSkyEquirect(CaptureWorld, SkyExrPath);
+    }
 
     bSessionDatasetChannelsOnly = bDatasetChannelsOnly;
     bSessionRgbOnly = bRgbOnly;

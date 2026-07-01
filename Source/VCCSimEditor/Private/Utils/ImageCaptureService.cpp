@@ -22,6 +22,7 @@
 #include "Sensors/DepthCamera.h"
 #include "Sensors/SegmentationCamera.h"
 #include "Sensors/NormalCamera.h"
+#include "Sensors/RGBLinearCamera.h"
 #include "Sensors/BaseColorCamera.h"
 #include "Sensors/MaterialPropertiesCamera.h"
 #include "Utils/ImageProcesser.h"
@@ -90,6 +91,10 @@ void FImageCaptureService::CaptureImageFromCurrentPose(
             if (SelectionManagerPin->HasRGBCamera())
             {
                 SaveRGB(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
+            }
+            if (SelectionManagerPin->HasRGBLinearCamera())
+            {
+                SaveRGBLinear(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
             }
             if (!bRgbOnly)
             {
@@ -304,7 +309,46 @@ void FImageCaptureService::SaveNormal(AFlashPawn* SelectedFlashPawn, int32 PoseI
                     Async(EAsyncExecution::ThreadPool,
                         [DataCopy = MoveTemp(DataCopy), Size, NormalEXRFilename, SaveJobNum]()
                         {
-                            FAsyncNormalEXRSaveTask(DataCopy, Size, NormalEXRFilename).DoWork();
+                            FAsyncEXRSaveTask(DataCopy, Size, NormalEXRFilename).DoWork();
+                            (*SaveJobNum)--;
+                        });
+                });
+            bAnyCaptured = true;
+        }
+        else
+        {
+            *JobNum -= 1;
+        }
+    }
+}
+
+void FImageCaptureService::SaveRGBLinear(AFlashPawn* SelectedFlashPawn, int32 PoseIndex, const FString& InSaveDirectory, bool& bAnyCaptured)
+{
+    TArray<URGBLinearCameraComponent*> RGBLinearCameras;
+    SelectedFlashPawn->GetComponents<URGBLinearCameraComponent>(RGBLinearCameras);
+    *JobNum += RGBLinearCameras.Num();
+
+    for (int32 i = 0; i < RGBLinearCameras.Num(); ++i)
+    {
+        URGBLinearCameraComponent* Camera = RGBLinearCameras[i];
+        if (Camera)
+        {
+            int32 CameraIndex = Camera->GetSensorIndex();
+            if (CameraIndex < 0) CameraIndex = i;
+
+            FString Filename = InSaveDirectory / FString::Printf(TEXT("RGBLinear_Cam%02d_Pose%03d.exr"), CameraIndex, PoseIndex);
+            FIntPoint Size = {Camera->GetImageSize().first, Camera->GetImageSize().second};
+
+            Camera->AsyncGetRGBLinearImageData(
+                [Filename, Size, JobNum = this->JobNum, SaveJobNum = this->SaveJobNum](const TArray<FFloat16Color>& ImageData)
+                {
+                    TArray<FFloat16Color> DataCopy = ImageData;
+                    *JobNum -= 1;
+                    (*SaveJobNum)++;
+                    Async(EAsyncExecution::ThreadPool,
+                        [DataCopy = MoveTemp(DataCopy), Size, Filename, SaveJobNum]()
+                        {
+                            FAsyncEXRSaveTask(DataCopy, Size, Filename).DoWork();
                             (*SaveJobNum)--;
                         });
                 });
@@ -541,8 +585,10 @@ TArray<bool> FImageCaptureService::ComputeCompletedPoses(
     TArray<TPair<FString, FString>> Expected;
     if (bDatasetChannelsOnly)
     {
-        // Dataset set: RGB always; the lighting-independent GT channels only when not RGB-only.
+        // Dataset set: RGB + RGBLinear beauty always (lighting-dependent); the lighting-independent
+        // GT channels only when not RGB-only.
         CollectChannelBases<URGBCameraComponent>(Pawn, TEXT("RGB"), TEXT("png"), Expected);
+        CollectChannelBases<URGBLinearCameraComponent>(Pawn, TEXT("RGBLinear"), TEXT("exr"), Expected);
         if (!bRgbOnly)
         {
             CollectChannelBases<UNormalCameraComponent>(Pawn, TEXT("Normal"), TEXT("exr"), Expected);

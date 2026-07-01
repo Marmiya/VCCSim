@@ -30,6 +30,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogSelection, Log, All);
 #include "Sensors/DepthCamera.h"
 #include "Sensors/SegmentationCamera.h"
 #include "Sensors/NormalCamera.h"
+#include "Sensors/RGBLinearCamera.h"
 #include "Sensors/BaseColorCamera.h"
 #include "Sensors/MaterialPropertiesCamera.h"
 #include "Utils/GTMaterialExporter.h"
@@ -1001,6 +1002,7 @@ void FVCCSimPanelSelection::RefreshCameraAvailability()
     bHasDepthCamera = false;
     bHasSegmentationCamera = false;
     bHasNormalCamera = false;
+    bHasRGBLinearCamera = false;
     bHasBaseColorCamera = false;
     bHasMaterialPropertiesCamera = false;
 
@@ -1013,6 +1015,7 @@ void FVCCSimPanelSelection::RefreshCameraAvailability()
     TArray<UDepthCameraComponent*> DepthCameras;
     TArray<USegCameraComponent*> SegmentationCameras;
     TArray<UNormalCameraComponent*> NormalCameras;
+    TArray<URGBLinearCameraComponent*> RGBLinearCameras;
     TArray<UBaseColorCameraComponent*> BaseColorCameras;
     TArray<UMaterialPropertiesCameraComponent*> MatPropsCameras;
 
@@ -1020,6 +1023,7 @@ void FVCCSimPanelSelection::RefreshCameraAvailability()
     SelectedFlashPawn->GetComponents<UDepthCameraComponent>(DepthCameras);
     SelectedFlashPawn->GetComponents<USegCameraComponent>(SegmentationCameras);
     SelectedFlashPawn->GetComponents<UNormalCameraComponent>(NormalCameras);
+    SelectedFlashPawn->GetComponents<URGBLinearCameraComponent>(RGBLinearCameras);
     SelectedFlashPawn->GetComponents<UBaseColorCameraComponent>(BaseColorCameras);
     SelectedFlashPawn->GetComponents<UMaterialPropertiesCameraComponent>(MatPropsCameras);
 
@@ -1027,6 +1031,7 @@ void FVCCSimPanelSelection::RefreshCameraAvailability()
     bHasDepthCamera = (DepthCameras.Num() > 0);
     bHasSegmentationCamera = (SegmentationCameras.Num() > 0);
     bHasNormalCamera = (NormalCameras.Num() > 0);
+    bHasRGBLinearCamera = (RGBLinearCameras.Num() > 0);
     bHasBaseColorCamera = (BaseColorCameras.Num() > 0);
     bHasMaterialPropertiesCamera = (MatPropsCameras.Num() > 0);
 }
@@ -1064,6 +1069,7 @@ void FVCCSimPanelSelection::ClearSelections()
     bHasDepthCamera = false;
     bHasSegmentationCamera = false;
     bHasNormalCamera = false;
+    bHasRGBLinearCamera = false;
     bHasBaseColorCamera = false;
     bHasMaterialPropertiesCamera = false;
     bUseRGBCamera = true;

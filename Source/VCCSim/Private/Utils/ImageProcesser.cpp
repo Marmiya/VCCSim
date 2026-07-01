@@ -212,7 +212,7 @@ void FAsyncPLYSaveTask::DoWork()
     }
 }
 
-void FAsyncNormalEXRSaveTask::DoWork()
+void FAsyncEXRSaveTask::DoWork()
 {
     // Use modern UE image API with FImage
     FImage Image;
@@ -222,17 +222,16 @@ void FAsyncNormalEXRSaveTask::DoWork()
     // Convert FFloat16Color to FImage data
     TArrayView64<FFloat16Color> ImageData = Image.AsRGBA16F();
 
-    if (ImageData.Num() != NormalPixels.Num())
+    if (ImageData.Num() != Pixels.Num())
     {
         UE_LOG(LogImageProcesser, Error, TEXT("Image data size mismatch: Expected %lld, got %d"),
-            ImageData.Num(), NormalPixels.Num());
+            ImageData.Num(), Pixels.Num());
         return;
     }
 
-    // Copy normal data to image
-    for (int32 i = 0; i < NormalPixels.Num(); ++i)
+    for (int32 i = 0; i < Pixels.Num(); ++i)
     {
-        ImageData[i] = NormalPixels[i];
+        ImageData[i] = Pixels[i];
     }
 
     // Get image wrapper module

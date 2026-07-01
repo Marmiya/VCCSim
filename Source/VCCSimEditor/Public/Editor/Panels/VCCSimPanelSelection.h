@@ -125,6 +125,7 @@ public:
     bool HasDepthCamera() const { return bHasDepthCamera; }
     bool HasSegmentationCamera() const { return bHasSegmentationCamera; }
     bool HasNormalCamera() const { return bHasNormalCamera; }
+    bool HasRGBLinearCamera() const { return bHasRGBLinearCamera; }
     bool HasBaseColorCamera() const { return bHasBaseColorCamera; }
     bool HasMaterialPropertiesCamera() const { return bHasMaterialPropertiesCamera; }
 
@@ -294,6 +295,7 @@ private:
     bool bHasDepthCamera = false;
     bool bHasSegmentationCamera = false;
     bool bHasNormalCamera = false;
+    bool bHasRGBLinearCamera = false;
     bool bHasBaseColorCamera = false;
     bool bHasMaterialPropertiesCamera = false;
 

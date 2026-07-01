@@ -95,14 +95,14 @@ private:
     FString FilePath;
 };
 
-class VCCSIM_API FAsyncNormalEXRSaveTask : public FNonAbandonableTask
+class VCCSIM_API FAsyncEXRSaveTask : public FNonAbandonableTask
 {
 public:
-    FAsyncNormalEXRSaveTask(
-        const TArray<FFloat16Color>& InNormalPixels,
+    FAsyncEXRSaveTask(
+        const TArray<FFloat16Color>& InPixels,
         FIntPoint InSize,
         const FString& InFilePath)
-        : NormalPixels(InNormalPixels)
+        : Pixels(InPixels)
         , Size(InSize)
         , FilePath(InFilePath)
     {}
@@ -111,12 +111,12 @@ public:
 
     FORCEINLINE TStatId GetStatId() const
     {
-        RETURN_QUICK_DECLARE_CYCLE_STAT(FAsyncNormalEXRSaveTask,
+        RETURN_QUICK_DECLARE_CYCLE_STAT(FAsyncEXRSaveTask,
            STATGROUP_ThreadPoolAsyncTasks);
     }
 
 private:
-    TArray<FFloat16Color> NormalPixels;
+    TArray<FFloat16Color> Pixels;
     FIntPoint Size;
     FString FilePath;
 };
