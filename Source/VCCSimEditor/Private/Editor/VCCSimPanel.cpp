@@ -21,7 +21,6 @@
 #include "Editor/Panels/VCCSimPanelSelection.h"
 #include "Editor/Panels/VCCSimPanelPathImageCapture.h"
 #include "Editor/Panels/VCCSimPanelSceneAnalysis.h"
-#include "Editor/Panels/VCCSimPanelTexEnhancer.h"
 #include "Editor/UnrealEd/Public/Selection.h"
 #include "Utils/VCCSimConfigManager.h"
 
@@ -54,13 +53,6 @@ SVCCSimPanel::~SVCCSimPanel()
     {
         SceneAnalysisManager->Cleanup();
         SceneAnalysisManager.Reset();
-    }
-
-    // Clean up TexEnhancer manager
-    if (TexEnhancerManager.IsValid())
-    {
-        TexEnhancerManager->Cleanup();
-        TexEnhancerManager.Reset();
     }
 
     // Clean up Point Cloud manager
@@ -112,12 +104,6 @@ void SVCCSimPanel::Construct(const FArguments& InArgs)
     // Initialize Scene Analysis manager
     SceneAnalysisManager = MakeShared<FVCCSimPanelSceneAnalysis>();
     SceneAnalysisManager->Initialize(SelectionManager);
-    
-    // Initialize TexEnhancer manager
-    TexEnhancerManager = MakeShared<FVCCSimPanelTexEnhancer>();
-    TexEnhancerManager->Initialize();
-    TexEnhancerManager->SetSelectionManager(SelectionManager);
-    TexEnhancerManager->SetPathImageCaptureManager(PathImageCaptureManager);
 
     // Load panel state BEFORE creating UI widgets
     LoadPanelState();
@@ -125,11 +111,12 @@ void SVCCSimPanel::Construct(const FArguments& InArgs)
     // Create the main widget layout
     CreateMainLayout();
 
-    // Refresh actor list views now that widgets exist (LoadPanelState ran before widget creation)
+    // Refresh actor list views / text boxes now that widgets exist (LoadPanelState ran before
+    // widget creation, so SetText-based fields would not have taken effect the first time).
     if (SelectionManager.IsValid())
         SelectionManager->LoadFromConfigManager();
-    if (TexEnhancerManager.IsValid())
-        TexEnhancerManager->LoadFromConfigManager();
+    if (PathImageCaptureManager.IsValid())
+        PathImageCaptureManager->LoadFromConfigManager();
 
     // Auto-select FlashPawn and LookAtPath if available in the scene (after UI is created)
     if (SelectionManager.IsValid())
@@ -246,14 +233,6 @@ void SVCCSimPanel::CreateMainLayout()
                 .AutoHeight()
                 [
                     CreatePointCloudPanel()
-                ]
-
-                // TexEnhancer data generation & evaluation panel
-                +SVerticalBox::Slot()
-                .AutoHeight()
-                [
-                    TexEnhancerManager.IsValid() ? TexEnhancerManager->CreateTexEnhancerPanel() :
-                    SNew(STextBlock).Text(FText::FromString("TexEnhancer Manager not initialized"))
                 ]
             ]
         ]
@@ -416,12 +395,6 @@ void SVCCSimPanel::UpdateSubPanelsFromState()
         SelectionManager->LoadFromConfigManager();
     }
 
-    if (TexEnhancerManager.IsValid())
-    {
-        TexEnhancerManager->SetTexEnhancerSectionExpanded(States.bTexEnhancerSectionExpanded);
-        TexEnhancerManager->LoadFromConfigManager();
-    }
-
     UE_LOG(LogVCCSimEditor, Log, TEXT("Sub-panel states updated from centralized configuration"));
 }
 
@@ -448,12 +421,6 @@ void SVCCSimPanel::GatherSubPanelStates()
     if (PointCloudManager.IsValid())
     {
         States.bPointCloudSectionExpanded = PointCloudManager->IsPointCloudSectionExpanded();
-    }
-
-    if (TexEnhancerManager.IsValid())
-    {
-        States.bTexEnhancerSectionExpanded = TexEnhancerManager->IsTexEnhancerSectionExpanded();
-        TexEnhancerManager->SaveToConfigManager();
     }
 
     FVCCSimConfigManager::Get().SetPanelStates(States);

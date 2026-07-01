@@ -125,47 +125,16 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateTargetActorListPanel()
 
     +SVerticalBox::Slot()
     .AutoHeight()
-    .Padding(FMargin(0, 0, 0, 2))
-    [
-        SNew(SHorizontalBox)
-        +SHorizontalBox::Slot().FillWidth(1.f)
-        [
-            SNew(SButton)
-            .ButtonStyle(FAppStyle::Get(), "FlatButton.Success")
-            .ContentPadding(FMargin(5, 2))
-            .Text(FText::FromString(TEXT("+ Add Selected Actors")))
-            .ToolTipText(FText::FromString(TEXT("Add the actors currently selected in the viewport")))
-            .OnClicked_Lambda([this]() { return OnAddTargetActorsClicked(); })
-        ]
-        +SHorizontalBox::Slot().AutoWidth().Padding(FMargin(4, 0, 0, 0))
-        [
-            SNew(SButton)
-            .ButtonStyle(FAppStyle::Get(), "FlatButton.Danger")
-            .ContentPadding(FMargin(5, 2))
-            .Text(FText::FromString(TEXT("Clear All")))
-            .OnClicked_Lambda([this]() -> FReply
-            {
-                TargetActorItems.Empty();
-                if (TargetActorListView.IsValid())
-                    TargetActorListView->RequestListRefresh();
-                SaveTargetActorsToConfig();
-                return FReply::Handled();
-            })
-        ]
-    ]
-
-    +SVerticalBox::Slot()
-    .AutoHeight()
     .Padding(FMargin(0, 2, 0, 0))
     [
         SNew(SHorizontalBox)
-        +SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
+        +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
         [
             SNew(SButton)
             .ContentPadding(FMargin(5, 2))
             .HAlign(HAlign_Center)
             .Text_Lambda([this]() { return FText::FromString(
-                HighlightActor.IsValid() ? TEXT("Hide Highlight") : TEXT("Highlight Targets")); })
+                HighlightActor.IsValid() ? TEXT("Hide Highlight") : TEXT("Highlight")); })
             .ToolTipText(FText::FromString(TEXT(
                 "Toggle boxes around every list actor: green = enabled structure, brown = enabled "
                 "ground/terrain, gray = disabled; thick cyan = detected building (gets an orbit); plus "
@@ -174,6 +143,42 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateTargetActorListPanel()
             .OnClicked_Lambda([this]() { return OnHighlightTargetsClicked(); })
         ]
         +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(4, 0, 0, 0))
+        [
+            SNew(SButton)
+            .ContentPadding(FMargin(5, 2))
+            .HAlign(HAlign_Center)
+            .Text_Lambda([this]() { return FText::FromString(
+                HiddenUnmatchedActors.Num() > 0 ? TEXT("Show Unmatched") : TEXT("Hide Unmatched")); })
+            .ToolTipText(FText::FromString(TEXT(
+                "Debug aid: temporarily hide every enabled actor that ended up GREEN in the highlight — "
+                "non-ground actors not merged into any building. What stays visible is the matched "
+                "buildings (and ground). Click again to restore.")))
+            .IsEnabled_Lambda([this]() { return TargetActorItems.Num() > 0 || HiddenUnmatchedActors.Num() > 0; })
+            .OnClicked_Lambda([this]() { return OnHideUnmatchedActorsClicked(); })
+        ]
+        +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(4, 0, 0, 0))
+        [
+            SNew(SButton)
+            .ContentPadding(FMargin(5, 2))
+            .HAlign(HAlign_Center)
+            .Text_Lambda([this]() { return FText::FromString(
+                HiddenGroundActors.Num() > 0 ? TEXT("Show Ground") : TEXT("Hide Ground")); })
+            .ToolTipText(FText::FromString(TEXT(
+                "Debug aid for building detection: temporarily hide every enabled list actor classified "
+                "as ground (same test as Generate Poses). What stays visible is exactly the structure set "
+                "DetectBuildings clusters — a street still visible between two buildings is a piece NOT "
+                "recognised as ground that bridges them into one building. Click again to restore.")))
+            .IsEnabled_Lambda([this]() { return TargetActorItems.Num() > 0 || HiddenGroundActors.Num() > 0; })
+            .OnClicked_Lambda([this]() { return OnHideGroundActorsClicked(); })
+        ]
+    ]
+
+    +SVerticalBox::Slot()
+    .AutoHeight()
+    .Padding(FMargin(0, 2, 0, 0))
+    [
+        SNew(SHorizontalBox)
+        +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
         [
             SNew(SButton)
             .ContentPadding(FMargin(5, 2))
@@ -208,56 +213,6 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateTargetActorListPanel()
                 ConnectGap = FMath::Max(0.f, (float)V);
                 SaveTargetActorsToConfig();
             })
-        ]
-    ]
-
-    +SVerticalBox::Slot()
-    .AutoHeight()
-    .Padding(FMargin(0, 2, 0, 0))
-    [
-        SNew(SHorizontalBox)
-        +SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
-        [
-            SNew(SButton)
-            .ButtonStyle(FAppStyle::Get(), "FlatButton.Primary")
-            .ContentPadding(FMargin(5, 2))
-            .HAlign(HAlign_Center)
-            .Text(FText::FromString(TEXT("Export Mesh")))
-            .ToolTipText(FText::FromString(TEXT(
-                "Export each enabled target actor as its own mesh.gltf + manifest under gt_materials/. "
-                "The Python preprocess aggregates them into the combined scene mesh. No material baking — "
-                "materials come from the camera captures.")))
-            .IsEnabled_Lambda([this]() { return !bGTExportInProgress; })
-            .OnClicked_Lambda([this]() { return OnExportGTMeshClicked(); })
-        ]
-        +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(4, 0, 0, 0))
-        [
-            SNew(SButton)
-            .ContentPadding(FMargin(5, 2))
-            .HAlign(HAlign_Center)
-            .Text_Lambda([this]() { return FText::FromString(
-                HiddenUnmatchedActors.Num() > 0 ? TEXT("Show Unmatched") : TEXT("Hide Unmatched")); })
-            .ToolTipText(FText::FromString(TEXT(
-                "Debug aid: temporarily hide every enabled actor that ended up GREEN in the highlight — "
-                "non-ground actors not merged into any building. What stays visible is the matched "
-                "buildings (and ground). Click again to restore.")))
-            .IsEnabled_Lambda([this]() { return TargetActorItems.Num() > 0 || HiddenUnmatchedActors.Num() > 0; })
-            .OnClicked_Lambda([this]() { return OnHideUnmatchedActorsClicked(); })
-        ]
-        +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(4, 0, 0, 0))
-        [
-            SNew(SButton)
-            .ContentPadding(FMargin(5, 2))
-            .HAlign(HAlign_Center)
-            .Text_Lambda([this]() { return FText::FromString(
-                HiddenGroundActors.Num() > 0 ? TEXT("Show Ground") : TEXT("Hide Ground")); })
-            .ToolTipText(FText::FromString(TEXT(
-                "Debug aid for building detection: temporarily hide every enabled list actor classified "
-                "as ground (same test as Generate Poses). What stays visible is exactly the structure set "
-                "DetectBuildings clusters — a street still visible between two buildings is a piece NOT "
-                "recognised as ground that bridges them into one building. Click again to restore.")))
-            .IsEnabled_Lambda([this]() { return TargetActorItems.Num() > 0 || HiddenGroundActors.Num() > 0; })
-            .OnClicked_Lambda([this]() { return OnHideGroundActorsClicked(); })
         ]
     ]
 
@@ -453,13 +408,42 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateBoundsSelectPanel()
     .AutoHeight()
     .Padding(FMargin(0, 1, 0, 0))
     [
-        SNew(SButton)
-        .ButtonStyle(FAppStyle::Get(), "FlatButton.Success")
-        .ContentPadding(FMargin(5, 2))
-        .HAlign(HAlign_Center)
-        .Text(FText::FromString(TEXT("+ Add Actors In Bounds")))
-        .ToolTipText(FText::FromString(TEXT("Add every mesh actor inside the box to the target list (only our own capture pawns are skipped)")))
-        .OnClicked_Lambda([this]() { return OnAddTargetActorsInBoundsClicked(); })
+        SNew(SHorizontalBox)
+        +SHorizontalBox::Slot().FillWidth(1.f).Padding(FMargin(0, 0, 4, 0))
+        [
+            SNew(SButton)
+            .ButtonStyle(FAppStyle::Get(), "FlatButton.Success")
+            .ContentPadding(FMargin(5, 2))
+            .HAlign(HAlign_Center)
+            .Text(FText::FromString(TEXT("+ Add Selected Actors")))
+            .ToolTipText(FText::FromString(TEXT("Add the actors currently selected in the viewport")))
+            .OnClicked_Lambda([this]() { return OnAddTargetActorsClicked(); })
+        ]
+        +SHorizontalBox::Slot().FillWidth(1.f).Padding(FMargin(0, 0, 4, 0))
+        [
+            SNew(SButton)
+            .ButtonStyle(FAppStyle::Get(), "FlatButton.Success")
+            .ContentPadding(FMargin(5, 2))
+            .HAlign(HAlign_Center)
+            .Text(FText::FromString(TEXT("+ Add Actors In Bounds")))
+            .ToolTipText(FText::FromString(TEXT("Add every mesh actor inside the box to the target list (only our own capture pawns are skipped)")))
+            .OnClicked_Lambda([this]() { return OnAddTargetActorsInBoundsClicked(); })
+        ]
+        +SHorizontalBox::Slot().AutoWidth()
+        [
+            SNew(SButton)
+            .ButtonStyle(FAppStyle::Get(), "FlatButton.Danger")
+            .ContentPadding(FMargin(5, 2))
+            .Text(FText::FromString(TEXT("Clear All")))
+            .OnClicked_Lambda([this]() -> FReply
+            {
+                TargetActorItems.Empty();
+                if (TargetActorListView.IsValid())
+                    TargetActorListView->RequestListRefresh();
+                SaveTargetActorsToConfig();
+                return FReply::Handled();
+            })
+        ]
     ];
 }
 
@@ -826,12 +810,23 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateCameraStatusRow()
     +SHorizontalBox::Slot()
     .MaxWidth(100)
     .HAlign(HAlign_Center)
-    .Padding(FMargin(2, 0, 0, 0))
+    .Padding(FMargin(2, 0, 2, 0))
     [
         CreateCameraStatusBox("MatProps",
             [this]() { return bHasMaterialPropertiesCamera; },
             [this]() { return bUseMaterialPropertiesCamera ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; },
             [this](ECheckBoxState NewState) { OnMaterialPropertiesCameraCheckboxChanged(NewState); })
+    ]
+
+    +SHorizontalBox::Slot()
+    .MaxWidth(100)
+    .HAlign(HAlign_Center)
+    .Padding(FMargin(2, 0, 0, 0))
+    [
+        CreateCameraStatusBox("RGBLinear",
+            [this]() { return bHasRGBLinearCamera; },
+            [this]() { return bUseRGBLinearCamera ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; },
+            [this](ECheckBoxState NewState) { OnRGBLinearCameraCheckboxChanged(NewState); })
     ];
 }
 

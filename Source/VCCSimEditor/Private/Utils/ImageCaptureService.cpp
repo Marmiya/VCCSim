@@ -67,7 +67,6 @@ void FImageCaptureService::CaptureImageFromCurrentPose(
     int32 PoseIndex,
     const FString& InSaveDirectory,
     bool& bAnyCaptured,
-    bool bDatasetChannelsOnly,
     bool bRgbOnly)
 {
     TSharedPtr<FVCCSimPanelSelection> SelectionManagerPin = SelectionManager.Pin();
@@ -86,46 +85,24 @@ void FImageCaptureService::CaptureImageFromCurrentPose(
 
     if (SelectedFlashPawn->IsReady())
     {
-        if (bDatasetChannelsOnly)
+        if (SelectionManagerPin->IsUsingRGBCamera() && SelectionManagerPin->HasRGBCamera())
         {
-            if (SelectionManagerPin->HasRGBCamera())
-            {
-                SaveRGB(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
-            }
-            if (SelectionManagerPin->HasRGBLinearCamera())
-            {
-                SaveRGBLinear(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
-            }
-            if (!bRgbOnly)
-            {
-                if (SelectionManagerPin->HasNormalCamera())
-                {
-                    SaveNormal(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
-                }
-                if (SelectionManagerPin->HasBaseColorCamera())
-                {
-                    SaveBaseColor(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
-                }
-                if (SelectionManagerPin->HasMaterialPropertiesCamera())
-                {
-                    SaveMaterialProperties(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
-                }
-            }
+            SaveRGB(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
         }
-        else
+        if (SelectionManagerPin->IsUsingRGBLinearCamera() && SelectionManagerPin->HasRGBLinearCamera())
         {
-            if (SelectionManagerPin->IsUsingRGBCamera() && SelectionManagerPin->HasRGBCamera())
-            {
-                SaveRGB(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
-            }
-            if (SelectionManagerPin->IsUsingDepthCamera() && SelectionManagerPin->HasDepthCamera())
-            {
-                SaveDepth(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
-            }
-            if (SelectionManagerPin->IsUsingSegmentationCamera() && SelectionManagerPin->HasSegmentationCamera())
-            {
-                SaveSeg(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
-            }
+            SaveRGBLinear(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
+        }
+        if (SelectionManagerPin->IsUsingDepthCamera() && SelectionManagerPin->HasDepthCamera())
+        {
+            SaveDepth(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
+        }
+        if (SelectionManagerPin->IsUsingSegmentationCamera() && SelectionManagerPin->HasSegmentationCamera())
+        {
+            SaveSeg(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
+        }
+        if (!bRgbOnly)
+        {
             if (SelectionManagerPin->IsUsingNormalCamera() && SelectionManagerPin->HasNormalCamera())
             {
                 SaveNormal(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
@@ -570,7 +547,6 @@ TArray<bool> FImageCaptureService::ComputeCompletedPoses(
     AFlashPawn* Pawn,
     const FString& Dir,
     int32 PoseCount,
-    bool bDatasetChannelsOnly,
     bool bRgbOnly) const
 {
     TArray<bool> Completed;
@@ -581,36 +557,28 @@ TArray<bool> FImageCaptureService::ComputeCompletedPoses(
     }
 
     // Build the expected (base, ext) list once: it is constant across poses (channels × cameras),
-    // differing only by the _Pose%03d suffix appended per pose below.
+    // differing only by the _Pose%03d suffix appended per pose below. Mirrors
+    // CaptureImageFromCurrentPose's checkbox-driven selection, gated the same way by bRgbOnly.
     TArray<TPair<FString, FString>> Expected;
-    if (bDatasetChannelsOnly)
+    if (TSharedPtr<FVCCSimPanelSelection> SM = SelectionManager.Pin())
     {
-        // Dataset set: RGB + RGBLinear beauty always (lighting-dependent); the lighting-independent
-        // GT channels only when not RGB-only.
-        CollectChannelBases<URGBCameraComponent>(Pawn, TEXT("RGB"), TEXT("png"), Expected);
-        CollectChannelBases<URGBLinearCameraComponent>(Pawn, TEXT("RGBLinear"), TEXT("exr"), Expected);
-        if (!bRgbOnly)
-        {
-            CollectChannelBases<UNormalCameraComponent>(Pawn, TEXT("Normal"), TEXT("exr"), Expected);
-            CollectChannelBases<UBaseColorCameraComponent>(Pawn, TEXT("BaseColor"), TEXT("png"), Expected);
-            CollectChannelBases<UMaterialPropertiesCameraComponent>(Pawn, TEXT("MatProps"), TEXT("png"), Expected);
-        }
-    }
-    else if (TSharedPtr<FVCCSimPanelSelection> SM = SelectionManager.Pin())
-    {
-        // Free capture: whatever the panel toggles select (mirrors CaptureImageFromCurrentPose).
         if (SM->IsUsingRGBCamera() && SM->HasRGBCamera())
             CollectChannelBases<URGBCameraComponent>(Pawn, TEXT("RGB"), TEXT("png"), Expected);
+        if (SM->IsUsingRGBLinearCamera() && SM->HasRGBLinearCamera())
+            CollectChannelBases<URGBLinearCameraComponent>(Pawn, TEXT("RGBLinear"), TEXT("exr"), Expected);
         if (SM->IsUsingDepthCamera() && SM->HasDepthCamera())
             CollectChannelBases<UDepthCameraComponent>(Pawn, TEXT("Depth16"), TEXT("png"), Expected);
         if (SM->IsUsingSegmentationCamera() && SM->HasSegmentationCamera())
             CollectChannelBases<USegCameraComponent>(Pawn, TEXT("Seg"), TEXT("png"), Expected);
-        if (SM->IsUsingNormalCamera() && SM->HasNormalCamera())
-            CollectChannelBases<UNormalCameraComponent>(Pawn, TEXT("Normal"), TEXT("exr"), Expected);
-        if (SM->IsUsingBaseColorCamera() && SM->HasBaseColorCamera())
-            CollectChannelBases<UBaseColorCameraComponent>(Pawn, TEXT("BaseColor"), TEXT("png"), Expected);
-        if (SM->IsUsingMaterialPropertiesCamera() && SM->HasMaterialPropertiesCamera())
-            CollectChannelBases<UMaterialPropertiesCameraComponent>(Pawn, TEXT("MatProps"), TEXT("png"), Expected);
+        if (!bRgbOnly)
+        {
+            if (SM->IsUsingNormalCamera() && SM->HasNormalCamera())
+                CollectChannelBases<UNormalCameraComponent>(Pawn, TEXT("Normal"), TEXT("exr"), Expected);
+            if (SM->IsUsingBaseColorCamera() && SM->HasBaseColorCamera())
+                CollectChannelBases<UBaseColorCameraComponent>(Pawn, TEXT("BaseColor"), TEXT("png"), Expected);
+            if (SM->IsUsingMaterialPropertiesCamera() && SM->HasMaterialPropertiesCamera())
+                CollectChannelBases<UMaterialPropertiesCameraComponent>(Pawn, TEXT("MatProps"), TEXT("png"), Expected);
+        }
     }
 
     if (Expected.Num() == 0)

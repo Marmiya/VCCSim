@@ -22,8 +22,11 @@
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SNumericEntryBox.h"
 #include "Widgets/Input/SCheckBox.h"
+#include "Widgets/Input/SEditableTextBox.h"
 #include "Widgets/Text/STextBlock.h"
 #include "Engine/TimerHandle.h"
+#include "Utils/CaptureReuseManifest.h"
+#include "Utils/CaptureSessionCheckpoint.h"
 #include <atomic>
 
 // Forward declarations
@@ -31,6 +34,8 @@ class AFlashPawn;
 class FPathGenerator;
 class FImageCaptureService;
 class FVCCSimPanelSelection;
+class FLightingManager;
+class FGTMaterialExporter;
 
 DECLARE_DELEGATE_OneParam(FOnCaptureSessionComplete, bool /*bSuccess*/);
 
@@ -62,7 +67,6 @@ public:
      * waits for all async readbacks, then fires OnComplete on the game thread.
      *
      * @param TargetDirectory Capture output directory (created if missing).
-     * @param bDatasetChannelsOnly Force the dataset channel set (RGB/Normal/BaseColor/MatProps).
      * @param bRgbOnly Capture only RGB and skip the lighting-independent GT channels
      *        (Normal/BaseColor/MatProps) — used when those are reused from another capture.
      * @param OnComplete Fired with true on success, false on cancel/failure.
@@ -70,7 +74,6 @@ public:
      */
     bool StartCaptureSession(
         const FString& TargetDirectory,
-        bool bDatasetChannelsOnly,
         bool bRgbOnly,
         FOnCaptureSessionComplete OnComplete);
 
@@ -104,6 +107,11 @@ public:
     TSharedRef<SWidget> CreatePoseActionButtons();
     TSharedRef<SWidget> CreateMovementButtons();
     TSharedRef<SWidget> CreateCaptureButtons();
+    TSharedRef<SWidget> CreateDatasetConfigSection();
+    TSharedRef<SWidget> CreateLightingScheduleSection();
+    TSharedRef<SWidget> CreateLightingEntry(int32 Index);
+    TSharedRef<SWidget> CreateSunPositionCalculatorWidget();
+    TSharedRef<SWidget> CreateDatasetCaptureSection();
 
 private:
     // UI Callbacks
@@ -112,7 +120,7 @@ private:
     FReply OnSavePoseClicked();
     FReply OnTogglePathVisualizationClicked();
     FReply OnCaptureImagesClicked();
-    
+
     // Path Configuration & Generation
     void GeneratePosesAroundTarget();
     
@@ -135,6 +143,41 @@ private:
     // Utility
     static FString GetTimestampedFilename();
 
+    // ============================================================================
+    // DATASET CONFIGURATION
+    // ============================================================================
+
+    FReply OnBrowseOutputDirClicked();
+
+    // ============================================================================
+    // LIGHTING SCHEDULE
+    // ============================================================================
+
+    FReply OnApplyLightingClicked(int32 Index);
+    FReply OnCalculateSunPositionClicked();
+    FReply OnFillFromSunPositionClicked();
+
+    // ============================================================================
+    // DATASET CAPTURE
+    // ============================================================================
+
+    FReply OnCaptureDatasetClicked();
+    bool DecideAndStartCapture(const FString& CaptureDir);
+    void StartNextBatchCapture();
+    void OnDatasetCaptureFinished(bool bSuccess, FString CaptureDirectory);
+    FString GetDatasetCapturesRoot() const;
+    FString MakeNextCaptureDirectory() const;
+
+    /** Continue the last interrupted dataset capture (from <captures>/capture_session.json): skip
+     *  windows/poses already on disk, re-shoot the last present pose, finish the rest. */
+    FReply OnResumeCaptureClicked();
+    /** True when a resumable checkpoint exists and no capture is currently running. */
+    bool HasResumableCapture() const;
+
+    /** Export the enabled target actors' GT mesh (gt_materials) for Dataset Capture's "Mesh"
+     *  checkbox, reused across lighting windows via the capture reuse manifest. */
+    bool StartGTMaterialExport(const FString& BaseDir);
+
     // UI Widgets
     TSharedPtr<SNumericEntryBox<float>> OrbitMarginSpinBox;
     TSharedPtr<SNumericEntryBox<float>> OrbitStartHeightSpinBox;
@@ -149,7 +192,29 @@ private:
     TSharedPtr<SNumericEntryBox<int32>> PoseWarmupFramesSpinBox;
     TSharedPtr<SButton> VisualizePathButton;
     TSharedPtr<SButton> AutoCaptureButton;
-    
+
+    // Dataset Configuration widgets
+    TSharedPtr<SEditableTextBox> OutputDirTextBox;
+    TSharedPtr<SEditableTextBox> SceneNameTextBox;
+
+    // Lighting Schedule widgets
+    static constexpr int32 NumLightingConditions = 5;
+    TSharedPtr<SNumericEntryBox<float>> LightingElevationSpinBox[NumLightingConditions];
+    TSharedPtr<SNumericEntryBox<float>> LightingAzimuthSpinBox[NumLightingConditions];
+    TOptional<float> LightingElevationValue[NumLightingConditions];
+    TOptional<float> LightingAzimuthValue[NumLightingConditions];
+
+    // Sun Position Calculator widgets
+    TSharedPtr<SNumericEntryBox<float>> SunCalcLatSpinBox;
+    TSharedPtr<SNumericEntryBox<float>> SunCalcLonSpinBox;
+    TSharedPtr<SNumericEntryBox<float>> SunCalcTZSpinBox;
+    TSharedPtr<SNumericEntryBox<int32>> SunCalcYearSpinBox;
+    TSharedPtr<SNumericEntryBox<int32>> SunCalcMonthSpinBox;
+    TSharedPtr<SNumericEntryBox<int32>> SunCalcDaySpinBox;
+    TSharedPtr<SNumericEntryBox<int32>> SunCalcHourSpinBox;
+    TSharedPtr<SNumericEntryBox<int32>> SunCalcMinuteSpinBox;
+    TSharedPtr<SNumericEntryBox<int32>> SunCalcFillSlotSpinBox;
+
     // State Variables
     float OrbitMargin = 500.0f;
     float OrbitStartHeight = 200.0f;
@@ -183,7 +248,6 @@ private:
     bool bAutoCaptureInProgress = false;
     bool bGenerationInProgress = false;
     bool bGameViewChangedForCapture = false;
-    bool bSessionDatasetChannelsOnly = false;
     bool bSessionRgbOnly = false;
     bool bDrainingCaptureJobs = false;
     bool bSessionCancelled = false;
@@ -203,7 +267,63 @@ private:
     FString SaveDirectory;
     
     bool bPathImageCaptureSectionExpanded = false;
-    
+
+    // ============================================================================
+    // DATASET CONFIGURATION / LIGHTING SCHEDULE / DATASET CAPTURE STATE
+    // (folded in from the retired TexEnhancer panel)
+    // ============================================================================
+
+    FString OutputDirectory;
+    FString SceneName = TEXT("Scene_A");
+
+    bool bLightingScheduleExpanded = false;
+    float LightingElevation[NumLightingConditions] = { 20.f, 70.f, 35.f, 85.f, 15.f };
+    float LightingAzimuth[NumLightingConditions]   = { 30.f, 110.f, 190.f, 250.f, 320.f };
+    bool  bLightingSelected[NumLightingConditions] = {};
+
+    float SunCalcLatitude  = 22.52933f;
+    float SunCalcLongitude = 113.94092f;
+    float SunCalcTimeZone  = 8.0f;
+    int32 SunCalcYear      = 2026;
+    int32 SunCalcMonth     = 3;
+    int32 SunCalcDay       = 20;
+    int32 SunCalcHour      = 10;
+    int32 SunCalcMinute    = 0;
+    int32 SunCalcFillSlot  = 1;
+    float SunCalcElevation = 0.f;
+    float SunCalcAzimuth   = 0.f;
+
+    TOptional<float> SunCalcLatValue;
+    TOptional<float> SunCalcLonValue;
+    TOptional<float> SunCalcTZValue;
+    TOptional<int32> SunCalcYearValue;
+    TOptional<int32> SunCalcMonthValue;
+    TOptional<int32> SunCalcDayValue;
+    TOptional<int32> SunCalcHourValue;
+    TOptional<int32> SunCalcMinuteValue;
+    TOptional<int32> SunCalcFillSlotValue;
+
+    int32 GTTextureResolution = 2048;
+    bool  bOutputImages = true;
+    bool  bOutputMesh   = true;
+    bool  bUseCaptureReuse = true;
+
+    bool bDatasetCaptureInProgress = false;
+    bool bBatchCapture = false;
+    FString BatchCaptureTimestamp;
+    TArray<int32> LightingCaptureQueue;
+
+    FString PendingCaptureName;
+    FCaptureReuseEntry PendingReuseEntry;
+
+    // In-memory copy of the on-disk resume checkpoint for the active dataset run. Written to
+    // <captures>/capture_session.json when a run starts (and updated with each window's channel mode),
+    // and cleared when the whole run finishes. Survives Stop; the on-disk copy survives an editor crash.
+    FCaptureSessionCheckpoint ActiveCheckpoint;
+
+    TSharedPtr<FLightingManager> LightingManager;
+    TSharedPtr<FGTMaterialExporter> GTMaterialExporter;
+
     // Dependencies
     TWeakPtr<FVCCSimPanelSelection> SelectionManager;
     TSharedPtr<FPathGenerator> PathGenerator;

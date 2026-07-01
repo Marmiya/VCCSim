@@ -94,16 +94,6 @@ public:
     /** Reload the target actor list from the centralized config manager. */
     void LoadFromConfigManager();
 
-    /** Export each enabled target actor's GT mesh (one mesh.gltf + manifest per actor) into BaseDir.
-     *  The Python preprocess (build_gt_mesh.py) aggregates the per-actor glTFs into the combined
-     *  scene mesh. Shared by this panel's Export Mesh button and the TexEnhancer dataset capture. */
-    void RunGTMeshExport(const FString& BaseDir, const FString& SceneName,
-                         int32 TextureResolution, const FString& Signature,
-                         FSimpleDelegate OnComplete);
-
-    /** True while a GT mesh export started by this panel is running. */
-    bool IsGTExportInProgress() const { return bGTExportInProgress; }
-
     // ============================================================================
     // GETTERS
     // ============================================================================
@@ -134,6 +124,7 @@ public:
     bool IsUsingDepthCamera() const { return bUseDepthCamera; }
     bool IsUsingSegmentationCamera() const { return bUseSegmentationCamera; }
     bool IsUsingNormalCamera() const { return bUseNormalCamera; }
+    bool IsUsingRGBLinearCamera() const { return bUseRGBLinearCamera; }
     bool IsUsingBaseColorCamera() const { return bUseBaseColorCamera; }
     bool IsUsingMaterialPropertiesCamera() const { return bUseMaterialPropertiesCamera; }
     
@@ -211,9 +202,6 @@ private:
     /** Add the viewport-selected actors to the manual ground-actor list. */
     FReply OnAddGroundActorsClicked();
 
-    /** Export the enabled target actors' GT mesh (geometry + is_glass) to a chosen folder. */
-    FReply OnExportGTMeshClicked();
-
     /** Draw a labelled debug box around every list actor (enabled green / disabled gray). */
     FReply OnHighlightTargetsClicked();
 
@@ -242,6 +230,7 @@ private:
     void OnDepthCameraCheckboxChanged(ECheckBoxState NewState);
     void OnSegmentationCameraCheckboxChanged(ECheckBoxState NewState);
     void OnNormalCameraCheckboxChanged(ECheckBoxState NewState);
+    void OnRGBLinearCameraCheckboxChanged(ECheckBoxState NewState);
     void OnBaseColorCameraCheckboxChanged(ECheckBoxState NewState);
     void OnMaterialPropertiesCameraCheckboxChanged(ECheckBoxState NewState);
     void OnUseRGBCameraClassCheckboxChanged(ECheckBoxState NewState);
@@ -304,6 +293,7 @@ private:
     bool bUseDepthCamera = false;
     bool bUseSegmentationCamera = false;
     bool bUseNormalCamera = false;
+    bool bUseRGBLinearCamera = false;
     bool bUseBaseColorCamera = false;
     bool bUseMaterialPropertiesCamera = false;
     
@@ -330,10 +320,6 @@ private:
      *  oriented boxes come within this of touching. Larger merges gapped pieces; smaller keeps
      *  road-side props separate. Shared by Highlight Targets and Generate Poses. */
     float ConnectGap = 15.0f;
-
-    /** GT mesh export (relocated here from the TexEnhancer panel; geometry + is_glass only). */
-    TSharedPtr<class FGTMaterialExporter> GTMaterialExporter;
-    bool bGTExportInProgress = false;
 
     /** Transient actor holding the debug-highlight TextRenderComponents (auto-destroyed). */
     TWeakObjectPtr<AActor> HighlightActor;

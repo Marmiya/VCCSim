@@ -442,86 +442,6 @@ FReply FVCCSimPanelSelection::OnAddTargetActorsInBoundsClicked()
     return FReply::Handled();
 }
 
-FReply FVCCSimPanelSelection::OnExportGTMeshClicked()
-{
-    if (bGTExportInProgress)
-        return FReply::Handled();
-
-    UWorld* World = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
-    if (!World)
-        return FReply::Handled();
-
-    if (!HasEnabledTargetActors())
-    {
-        FVCCSimUIHelpers::ShowNotification(
-            TEXT("Enable target actors before exporting a mesh."), true);
-        return FReply::Handled();
-    }
-
-    IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
-    if (!DesktopPlatform)
-        return FReply::Handled();
-
-    const void* ParentWindowHandle = FSlateApplication::Get().FindBestParentWindowHandleForDialogs(nullptr);
-    FString ChosenDir;
-    if (!DesktopPlatform->OpenDirectoryDialog(
-            ParentWindowHandle, TEXT("Choose mesh export folder"),
-            FPaths::ProjectSavedDir(), ChosenDir) || ChosenDir.IsEmpty())
-        return FReply::Handled();
-
-    const FString BaseDir = ChosenDir / TEXT("gt_materials");
-    const FString SceneName = TEXT("RegionMesh");
-    const int32 TextureResolution = 2048;   // vestigial (no baking); kept for manifest/signature
-    const FString Signature = FGTMaterialExporter::ComputeSignature(
-        World, GetEnabledTargetActorLabels(), SceneName, TextureResolution);
-
-    RunGTMeshExport(BaseDir, SceneName, TextureResolution, Signature, FSimpleDelegate());
-    return FReply::Handled();
-}
-
-void FVCCSimPanelSelection::RunGTMeshExport(
-    const FString& BaseDir, const FString& SceneName,
-    int32 TextureResolution, const FString& Signature,
-    FSimpleDelegate OnComplete)
-{
-    if (bGTExportInProgress)
-    {
-        OnComplete.ExecuteIfBound();
-        return;
-    }
-
-    UWorld* World = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
-    if (!World)
-    {
-        OnComplete.ExecuteIfBound();
-        return;
-    }
-
-    const TArray<FString> Labels = GetEnabledTargetActorLabels();
-    if (Labels.IsEmpty())
-    {
-        FVCCSimUIHelpers::ShowNotification(
-            TEXT("Enable target actors before exporting meshes."), true);
-        OnComplete.ExecuteIfBound();
-        return;
-    }
-
-    if (!GTMaterialExporter.IsValid())
-        GTMaterialExporter = MakeShared<FGTMaterialExporter>();
-
-    bGTExportInProgress = true;
-    FSimpleDelegate Wrapped = FSimpleDelegate::CreateLambda([this, OnComplete]()
-    {
-        bGTExportInProgress = false;
-        OnComplete.ExecuteIfBound();
-    });
-
-    // One mesh.gltf + manifest per actor; the Python preprocess aggregates them into the scene mesh.
-    UE_LOG(LogSelection, Log, TEXT("Mesh export (per-actor) -> %s (%d actors)"), *BaseDir, Labels.Num());
-    GTMaterialExporter->ExportMaterials(
-        Labels, TArray<FGTFoliageExportEntry>(), World, BaseDir, SceneName, TextureResolution, Signature, Wrapped);
-}
-
 FReply FVCCSimPanelSelection::OnHighlightTargetsClicked()
 {
     UWorld* World = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
@@ -981,6 +901,11 @@ void FVCCSimPanelSelection::OnNormalCameraCheckboxChanged(ECheckBoxState NewStat
     bUseNormalCamera = (NewState == ECheckBoxState::Checked);
 }
 
+void FVCCSimPanelSelection::OnRGBLinearCameraCheckboxChanged(ECheckBoxState NewState)
+{
+    bUseRGBLinearCamera = (NewState == ECheckBoxState::Checked);
+}
+
 void FVCCSimPanelSelection::OnBaseColorCameraCheckboxChanged(ECheckBoxState NewState)
 {
     bUseBaseColorCamera = (NewState == ECheckBoxState::Checked);
@@ -1076,6 +1001,7 @@ void FVCCSimPanelSelection::ClearSelections()
     bUseDepthCamera = false;
     bUseSegmentationCamera = false;
     bUseNormalCamera = false;
+    bUseRGBLinearCamera = false;
     bUseBaseColorCamera = false;
     bUseMaterialPropertiesCamera = false;
     bUseRGBCameraClass = false;
@@ -1087,6 +1013,7 @@ bool FVCCSimPanelSelection::HasAnyActiveCamera() const
            (bHasDepthCamera && bUseDepthCamera) ||
            (bHasSegmentationCamera && bUseSegmentationCamera) ||
            (bHasNormalCamera && bUseNormalCamera) ||
+           (bHasRGBLinearCamera && bUseRGBLinearCamera) ||
            (bHasBaseColorCamera && bUseBaseColorCamera) ||
            (bHasMaterialPropertiesCamera && bUseMaterialPropertiesCamera);
 }

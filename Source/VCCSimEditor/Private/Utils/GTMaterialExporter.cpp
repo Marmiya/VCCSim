@@ -250,6 +250,33 @@ bool FGTMaterialExporter::WriteManifest(
     return FFileHelper::SaveStringToFile(JsonStr, *(ActorDir / TEXT("manifest.json")));
 }
 
+void FGTMaterialExporter::RunExport(
+    const TArray<FString>& ActorLabels,
+    const TArray<FGTFoliageExportEntry>& FoliageEntries,
+    UWorld* World,
+    const FString& BaseDir,
+    const FString& SceneName,
+    int32 TextureResolution,
+    const FString& Signature,
+    FSimpleDelegate OnComplete)
+{
+    if (bExportInProgress)
+    {
+        OnComplete.ExecuteIfBound();
+        return;
+    }
+
+    bExportInProgress = true;
+    FSimpleDelegate Wrapped = FSimpleDelegate::CreateLambda([this, OnComplete]()
+    {
+        bExportInProgress = false;
+        OnComplete.ExecuteIfBound();
+    });
+
+    ExportMaterials(ActorLabels, FoliageEntries, World, BaseDir, SceneName,
+        TextureResolution, Signature, Wrapped);
+}
+
 void FGTMaterialExporter::ExportMaterials(
     const TArray<FString>& ActorLabels,
     const TArray<FGTFoliageExportEntry>& FoliageEntries,

@@ -29,7 +29,6 @@ class FVCCSimPanelPointCloud;
 class FVCCSimPanelSelection;
 class FVCCSimPanelPathImageCapture;
 class FVCCSimPanelSceneAnalysis;
-class FVCCSimPanelTexEnhancer;
 
 
 class VCCSIMEDITOR_API SVCCSimPanel final : public SCompoundWidget
@@ -72,7 +71,6 @@ private:
     TSharedPtr<FVCCSimPanelSelection> SelectionManager;
     TSharedPtr<FVCCSimPanelPathImageCapture> PathImageCaptureManager;
     TSharedPtr<FVCCSimPanelSceneAnalysis> SceneAnalysisManager;
-    TSharedPtr<FVCCSimPanelTexEnhancer> TexEnhancerManager;
 
     // ============================================================================
     // INITIALIZATION AND CLEANUP

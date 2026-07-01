@@ -18,7 +18,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Engine/TimerHandle.h"
 #include "Utils/VCCSimSunPositionHelper.h"
 
 /**
@@ -44,28 +43,4 @@ public:
      * @return The calculated sun elevation and azimuth.
      */
     TPair<float, float> CalculateAndApplySunPosition(const FVCCSimSunPositionHelper::FSunParams& Params);
-
-    /**
-     * Toggles the automatic day/night cycle simulation.
-     * @param bIsActive Whether to activate or deactivate the cycle.
-     * @param InCycleParams The parameters to use for the simulation.
-     * @param InCycleSpeed The speed of the simulation (24h in N real-world seconds).
-     */
-    void ToggleDayCycle(bool bIsActive, const FVCCSimSunPositionHelper::FSunParams& InCycleParams, float InCycleSpeed);
-
-private:
-    /** Callback for the day cycle timer. */
-    void TickDayCycle();
-
-    /** Timer handle for the day cycle simulation. */
-    FTimerHandle DayCycleTimerHandle;
-
-    /** Current parameters for the active day cycle. */
-    FVCCSimSunPositionHelper::FSunParams DayCycleParams;
-    
-    /** Speed of the day cycle simulation. */
-    float DayCycleSpeed = 10.f;
-    
-    /** The current simulated minute of the day (0-1440). */
-    float DayCycleSimMinute = 0.f;
 };

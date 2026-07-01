@@ -96,50 +96,10 @@ void FVCCSimConfigManager::SaveToJsonFile()
     PanelStatesJson->SetBoolField(TEXT("PathImageCaptureSection"), PanelStates.bPathImageCaptureSectionExpanded);
     PanelStatesJson->SetBoolField(TEXT("SceneAnalysisSection"), PanelStates.bSceneAnalysisSectionExpanded);
     PanelStatesJson->SetBoolField(TEXT("PointCloudSection"), PanelStates.bPointCloudSectionExpanded);
-    PanelStatesJson->SetBoolField(TEXT("TexEnhancerSection"), PanelStates.bTexEnhancerSectionExpanded);
     RootObject->SetObjectField(TEXT("PanelStates"), PanelStatesJson);
 
-    // Save TexEnhancer configuration
-    TSharedPtr<FJsonObject> TexEnhancerConfigJson = MakeShareable(new FJsonObject);
-    TexEnhancerConfigJson->SetStringField(TEXT("OutputDirectory"), TexEnhancerConfig.OutputDirectory);
-    TexEnhancerConfigJson->SetStringField(TEXT("SceneName"), TexEnhancerConfig.SceneName);
-    TexEnhancerConfigJson->SetStringField(TEXT("TexEnhancerScriptPath"), TexEnhancerConfig.TexEnhancerScriptPath);
-    TexEnhancerConfigJson->SetStringField(TEXT("EstimatedMaterialsDir"), TexEnhancerConfig.EstimatedMaterialsDir);
-    TexEnhancerConfigJson->SetNumberField(TEXT("GTTextureResolution"),   TexEnhancerConfig.GTTextureResolution);
-    TexEnhancerConfigJson->SetNumberField(TEXT("DayCycleSpeed"),         TexEnhancerConfig.DayCycleSpeed);
-    TexEnhancerConfigJson->SetBoolField(TEXT("OutputImages"),            TexEnhancerConfig.bOutputImages);
-    TexEnhancerConfigJson->SetBoolField(TEXT("OutputMesh"),              TexEnhancerConfig.bOutputMesh);
-    TexEnhancerConfigJson->SetBoolField(TEXT("UseCaptureReuse"),         TexEnhancerConfig.bUseCaptureReuse);
-
-    {
-        auto MakeFloatArrayJson = [](const TArray<float>& Values)
-        {
-            TArray<TSharedPtr<FJsonValue>> Arr;
-            for (float V : Values)
-                Arr.Add(MakeShareable(new FJsonValueNumber(V)));
-            return Arr;
-        };
-        TexEnhancerConfigJson->SetArrayField(TEXT("LightingElevation"), MakeFloatArrayJson(TexEnhancerConfig.LightingElevation));
-        TexEnhancerConfigJson->SetArrayField(TEXT("LightingAzimuth"),   MakeFloatArrayJson(TexEnhancerConfig.LightingAzimuth));
-
-        TArray<TSharedPtr<FJsonValue>> SelectedArr;
-        for (bool bSel : TexEnhancerConfig.LightingSelected)
-            SelectedArr.Add(MakeShareable(new FJsonValueBoolean(bSel)));
-        TexEnhancerConfigJson->SetArrayField(TEXT("LightingSelected"), SelectedArr);
-    }
-
-    TexEnhancerConfigJson->SetNumberField(TEXT("SunCalcLatitude"),  TexEnhancerConfig.SunCalcLatitude);
-    TexEnhancerConfigJson->SetNumberField(TEXT("SunCalcLongitude"), TexEnhancerConfig.SunCalcLongitude);
-    TexEnhancerConfigJson->SetNumberField(TEXT("SunCalcTimeZone"),  TexEnhancerConfig.SunCalcTimeZone);
-    TexEnhancerConfigJson->SetNumberField(TEXT("SunCalcYear"),      TexEnhancerConfig.SunCalcYear);
-    TexEnhancerConfigJson->SetNumberField(TEXT("SunCalcMonth"),     TexEnhancerConfig.SunCalcMonth);
-    TexEnhancerConfigJson->SetNumberField(TEXT("SunCalcDay"),       TexEnhancerConfig.SunCalcDay);
-    TexEnhancerConfigJson->SetNumberField(TEXT("SunCalcHour"),      TexEnhancerConfig.SunCalcHour);
-    TexEnhancerConfigJson->SetNumberField(TEXT("SunCalcMinute"),    TexEnhancerConfig.SunCalcMinute);
-    TexEnhancerConfigJson->SetNumberField(TEXT("SunCalcFillSlot"),  TexEnhancerConfig.SunCalcFillSlot);
-    RootObject->SetObjectField(TEXT("TexEnhancerConfig"), TexEnhancerConfigJson);
-
-    // Save PathImageCapture parameters
+    // Save PathImageCapture parameters (incl. Dataset Configuration / Lighting Schedule /
+    // Dataset Capture state folded in from the retired TexEnhancer panel)
     {
         TSharedPtr<FJsonObject> PathCaptureJson = MakeShareable(new FJsonObject);
         PathCaptureJson->SetNumberField(TEXT("Margin"),              PathImageCaptureConfig.Margin);
@@ -155,6 +115,41 @@ void FVCCSimConfigManager::SaveToJsonFile()
         PathCaptureJson->SetBoolField(TEXT("SideOrbit"),             PathImageCaptureConfig.bSideOrbit);
         PathCaptureJson->SetNumberField(TEXT("CaptureTickInterval"), PathImageCaptureConfig.CaptureTickInterval);
         PathCaptureJson->SetNumberField(TEXT("PoseWarmupFrames"),    PathImageCaptureConfig.PoseWarmupFrames);
+
+        PathCaptureJson->SetStringField(TEXT("OutputDirectory"), PathImageCaptureConfig.OutputDirectory);
+        PathCaptureJson->SetStringField(TEXT("SceneName"), PathImageCaptureConfig.SceneName);
+        PathCaptureJson->SetNumberField(TEXT("GTTextureResolution"), PathImageCaptureConfig.GTTextureResolution);
+        PathCaptureJson->SetBoolField(TEXT("OutputImages"),          PathImageCaptureConfig.bOutputImages);
+        PathCaptureJson->SetBoolField(TEXT("OutputMesh"),            PathImageCaptureConfig.bOutputMesh);
+        PathCaptureJson->SetBoolField(TEXT("UseCaptureReuse"),       PathImageCaptureConfig.bUseCaptureReuse);
+
+        {
+            auto MakeFloatArrayJson = [](const TArray<float>& Values)
+            {
+                TArray<TSharedPtr<FJsonValue>> Arr;
+                for (float V : Values)
+                    Arr.Add(MakeShareable(new FJsonValueNumber(V)));
+                return Arr;
+            };
+            PathCaptureJson->SetArrayField(TEXT("LightingElevation"), MakeFloatArrayJson(PathImageCaptureConfig.LightingElevation));
+            PathCaptureJson->SetArrayField(TEXT("LightingAzimuth"),   MakeFloatArrayJson(PathImageCaptureConfig.LightingAzimuth));
+
+            TArray<TSharedPtr<FJsonValue>> SelectedArr;
+            for (bool bSel : PathImageCaptureConfig.LightingSelected)
+                SelectedArr.Add(MakeShareable(new FJsonValueBoolean(bSel)));
+            PathCaptureJson->SetArrayField(TEXT("LightingSelected"), SelectedArr);
+        }
+
+        PathCaptureJson->SetNumberField(TEXT("SunCalcLatitude"),  PathImageCaptureConfig.SunCalcLatitude);
+        PathCaptureJson->SetNumberField(TEXT("SunCalcLongitude"), PathImageCaptureConfig.SunCalcLongitude);
+        PathCaptureJson->SetNumberField(TEXT("SunCalcTimeZone"),  PathImageCaptureConfig.SunCalcTimeZone);
+        PathCaptureJson->SetNumberField(TEXT("SunCalcYear"),      PathImageCaptureConfig.SunCalcYear);
+        PathCaptureJson->SetNumberField(TEXT("SunCalcMonth"),     PathImageCaptureConfig.SunCalcMonth);
+        PathCaptureJson->SetNumberField(TEXT("SunCalcDay"),       PathImageCaptureConfig.SunCalcDay);
+        PathCaptureJson->SetNumberField(TEXT("SunCalcHour"),      PathImageCaptureConfig.SunCalcHour);
+        PathCaptureJson->SetNumberField(TEXT("SunCalcMinute"),    PathImageCaptureConfig.SunCalcMinute);
+        PathCaptureJson->SetNumberField(TEXT("SunCalcFillSlot"),  PathImageCaptureConfig.SunCalcFillSlot);
+
         RootObject->SetObjectField(TEXT("PathImageCaptureConfig"), PathCaptureJson);
     }
 
@@ -259,66 +254,10 @@ bool FVCCSimConfigManager::LoadFromJsonFile()
         (*PanelStatesJson)->TryGetBoolField(TEXT("PathImageCaptureSection"), PanelStates.bPathImageCaptureSectionExpanded);
         (*PanelStatesJson)->TryGetBoolField(TEXT("SceneAnalysisSection"), PanelStates.bSceneAnalysisSectionExpanded);
         (*PanelStatesJson)->TryGetBoolField(TEXT("PointCloudSection"), PanelStates.bPointCloudSectionExpanded);
-        (*PanelStatesJson)->TryGetBoolField(TEXT("TexEnhancerSection"), PanelStates.bTexEnhancerSectionExpanded);
     }
 
-    // Load TexEnhancer configuration
-    const TSharedPtr<FJsonObject>* TexEnhancerConfigJson = nullptr;
-    if (RootObject->TryGetObjectField(TEXT("TexEnhancerConfig"), TexEnhancerConfigJson))
-    {
-        (*TexEnhancerConfigJson)->TryGetStringField(TEXT("OutputDirectory"), TexEnhancerConfig.OutputDirectory);
-        (*TexEnhancerConfigJson)->TryGetStringField(TEXT("SceneName"), TexEnhancerConfig.SceneName);
-        (*TexEnhancerConfigJson)->TryGetStringField(TEXT("TexEnhancerScriptPath"), TexEnhancerConfig.TexEnhancerScriptPath);
-        (*TexEnhancerConfigJson)->TryGetStringField(TEXT("EstimatedMaterialsDir"), TexEnhancerConfig.EstimatedMaterialsDir);
-        {
-            double V = 0.0;
-            if ((*TexEnhancerConfigJson)->TryGetNumberField(TEXT("GTTextureResolution"), V))  TexEnhancerConfig.GTTextureResolution = (int32)V;
-            if ((*TexEnhancerConfigJson)->TryGetNumberField(TEXT("DayCycleSpeed"), V))        TexEnhancerConfig.DayCycleSpeed       = (float)V;
-            if ((*TexEnhancerConfigJson)->TryGetNumberField(TEXT("SunCalcLatitude"), V))      TexEnhancerConfig.SunCalcLatitude     = (float)V;
-            if ((*TexEnhancerConfigJson)->TryGetNumberField(TEXT("SunCalcLongitude"), V))     TexEnhancerConfig.SunCalcLongitude    = (float)V;
-            if ((*TexEnhancerConfigJson)->TryGetNumberField(TEXT("SunCalcTimeZone"), V))      TexEnhancerConfig.SunCalcTimeZone     = (float)V;
-            if ((*TexEnhancerConfigJson)->TryGetNumberField(TEXT("SunCalcYear"), V))          TexEnhancerConfig.SunCalcYear         = (int32)V;
-            if ((*TexEnhancerConfigJson)->TryGetNumberField(TEXT("SunCalcMonth"), V))         TexEnhancerConfig.SunCalcMonth        = (int32)V;
-            if ((*TexEnhancerConfigJson)->TryGetNumberField(TEXT("SunCalcDay"), V))           TexEnhancerConfig.SunCalcDay          = (int32)V;
-            if ((*TexEnhancerConfigJson)->TryGetNumberField(TEXT("SunCalcHour"), V))          TexEnhancerConfig.SunCalcHour         = (int32)V;
-            if ((*TexEnhancerConfigJson)->TryGetNumberField(TEXT("SunCalcMinute"), V))        TexEnhancerConfig.SunCalcMinute       = (int32)V;
-            if ((*TexEnhancerConfigJson)->TryGetNumberField(TEXT("SunCalcFillSlot"), V))      TexEnhancerConfig.SunCalcFillSlot     = (int32)V;
-        }
-        (*TexEnhancerConfigJson)->TryGetBoolField(TEXT("OutputImages"), TexEnhancerConfig.bOutputImages);
-        (*TexEnhancerConfigJson)->TryGetBoolField(TEXT("OutputMesh"),   TexEnhancerConfig.bOutputMesh);
-        (*TexEnhancerConfigJson)->TryGetBoolField(TEXT("UseCaptureReuse"), TexEnhancerConfig.bUseCaptureReuse);
-
-        {
-            auto LoadFloatArray = [&TexEnhancerConfigJson](const TCHAR* Field, TArray<float>& Out)
-            {
-                const TArray<TSharedPtr<FJsonValue>>* Arr = nullptr;
-                if (!(*TexEnhancerConfigJson)->TryGetArrayField(Field, Arr)) return;
-                Out.Empty();
-                for (const TSharedPtr<FJsonValue>& Val : *Arr)
-                {
-                    double V = 0.0;
-                    if (Val->TryGetNumber(V))
-                        Out.Add((float)V);
-                }
-            };
-            LoadFloatArray(TEXT("LightingElevation"), TexEnhancerConfig.LightingElevation);
-            LoadFloatArray(TEXT("LightingAzimuth"),   TexEnhancerConfig.LightingAzimuth);
-
-            const TArray<TSharedPtr<FJsonValue>>* SelectedArr = nullptr;
-            if ((*TexEnhancerConfigJson)->TryGetArrayField(TEXT("LightingSelected"), SelectedArr))
-            {
-                TexEnhancerConfig.LightingSelected.Empty();
-                for (const TSharedPtr<FJsonValue>& Val : *SelectedArr)
-                {
-                    bool bSel = false;
-                    if (Val->TryGetBool(bSel))
-                        TexEnhancerConfig.LightingSelected.Add(bSel);
-                }
-            }
-        }
-    }
-
-    // Load PathImageCapture parameters
+    // Load PathImageCapture parameters (incl. Dataset Configuration / Lighting Schedule /
+    // Dataset Capture state folded in from the retired TexEnhancer panel)
     const TSharedPtr<FJsonObject>* PathCaptureJson = nullptr;
     if (RootObject->TryGetObjectField(TEXT("PathImageCaptureConfig"), PathCaptureJson))
     {
@@ -336,6 +275,52 @@ bool FVCCSimConfigManager::LoadFromJsonFile()
         if ((*PathCaptureJson)->TryGetNumberField(TEXT("PoseWarmupFrames"), V))    PathImageCaptureConfig.PoseWarmupFrames    = (int32)V;
         (*PathCaptureJson)->TryGetBoolField(TEXT("IncludeOblique"), PathImageCaptureConfig.bIncludeOblique);
         (*PathCaptureJson)->TryGetBoolField(TEXT("SideOrbit"), PathImageCaptureConfig.bSideOrbit);
+
+        (*PathCaptureJson)->TryGetStringField(TEXT("OutputDirectory"), PathImageCaptureConfig.OutputDirectory);
+        (*PathCaptureJson)->TryGetStringField(TEXT("SceneName"), PathImageCaptureConfig.SceneName);
+        if ((*PathCaptureJson)->TryGetNumberField(TEXT("GTTextureResolution"), V)) PathImageCaptureConfig.GTTextureResolution = (int32)V;
+        (*PathCaptureJson)->TryGetBoolField(TEXT("OutputImages"), PathImageCaptureConfig.bOutputImages);
+        (*PathCaptureJson)->TryGetBoolField(TEXT("OutputMesh"),   PathImageCaptureConfig.bOutputMesh);
+        (*PathCaptureJson)->TryGetBoolField(TEXT("UseCaptureReuse"), PathImageCaptureConfig.bUseCaptureReuse);
+
+        {
+            auto LoadFloatArray = [&PathCaptureJson](const TCHAR* Field, TArray<float>& Out)
+            {
+                const TArray<TSharedPtr<FJsonValue>>* Arr = nullptr;
+                if (!(*PathCaptureJson)->TryGetArrayField(Field, Arr)) return;
+                Out.Empty();
+                for (const TSharedPtr<FJsonValue>& Val : *Arr)
+                {
+                    double ElemV = 0.0;
+                    if (Val->TryGetNumber(ElemV))
+                        Out.Add((float)ElemV);
+                }
+            };
+            LoadFloatArray(TEXT("LightingElevation"), PathImageCaptureConfig.LightingElevation);
+            LoadFloatArray(TEXT("LightingAzimuth"),   PathImageCaptureConfig.LightingAzimuth);
+
+            const TArray<TSharedPtr<FJsonValue>>* SelectedArr = nullptr;
+            if ((*PathCaptureJson)->TryGetArrayField(TEXT("LightingSelected"), SelectedArr))
+            {
+                PathImageCaptureConfig.LightingSelected.Empty();
+                for (const TSharedPtr<FJsonValue>& Val : *SelectedArr)
+                {
+                    bool bSel = false;
+                    if (Val->TryGetBool(bSel))
+                        PathImageCaptureConfig.LightingSelected.Add(bSel);
+                }
+            }
+        }
+
+        if ((*PathCaptureJson)->TryGetNumberField(TEXT("SunCalcLatitude"), V))  PathImageCaptureConfig.SunCalcLatitude  = (float)V;
+        if ((*PathCaptureJson)->TryGetNumberField(TEXT("SunCalcLongitude"), V)) PathImageCaptureConfig.SunCalcLongitude = (float)V;
+        if ((*PathCaptureJson)->TryGetNumberField(TEXT("SunCalcTimeZone"), V))  PathImageCaptureConfig.SunCalcTimeZone  = (float)V;
+        if ((*PathCaptureJson)->TryGetNumberField(TEXT("SunCalcYear"), V))      PathImageCaptureConfig.SunCalcYear      = (int32)V;
+        if ((*PathCaptureJson)->TryGetNumberField(TEXT("SunCalcMonth"), V))     PathImageCaptureConfig.SunCalcMonth     = (int32)V;
+        if ((*PathCaptureJson)->TryGetNumberField(TEXT("SunCalcDay"), V))       PathImageCaptureConfig.SunCalcDay       = (int32)V;
+        if ((*PathCaptureJson)->TryGetNumberField(TEXT("SunCalcHour"), V))      PathImageCaptureConfig.SunCalcHour      = (int32)V;
+        if ((*PathCaptureJson)->TryGetNumberField(TEXT("SunCalcMinute"), V))    PathImageCaptureConfig.SunCalcMinute    = (int32)V;
+        if ((*PathCaptureJson)->TryGetNumberField(TEXT("SunCalcFillSlot"), V))  PathImageCaptureConfig.SunCalcFillSlot  = (int32)V;
     }
 
     // Load shared target actor list

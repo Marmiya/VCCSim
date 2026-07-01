@@ -34,22 +34,20 @@ public:
     FImageCaptureService(TSharedPtr<FVCCSimPanelSelection> InSelectionManager);
 
     /**
-     * Captures images from all active cameras on the selected FlashPawn for a given pose.
+     * Captures images from all active cameras on the selected FlashPawn for a given pose. The
+     * channel set is whatever the Object Selection panel's camera checkboxes have enabled.
      *
      * @param PoseIndex The index of the current pose, used for filenames.
      * @param InSaveDirectory The directory where images will be saved.
      * @param bAnyCaptured Output parameter, set to true if at least one image was captured.
-     * @param bDatasetChannelsOnly When true, capture the fixed dataset channel set
-     *        (RGB, Normal, BaseColor, MaterialProperties) regardless of panel camera toggles.
-     * @param bRgbOnly When true (with bDatasetChannelsOnly), capture only RGB and skip the
-     *        lighting-independent GT channels (Normal/BaseColor/MaterialProperties) — used when
-     *        those are reused from another capture under different lighting.
+     * @param bRgbOnly When true, skip the lighting-independent GT channels (Normal/BaseColor/
+     *        MaterialProperties) even if checked — used when those are reused from another
+     *        capture under different lighting.
      */
     void CaptureImageFromCurrentPose(
         int32 PoseIndex,
         const FString& InSaveDirectory,
         bool& bAnyCaptured,
-        bool bDatasetChannelsOnly = false,
         bool bRgbOnly = false);
 
     /**
@@ -71,14 +69,13 @@ public:
     /** Per-pose completion mask for an existing capture directory, used by resume. Element i is true
      *  only when EVERY expected output file for pose i (each channel of the active set, for every
      *  camera of that type) exists on disk with non-zero size. The channel set mirrors
-     *  CaptureImageFromCurrentPose's branch on (bDatasetChannelsOnly, bRgbOnly), and filenames mirror
-     *  the Save* helpers, so "complete" matches exactly what a full capture would have written.
-     *  Returns an all-false mask (capture everything) when no channels/cameras are known. */
+     *  CaptureImageFromCurrentPose's checkbox-driven selection (gated the same way by bRgbOnly), and
+     *  filenames mirror the Save* helpers, so "complete" matches exactly what a full capture would
+     *  have written. Returns an all-false mask (capture everything) when no channels/cameras are known. */
     TArray<bool> ComputeCompletedPoses(
         AFlashPawn* Pawn,
         const FString& Dir,
         int32 PoseCount,
-        bool bDatasetChannelsOnly,
         bool bRgbOnly) const;
 
     /** Number of capture readbacks still in flight (async save tasks not yet dispatched). */

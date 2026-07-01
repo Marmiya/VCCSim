@@ -21,7 +21,6 @@
 #include "Components/DirectionalLightComponent.h"
 #include "EngineUtils.h"
 #include "Editor.h"
-#include "TimerManager.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogLightingManager, Log, All);
 
@@ -31,11 +30,6 @@ FLightingManager::FLightingManager()
 
 FLightingManager::~FLightingManager()
 {
-    // Ensure the timer is cleared if it's still active
-    if (DayCycleTimerHandle.IsValid() && GEditor)
-    {
-        GEditor->GetTimerManager()->ClearTimer(DayCycleTimerHandle);
-    }
 }
 
 void FLightingManager::ApplyLightingCondition(float ElevationDeg, float AzimuthDeg, bool bMarkDirty)
@@ -101,42 +95,4 @@ TPair<float, float> FLightingManager::CalculateAndApplySunPosition(const FVCCSim
     }
     
     return TPair<float, float>(Elevation, Azimuth);
-}
-
-void FLightingManager::ToggleDayCycle(bool bIsActive, const FVCCSimSunPositionHelper::FSunParams& InCycleParams, float InCycleSpeed)
-{
-    if (!GEditor) return;
-
-    if (bIsActive)
-    {
-        DayCycleParams = InCycleParams;
-        DayCycleSpeed = InCycleSpeed;
-        DayCycleSimMinute = (DayCycleParams.Hour * 60.f) + DayCycleParams.Minute;
-
-        FTimerDelegate TimerDelegate = FTimerDelegate::CreateRaw(this, &FLightingManager::TickDayCycle);
-        GEditor->GetTimerManager()->SetTimer(DayCycleTimerHandle, TimerDelegate, 0.1f, true);
-    }
-    else
-    {
-        GEditor->GetTimerManager()->ClearTimer(DayCycleTimerHandle);
-    }
-}
-
-void FLightingManager::TickDayCycle()
-{
-    const float MinutesPerTick = 1440.f * 0.1f / FMath::Max(DayCycleSpeed, 1.f);
-    DayCycleSimMinute += MinutesPerTick;
-    if (DayCycleSimMinute >= 1440.f)
-    {
-        DayCycleSimMinute -= 1440.f;
-    }
-
-    FVCCSimSunPositionHelper::FSunParams CurrentParams = DayCycleParams;
-    CurrentParams.Hour = FMath::FloorToInt(DayCycleSimMinute / 60.f) % 24;
-    CurrentParams.Minute = FMath::FloorToInt(DayCycleSimMinute) % 60;
-
-    float Elevation = 0.f, Azimuth = 0.f;
-    FVCCSimSunPositionHelper::Calculate(CurrentParams, Elevation, Azimuth);
-
-    ApplyLightingCondition(Elevation, Azimuth, false);
 }

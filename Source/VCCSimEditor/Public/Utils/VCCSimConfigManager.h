@@ -53,19 +53,43 @@ public:
         bool bPathImageCaptureSectionExpanded = false;
         bool bSceneAnalysisSectionExpanded = false;
         bool bPointCloudSectionExpanded = false;
-        bool bTexEnhancerSectionExpanded = false;
     };
 
-    // TexEnhancer data generation & evaluation configuration
-    struct FTexEnhancerConfig
+    // Shared target actor list (path generation + GT material export) + bounds-select state
+    struct FTargetActorsConfig
     {
+        TArray<FString> Labels;
+        TArray<bool>    EnabledFlags;
+        TArray<FString> GroundLabels;   // actors manually marked as ground (forced out of buildings)
+        FVector BoundsMin = FVector(-100000.0);
+        FVector BoundsMax = FVector(100000.0);
+        float   MinBuildingHeight = 300.0f;
+        float   MinBuildingFootprint = 300.0f;
+        float   ConnectGap = 15.0f;
+    };
+
+    // PathImageCapture orbit & capture parameters, plus the Dataset Configuration / Lighting
+    // Schedule / Dataset Capture state folded in from the retired TexEnhancer panel.
+    struct FPathImageCaptureConfig
+    {
+        float Margin              = 500.f;
+        float StartHeight         = 200.f;
+        float CameraHFOV          = 90.f;
+        float HOverlap            = 0.6f;
+        float VOverlap            = 0.6f;
+        float SurveyHOverlap      = 0.7f;
+        float NadirAltitude       = 500.f;
+        float NadirTiltAngle      = 45.f;
+        bool  bIncludeOblique     = false;
+        int32 NumObliqueRings     = 2;
+        bool  bSideOrbit          = false;
+        float CaptureTickInterval = 0.2f;
+        int32 PoseWarmupFrames    = 3;
+
         FString OutputDirectory;
         FString SceneName = TEXT("Scene_A");
-        FString TexEnhancerScriptPath;
-        FString EstimatedMaterialsDir;
 
         int32   GTTextureResolution  = 2048;
-        float   DayCycleSpeed        = 10.f;
 
         bool    bOutputImages = true;
         bool    bOutputMesh   = true;
@@ -86,44 +110,9 @@ public:
         int32 SunCalcFillSlot  = 1;
     };
 
-    // Shared target actor list (path generation + GT material export) + bounds-select state
-    struct FTargetActorsConfig
-    {
-        TArray<FString> Labels;
-        TArray<bool>    EnabledFlags;
-        TArray<FString> GroundLabels;   // actors manually marked as ground (forced out of buildings)
-        FVector BoundsMin = FVector(-100000.0);
-        FVector BoundsMax = FVector(100000.0);
-        float   MinBuildingHeight = 300.0f;
-        float   MinBuildingFootprint = 300.0f;
-        float   ConnectGap = 15.0f;
-    };
-
-    // PathImageCapture orbit & capture parameters
-    struct FPathImageCaptureConfig
-    {
-        float Margin              = 500.f;
-        float StartHeight         = 200.f;
-        float CameraHFOV          = 90.f;
-        float HOverlap            = 0.6f;
-        float VOverlap            = 0.6f;
-        float SurveyHOverlap      = 0.7f;
-        float NadirAltitude       = 500.f;
-        float NadirTiltAngle      = 45.f;
-        bool  bIncludeOblique     = false;
-        int32 NumObliqueRings     = 2;
-        bool  bSideOrbit          = false;
-        float CaptureTickInterval = 0.2f;
-        int32 PoseWarmupFrames    = 3;
-    };
-
     // Getters and setters for panel states
     const FPanelStates& GetPanelStates() const { return PanelStates; }
     void SetPanelStates(const FPanelStates& InStates) { PanelStates = InStates; }
-
-    // Getters and setters for TexEnhancer config
-    const FTexEnhancerConfig& GetTexEnhancerConfig() const { return TexEnhancerConfig; }
-    void SetTexEnhancerConfig(const FTexEnhancerConfig& InConfig) { TexEnhancerConfig = InConfig; }
 
     // Getters and setters for the shared target actor list
     const FTargetActorsConfig& GetTargetActorsConfig() const { return TargetActorsConfig; }
@@ -138,7 +127,6 @@ public:
     void SetPathImageCaptureSectionExpanded(bool bExpanded) { PanelStates.bPathImageCaptureSectionExpanded = bExpanded; }
     void SetSceneAnalysisSectionExpanded(bool bExpanded) { PanelStates.bSceneAnalysisSectionExpanded = bExpanded; }
     void SetPointCloudSectionExpanded(bool bExpanded) { PanelStates.bPointCloudSectionExpanded = bExpanded; }
-    void SetTexEnhancerSectionExpanded(bool bExpanded) { PanelStates.bTexEnhancerSectionExpanded = bExpanded; }
 
     // ============================================================================
     // EVENTS AND CALLBACKS
@@ -158,7 +146,6 @@ private:
 
     // Configuration data
     FPanelStates PanelStates;
-    FTexEnhancerConfig TexEnhancerConfig;
     FTargetActorsConfig TargetActorsConfig;
     FPathImageCaptureConfig PathImageCaptureConfig;
 

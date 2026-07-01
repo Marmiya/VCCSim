@@ -49,6 +49,23 @@ public:
         FSimpleDelegate OnComplete
     );
 
+    /** True while a RunExport() call on this instance is still running. */
+    bool IsExportInProgress() const { return bExportInProgress; }
+
+    /** Guarded entry point: no-ops (still firing OnComplete) if this instance is already exporting,
+     *  otherwise runs ExportMaterials and clears the in-progress flag when it completes. The single
+     *  copy of "guard + run", shared by every caller instead of each one tracking its own flag. */
+    void RunExport(
+        const TArray<FString>& ActorLabels,
+        const TArray<FGTFoliageExportEntry>& FoliageEntries,
+        UWorld* World,
+        const FString& BaseDir,
+        const FString& SceneName,
+        int32 TextureResolution,
+        const FString& Signature,
+        FSimpleDelegate OnComplete
+    );
+
 public:
     /** True if the actor owns at least one StaticMeshComponent (incl. ISM/HISM) with a mesh and materials. */
     static bool HasExportableMeshMaterials(const AActor* Actor);
@@ -92,6 +109,8 @@ public:
     static FString ComputeSceneSignature(UWorld* World);
 
 private:
+    bool bExportInProgress = false;
+
     static bool WriteManifest(
         AActor* Actor,
         const FString& Label,
