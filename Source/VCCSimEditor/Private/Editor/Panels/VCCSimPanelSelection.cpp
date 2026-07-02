@@ -32,6 +32,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogSelection, Log, All);
 #include "Sensors/NormalCamera.h"
 #include "Sensors/RGBLinearCamera.h"
 #include "Sensors/BaseColorCamera.h"
+#include "Sensors/BaseColorLinearCamera.h"
 #include "Sensors/MaterialPropertiesCamera.h"
 #include "Utils/GTMaterialExporter.h"
 #include "Utils/VCCSimUIHelpers.h"
@@ -911,6 +912,11 @@ void FVCCSimPanelSelection::OnBaseColorCameraCheckboxChanged(ECheckBoxState NewS
     bUseBaseColorCamera = (NewState == ECheckBoxState::Checked);
 }
 
+void FVCCSimPanelSelection::OnBaseColorLinearCameraCheckboxChanged(ECheckBoxState NewState)
+{
+    bUseBaseColorLinearCamera = (NewState == ECheckBoxState::Checked);
+}
+
 void FVCCSimPanelSelection::OnMaterialPropertiesCameraCheckboxChanged(ECheckBoxState NewState)
 {
     bUseMaterialPropertiesCamera = (NewState == ECheckBoxState::Checked);
@@ -929,6 +935,7 @@ void FVCCSimPanelSelection::RefreshCameraAvailability()
     bHasNormalCamera = false;
     bHasRGBLinearCamera = false;
     bHasBaseColorCamera = false;
+    bHasBaseColorLinearCamera = false;
     bHasMaterialPropertiesCamera = false;
 
     if (!SelectedFlashPawn.IsValid())
@@ -942,6 +949,7 @@ void FVCCSimPanelSelection::RefreshCameraAvailability()
     TArray<UNormalCameraComponent*> NormalCameras;
     TArray<URGBLinearCameraComponent*> RGBLinearCameras;
     TArray<UBaseColorCameraComponent*> BaseColorCameras;
+    TArray<UBaseColorLinearCameraComponent*> BaseColorLinearCameras;
     TArray<UMaterialPropertiesCameraComponent*> MatPropsCameras;
 
     SelectedFlashPawn->GetComponents<URGBCameraComponent>(RGBCameras);
@@ -950,6 +958,7 @@ void FVCCSimPanelSelection::RefreshCameraAvailability()
     SelectedFlashPawn->GetComponents<UNormalCameraComponent>(NormalCameras);
     SelectedFlashPawn->GetComponents<URGBLinearCameraComponent>(RGBLinearCameras);
     SelectedFlashPawn->GetComponents<UBaseColorCameraComponent>(BaseColorCameras);
+    SelectedFlashPawn->GetComponents<UBaseColorLinearCameraComponent>(BaseColorLinearCameras);
     SelectedFlashPawn->GetComponents<UMaterialPropertiesCameraComponent>(MatPropsCameras);
 
     bHasRGBCamera = (RGBCameras.Num() > 0);
@@ -958,6 +967,7 @@ void FVCCSimPanelSelection::RefreshCameraAvailability()
     bHasNormalCamera = (NormalCameras.Num() > 0);
     bHasRGBLinearCamera = (RGBLinearCameras.Num() > 0);
     bHasBaseColorCamera = (BaseColorCameras.Num() > 0);
+    bHasBaseColorLinearCamera = (BaseColorLinearCameras.Num() > 0);
     bHasMaterialPropertiesCamera = (MatPropsCameras.Num() > 0);
 }
 
@@ -996,6 +1006,7 @@ void FVCCSimPanelSelection::ClearSelections()
     bHasNormalCamera = false;
     bHasRGBLinearCamera = false;
     bHasBaseColorCamera = false;
+    bHasBaseColorLinearCamera = false;
     bHasMaterialPropertiesCamera = false;
     bUseRGBCamera = true;
     bUseDepthCamera = false;
@@ -1003,6 +1014,7 @@ void FVCCSimPanelSelection::ClearSelections()
     bUseNormalCamera = false;
     bUseRGBLinearCamera = false;
     bUseBaseColorCamera = false;
+    bUseBaseColorLinearCamera = false;
     bUseMaterialPropertiesCamera = false;
     bUseRGBCameraClass = false;
 }
@@ -1015,5 +1027,6 @@ bool FVCCSimPanelSelection::HasAnyActiveCamera() const
            (bHasNormalCamera && bUseNormalCamera) ||
            (bHasRGBLinearCamera && bUseRGBLinearCamera) ||
            (bHasBaseColorCamera && bUseBaseColorCamera) ||
+           (bHasBaseColorLinearCamera && bUseBaseColorLinearCamera) ||
            (bHasMaterialPropertiesCamera && bUseMaterialPropertiesCamera);
 }

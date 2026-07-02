@@ -821,12 +821,23 @@ TSharedRef<SWidget> FVCCSimPanelSelection::CreateCameraStatusRow()
     +SHorizontalBox::Slot()
     .MaxWidth(100)
     .HAlign(HAlign_Center)
-    .Padding(FMargin(2, 0, 0, 0))
+    .Padding(FMargin(2, 0, 2, 0))
     [
         CreateCameraStatusBox("RGBLinear",
             [this]() { return bHasRGBLinearCamera; },
             [this]() { return bUseRGBLinearCamera ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; },
             [this](ECheckBoxState NewState) { OnRGBLinearCameraCheckboxChanged(NewState); })
+    ]
+
+    +SHorizontalBox::Slot()
+    .MaxWidth(100)
+    .HAlign(HAlign_Center)
+    .Padding(FMargin(2, 0, 0, 0))
+    [
+        CreateCameraStatusBox("BaseColorLin",
+            [this]() { return bHasBaseColorLinearCamera; },
+            [this]() { return bUseBaseColorLinearCamera ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; },
+            [this](ECheckBoxState NewState) { OnBaseColorLinearCameraCheckboxChanged(NewState); })
     ];
 }
 

@@ -117,6 +117,7 @@ public:
     bool HasNormalCamera() const { return bHasNormalCamera; }
     bool HasRGBLinearCamera() const { return bHasRGBLinearCamera; }
     bool HasBaseColorCamera() const { return bHasBaseColorCamera; }
+    bool HasBaseColorLinearCamera() const { return bHasBaseColorLinearCamera; }
     bool HasMaterialPropertiesCamera() const { return bHasMaterialPropertiesCamera; }
 
     /** Check camera usage state */
@@ -126,6 +127,7 @@ public:
     bool IsUsingNormalCamera() const { return bUseNormalCamera; }
     bool IsUsingRGBLinearCamera() const { return bUseRGBLinearCamera; }
     bool IsUsingBaseColorCamera() const { return bUseBaseColorCamera; }
+    bool IsUsingBaseColorLinearCamera() const { return bUseBaseColorLinearCamera; }
     bool IsUsingMaterialPropertiesCamera() const { return bUseMaterialPropertiesCamera; }
     
     /** Check if any camera is both available and active */
@@ -232,6 +234,7 @@ private:
     void OnNormalCameraCheckboxChanged(ECheckBoxState NewState);
     void OnRGBLinearCameraCheckboxChanged(ECheckBoxState NewState);
     void OnBaseColorCameraCheckboxChanged(ECheckBoxState NewState);
+    void OnBaseColorLinearCameraCheckboxChanged(ECheckBoxState NewState);
     void OnMaterialPropertiesCameraCheckboxChanged(ECheckBoxState NewState);
     void OnUseRGBCameraClassCheckboxChanged(ECheckBoxState NewState);
     
@@ -286,6 +289,7 @@ private:
     bool bHasNormalCamera = false;
     bool bHasRGBLinearCamera = false;
     bool bHasBaseColorCamera = false;
+    bool bHasBaseColorLinearCamera = false;
     bool bHasMaterialPropertiesCamera = false;
 
     /** Camera usage flags */
@@ -295,6 +299,7 @@ private:
     bool bUseNormalCamera = false;
     bool bUseRGBLinearCamera = false;
     bool bUseBaseColorCamera = false;
+    bool bUseBaseColorLinearCamera = false;
     bool bUseMaterialPropertiesCamera = false;
     
     /** Flag to use RGBCamera class for capture instead of high-res screenshot */

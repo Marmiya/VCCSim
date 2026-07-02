@@ -24,6 +24,7 @@
 #include "Sensors/NormalCamera.h"
 #include "Sensors/RGBLinearCamera.h"
 #include "Sensors/BaseColorCamera.h"
+#include "Sensors/BaseColorLinearCamera.h"
 #include "Sensors/MaterialPropertiesCamera.h"
 #include "Utils/ImageProcesser.h"
 #include "LevelEditorViewport.h"
@@ -37,8 +38,17 @@ DEFINE_LOG_CATEGORY_STATIC(LogImageCaptureService, Log, All);
 
 namespace
 {
-    // Append one "<Prefix>_Cam%02d" base name + extension per camera of type TComp on the pawn, using the
-    // same camera index as the Save* helpers (GetSensorIndex(), falling back to the enumeration order).
+    // Each modality is written into its own "<Channel>/" subfolder of the capture directory; the
+    // async save tasks do not create directories, so this ensures the subfolder exists first.
+    FString EnsureChannelDir(const FString& Base, const TCHAR* Channel)
+    {
+        const FString Dir = Base / Channel;
+        IFileManager::Get().MakeDirectory(*Dir, true);
+        return Dir;
+    }
+
+    // Append one "<Prefix>/<Prefix>_Cam%02d" base name + extension per camera of type TComp on the pawn, using
+    // the same camera index and subfolder as the Save* helpers (GetSensorIndex(), falling back to enum order).
     template<typename TComp>
     void CollectChannelBases(AFlashPawn* Pawn, const TCHAR* Prefix, const TCHAR* Ext,
         TArray<TPair<FString, FString>>& Out)
@@ -51,7 +61,7 @@ namespace
             if (!C) continue;
             int32 Idx = C->GetSensorIndex();
             if (Idx < 0) Idx = i;
-            Out.Emplace(FString::Printf(TEXT("%s_Cam%02d"), Prefix, Idx), FString(Ext));
+            Out.Emplace(FString::Printf(TEXT("%s/%s_Cam%02d"), Prefix, Prefix, Idx), FString(Ext));
         }
     }
 }
@@ -111,6 +121,10 @@ void FImageCaptureService::CaptureImageFromCurrentPose(
             {
                 SaveBaseColor(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
             }
+            if (SelectionManagerPin->IsUsingBaseColorLinearCamera() && SelectionManagerPin->HasBaseColorLinearCamera())
+            {
+                SaveBaseColorLinear(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
+            }
             if (SelectionManagerPin->IsUsingMaterialPropertiesCamera() && SelectionManagerPin->HasMaterialPropertiesCamera())
             {
                 SaveMaterialProperties(SelectedFlashPawn, PoseIndex, InSaveDirectory, bAnyCaptured);
@@ -147,7 +161,7 @@ void FImageCaptureService::SaveRGB(AFlashPawn* SelectedFlashPawn, int32 PoseInde
                 int32 CameraIndex = Camera->GetSensorIndex();
                 if (CameraIndex < 0) CameraIndex = i;
 
-                FString Filename = InSaveDirectory / FString::Printf(TEXT("RGB_Cam%02d_Pose%03d.png"), CameraIndex, PoseIndex);
+                FString Filename = EnsureChannelDir(InSaveDirectory, TEXT("RGB")) / FString::Printf(TEXT("RGB_Cam%02d_Pose%03d.png"), CameraIndex, PoseIndex);
                 FIntPoint Size = {Camera->GetImageSize().first, Camera->GetImageSize().second};
 
                 Camera->AsyncGetRGBImageData(
@@ -191,7 +205,7 @@ void FImageCaptureService::SaveDepth(AFlashPawn* SelectedFlashPawn, int32 PoseIn
             int32 CameraIndex = Camera->GetSensorIndex();
             if (CameraIndex < 0) CameraIndex = i;
 
-            FString DepthFilename = InSaveDirectory / FString::Printf(TEXT("Depth16_Cam%02d_Pose%03d.png"), CameraIndex, PoseIndex);
+            FString DepthFilename = EnsureChannelDir(InSaveDirectory, TEXT("Depth16")) / FString::Printf(TEXT("Depth16_Cam%02d_Pose%03d.png"), CameraIndex, PoseIndex);
             FIntPoint Size = {Camera->GetImageSize().first, Camera->GetImageSize().second};
 
             Camera->AsyncGetDepthImageData(
@@ -236,7 +250,7 @@ void FImageCaptureService::SaveSeg(AFlashPawn* SelectedFlashPawn, int32 PoseInde
             int32 CameraIndex = Camera->GetSensorIndex();
             if (CameraIndex < 0) CameraIndex = i;
 
-            FString Filename = InSaveDirectory / FString::Printf(TEXT("Seg_Cam%02d_Pose%03d.png"), CameraIndex, PoseIndex);
+            FString Filename = EnsureChannelDir(InSaveDirectory, TEXT("Seg")) / FString::Printf(TEXT("Seg_Cam%02d_Pose%03d.png"), CameraIndex, PoseIndex);
             FIntPoint Size = {Camera->GetImageSize().first, Camera->GetImageSize().second};
 
             Camera->AsyncGetSegmentationImageData(
@@ -274,7 +288,7 @@ void FImageCaptureService::SaveNormal(AFlashPawn* SelectedFlashPawn, int32 PoseI
             int32 CameraIndex = Camera->GetSensorIndex();
             if (CameraIndex < 0) CameraIndex = i;
 
-            FString NormalEXRFilename = InSaveDirectory / FString::Printf(TEXT("Normal_Cam%02d_Pose%03d.exr"), CameraIndex, PoseIndex);
+            FString NormalEXRFilename = EnsureChannelDir(InSaveDirectory, TEXT("Normal")) / FString::Printf(TEXT("Normal_Cam%02d_Pose%03d.exr"), CameraIndex, PoseIndex);
             FIntPoint Size = {Camera->GetImageSize().first, Camera->GetImageSize().second};
             
             Camera->AsyncGetNormalImageData(
@@ -313,10 +327,49 @@ void FImageCaptureService::SaveRGBLinear(AFlashPawn* SelectedFlashPawn, int32 Po
             int32 CameraIndex = Camera->GetSensorIndex();
             if (CameraIndex < 0) CameraIndex = i;
 
-            FString Filename = InSaveDirectory / FString::Printf(TEXT("RGBLinear_Cam%02d_Pose%03d.exr"), CameraIndex, PoseIndex);
+            FString Filename = EnsureChannelDir(InSaveDirectory, TEXT("RGBLinear")) / FString::Printf(TEXT("RGBLinear_Cam%02d_Pose%03d.exr"), CameraIndex, PoseIndex);
             FIntPoint Size = {Camera->GetImageSize().first, Camera->GetImageSize().second};
 
             Camera->AsyncGetRGBLinearImageData(
+                [Filename, Size, JobNum = this->JobNum, SaveJobNum = this->SaveJobNum](const TArray<FFloat16Color>& ImageData)
+                {
+                    TArray<FFloat16Color> DataCopy = ImageData;
+                    *JobNum -= 1;
+                    (*SaveJobNum)++;
+                    Async(EAsyncExecution::ThreadPool,
+                        [DataCopy = MoveTemp(DataCopy), Size, Filename, SaveJobNum]()
+                        {
+                            FAsyncEXRSaveTask(DataCopy, Size, Filename).DoWork();
+                            (*SaveJobNum)--;
+                        });
+                });
+            bAnyCaptured = true;
+        }
+        else
+        {
+            *JobNum -= 1;
+        }
+    }
+}
+
+void FImageCaptureService::SaveBaseColorLinear(AFlashPawn* SelectedFlashPawn, int32 PoseIndex, const FString& InSaveDirectory, bool& bAnyCaptured)
+{
+    TArray<UBaseColorLinearCameraComponent*> BaseColorLinearCameras;
+    SelectedFlashPawn->GetComponents<UBaseColorLinearCameraComponent>(BaseColorLinearCameras);
+    *JobNum += BaseColorLinearCameras.Num();
+
+    for (int32 i = 0; i < BaseColorLinearCameras.Num(); ++i)
+    {
+        UBaseColorLinearCameraComponent* Camera = BaseColorLinearCameras[i];
+        if (Camera)
+        {
+            int32 CameraIndex = Camera->GetSensorIndex();
+            if (CameraIndex < 0) CameraIndex = i;
+
+            FString Filename = EnsureChannelDir(InSaveDirectory, TEXT("BaseColorLinear")) / FString::Printf(TEXT("BaseColorLinear_Cam%02d_Pose%03d.exr"), CameraIndex, PoseIndex);
+            FIntPoint Size = {Camera->GetImageSize().first, Camera->GetImageSize().second};
+
+            Camera->AsyncGetBaseColorLinearImageData(
                 [Filename, Size, JobNum = this->JobNum, SaveJobNum = this->SaveJobNum](const TArray<FFloat16Color>& ImageData)
                 {
                     TArray<FFloat16Color> DataCopy = ImageData;
@@ -352,7 +405,7 @@ void FImageCaptureService::SaveBaseColor(AFlashPawn* SelectedFlashPawn, int32 Po
             int32 CameraIndex = Camera->GetSensorIndex();
             if (CameraIndex < 0) CameraIndex = i;
 
-            FString Filename = InSaveDirectory / FString::Printf(TEXT("BaseColor_Cam%02d_Pose%03d.png"), CameraIndex, PoseIndex);
+            FString Filename = EnsureChannelDir(InSaveDirectory, TEXT("BaseColor")) / FString::Printf(TEXT("BaseColor_Cam%02d_Pose%03d.png"), CameraIndex, PoseIndex);
             FIntPoint Size = {Camera->GetImageSize().first, Camera->GetImageSize().second};
 
             Camera->AsyncGetBaseColorImageData(
@@ -392,7 +445,7 @@ void FImageCaptureService::SaveMaterialProperties(AFlashPawn* SelectedFlashPawn,
             int32 CameraIndex = Camera->GetSensorIndex();
             if (CameraIndex < 0) CameraIndex = i;
 
-            FString Filename = InSaveDirectory / FString::Printf(TEXT("MatProps_Cam%02d_Pose%03d.png"), CameraIndex, PoseIndex);
+            FString Filename = EnsureChannelDir(InSaveDirectory, TEXT("MatProps")) / FString::Printf(TEXT("MatProps_Cam%02d_Pose%03d.png"), CameraIndex, PoseIndex);
             FIntPoint Size = {Camera->GetImageSize().first, Camera->GetImageSize().second};
 
             Camera->AsyncGetMaterialPropertiesImageData(
@@ -499,7 +552,7 @@ void FImageCaptureService::CaptureRGBFromViewport(
         if (CameraIndex < 0) CameraIndex = i;
 
         const FString Filename =
-            InSaveDirectory / FString::Printf(TEXT("RGB_Cam%02d_Pose%03d.png"), CameraIndex, PoseIndex);
+            EnsureChannelDir(InSaveDirectory, TEXT("RGB")) / FString::Printf(TEXT("RGB_Cam%02d_Pose%03d.png"), CameraIndex, PoseIndex);
         const FTransform CameraTransform = Camera->GetComponentTransform();
 
         VC->SetViewLocation(CameraTransform.GetLocation());
@@ -576,6 +629,8 @@ TArray<bool> FImageCaptureService::ComputeCompletedPoses(
                 CollectChannelBases<UNormalCameraComponent>(Pawn, TEXT("Normal"), TEXT("exr"), Expected);
             if (SM->IsUsingBaseColorCamera() && SM->HasBaseColorCamera())
                 CollectChannelBases<UBaseColorCameraComponent>(Pawn, TEXT("BaseColor"), TEXT("png"), Expected);
+            if (SM->IsUsingBaseColorLinearCamera() && SM->HasBaseColorLinearCamera())
+                CollectChannelBases<UBaseColorLinearCameraComponent>(Pawn, TEXT("BaseColorLinear"), TEXT("exr"), Expected);
             if (SM->IsUsingMaterialPropertiesCamera() && SM->HasMaterialPropertiesCamera())
                 CollectChannelBases<UMaterialPropertiesCameraComponent>(Pawn, TEXT("MatProps"), TEXT("png"), Expected);
         }
